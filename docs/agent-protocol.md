@@ -89,6 +89,9 @@ attention flag and raises a desktop notification.
 | --- | --- |
 | `notification_type` | Why the agent waits. Claude sends `permission`; pi sends the kind of prompt it is showing. The value is shown next to the pane. |
 
+`wait_reason` is accepted as an alias for `notification_type`, because that is
+the name the OpenCode producer already uses.
+
 ### `stop`
 
 The turn ended. The pane becomes idle, and the response preview is the last
