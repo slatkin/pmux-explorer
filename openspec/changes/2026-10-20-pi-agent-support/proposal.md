@@ -28,7 +28,8 @@ specification rather than by reading the Rust adapter.
 - pi becomes a first-class agent in the sidebar: `AgentType::Pi` with the label
   `pi`, its own colour (`@sidebar_color_agent_pi`), a `pi` event adapter, the
   pi tool names normalised into the canonical vocabulary, and pi in the
-  process-based dead-pane sweep.
+  process-based dead-pane sweep. A pi pane that waits for a human is marked
+  the same way a Claude pane is, from pi's `ui_prompt` events.
 - The event contract becomes a documented producer protocol. Today the contract
   is implicit in the Claude adapter's field names. After this change
   `docs/agent-protocol.md` states, per event, the JSON fields a producer must
@@ -73,6 +74,5 @@ None. This repository has no specs yet; this change adds the first.
   trip, the setup output.
 - The producer is not in this change. pmux carries it, under the change
   `2026-10-20-sidebar-events` in the pmux repository.
-- Not in this change, and not planned for it: the attention badge for a pi
-  pane that waits for a human, the task-progress row, the subagent tree, and
-  anything inside pi itself. The reasons are in the design.
+- Not in this change: the task-progress row, the subagent tree, and anything
+  inside pi itself. The reasons are in the design.

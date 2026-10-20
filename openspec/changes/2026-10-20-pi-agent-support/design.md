@@ -65,7 +65,10 @@ pi 1.3.0 gives a producer these extension events: `session_start`,
 | `input` | `user-prompt-submit` | `cwd`, `prompt`, `session_id` |
 | `tool_execution_start` | `activity-log` | `tool_name`, `tool_input` |
 | `tool_execution_end` | `activity-log` | `tool_name`, `tool_input`, `tool_response` |
-| `agent_end` | `stop` | `last_assistant_message` |
+| `agent_settled` (outcome `error`) | `stop-failure` | `error` |
+| `agent_settled` (outcome `completed` or `aborted`) | `stop` | `last_assistant_message` |
+| `ui_prompt_start` | `notification` | `wait_reason` |
+| `ui_prompt_end` | `user-prompt-submit` | empty `prompt` |
 | `session_shutdown` | `session-end` | `end_reason` |
 
 `tool_execution_start` carries the arguments, so the activity entry is written
@@ -81,20 +84,8 @@ same field Claude's `Stop` hook sends.
 
 ## D5. What pi cannot report, and what the sidebar therefore cannot show
 
-Three sidebar features have no pi source, and the change says so rather than
+Two sidebar features have no pi source, and the change says so rather than
 faking them.
-
-The attention badge. The sidebar marks a pane as needing a human when the
-agent asks for permission, which for Claude arrives as the `Notification` hook.
-pi 1.3.0 has no approval event. Permission in pi is a concept an extension
-implements, not a built-in prompt, and the built-in tools run with the
-permissions of the pi process. A pi pane therefore shows running, idle and
-error, and never the attention badge. The one source that exists is the
-`tool_call` event, and the ordering makes it unusable: a permission extension
-is itself a `tool_call` handler, so a producer that subscribes to `tool_call`
-either runs before the gate and cannot see the decision, or after it and sees
-nothing at all while the dialog is open. Reading the pane's screen is the
-other candidate and is a screen scrape. Both are worse than an honest gap.
 
 The task-progress row. The sidebar reads it from Claude's `TaskCreate` and
 `TaskUpdate` tools. pi has no task tool; its built-in tools are `read`,
@@ -104,6 +95,25 @@ nothing to read.
 The subagent tree. pi has no in-process subagents. pmux runs child agents in
 their own panes, and each of those panes is a pane of its own in the sidebar,
 which is the same information in a shape the sidebar already renders.
+
+The attention badge is available, but not in the way the first draft of this
+design assumed. pi has no approval event, and permission in pi is a concept
+an extension implements rather than a built-in prompt. The usable signal is
+`ui_prompt_start` and `ui_prompt_end`: pi fires them when it starts and stops
+waiting on a blocking user-facing extension UI prompt, which is exactly what a
+permission extension's confirmation dialog is. The producer maps
+`ui_prompt_start` to `notification`, which sets the waiting status, the
+attention flag and the desktop notification, and maps `ui_prompt_end` to a
+`user-prompt-submit` with an empty prompt, which clears the attention and
+returns the pane to running without touching the prompt text. The OpenCode
+producer already uses that empty-prompt call for the same reason.
+
+The `tool_call` event is not the route, and the reason is worth recording: a
+permission extension is itself a `tool_call` handler, so a producer that
+subscribes to `tool_call` either runs before the gate and cannot see the
+decision, or after it and sees nothing at all while the dialog is open.
+Reading the pane's screen is the other candidate and is a screen scrape. Both
+are worse than the `ui_prompt` events.
 
 ## D6. The dead-pane sweep covers pi
 

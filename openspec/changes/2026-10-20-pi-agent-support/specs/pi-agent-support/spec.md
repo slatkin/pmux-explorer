@@ -109,15 +109,29 @@ last prompt and status.
 - **WHEN** a pane carries `@pane_agent` set to `pi` and a pi process is still running in its process tree
 - **THEN** the pane keeps its state and stays in the pane list
 
+### Requirement: a pi pane that waits for a human is marked
+
+The sidebar SHALL mark a pi pane that waits for a human, the same way it marks
+a pane of any other agent: the status becomes waiting, the attention flag is
+set, and the desktop notification fires.
+
+#### Scenario: The producer reports a wait
+- **WHEN** the producer sends `notification` with a `wait_reason`
+- **THEN** the pane status becomes waiting, the pane carries the attention flag, and the reason is shown
+
+#### Scenario: The wait is over
+- **WHEN** the producer sends `user-prompt-submit` with an empty prompt after a wait
+- **THEN** the pane status becomes running, the attention flag is cleared, and the pane keeps the prompt text it had
+
 ### Requirement: the gaps stay gaps
 
-The sidebar SHALL NOT report an attention state, a permission mode, a task
-progress or a subagent tree for a pi pane, because pi reports none of them. The
-pi adapter SHALL report the default permission mode.
+The sidebar SHALL NOT report a permission mode, a task progress or a subagent
+tree for a pi pane, because pi reports none of them. The pi adapter SHALL
+report the default permission mode.
 
 #### Scenario: A pi pane with a finished turn
 - **WHEN** a pi turn ends
-- **THEN** the pane shows the idle status and no attention badge
+- **THEN** the pane shows the idle status and no permission mode badge
 
 #### Scenario: The permission mode of a pi pane
 - **WHEN** a pi pane is listed
