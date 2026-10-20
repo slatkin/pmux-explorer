@@ -10,6 +10,13 @@
   <a href="https://hiroppy.github.io/tmux-agent-sidebar/features/agent-pane/">Features</a>
 </p>
 
+> **This is a fork.** It started from
+> [hiroppy/tmux-agent-sidebar](https://github.com/hiroppy/tmux-agent-sidebar),
+> which is MIT licensed and credited in [LICENSE](LICENSE). The fork is
+> developed on its own and no longer tracks upstream, and the documentation
+> links above still point at the upstream site until this fork publishes its
+> own. If the upstream project fits your needs, use it.
+
 ## Features
 
 - **Every pane, one view** 

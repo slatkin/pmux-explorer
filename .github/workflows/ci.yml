@@ -13,3 +13,5 @@ jobs:
       - run: cargo test
       - run: cargo clippy
       - run: cargo fmt --check
+
+# The fork runs the same CI as upstream.
