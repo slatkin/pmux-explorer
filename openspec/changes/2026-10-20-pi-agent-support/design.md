@@ -126,6 +126,13 @@ falls back to the shell with stale options. The sweep's process check compares
 the process name against the agent label, and the pi process is called `pi`, so
 the check works with no change.
 
+The sweep needs the process snapshot, and the sidebar only builds that
+snapshot when a pane is an agent whose exit cannot be observed. A pi pane is
+such a pane, so `pane_output_needs_process_snapshot` must ask for a snapshot
+for pi as well. Without that, a session with only pi panes has no snapshot, the
+sweep sees no live agent, and the pi pane is wiped a second after it appears.
+This was found by the live check in task 5.3, not by the unit tests.
+
 ## D7. The permission mode stays empty for pi
 
 The sidebar reads `@pane_permission_mode` for Claude alone, because the badge
