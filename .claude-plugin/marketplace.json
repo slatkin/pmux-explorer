@@ -1,13 +1,13 @@
 {
-  "name": "hiroppy",
+  "name": "slatkin",
   "owner": {
-    "name": "Yuta Hiroto"
+    "name": "slatkin"
   },
   "plugins": [
     {
       "name": "tmux-agent-sidebar",
       "source": "./",
-      "description": "Monitor Claude Code agents across tmux panes in a real-time sidebar TUI"
+      "description": "Monitor AI coding agents across tmux panes in a real-time sidebar TUI"
     }
   ]
 }

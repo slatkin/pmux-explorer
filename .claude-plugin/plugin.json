@@ -1,12 +1,12 @@
 {
   "name": "tmux-agent-sidebar",
   "version": "0.13.0",
-  "description": "Monitor Claude Code agents across tmux panes in a real-time sidebar TUI",
+  "description": "Monitor AI coding agents across tmux panes in a real-time sidebar TUI",
   "author": {
-    "name": "Yuta Hiroto",
-    "url": "https://github.com/hiroppy"
+    "name": "slatkin",
+    "url": "https://github.com/slatkin"
   },
-  "repository": "https://github.com/hiroppy/tmux-agent-sidebar",
+  "repository": "https://github.com/slatkin/tmux-agent-sidebar",
   "license": "MIT",
   "keywords": ["tmux", "agent", "monitoring", "tui", "sidebar"]
 }
