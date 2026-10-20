@@ -6,3 +6,6 @@
 dist
 .astro
 node_modules
+
+# zvec-grep local index
+.zvec-grep/
