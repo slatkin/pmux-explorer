@@ -457,7 +457,7 @@ fn full_output_has_expected_top_level_keys() {
     let agents = v.get("agents").and_then(Value::as_object).unwrap();
     let mut keys: Vec<&str> = agents.keys().map(String::as_str).collect();
     keys.sort();
-    assert_eq!(keys, vec!["claude", "codex"]);
+    assert_eq!(keys, vec!["claude", "codex", "pi"]);
 }
 
 #[test]
@@ -556,6 +556,55 @@ fn run_setup_unknown_agent_returns_err_exit_2() {
     let (code, json) = run_setup(&["gemini".to_string()], FAKE_HOOK);
     assert_eq!(code, 2);
     assert!(json.is_none());
+}
+
+#[test]
+fn run_setup_pi_returns_the_producer_contract() {
+    let (code, json) = run_setup(&["pi".to_string()], FAKE_HOOK);
+    assert_eq!(code, 0);
+    let v = json.unwrap();
+    assert_eq!(
+        v.get("command").and_then(Value::as_str),
+        Some("tmux-agent-sidebar hook pi <event>")
+    );
+    let events = v.get("events").and_then(Value::as_array).unwrap();
+    let names: Vec<&str> = events
+        .iter()
+        .filter_map(|e| e.get("event").and_then(Value::as_str))
+        .collect();
+    assert!(names.contains(&"session-start"));
+    assert!(names.contains(&"user-prompt-submit"));
+    assert!(names.contains(&"activity-log"));
+    assert!(names.contains(&"stop"));
+}
+
+#[test]
+fn pi_contract_names_the_fields_of_every_event() {
+    let contract = build_pi_contract();
+    let events = contract.get("events").and_then(Value::as_array).unwrap();
+    for event in events {
+        let name = event.get("event").and_then(Value::as_str).unwrap();
+        let fields = event.get("fields").and_then(Value::as_array).unwrap();
+        assert!(!fields.is_empty(), "{name} must name its fields");
+    }
+    // The contract and the adapter's table are the same source of truth.
+    let table: Vec<&str> = crate::adapter::pi::PI_EVENTS
+        .iter()
+        .map(|(event, _, _)| *event)
+        .collect();
+    let contract_names: Vec<&str> = events
+        .iter()
+        .filter_map(|e| e.get("event").and_then(Value::as_str))
+        .collect();
+    assert_eq!(contract_names, table);
+}
+
+#[test]
+fn pi_contract_does_not_touch_any_config_file() {
+    // The contract is printed, never merged: pi has no settings file.
+    let contract = build_pi_contract();
+    assert!(contract.get("config_path").is_none());
+    assert!(contract.get("snippet").is_none());
 }
 
 #[test]
@@ -906,6 +955,90 @@ const EXPECTED_FULL_OUTPUT: &str = r#"{
           ]
         }
       }
+    },
+    "pi": {
+      "agent": "pi",
+      "command": "tmux-agent-sidebar hook pi <event>",
+      "events": [
+        {
+          "event": "session-start",
+          "fields": [
+            "cwd",
+            "session_id",
+            "source",
+            "permission_mode",
+            "agent_id",
+            "worktree"
+          ],
+          "kind": "session-start"
+        },
+        {
+          "event": "session-end",
+          "fields": [
+            "end_reason"
+          ],
+          "kind": "session-end"
+        },
+        {
+          "event": "user-prompt-submit",
+          "fields": [
+            "cwd",
+            "prompt",
+            "session_id",
+            "permission_mode",
+            "agent_id",
+            "worktree"
+          ],
+          "kind": "user-prompt-submit"
+        },
+        {
+          "event": "notification",
+          "fields": [
+            "notification_type",
+            "wait_reason",
+            "cwd",
+            "session_id"
+          ],
+          "kind": "notification"
+        },
+        {
+          "event": "stop",
+          "fields": [
+            "last_assistant_message",
+            "cwd",
+            "session_id",
+            "permission_mode"
+          ],
+          "kind": "stop"
+        },
+        {
+          "event": "stop-failure",
+          "fields": [
+            "error",
+            "error_type",
+            "error_message",
+            "cwd",
+            "session_id"
+          ],
+          "kind": "stop-failure"
+        },
+        {
+          "event": "activity-log",
+          "fields": [
+            "tool_name",
+            "tool_input",
+            "tool_response"
+          ],
+          "kind": "activity-log"
+        }
+      ],
+      "notes": [
+        "The pane is the one in $TMUX_PANE, read from the environment of the command.",
+        "The command is not awaited: spawn it, write the payload, close the pipe, move on.",
+        "A missing binary is not an error: the producer does nothing.",
+        "The protocol is written down in docs/agent-protocol.md.",
+        "The pmux pi extension implements this contract."
+      ]
     }
   },
   "hook_script": "/fake/hook.sh",

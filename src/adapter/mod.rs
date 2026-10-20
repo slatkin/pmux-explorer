@@ -1,11 +1,35 @@
 pub mod claude;
 pub mod codex;
 pub mod opencode;
+pub mod pi;
 
 use crate::event::AgentEventKind;
 
 pub(crate) fn json_str<'a>(val: &'a serde_json::Value, key: &str) -> &'a str {
     val.get(key).and_then(|v| v.as_str()).unwrap_or("")
+}
+
+/// Parse the optional worktree object of a payload.
+/// Returns None if the "worktree" field is missing or not an object.
+pub(crate) fn parse_worktree(input: &serde_json::Value) -> Option<crate::event::WorktreeInfo> {
+    use crate::event::WorktreeInfo;
+    let obj = input.get("worktree")?;
+    if !obj.is_object() {
+        return None;
+    }
+    let name = json_str(obj, "name");
+    let path = json_str(obj, "path");
+    let branch = json_str(obj, "branch");
+    let original = json_str(obj, "originalRepoDir");
+    if name.is_empty() && path.is_empty() && branch.is_empty() && original.is_empty() {
+        return None;
+    }
+    Some(WorktreeInfo {
+        name: name.into(),
+        path: path.into(),
+        branch: branch.into(),
+        original_repo_dir: original.into(),
+    })
 }
 
 pub(crate) fn optional_str(val: &serde_json::Value, key: &str) -> Option<String> {

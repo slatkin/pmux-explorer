@@ -265,6 +265,41 @@ pub(crate) fn has_missing_hooks(
     !missing_hooks(agent, current_config, hook_script).is_empty()
 }
 
+/// Build the producer contract for an agent that has no hook configuration
+/// file.
+///
+/// pi has no settings file to merge hooks into, and no hook registrations to
+/// merge: its producer is an extension that calls the sidebar binary once
+/// per event. The contract states the command, the events and the fields of
+/// each event, and it is the same table the pi adapter parses.
+pub(crate) fn build_pi_contract() -> serde_json::Value {
+    use crate::adapter::pi::PI_EVENTS;
+
+    let events: Vec<serde_json::Value> = PI_EVENTS
+        .iter()
+        .map(|(event, kind, fields)| {
+            serde_json::json!({
+                "event": event,
+                "kind": kind.external_name(),
+                "fields": fields,
+            })
+        })
+        .collect();
+
+    serde_json::json!({
+        "agent": "pi",
+        "command": "tmux-agent-sidebar hook pi <event>",
+        "events": events,
+        "notes": [
+            "The pane is the one in $TMUX_PANE, read from the environment of the command.",
+            "The command is not awaited: spawn it, write the payload, close the pipe, move on.",
+            "A missing binary is not an error: the producer does nothing.",
+            "The protocol is written down in docs/agent-protocol.md.",
+            "The pmux pi extension implements this contract.",
+        ],
+    })
+}
+
 /// Build the full setup output: version, resolved hook script path,
 /// and a per-agent object containing `config_path`, the normalized
 /// `hooks[]` array, and the ready-to-paste `snippet`.
@@ -283,6 +318,7 @@ pub(crate) fn build_setup_output(hook_script: &str) -> serde_json::Value {
         CodexAdapter::HOOK_REGISTRATIONS,
         hook_script,
     );
+    let pi = build_pi_contract();
 
     serde_json::json!({
         "version": crate::VERSION,
@@ -290,6 +326,7 @@ pub(crate) fn build_setup_output(hook_script: &str) -> serde_json::Value {
         "agents": {
             "claude": claude,
             "codex": codex,
+            "pi": pi,
         },
     })
 }
@@ -427,18 +464,19 @@ pub(crate) fn load_current_config(agent: &str) -> serde_json::Value {
 fn run_setup(args: &[String], hook_script: &str) -> (i32, Option<serde_json::Value>) {
     match args.len() {
         0 => (0, Some(build_setup_output(hook_script))),
+        1 if args[0] == "pi" => (0, Some(build_pi_contract())),
         1 => match build_agent_snippet(&args[0], hook_script) {
             Some(snippet) => (0, Some(snippet)),
             None => {
                 eprintln!(
-                    "error: unknown agent '{}' (expected 'claude' or 'codex')",
+                    "error: unknown agent '{}' (expected 'claude', 'codex' or 'pi')",
                     args[0]
                 );
                 (2, None)
             }
         },
         _ => {
-            eprintln!("usage: tmux-agent-sidebar setup [claude|codex]");
+            eprintln!("usage: tmux-agent-sidebar setup [claude|codex|pi]");
             (2, None)
         }
     }
