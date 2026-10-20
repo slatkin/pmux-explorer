@@ -267,16 +267,20 @@ fn parse_pane_fields_with_processes(
     let current_command = parts[pane_line_field::PANE_CURRENT_COMMAND].as_str();
     let pane_pid: Option<u32> = parts[pane_line_field::PANE_PID].parse().ok();
 
-    // Codex / OpenCode panes can leave stale tmux metadata behind after the
-    // agent exits and the pane falls back to the user's shell. Neither
-    // agent exposes a reliable "process exit" hook (Codex has no such
-    // hook, OpenCode runs under Bun where `process.on("exit")` does not
-    // fire our handlers), so the Rust polling side must own teardown:
-    // wipe pane options + activity log the first poll after the agent
-    // is gone. Subsequent polls short-circuit at the `AgentType::from_label`
-    // check above once `@pane_agent` has been cleared. Claude is excluded
-    // because its SessionEnd hook drives cleanup instead.
-    if matches!(agent, AgentType::Codex | AgentType::OpenCode) && is_shell_command(current_command)
+    // Codex / OpenCode / pi panes can leave stale tmux metadata behind after
+    // the agent exits and the pane falls back to the user's shell. None of
+    // them guarantees a "process exit" event reaches the sidebar (Codex has
+    // no such hook, OpenCode runs under Bun where `process.on("exit")` does
+    // not fire our handlers, and a pi process can be killed), so the Rust
+    // polling side must own teardown: wipe pane options + activity log the
+    // first poll after the agent is gone. Subsequent polls short-circuit at
+    // the `AgentType::from_label` check above once `@pane_agent` has been
+    // cleared. Claude is excluded because its SessionEnd hook drives cleanup
+    // instead.
+    if matches!(
+        agent,
+        AgentType::Codex | AgentType::OpenCode | AgentType::Pi
+    ) && is_shell_command(current_command)
     {
         let agent_still_alive = pane_pid
             .and_then(|pid| {
@@ -298,7 +302,8 @@ fn parse_pane_fields_with_processes(
     };
 
     // Claude: read permission_mode from hook-set tmux variable.
-    // Codex / OpenCode: no permission_mode in hooks, keep the default.
+    // Codex / OpenCode / pi: no permission_mode in the protocol, keep the
+    // default.
     let permission_mode = if agent == AgentType::Claude {
         PermissionMode::from_label(&parts[pane_line_field::PERMISSION_MODE])
     } else {
@@ -444,8 +449,12 @@ fn pane_output_needs_process_snapshot(all_panes_output: &str) -> bool {
             return false;
         }
         let pane_fields = &parts[session_line_field::PANE_LINE_OFFSET..];
-        AgentType::from_label(&pane_fields[pane_line_field::AGENT])
-            .is_some_and(|agent| matches!(agent, AgentType::Codex | AgentType::OpenCode))
+        AgentType::from_label(&pane_fields[pane_line_field::AGENT]).is_some_and(|agent| {
+            matches!(
+                agent,
+                AgentType::Codex | AgentType::OpenCode | AgentType::Pi
+            )
+        })
     })
 }
 
@@ -935,6 +944,116 @@ mod tests {
     fn split_tmux_fields_unescapes_delimiter() {
         let fields = split_tmux_fields("one|two\\|still-two|three", '|');
         assert_eq!(fields, vec!["one", "two|still-two", "three"]);
+    }
+
+    #[test]
+    fn parse_pane_line_wipes_stale_state_for_pi_shell_pane() {
+        // A pi process can be killed without a shutdown event reaching the
+        // sidebar, so a pi pane that fell back to the shell is swept the
+        // same way a Codex or an OpenCode pane is.
+        let _guard = test_mock::install();
+        let pane = "%PI_STALE";
+        test_mock::set(pane, PANE_AGENT, "pi");
+        test_mock::set(pane, PANE_PROMPT, "previous pi prompt");
+        test_mock::set(pane, PANE_PROMPT_SOURCE, "user");
+        test_mock::set(pane, PANE_STATUS, "running");
+        test_mock::set(pane, PANE_CWD, "/repo");
+        test_mock::set(pane, PANE_SESSION_ID, "ses-pi");
+        let log = crate::activity::log_file_path(pane);
+        let _ = std::fs::create_dir_all(log.parent().unwrap());
+        std::fs::write(&log, "1234|Read|main.rs\n").unwrap();
+
+        let mut fields = full_fields();
+        fields[pane_line_field::PANE_ID] = pane;
+        fields[pane_line_field::AGENT] = "pi";
+        fields[pane_line_field::PANE_CURRENT_COMMAND] = "zsh";
+        let line = make_pane_line(&fields);
+
+        assert!(parse_pane_line(&line).is_none());
+        for key in &[
+            PANE_AGENT,
+            PANE_PROMPT,
+            PANE_PROMPT_SOURCE,
+            PANE_STATUS,
+            PANE_CWD,
+        ] {
+            assert!(
+                !test_mock::contains(pane, key),
+                "{key} must be cleared when a pi pane falls back to shell"
+            );
+        }
+        assert!(
+            !log.exists(),
+            "pi activity log must be removed once the agent process is gone"
+        );
+    }
+
+    #[test]
+    fn parse_pane_fields_keeps_pi_shell_pane_when_process_is_alive() {
+        let _guard = test_mock::install();
+        let pane = "%PI_LIVE";
+        test_mock::set(pane, PANE_AGENT, "pi");
+        test_mock::set(pane, PANE_PROMPT, "keep me");
+
+        let mut fields = full_fields();
+        fields[pane_line_field::PANE_ID] = pane;
+        fields[pane_line_field::AGENT] = "pi";
+        fields[pane_line_field::PANE_CURRENT_COMMAND] = "zsh";
+        fields[pane_line_field::PANE_PID] = "300";
+        let fields = field_strings(&fields);
+        let snapshot = process_snapshot("300 1 zsh zsh -c pi\n301 300 pi pi\n");
+
+        let pane_info = parse_pane_fields_with_processes(&fields, Some(&snapshot))
+            .expect("live pi child process should keep pane visible");
+
+        assert_eq!(pane_info.agent, AgentType::Pi);
+        assert!(test_mock::contains(pane, PANE_AGENT));
+        assert_eq!(
+            test_mock::get(pane, PANE_PROMPT).as_deref(),
+            Some("keep me"),
+            "live pi panes must not be swept just because tmux reports a shell"
+        );
+    }
+
+    #[test]
+    fn pi_pane_needs_a_process_snapshot() {
+        // A pi pane is swept when its process is gone, so the sidebar must
+        // build the process snapshot even when pi is the only agent on
+        // screen. Without the snapshot the sweep sees no live agent and
+        // clears the pane.
+        let mut fields = full_fields();
+        fields[pane_line_field::AGENT] = "pi";
+        let mut line: Vec<String> = vec![
+            "sess".into(),
+            "3".into(),
+            "1".into(),
+            "win".into(),
+            "1".into(),
+            "0".into(),
+        ];
+        line.extend(field_strings(&fields));
+        let output = line.join("|");
+        assert!(
+            pane_output_needs_process_snapshot(&output),
+            "a pi pane must make the sidebar build a process snapshot"
+        );
+    }
+
+    #[test]
+    fn claude_only_panes_need_no_process_snapshot() {
+        let mut fields = full_fields();
+        fields[pane_line_field::AGENT] = "claude";
+        let mut line: Vec<String> = vec![
+            "sess".into(),
+            "3".into(),
+            "1".into(),
+            "win".into(),
+            "1".into(),
+            "0".into(),
+        ];
+        line.extend(field_strings(&fields));
+        let output = line.join("|");
+        assert!(!pane_output_needs_process_snapshot(&output));
     }
 
     #[test]

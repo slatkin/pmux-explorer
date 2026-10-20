@@ -1,32 +1,8 @@
-use crate::event::{AgentEvent, AgentEventKind, EventAdapter, WorktreeInfo};
+use crate::event::{AgentEvent, AgentEventKind, EventAdapter};
 use crate::tmux::CLAUDE_AGENT;
 use serde_json::Value;
 
-use super::{HookRegistration, json_str};
-
-/// Parse optional worktree object from hook payload.
-/// Returns None if the "worktree" field is missing or not an object.
-fn parse_worktree(input: &Value) -> Option<WorktreeInfo> {
-    let obj = input.get("worktree")?;
-    if !obj.is_object() {
-        return None;
-    }
-    let name = json_str(obj, "name");
-    let path = json_str(obj, "path");
-    let branch = json_str(obj, "branch");
-    let original = json_str(obj, "originalRepoDir");
-    if name.is_empty() && path.is_empty() && branch.is_empty() && original.is_empty() {
-        return None;
-    }
-    Some(WorktreeInfo {
-        name: name.into(),
-        path: path.into(),
-        branch: branch.into(),
-        original_repo_dir: original.into(),
-    })
-}
-
-use super::optional_str;
+use super::{HookRegistration, json_str, optional_str, parse_worktree};
 
 fn parse_json_field(input: &Value, field: &str) -> Value {
     input

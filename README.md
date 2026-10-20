@@ -30,6 +30,8 @@
 
 OpenCode uses a small local plugin bridge instead of per-event hook config. The plugin lives at `.opencode/plugins/tmux-agent-sidebar.js` and can be symlinked as a single file into `~/.config/opencode/plugins/` so it coexists with any existing plugins.
 
+pi is supported through the pmux extension: pmux ships a pi extension that loads in every pi session and publishes the session's activity to the sidebar.
+
 ## Requirements
 
 - tmux 3.0+
@@ -43,7 +45,7 @@ OpenCode uses a small local plugin bridge instead of per-event hook config. The 
 Using [TPM](https://github.com/tmux-plugins/tpm):
 
 ```tmux
-set -g @plugin 'hiroppy/tmux-agent-sidebar'
+set -g @plugin 'slatkin/tmux-agent-sidebar'
 ```
 
 Reload tmux (`tmux source ~/.tmux.conf`), then press `prefix + I`. The install wizard downloads a pre-built binary or builds from source.
@@ -54,7 +56,7 @@ Reload tmux (`tmux source ~/.tmux.conf`), then press `prefix + I`. The install w
 
   ```sh
   /plugin marketplace add ~/.tmux/plugins/tmux-agent-sidebar
-  /plugin install tmux-agent-sidebar@hiroppy
+  /plugin install tmux-agent-sidebar@slatkin
   ```
 
 - **Codex** — open a Codex pane, press `prefix + e`, click the yellow `ⓘ` badge, copy the setup snippet, paste it into the Codex pane.
