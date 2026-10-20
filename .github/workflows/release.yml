@@ -91,3 +91,5 @@ jobs:
         with:
           body: ${{ steps.changelog.outputs.body }}
           files: tmux-agent-sidebar-*
+
+# The fork releases and deploys from the same workflows as upstream.
