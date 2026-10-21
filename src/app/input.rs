@@ -323,14 +323,14 @@ mod tests {
     }
 
     #[test]
-    fn bare_p_does_not_navigate_the_selection() {
+    fn bare_p_toggles_the_popout_and_does_not_navigate() {
         // The bare `p` runs the pop-out action, not navigation. The pane
         // id cannot exist in any tmux server, so the pane probe fails and
-        // the pop-out stays silent — an unknown window size (0) means
-        // "do not act", not a refusal (the refusal flash itself is
-        // covered by the injected popout tests). What this test pins is
-        // the old bare-`p` navigation guarantee: the selection starts off
-        // row 0, so a `p` that navigated would move it and fail here.
+        // the action reports the unreadable window size instead of acting
+        // — the flash is the proof that `p` reached the pop-out (the
+        // refusal flash itself is covered by the injected popout tests).
+        // The selection starts off row 0, so a `p` that navigated would
+        // move it and fail here.
         let mut state = state_with_three_panes();
         state.tmux_pane = "%4294967295".into();
         state.global.selected_pane_row = 1;
@@ -338,8 +338,11 @@ mod tests {
         handle_key_event(key(KeyCode::Char('p')), &mut state, &flag);
         assert_eq!(state.global.selected_pane_row, 1);
         assert!(
-            state.flash.is_none(),
-            "a failed pane probe is silent, not a refusal"
+            state
+                .flash
+                .as_ref()
+                .is_some_and(|(msg, _)| msg.starts_with("Pop-out unavailable:")),
+            "pressing `p` must reach the pop-out action"
         );
     }
 

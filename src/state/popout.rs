@@ -66,7 +66,8 @@ pub fn clamp_bottom_height(bottom_height: u16, panel_height: u16) -> u16 {
 /// query failed (or the pane is gone); asking tmux to float a pane with
 /// a 0 height is refused ("position too small"), which would flash a
 /// confusing refusal for what is really a failed probe — so an unknown
-/// size means "do not act", the same rule the guard modules apply.
+/// size means "do not act" (with an accurate flash, not silence), the
+/// same rule the guard modules apply.
 fn float_geometry(info: SidebarPaneInfo) -> Option<PanelGeometry> {
     if info.window_width == 0 || info.window_height == 0 {
         return None;
@@ -99,7 +100,15 @@ impl AppState {
         // Precondition: `toggle_popout` only routes a docked pane here.
         debug_assert!(!info.floating, "pop_out_with requires a docked pane");
         let Some(geometry) = float_geometry(info) else {
-            return; // unknown window size: the probe failed, do not act
+            // Unknown window size: the probe failed (pane gone, tmux
+            // unreachable) or tmux never reported the size (older than
+            // the floating flag). No tmux call — a 0-size float is
+            // refused with "position too small" — but the user who
+            // pressed `p` must learn why nothing happened.
+            self.set_flash(
+                "Pop-out unavailable: could not read the window size, so the sidebar stays docked.",
+            );
+            return;
         };
         let result = tmux::float_pane(
             &self.tmux_pane,
@@ -308,12 +317,19 @@ mod tests {
     }
 
     #[test]
-    fn toggle_popout_with_an_unknown_window_size_does_not_act() {
+    fn toggle_popout_with_an_unknown_window_size_says_so_and_does_not_act() {
         // The probe failed (pane gone, tmux unreachable): no tmux call is
-        // made and nothing flashes — a failed probe is not a refusal.
+        // made and the pane stays docked, but the user is told why the
+        // sidebar did not float — a failed probe is not a refusal, so the
+        // flash is an accurate notice, not "Pop-out refused".
         let mut state = AppState::new("%4294967295".into());
         state.toggle_popout_with(SidebarPaneInfo::FALLBACK);
-        assert!(state.flash.is_none());
+        assert_eq!(
+            state.flash.as_ref().map(|(msg, _)| msg.clone()).as_deref(),
+            Some(
+                "Pop-out unavailable: could not read the window size, so the sidebar stays docked."
+            ),
+        );
         assert_eq!(state.docked_width, None);
         assert!(!state.sidebar_pane.floating);
     }

@@ -1697,13 +1697,14 @@ mod tests {
     }
 
     #[test]
-    fn filter_click_on_the_popout_control_keeps_the_filter() {
+    fn filter_click_on_the_popout_control_pops_out_and_keeps_the_filter() {
         // The control is hit-tested before the chip walk: a click on its
         // column runs the pop-out action and never touches the status
         // filter. The pane id cannot exist in any tmux server, so the
-        // pane probe fails and the pop-out does not act — an unknown
-        // window size means "do not act", not a refusal (the refusal
-        // flash itself is covered by the injected popout tests).
+        // pane probe fails and the action reports the unreadable window
+        // size instead of acting — the flash is the proof that the click
+        // reached the pop-out (the refusal flash itself is covered by
+        // the injected popout tests).
         let mut state = AppState::new("%4294967295".into());
         state.layout.filter_bar_width = 20;
         state.global.status_filter = StatusFilter::All;
@@ -1711,12 +1712,17 @@ mod tests {
         state.handle_filter_click(19);
         assert_eq!(state.global.status_filter, StatusFilter::All);
         assert!(
-            state.flash.is_none(),
-            "a failed pane probe is silent, not a refusal"
+            state
+                .flash
+                .as_ref()
+                .is_some_and(|(msg, _)| msg.starts_with("Pop-out unavailable:")),
+            "clicking the control must reach the pop-out action"
         );
 
         // A click on a chip column still walks the chips and selects the
-        // matching category even with the control column registered.
+        // matching category even with the control column registered, and
+        // it must not pop out.
+        state.flash = None;
         reset_filter_debounce(&mut state);
         state.handle_filter_click(4); // "●" busy chip
         assert_eq!(state.global.status_filter, StatusFilter::Busy);
