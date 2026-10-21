@@ -54,7 +54,7 @@ The agent started, or resumed.
 | `cwd` | The working directory of the agent. |
 | `session_id` | The agent's own identifier for this session. The sidebar uses it to find the session's name and its transcript. |
 | `source` | Why the session started. Free text. |
-| `permission_mode` | The agent's permission mode, if it has one. Only Claude reports it, and only Claude shows the badge. |
+| `permission_mode` | The agent's permission mode, if it has one. Only Claude reports it, and only Claude shows the permission-mode badge. pi reports none. The badge slot is shared: a pmux subagent pane shows a `subagent`/`resumed` badge there instead. |
 | `agent_id` | The identifier of a subagent, when the event is about one. |
 | `worktree` | An object with `name`, `path`, `branch` and `originalRepoDir`, when the agent works in a worktree. |
 
@@ -241,7 +241,8 @@ agents do not all report the same things. A producer that cannot report
 something leaves it out, and the sidebar shows less rather than guessing.
 
 - The permission mode badge is a Claude feature. pi has no permission mode
-  the sidebar can read.
+  the sidebar can read. A pmux subagent pane is still marked with a
+  `subagent`/`resumed` badge in that slot, which is not a permission mode.
 - The task progress needs a task tool. Claude has one, pi does not.
 - The subagent tree needs subagents inside the agent's process. pmux runs
   child agents in their own panes, and the sidebar shows each of those panes
