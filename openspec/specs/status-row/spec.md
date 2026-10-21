@@ -45,6 +45,7 @@ setting SHALL NOT affect the result.
   and the pane runs pi
 - **THEN** the status row shows `pi ♟ my-task`
 
+
 #### Scenario: A pane whose title is the host name
 
 - **WHEN** the pane's title equals the host name
