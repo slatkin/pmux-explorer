@@ -807,84 +807,108 @@ fn full_sync_picks_up_cursor_from_another_instance() {
     );
 }
 
-// ─── window activation sync tests ───────────────────────────────────
-// In the main loop, load_from_tmux() is called ONLY when the sidebar's
-// window becomes active after being inactive for ≥2 refresh cycles
-// (debounced to ignore hook-induced flicker). Periodic refresh within
-// the same active window does NOT sync global state.
+// ─── Per-tick shared options sync tests ─────────────────────────
+// The main loop applies the shared tmux options on every refresh tick
+// (`apply_shared_options` → `GlobalState::apply_all`). The
+// `last_saved_*` guards are the only protection a window-activation
+// flicker needs: a tick changes a field only when another instance
+// wrote a value the guard does not already know about.
 
 #[test]
-fn global_state_stable_during_task_completion() {
-    // Task completes in the active window — window stays active,
-    // so load_from_tmux is never called. Filter stays as user set it.
-    let mut g = make_global();
-
-    g.apply_all(&make_opts(&[(tmux::SIDEBAR_FILTER, "running")]));
-    g.status_filter = StatusFilter::Idle;
-
-    // No apply_all called during task completion (window still active).
-    assert_eq!(
-        g.status_filter,
-        StatusFilter::Idle,
-        "filter must not change during task completion (window stayed active)"
-    );
-}
-
-#[test]
-fn window_switch_syncs_after_debounce() {
-    // Simulates: user leaves this window (inactive for 2+ cycles),
-    // another instance changes filter, user returns → sync fires.
+fn per_tick_does_not_revert_filter_after_failed_save() {
+    // The sidebar adopts "running" from tmux, then the user switches to
+    // Idle but the save fails (last_saved_filter stays Busy). Every
+    // later tick re-reads "running", which equals last_saved → no change.
     let mut g = make_global();
 
     g.apply_all(&make_opts(&[(tmux::SIDEBAR_FILTER, "running")]));
     assert_eq!(g.status_filter, StatusFilter::Busy);
-
-    // User returns to this window after being away.
-    // Debounce passed (inactive_count >= 2) → apply_all called.
-    g.apply_all(&make_opts(&[(tmux::SIDEBAR_FILTER, "waiting")]));
-
-    assert_eq!(
-        g.status_filter,
-        StatusFilter::Waiting,
-        "window activation after debounce should sync filter"
-    );
-}
-
-#[test]
-fn window_active_flicker_does_not_trigger_sync() {
-    // Simulates: hook processing causes window_active to flicker
-    // (1 cycle of inactive). Debounce threshold (≥2) prevents sync.
-    // This is tested at the main loop level — GlobalState itself
-    // is passive. Verify that apply_all is NOT called unless the
-    // main loop determines debounce threshold was met.
-    let mut g = make_global();
-
-    g.apply_all(&make_opts(&[(tmux::SIDEBAR_FILTER, "running")]));
     g.status_filter = StatusFilter::Idle;
 
-    // Flicker: only 1 cycle of inactive (count=1 < threshold=2).
-    // Main loop would NOT call apply_all. State stays local.
+    // Several refresh ticks pass with the failed save never succeeding.
+    g.apply_all(&make_opts(&[(tmux::SIDEBAR_FILTER, "running")]));
+    g.apply_all(&make_opts(&[(tmux::SIDEBAR_FILTER, "running")]));
+    g.apply_all(&make_opts(&[(tmux::SIDEBAR_FILTER, "running")]));
+
     assert_eq!(
         g.status_filter,
         StatusFilter::Idle,
-        "1-cycle flicker must not trigger sync"
+        "per-tick sync must not revert a filter whose save failed"
     );
 }
 
 #[test]
-fn window_activation_syncs_all_fields() {
-    // Window activation triggers full sync of filter, cursor, and repo filter.
+fn per_tick_does_not_revert_pending_cursor_save() {
+    // The user navigates to row 5 but the debounced save has not fired
+    // yet, so tmux still holds 2 (= last_saved_cursor). Ticks that run
+    // before the flush must not drag the cursor back to 2.
+    let mut g = make_global();
+
+    g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "2")]));
+    assert_eq!(g.selected_pane_row, 2);
+    g.selected_pane_row = 5;
+    g.queue_cursor_save();
+
+    // Ticks run while the save is still pending (tmux value unchanged).
+    g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "2")]));
+    g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "2")]));
+
+    assert_eq!(
+        g.selected_pane_row, 5,
+        "per-tick sync must not revert a cursor whose save is pending"
+    );
+}
+
+#[test]
+fn per_tick_picks_up_cursor_and_repo_filter_from_another_instance() {
+    // Both instances start from the same synced values; the other one
+    // then writes a new cursor and repo filter, and this instance's
+    // next tick adopts both in a single apply.
     let mut g = make_global();
 
     g.apply_all(&make_opts(&[
-        (tmux::SIDEBAR_FILTER, "idle"),
-        (tmux::SIDEBAR_CURSOR, "4"),
-        (tmux::SIDEBAR_REPO_FILTER, "my-app"),
+        (tmux::SIDEBAR_CURSOR, "1"),
+        (tmux::SIDEBAR_REPO_FILTER, "app"),
+    ]));
+    assert_eq!(g.selected_pane_row, 1);
+    assert_eq!(g.repo_filter, RepoFilter::Repo("app".into()));
+
+    g.apply_all(&make_opts(&[
+        (tmux::SIDEBAR_CURSOR, "6"),
+        (tmux::SIDEBAR_REPO_FILTER, "other"),
     ]));
 
-    assert_eq!(g.status_filter, StatusFilter::Idle);
-    assert_eq!(g.selected_pane_row, 4);
-    assert_eq!(g.repo_filter, RepoFilter::Repo("my-app".into()));
+    assert_eq!(
+        g.selected_pane_row, 6,
+        "one tick should pick up the other instance's cursor"
+    );
+    assert_eq!(
+        g.repo_filter,
+        RepoFilter::Repo("other".into()),
+        "one tick should pick up the other instance's repo filter"
+    );
+}
+
+#[test]
+fn per_tick_unchanged_tmux_value_leaves_local_change_alone() {
+    // The user narrows the repo filter locally but the write has not
+    // landed, so tmux keeps "app" — the same value as last_saved. Ticks
+    // that keep re-reading it must not clobber the local choice.
+    let mut g = make_global();
+
+    g.apply_all(&make_opts(&[(tmux::SIDEBAR_REPO_FILTER, "app")]));
+    assert_eq!(g.repo_filter, RepoFilter::Repo("app".into()));
+    g.repo_filter = RepoFilter::Repo("mine".into());
+
+    g.apply_all(&make_opts(&[(tmux::SIDEBAR_REPO_FILTER, "app")]));
+    g.apply_all(&make_opts(&[(tmux::SIDEBAR_REPO_FILTER, "app")]));
+    g.apply_all(&make_opts(&[(tmux::SIDEBAR_REPO_FILTER, "app")]));
+
+    assert_eq!(
+        g.repo_filter,
+        RepoFilter::Repo("mine".into()),
+        "an unchanged tmux value must not overwrite a local change"
+    );
 }
 
 // ─── Spawn / Remove Popup State ───────────────────────────────────

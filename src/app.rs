@@ -33,7 +33,6 @@ pub fn run(
     needs_refresh: &'static AtomicBool,
 ) -> io::Result<()> {
     let mut state = setup::init_state(tmux_pane);
-    let mut window_inactive_count: u32 = 0;
 
     let workers = workers::spawn(&state);
     let workers::Workers {
@@ -111,13 +110,6 @@ pub fn run(
                     &mut last_window_height,
                     state.sidebar_pane.floating,
                 );
-                if window_inactive_count >= 2 {
-                    state.global.load_from_tmux();
-                    state.rebuild_row_targets();
-                }
-                window_inactive_count = 0;
-            } else {
-                window_inactive_count = window_inactive_count.saturating_add(1);
             }
             git_tab_active.store(state.bottom_tab == BottomTab::GitStatus, Ordering::Relaxed);
             last_refresh = std::time::Instant::now();
