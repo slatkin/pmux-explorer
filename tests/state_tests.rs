@@ -681,33 +681,6 @@ fn apply_all_applies_all_three_from_tmux() {
 // ─── last_saved guard tests (protects against save failure revert) ───
 
 #[test]
-fn apply_all_does_not_revert_filter_after_save_failure() {
-    // The original bug scenario:
-    // 1. Startup: tmux has "error", sidebar adopts it
-    // 2. User changes filter to Running, but save_filter fails
-    // 3. Next sync should NOT overwrite Running back to Error
-    //    because last_saved_filter == Error == tmux value → no change
-    let mut g = make_global();
-
-    // Step 1: startup sync adopts "error" from tmux
-    g.apply_all(&make_opts(&[(tmux::SIDEBAR_FILTER, "error")]));
-    assert_eq!(g.status_filter, StatusFilter::Error);
-
-    // Step 2: user changes filter locally, save_filter fails
-    // (last_saved_filter stays Error)
-    g.status_filter = StatusFilter::Busy;
-
-    // Step 3: next sync reads tmux "error", but last_saved is also Error → equal → no change
-    g.apply_all(&make_opts(&[(tmux::SIDEBAR_FILTER, "error")]));
-
-    assert_eq!(
-        g.status_filter,
-        StatusFilter::Busy,
-        "sync must not revert filter when save failed — the original bug scenario"
-    );
-}
-
-#[test]
 fn apply_all_picks_up_change_from_another_instance() {
     // Simulates: this instance saved "running", another instance later
     // saved "waiting". The next tick should pick up "waiting".

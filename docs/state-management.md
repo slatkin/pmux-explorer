@@ -18,6 +18,14 @@ read from tmux on every refresh tick.
 
 Each field has a corresponding `last_saved_*` to prevent sync conflicts — only overwrites tmux if the local write succeeded.
 
+The status filter additionally has a `filter_save_pending` latch:
+when tmux rejects a `set -g @sidebar_filter` write, the latch is set
+and `apply_all` skips adopting the shared filter, because tmux still
+holds the stale value the write was meant to replace and adopting it
+would revert the user's choice. `retry_pending_filter_save` retries
+the write once per refresh tick, before the tick reads the shared
+options, so a successful retry is what that tick reads back.
+
 ### Per-pane State (keyed by pane ID)
 
 Written by `cli/hook.rs` on agent events, read by `query_sessions()` every **1 second**.

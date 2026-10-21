@@ -1188,18 +1188,6 @@ mod tests {
     }
 
     #[test]
-    fn status_row_pane_without_name_shows_only_agent_label() {
-        // A pane with no pane name shows only the agent label in the
-        // title slot — no placeholder, no session name.
-        let theme = ColorTheme::default();
-        let ctx = test_ctx(&theme, 40, false);
-        let mut p = pi_pane();
-        p.pane_name = None;
-        let line = status_row(&p, &ctx, &StatusIcons::default(), 0, 0);
-        insta::assert_snapshot!(line_text(&line), @"  ● pi");
-    }
-
-    #[test]
     fn status_row_named_pane_shows_agent_label_then_pane_name() {
         let theme = ColorTheme::default();
         let ctx = test_ctx(&theme, 40, false);

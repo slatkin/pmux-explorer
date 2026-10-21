@@ -23,8 +23,8 @@ pub(super) fn status_row(
     let icon_color =
         pulse_color.unwrap_or_else(|| theme.status_color(&pane.status, pane.attention));
     // The agent label is always shown; a real pane name (set via pmux's
-    // `select-pane -T`) is appended after it. The session name is never
-    // shown in the title slot.
+    // `select-pane -T`) is appended after it. Only the pane's own name
+    // is shown in the title slot — never the tmux session name.
     let agent_label = pane.agent.label();
     // A subagent pane owns the badge slot: a pi pane always has the default
     // permission mode, whose badge is empty, so the pmux identity can use it.

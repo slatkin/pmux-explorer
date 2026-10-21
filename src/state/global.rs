@@ -48,11 +48,12 @@ impl GlobalState {
     }
 
     /// Save filter to tmux global variable.
-    /// Only updates `last_saved_filter` on success so that a failed write
-    /// does not cause sync to overwrite the user's choice, and leaves
-    /// `filter_save_pending` set so the next refresh tick retries the
-    /// write instead of letting the instance drift from the shared value.
-    pub fn save_filter(&mut self) -> bool {
+    /// Only updates `last_saved_filter` on success so that a failed
+    /// write does not cause sync to overwrite the user's choice, and
+    /// sets `filter_save_pending` so the next refresh tick retries the
+    /// write instead of letting the instance drift from the shared
+    /// value.
+    pub fn save_filter(&mut self) {
         if tmux::run_tmux(&[
             "set",
             "-g",
@@ -63,10 +64,8 @@ impl GlobalState {
         {
             self.last_saved_filter = self.status_filter;
             self.filter_save_pending = false;
-            true
         } else {
             self.filter_save_pending = true;
-            false
         }
     }
 
@@ -136,20 +135,19 @@ impl GlobalState {
         self.apply_all(&opts);
     }
 
-    /// Apply the shared options read from tmux (filter, cursor, repo
-    /// filter). Runs once at startup and on every refresh tick.
     /// Retry a filter write tmux rejected, so an instance cannot drift
     /// from the shared value and later have its stale choice adopted by
     /// (or pushed onto) every other sidebar. Called once per refresh
     /// tick, before the tick reads the shared options, so a successful
     /// retry is what that tick reads back.
-    pub fn retry_pending_filter_save(&mut self) -> bool {
-        if !self.filter_save_pending {
-            return false;
+    pub fn retry_pending_filter_save(&mut self) {
+        if self.filter_save_pending {
+            self.save_filter();
         }
-        self.save_filter()
     }
 
+    /// Apply the shared options read from tmux (filter, cursor, repo
+    /// filter). Runs once at startup and on every refresh tick.
     pub fn apply_all(&mut self, opts: &HashMap<String, String>) {
         // While a filter write is pending, tmux holds the value this
         // instance is trying to replace. Adopting it would revert the
@@ -211,11 +209,5 @@ mod tests {
         g.apply_all(&opts(&[(tmux::SIDEBAR_FILTER, "all")]));
 
         assert_eq!(g.status_filter, StatusFilter::Busy);
-    }
-
-    #[test]
-    fn retry_reports_nothing_to_do_without_a_pending_save() {
-        let mut g = GlobalState::new();
-        assert!(!g.retry_pending_filter_save());
     }
 }

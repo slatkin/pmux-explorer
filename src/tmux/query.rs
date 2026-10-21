@@ -1021,58 +1021,22 @@ mod tests {
     // ─── pane_name resolution tests ────────────────────────────
 
     #[test]
-    fn parse_pane_line_named_title_resolves_to_pane_name() {
-        // pmux names a pane with `select-pane -T my-task`; a title that is
-        // neither empty, the host name, nor an agent OSC title is a name.
-        let mut fields = full_fields();
-        fields[pane_line_field::PANE_TITLE] = "my-task";
-        let pane = parse_pane_line(&make_pane_line(&fields)).unwrap();
-        assert_eq!(pane.pane_name.as_deref(), Some("my-task"));
-    }
-
-    #[test]
-    fn parse_pane_line_host_title_is_not_a_name() {
-        // tmux defaults the title to the host name.
-        let mut fields = full_fields();
-        fields[pane_line_field::PANE_TITLE] = "myhost";
-        let pane = parse_pane_line(&make_pane_line(&fields)).unwrap();
-        assert!(
-            pane.pane_name.is_none(),
-            "a title equal to the host name is not a pane name"
-        );
-    }
-
-    #[test]
-    fn parse_pane_line_pi_osc_title_is_not_a_name() {
-        let mut fields = full_fields();
-        fields[pane_line_field::PANE_TITLE] = "π - send-report-channel";
-        let pane = parse_pane_line(&make_pane_line(&fields)).unwrap();
-        assert!(
-            pane.pane_name.is_none(),
-            "pi's OSC title is not a pane name"
-        );
-    }
-
-    #[test]
-    fn parse_pane_line_claude_osc_title_is_not_a_name() {
-        let mut fields = full_fields();
-        fields[pane_line_field::PANE_TITLE] = "✳ Claude Code";
-        let pane = parse_pane_line(&make_pane_line(&fields)).unwrap();
-        assert!(
-            pane.pane_name.is_none(),
-            "Claude's OSC title is not a pane name"
-        );
-    }
-
-    #[test]
-    fn parse_pane_line_empty_title_is_not_a_name() {
-        let mut fields = full_fields();
-        fields[pane_line_field::PANE_TITLE] = "";
-        let pane = parse_pane_line(&make_pane_line(&fields)).unwrap();
-        assert!(
-            pane.pane_name.is_none(),
-            "an empty title is not a pane name"
-        );
+    fn parse_pane_line_pane_name_gate() {
+        // A title that is non-empty, different from the host name, and
+        // not an agent OSC title is a pane name; anything else is None.
+        let cases = [
+            ("my-task", Some("my-task")),      // pmux `select-pane -T my-task`
+            ("myhost", None),                  // tmux default: the host name
+            ("π - send-report-channel", None), // pi's OSC title
+            ("✳ Claude Code", None),           // Claude Code's OSC title
+            ("", None),                        // empty title
+        ];
+        for (title, expected) in cases {
+            let mut fields = full_fields();
+            fields[pane_line_field::PANE_TITLE] = title;
+            let pane = parse_pane_line(&make_pane_line(&fields)).unwrap();
+            assert_eq!(pane.pane_name.as_deref(), expected, "title: {title:?}");
+        }
     }
 
     // ─── parse_subagent_identity tests ────────────────────────────
