@@ -13,5 +13,5 @@
 
 ## 3. Integration checks
 
-- [ ] 3.1 Run `cargo fmt --check`, `cargo clippy`, `cargo test` and `cargo build --release`. Verify that all four pass.
+- [x] 3.1 Run `cargo fmt --check`, `cargo clippy`, `cargo test` and `cargo build --release`. Verify that all four pass.
 - [ ] 3.2 Do a manual check in tmux with the release build and two sessions, each with two windows that have a sidebar. Set the waiting filter in session A, switch the client to session B, and verify that its sidebar shows the waiting filter within 1 second. Then go from window 1 to window 2, change the filter, go back in less than 2 seconds, and verify that window 1 shows the new filter. Verify that the bottom tab of each sidebar stays as it was.
