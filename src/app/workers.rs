@@ -1,11 +1,9 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver};
 use std::time::Duration;
 
 use crate::git::{self, GitData};
-use crate::session;
 use crate::state::{AppState, BottomTab};
 use crate::tmux;
 use crate::version::{self, UpdateNotice};
@@ -14,25 +12,20 @@ use crate::version::{self, UpdateNotice};
 /// drains every tick.
 pub(super) struct Workers {
     pub git_rx: Receiver<GitData>,
-    pub session_rx: Receiver<HashMap<String, String>>,
     pub version_rx: Receiver<UpdateNotice>,
     pub git_tab_active: Arc<AtomicBool>,
 }
 
-/// Spawn the background threads (git polling, session-name polling, version
+/// Spawn the background threads (git polling, version
 /// notice fetch) that feed the event loop.
 pub(super) fn spawn(state: &AppState) -> Workers {
     let (git_tx, git_rx) = mpsc::channel::<GitData>();
-    let (session_tx, session_rx) = mpsc::channel::<HashMap<String, String>>();
     let (version_tx, version_rx) = mpsc::channel::<UpdateNotice>();
     let tmux_pane_clone = state.tmux_pane.clone();
     let git_tab_active = Arc::new(AtomicBool::new(state.bottom_tab == BottomTab::GitStatus));
     let git_tab_flag = Arc::clone(&git_tab_active);
     std::thread::spawn(move || {
         git_poll_loop(&tmux_pane_clone, &git_tx, &git_tab_flag);
-    });
-    std::thread::spawn(move || {
-        session_poll_loop(&session_tx);
     });
     std::thread::spawn(move || {
         if let Some(notice) = version::fetch_update_notice() {
@@ -42,22 +35,8 @@ pub(super) fn spawn(state: &AppState) -> Workers {
 
     Workers {
         git_rx,
-        session_rx,
         version_rx,
         git_tab_active,
-    }
-}
-
-/// Session name polling thread. Scans `~/.claude/sessions/*.json` every 10
-/// seconds so the main TUI thread never performs blocking filesystem I/O
-/// to refresh `/rename`-assigned labels.
-pub(super) fn session_poll_loop(tx: &mpsc::Sender<HashMap<String, String>>) {
-    loop {
-        std::thread::sleep(Duration::from_secs(10));
-        let names = session::scan_session_names();
-        if tx.send(names).is_err() {
-            return;
-        }
     }
 }
 

@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::time::Duration;
 
 use crate::activity::{self, TaskProgress};
@@ -57,34 +57,7 @@ impl AppState {
         sessions: Vec<SessionInfo>,
     ) {
         self.focus_state.sidebar_focused = sidebar_focused;
-        // Capture the prior `pane_id → session_id` map so we can detect
-        // anything that should re-trigger `refresh_session_names`:
-        //   - a brand-new pane_id (first appearance)
-        //   - an existing pane whose session_id changed (e.g. /clear or
-        //     a Codex session swap reuses the same pane_id but binds a
-        //     new session label)
-        let prev_session_ids: HashMap<String, Option<String>> = self
-            .repo_groups
-            .iter()
-            .flat_map(|g| {
-                g.panes
-                    .iter()
-                    .map(|(p, _)| (p.pane_id.clone(), p.session_id.clone()))
-            })
-            .collect();
         self.repo_groups = crate::group::group_panes_by_repo(&sessions);
-        if !self.sessions.dirty
-            && self
-                .repo_groups
-                .iter()
-                .flat_map(|g| g.panes.iter())
-                .any(|(p, _)| match prev_session_ids.get(&p.pane_id) {
-                    None => true,
-                    Some(prev_sid) => *prev_sid != p.session_id,
-                })
-        {
-            self.sessions.dirty = true;
-        }
         self.prune_pane_states_to_current_panes();
         self.rebuild_row_targets();
         self.find_focused_pane();
@@ -140,6 +113,10 @@ impl AppState {
     /// Returns whether the sidebar's window is the active tmux window.
     pub fn refresh(&mut self) -> bool {
         self.refresh_now();
+        // Retry a filter write tmux rejected before reading the shared
+        // options, so the read below sees the value this instance just
+        // tried to write instead of the stale one it replaces.
+        self.global.retry_pending_filter_save();
         let reading = tmux::get_sidebar_pane_reading(&self.tmux_pane);
         self.sidebar_pane = reading.info;
         // The shared settings ride along on the same per-tick
@@ -165,30 +142,8 @@ impl AppState {
         } else {
             self.apply_session_snapshot(focused, sessions);
         }
-        if self.sessions.dirty {
-            self.refresh_session_names();
-            self.sessions.dirty = false;
-        }
         self.refresh_activity_data();
         window_active
-    }
-
-    /// Apply the current `session_id → name` map to each pane so the
-    /// sidebar can render `/rename`-assigned labels. The map itself is
-    /// refreshed off-thread by `session_poll_loop` in `main.rs`; this
-    /// function only consumes the cached snapshot.
-    fn refresh_session_names(&mut self) {
-        for group in &mut self.repo_groups {
-            for (pane, _) in &mut group.panes {
-                if let Some(sid) = &pane.session_id
-                    && let Some(name) = self.sessions.names.get(sid)
-                {
-                    pane.session_name.clone_from(name);
-                } else {
-                    pane.session_name.clear();
-                }
-            }
-        }
     }
 
     pub(crate) fn refresh_port_data(
@@ -481,8 +436,8 @@ mod tests {
             pane_pid: None,
             worktree: WorktreeMetadata::default(),
             session_id: None,
-            session_name: String::new(),
             sidebar_spawned: false,
+            pane_name: None,
             bg_shell_cmd: None,
             subagent: None,
         }
@@ -852,123 +807,5 @@ mod tests {
         let filtered = AppState::filter_sessions_to_live_agent_panes(sessions, &live);
 
         assert!(filtered.is_empty());
-    }
-
-    // ─── refresh_session_names ──────────────────────────────────────
-    //
-    // refresh_session_names no longer scans the filesystem itself; it
-    // only consumes the cached `session_names` map populated by the
-    // dedicated polling thread in `main.rs`. These tests pin that
-    // contract: the function must apply the cached snapshot to every
-    // pane and clear stale labels for panes whose session_id is no
-    // longer in the map.
-
-    fn pane_with_session(id: &str, session_id: &str) -> PaneInfo {
-        let mut p = test_pane(id);
-        p.session_id = Some(session_id.to_string());
-        p
-    }
-
-    fn state_with_panes(panes: Vec<PaneInfo>) -> AppState {
-        let mut state = AppState::new("%99".into());
-        state.repo_groups = vec![crate::group::RepoGroup {
-            name: "test".into(),
-            has_focus: true,
-            panes: panes
-                .into_iter()
-                .map(|p| (p, crate::group::PaneGitInfo::default()))
-                .collect(),
-        }];
-        state
-    }
-
-    #[test]
-    fn refresh_session_names_applies_cached_map_to_panes() {
-        let mut state = state_with_panes(vec![
-            pane_with_session("%1", "sess-a"),
-            pane_with_session("%2", "sess-b"),
-        ]);
-        state.sessions.names.insert("sess-a".into(), "alpha".into());
-        state.sessions.names.insert("sess-b".into(), "beta".into());
-
-        state.refresh_session_names();
-
-        let names: Vec<&str> = state.repo_groups[0]
-            .panes
-            .iter()
-            .map(|(p, _)| p.session_name.as_str())
-            .collect();
-        assert_eq!(names, vec!["alpha", "beta"]);
-    }
-
-    #[test]
-    fn refresh_session_names_clears_stale_label_when_session_id_missing() {
-        // Pane already has a label from a previous tick, but its
-        // session_id no longer appears in the cached map (e.g. the
-        // session JSON file was deleted). The label must be cleared so
-        // the UI does not show a name for a session that is gone.
-        let mut state = state_with_panes(vec![pane_with_session("%1", "sess-gone")]);
-        state.repo_groups[0].panes[0].0.session_name = "old-label".into();
-        // session_names is empty — no entry for sess-gone.
-
-        state.refresh_session_names();
-
-        assert!(
-            state.repo_groups[0].panes[0].0.session_name.is_empty(),
-            "stale session_name must be cleared when the cache no longer has it"
-        );
-    }
-
-    #[test]
-    fn apply_session_snapshot_marks_dirty_when_existing_pane_swaps_session_id() {
-        // Pane %1 keeps the same pane_id across snapshots but its
-        // session_id changes (e.g. the agent restarted with a new
-        // Claude session). Without dirty propagation,
-        // refresh_session_names would be skipped and the UI would
-        // keep showing the old session label forever.
-        let mut state = state_with_panes(vec![pane_with_session("%1", "sess-old")]);
-        state.sessions.dirty = false;
-
-        let next_sessions = test_session(vec![pane_with_session("%1", "sess-new")]);
-        state.apply_session_snapshot(false, next_sessions);
-
-        assert!(
-            state.sessions.dirty,
-            "session_names_dirty must be set when an existing pane's session_id changes"
-        );
-    }
-
-    #[test]
-    fn apply_session_snapshot_does_not_mark_dirty_when_session_ids_unchanged() {
-        // Same pane, same session_id across snapshots — no need to
-        // re-walk every pane, dirty flag should stay clear.
-        let mut state = state_with_panes(vec![pane_with_session("%1", "sess-a")]);
-        state.sessions.dirty = false;
-
-        let next_sessions = test_session(vec![pane_with_session("%1", "sess-a")]);
-        state.apply_session_snapshot(false, next_sessions);
-
-        assert!(
-            !state.sessions.dirty,
-            "session_names_dirty must remain clear when nothing changed"
-        );
-    }
-
-    #[test]
-    fn refresh_session_names_clears_label_for_pane_with_no_session_id() {
-        // Pane has a session_name set but no session_id (e.g. a
-        // non-Claude agent or a pane that has not reported one yet).
-        // The function must not preserve a label that no longer ties
-        // to a known session.
-        let mut state = state_with_panes(vec![test_pane("%1")]);
-        state.repo_groups[0].panes[0].0.session_name = "stray".into();
-        state.sessions.names.insert("sess-a".into(), "alpha".into());
-
-        state.refresh_session_names();
-
-        assert!(
-            state.repo_groups[0].panes[0].0.session_name.is_empty(),
-            "pane without session_id must end up with an empty session_name"
-        );
     }
 }

@@ -22,17 +22,16 @@ pub(super) fn status_row(
     let (icon, pulse_color) = running_icon_for(&pane.status, spinner_frame, icons);
     let icon_color =
         pulse_color.unwrap_or_else(|| theme.status_color(&pane.status, pane.attention));
-    let title_raw: &str = if pane.session_name.is_empty() {
-        pane.agent.label()
-    } else {
-        &pane.session_name
-    };
+    // The agent label is always shown; a real pane name (set via pmux's
+    // `select-pane -T`) is appended after it. Only the pane's own name
+    // is shown in the title slot — never the tmux session name.
+    let agent_label = pane.agent.label();
     // A subagent pane owns the badge slot: a pi pane always has the default
     // permission mode, whose badge is empty, so the pmux identity can use it.
     let (badge, badge_override) = match &pane.subagent {
         Some(info) => match info.kind {
             PmuxTaskKind::Spawned => ("♟", Some(theme.badge_plan)),
-            PmuxTaskKind::Resumed => ("resumed", Some(theme.badge_auto)),
+            PmuxTaskKind::Resumed => ("↻", Some(theme.badge_auto)),
         },
         None => (pane.permission_mode.badge(), None),
     };
@@ -46,32 +45,47 @@ pub(super) fn status_row(
     };
 
     let badge_extra = if badge.is_empty() { 0 } else { 1 };
-    let fixed_width = display_width(icon) + 1 + badge_extra + display_width(badge);
-    // User-supplied session names (set via `/rename`) can be arbitrarily
-    // long; cap the title to the space left after reserving room for the
-    // icon, badge, and elapsed label so they stay visible instead of
-    // being pushed off-screen.
+    let fixed_width =
+        display_width(icon) + 1 + display_width(agent_label) + badge_extra + display_width(badge);
+    // Reserve room for the icon, the agent label, the badge, and the
+    // elapsed label; the pane name gets what remains and takes the
+    // ellipsis when cut. The agent label itself is never truncated, and
+    // the elapsed-truncation fallback below stays in place.
     let elapsed_width = display_width(&elapsed);
     let elapsed_gap = usize::from(elapsed_width > 0);
     let title_budget = ctx
         .inner_width
         .saturating_sub(fixed_width + elapsed_gap + elapsed_width);
-    let title = truncate_to_width(title_raw, title_budget);
+    let name_budget = title_budget.saturating_sub(1);
+    let pane_name = pane
+        .pane_name
+        .as_deref()
+        .filter(|_| name_budget > 0)
+        .map(|name| truncate_to_width(name, name_budget));
 
-    let left_width = fixed_width + display_width(&title);
+    let mut left_width = fixed_width;
+    if let Some(name) = &pane_name {
+        left_width += 1 + display_width(name);
+    }
     let available_for_elapsed = ctx.inner_width.saturating_sub(left_width);
     let elapsed = truncate_to_width(&elapsed, available_for_elapsed);
     let elapsed_width = display_width(&elapsed);
 
-    let mut left_spans: Vec<Span<'static>> = Vec::with_capacity(3);
+    let mut left_spans: Vec<Span<'static>> = Vec::with_capacity(4);
     left_spans.push(Span::styled(
         icon.to_string(),
         ctx.apply_bg(Style::default().fg(icon_color)),
     ));
     left_spans.push(Span::styled(
-        format!(" {}", title),
+        format!(" {agent_label}"),
         ctx.apply_bg(Style::default().fg(title_fg)),
     ));
+    if let Some(name) = &pane_name {
+        left_spans.push(Span::styled(
+            format!(" {name}"),
+            ctx.apply_bg(Style::default().fg(title_fg)),
+        ));
+    }
     if !badge.is_empty() {
         let badge_color = badge_override.unwrap_or(match pane.permission_mode {
             PermissionMode::BypassPermissions => theme.badge_danger,

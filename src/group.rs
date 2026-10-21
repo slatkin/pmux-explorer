@@ -226,8 +226,8 @@ mod tests {
             pane_pid: None,
             worktree: crate::tmux::WorktreeMetadata::default(),
             session_id: None,
-            session_name: String::new(),
             sidebar_spawned: false,
+            pane_name: None,
             bg_shell_cmd: None,
             subagent: None,
         }

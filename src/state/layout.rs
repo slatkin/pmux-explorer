@@ -211,7 +211,17 @@ impl AppState {
     /// Determines which filter was clicked based on x coordinate.
     /// Debounces rapid clicks to ignore phantom mouse events from tmux
     /// pane resize/layout changes.
+    ///
+    /// A click that lands on the filter bar while this sidebar was not
+    /// the active pane is the click that focuses the sidebar, not a chip
+    /// selection: tmux focuses the pane it delivers the click to, so the
+    /// event arrives even though the user only meant to reach the pane.
+    /// Such a click is ignored; the status filter is a server-wide
+    /// setting, so honouring it here would change every window.
     pub fn handle_filter_click(&mut self, col: u16) {
+        if !self.sidebar_pane.pane_active {
+            return;
+        }
         const DEBOUNCE_MS: u128 = 150;
         let now = std::time::Instant::now();
         if now

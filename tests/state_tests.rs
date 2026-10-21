@@ -118,8 +118,8 @@ fn test_line_to_row_two_agents() {
         pane_pid: None,
         worktree: WorktreeMetadata::default(),
         session_id: None,
-        session_name: String::new(),
         sidebar_spawned: false,
+        pane_name: None,
         bg_shell_cmd: None,
         subagent: None,
     };
@@ -140,8 +140,8 @@ fn test_line_to_row_two_agents() {
         pane_pid: None,
         worktree: WorktreeMetadata::default(),
         session_id: None,
-        session_name: String::new(),
         sidebar_spawned: false,
+        pane_name: None,
         bg_shell_cmd: None,
         subagent: None,
     };
@@ -681,33 +681,6 @@ fn apply_all_applies_all_three_from_tmux() {
 // ─── last_saved guard tests (protects against save failure revert) ───
 
 #[test]
-fn apply_all_does_not_revert_filter_after_save_failure() {
-    // The original bug scenario:
-    // 1. Startup: tmux has "error", sidebar adopts it
-    // 2. User changes filter to Running, but save_filter fails
-    // 3. Next sync should NOT overwrite Running back to Error
-    //    because last_saved_filter == Error == tmux value → no change
-    let mut g = make_global();
-
-    // Step 1: startup sync adopts "error" from tmux
-    g.apply_all(&make_opts(&[(tmux::SIDEBAR_FILTER, "error")]));
-    assert_eq!(g.status_filter, StatusFilter::Error);
-
-    // Step 2: user changes filter locally, save_filter fails
-    // (last_saved_filter stays Error)
-    g.status_filter = StatusFilter::Busy;
-
-    // Step 3: next sync reads tmux "error", but last_saved is also Error → equal → no change
-    g.apply_all(&make_opts(&[(tmux::SIDEBAR_FILTER, "error")]));
-
-    assert_eq!(
-        g.status_filter,
-        StatusFilter::Busy,
-        "sync must not revert filter when save failed — the original bug scenario"
-    );
-}
-
-#[test]
 fn apply_all_picks_up_change_from_another_instance() {
     // Simulates: this instance saved "running", another instance later
     // saved "waiting". The next tick should pick up "waiting".
@@ -1139,6 +1112,9 @@ fn rendered_filter_row_and_hit_test_agree_at_the_20_column_minimum() {
     assert_eq!(state.layout.filter_bar_width, 20);
 
     let past = std::time::Instant::now() - std::time::Duration::from_millis(200);
+    // The sidebar is the active pane: a filter-bar click only counts then,
+    // so that the click which focuses the sidebar cannot select a chip.
+    state.sidebar_pane.pane_active = true;
     let click = |state: &mut AppState, col: u16| {
         state.timers.last_filter_click = past;
         state.handle_mouse_click(0, col);

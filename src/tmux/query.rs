@@ -30,7 +30,7 @@ mod session_line_field {
     /// Index where the per-pane field suffix consumed by `parse_pane_line` begins.
     pub const PANE_LINE_OFFSET: usize = 6;
     /// Minimum number of fields a valid `pane_format()` line must contain.
-    pub const MIN_FIELDS: usize = 32;
+    pub const MIN_FIELDS: usize = 33;
 }
 
 // Indices into the pane-line suffix that `parse_pane_line` operates on.
@@ -63,9 +63,10 @@ pub(super) mod pane_line_field {
     pub const SUBAGENT_PARENT: usize = 23; // absolute 29 (@pane_subagent_parent)
     pub const SUBAGENT_TASK: usize = 24; // absolute 30 (@pane_subagent_task)
     pub const PANE_TITLE: usize = 25; // absolute 31 (pane_title)
+    pub const HOST: usize = 26; // absolute 32 (host)
     /// Minimum number of fields the pane-line suffix must contain.
     /// Equals `session_line_field::MIN_FIELDS - PANE_LINE_OFFSET`.
-    pub const MIN_FIELDS: usize = 26;
+    pub const MIN_FIELDS: usize = 27;
 }
 
 /// Build the tmux `list-panes -F` format used by [`query_sessions`].
@@ -105,6 +106,7 @@ fn pane_format() -> String {
         q(PANE_SUBAGENT_PARENT),
         q(PANE_SUBAGENT_TASK),
         q("pane_title"),
+        q("host"),
     ]
     .join("|")
 }
@@ -400,6 +402,24 @@ fn parse_pane_fields_with_processes(
         &parts[pane_line_field::SUBAGENT_TASK],
     );
 
+    // The pane's own name: pmux names a pane with `select-pane -T`, which
+    // shows up as `pane_title`. tmux defaults the title to the host name
+    // and pi / Claude Code overwrite it with OSC titles, so a title that
+    // is empty, equals the host, or matches an agent's OSC prefix is not
+    // a name. `automatic-rename` only affects the window name, so it does
+    // not enter the gate. Known gap: agent-set titles other than pi's and
+    // Claude's (Codex, opencode) are not filtered and show as pane names.
+    let pane_title = &parts[pane_line_field::PANE_TITLE];
+    let pane_name = if !pane_title.is_empty()
+        && pane_title != parts[pane_line_field::HOST].as_str()
+        && !pane_title.starts_with("π - ")
+        && !pane_title.starts_with("✳ ")
+    {
+        Some(pane_title.clone())
+    } else {
+        None
+    };
+
     Some(PaneInfo {
         pane_active: parts[pane_line_field::PANE_ACTIVE] == "1",
         status: PaneStatus::from_label(&parts[pane_line_field::PANE_STATUS]),
@@ -420,7 +440,7 @@ fn parse_pane_fields_with_processes(
             branch: parts[pane_line_field::WORKTREE_BRANCH].to_string(),
         },
         session_id,
-        session_name: String::new(),
+        pane_name,
         sidebar_spawned: parts[pane_line_field::SIDEBAR_SPAWNED] == "1",
         bg_shell_cmd: {
             let raw = &parts[pane_line_field::BG_CMD];
@@ -699,8 +719,8 @@ mod tests {
             pane_pid: None,
             worktree: WorktreeMetadata::default(),
             session_id: None,
-            session_name: String::new(),
             sidebar_spawned: false,
+            pane_name: None,
             bg_shell_cmd: None,
             subagent: None,
         }
@@ -897,6 +917,7 @@ mod tests {
             "",                   // 23: @pane_subagent_parent
             "",                   // 24: @pane_subagent_task
             "",                   // 25: pane_title
+            "myhost",             // 26: host
         ]
     }
 
@@ -911,7 +932,7 @@ mod tests {
     #[test]
     fn parse_pane_line_full_fields() {
         let line = make_pane_line(&full_fields());
-        let pane = parse_pane_line(&line).expect("should parse 26 fields");
+        let pane = parse_pane_line(&line).expect("should parse 27 fields");
         assert!(pane.pane_active);
         assert_eq!(pane.status, PaneStatus::Running);
         assert_eq!(pane.agent, AgentType::Claude);
@@ -968,8 +989,9 @@ mod tests {
             "15 fields should be rejected"
         );
 
-        // 21 fields — still rejected (need 26 including the four new tail
-        // fields: the three `@pane_subagent_*` options and `pane_title`).
+        // 21 fields — still rejected (need 27 including the five tail
+        // fields: the three `@pane_subagent_*` options, `pane_title`, and
+        // `host`).
         let fields_21 = "1|running||claude|name|/path|fish||%1|prompt|user|1700000000||12345|Explore|/cwd|auto||||";
         assert!(
             parse_pane_line(fields_21).is_none(),
@@ -994,6 +1016,27 @@ mod tests {
             pane.bg_shell_cmd.is_none(),
             "empty @pane_bg_cmd should parse as None"
         );
+    }
+
+    // ─── pane_name resolution tests ────────────────────────────
+
+    #[test]
+    fn parse_pane_line_pane_name_gate() {
+        // A title that is non-empty, different from the host name, and
+        // not an agent OSC title is a pane name; anything else is None.
+        let cases = [
+            ("my-task", Some("my-task")),      // pmux `select-pane -T my-task`
+            ("myhost", None),                  // tmux default: the host name
+            ("π - send-report-channel", None), // pi's OSC title
+            ("✳ Claude Code", None),           // Claude Code's OSC title
+            ("", None),                        // empty title
+        ];
+        for (title, expected) in cases {
+            let mut fields = full_fields();
+            fields[pane_line_field::PANE_TITLE] = title;
+            let pane = parse_pane_line(&make_pane_line(&fields)).unwrap();
+            assert_eq!(pane.pane_name.as_deref(), expected, "title: {title:?}");
+        }
     }
 
     // ─── parse_subagent_identity tests ────────────────────────────
@@ -1492,8 +1535,8 @@ mod tests {
                     pane_pid: None,
                     worktree: WorktreeMetadata::default(),
                     session_id: None,
-                    session_name: String::new(),
                     sidebar_spawned: false,
+                    pane_name: None,
                     bg_shell_cmd: None,
                     subagent: None,
                 }],
@@ -1558,10 +1601,10 @@ mod tests {
         // 23:@pane_worktree_name|24:@pane_worktree_branch|
         // 25:@pane_session_id|26:@agent-sidebar-spawned|27:@pane_bg_cmd|
         // 28:@pane_subagent_kind|29:@pane_subagent_parent|
-        // 30:@pane_subagent_task|31:pane_title
+        // 30:@pane_subagent_task|31:pane_title|32:host
 
-        // 32 total fields (MIN_FIELDS = 32)
-        let mut fields: Vec<&str> = vec![""; 32];
+        // 33 total fields (MIN_FIELDS = 33)
+        let mut fields: Vec<&str> = vec![""; 33];
         fields[0] = session_name;
         fields[1] = "@0"; // window_id
         fields[3] = "win"; // window_name
@@ -1635,7 +1678,7 @@ mod tests {
         title: &str,
         subagent: Option<(&str, &str, &str)>,
     ) -> String {
-        let mut fields: Vec<&str> = vec![""; 32];
+        let mut fields: Vec<&str> = vec![""; 33];
         fields[0] = session_name;
         fields[1] = "@0"; // window_id
         fields[3] = "win"; // window_name

@@ -18,6 +18,14 @@ read from tmux on every refresh tick.
 
 Each field has a corresponding `last_saved_*` to prevent sync conflicts — only overwrites tmux if the local write succeeded.
 
+The status filter additionally has a `filter_save_pending` latch:
+when tmux rejects a `set -g @sidebar_filter` write, the latch is set
+and `apply_all` skips adopting the shared filter, because tmux still
+holds the stale value the write was meant to replace and adopting it
+would revert the user's choice. `retry_pending_filter_save` retries
+the write once per refresh tick, before the tick reads the shared
+options, so a successful retry is what that tick reads back.
+
 ### Per-pane State (keyed by pane ID)
 
 Written by `cli/hook.rs` on agent events, read by `query_sessions()` every **1 second**.
@@ -28,6 +36,7 @@ Each pane's runtime data is split into two buckets:
 |--------|----------------|-------------|
 | tmux pane options | Event-driven + cleanup on agent exit | Agent type, status, cwd, permission mode, prompt, subagents, worktree, etc. |
 | `PaneRuntimeState` in `AppState` | Refresh cycle + cleanup on agent exit | `ports`, `command`, `task_progress`, `task_dismissed_total`, `inactive_since` |
+| `PaneInfo` (query result, `src/tmux/types.rs`) | Every 1s (refresh cycle) | Per-pane snapshot read from tmux in one `list-panes -a` call: agent type, status, cwd, prompt, pane PID, worktree, session id, and `pane_name` — the pane's own title (`pane_title`) when it is a real name: non-empty, different from the host name, and not an agent-set OSC title (`π - …` from pi, `✳ …` from Claude Code). `None` otherwise. Rendered after the agent label in the status row |
 
 Pane options written to tmux:
 
@@ -113,8 +122,6 @@ Per-pane file-based state:
 | `docked_width` | On pop-out / pop-in (user input) | The pane width captured when the sidebar was popped out, restored by the pop-in with `resize-pane -x` (`src/state/popout.rs`). `None` while docked and when the pane was already floating when the sidebar started |
 | `pane_states.seen` | Every 1s | Set of pane IDs that have been seen as agents (bundled with `pane_states.map` under the `PaneRuntimeMap` wrapper) |
 | `version_notice` | Once at startup (bg fetch) | GitHub release update notice, `None` when up-to-date |
-| `sessions.names` | Every 10s (background thread) | `session_id → session name` map; scanned by `session_poll_loop` in `app/workers.rs` so the TUI thread never blocks on filesystem I/O |
-| `sessions.dirty` | On session map refresh / application tick | Marks the session map as changed so the per-pane session label walk only runs when needed |
 
 ---
 
@@ -132,9 +139,6 @@ Per-pane file-based state:
 │  GlobalState shared options re-read every tick              │
 ├─────────────────────────────────────────────────────────────┤
 │  pane_states.map[..].ports, agent liveness cleanup          │
-├─────────────────────────────────────────────────────────────┤
-│  Every 10s (session_names background thread)                │
-│  sessions.names map populated by session_poll_loop          │
 ├─────────────────────────────────────────────────────────────┤
 │  Once at startup                                             │
 │  theme, bottom_panel_height, notices.claude_plugin_*,       │
@@ -179,6 +183,8 @@ TUI main loop (app::run in app.rs; submodules app/{setup,workers,input,render,pa
     → get_sidebar_pane_reading()     ← reads pane state + @sidebar_* in one display-message
     → global.apply_all()             ← applies the shared options under the last_saved_* guards
     → query_sessions() (tmux.rs)     ← reads @pane_* via `tmux list-panes -a`
+    → pane_name resolved in the same query (the pane title when it is
+      a real name; no extra tmux call)
     → group_panes_by_repo() (group.rs)
     → rebuild_row_targets()          ← applies GlobalState filters
     → refresh_activity_data()        ← reads /tmp activity logs
@@ -189,7 +195,8 @@ TUI main loop (app::run in app.rs; submodules app/{setup,workers,input,render,pa
   → git_rx.try_recv()                ← receives GitData from background thread
   → notices popup render/copy state  ← derived from AppState plugin fields
                         ↓
-  → ui::draw() renders frame         ← reads all AppState fields
+  → ui::draw() renders frame         ← reads all AppState fields;
+    status row = agent label + pane_name (ui/panes/row/status.rs)
 ```
 
 ---
@@ -289,13 +296,6 @@ struct ActivityState {
     log_cache: Option<(String, SystemTime)>,
 }
 
-/// Session-name map scanned by a background thread so the TUI thread
-/// never blocks on `~/.claude/sessions/*.json` reads.
-struct SessionNamesState {
-    names: HashMap<String, String>,
-    dirty: bool,
-}
-
 /// Frame-scoped render output cached for click hit-testing. Rewritten
 /// every frame by the UI layer; consumed by mouse/keyboard handlers
 /// before the next render.
@@ -309,9 +309,7 @@ struct FrameLayout {
     filter_bar_width: u16,
 }
 
-/// Periodic-refresh bookkeeping. session_names refresh is intentionally
-/// NOT here — it lives in a dedicated background thread so the TUI
-/// thread never performs blocking filesystem I/O.
+/// Periodic-refresh bookkeeping.
 struct RefreshTimers {
     last_filter_click: Instant,
     last_port_refresh: Instant,

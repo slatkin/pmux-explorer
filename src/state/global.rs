@@ -14,6 +14,11 @@ pub struct GlobalState {
     pub repo_filter: RepoFilter,
     /// Last filter value successfully written to tmux.
     last_saved_filter: StatusFilter,
+    /// A filter write that tmux rejected and that is retried on every
+    /// refresh tick. While it is set, the value tmux holds is the stale
+    /// one this instance is trying to replace, so the shared value must
+    /// not be adopted over the user's choice.
+    filter_save_pending: bool,
     /// Last cursor value successfully written to tmux.
     last_saved_cursor: usize,
     /// Last repo filter value successfully written to tmux.
@@ -35,6 +40,7 @@ impl GlobalState {
             selected_pane_row: 0,
             repo_filter: RepoFilter::All,
             last_saved_filter: StatusFilter::All,
+            filter_save_pending: false,
             last_saved_cursor: 0,
             last_saved_repo_filter: RepoFilter::All,
             pending_cursor_save_since: None,
@@ -42,8 +48,11 @@ impl GlobalState {
     }
 
     /// Save filter to tmux global variable.
-    /// Only updates `last_saved_filter` on success so that a failed write
-    /// does not cause sync to overwrite the user's choice.
+    /// Only updates `last_saved_filter` on success so that a failed
+    /// write does not cause sync to overwrite the user's choice, and
+    /// sets `filter_save_pending` so the next refresh tick retries the
+    /// write instead of letting the instance drift from the shared
+    /// value.
     pub fn save_filter(&mut self) {
         if tmux::run_tmux(&[
             "set",
@@ -54,6 +63,9 @@ impl GlobalState {
         .is_some()
         {
             self.last_saved_filter = self.status_filter;
+            self.filter_save_pending = false;
+        } else {
+            self.filter_save_pending = true;
         }
     }
 
@@ -123,10 +135,27 @@ impl GlobalState {
         self.apply_all(&opts);
     }
 
+    /// Retry a filter write tmux rejected, so an instance cannot drift
+    /// from the shared value and later have its stale choice adopted by
+    /// (or pushed onto) every other sidebar. Called once per refresh
+    /// tick, before the tick reads the shared options, so a successful
+    /// retry is what that tick reads back.
+    pub fn retry_pending_filter_save(&mut self) {
+        if self.filter_save_pending {
+            self.save_filter();
+        }
+    }
+
     /// Apply the shared options read from tmux (filter, cursor, repo
     /// filter). Runs once at startup and on every refresh tick.
     pub fn apply_all(&mut self, opts: &HashMap<String, String>) {
-        if let Some(filter_str) = opts.get(tmux::SIDEBAR_FILTER) {
+        // While a filter write is pending, tmux holds the value this
+        // instance is trying to replace. Adopting it would revert the
+        // user's choice, so the filter is left alone until the write
+        // lands.
+        if !self.filter_save_pending
+            && let Some(filter_str) = opts.get(tmux::SIDEBAR_FILTER)
+        {
             let tmux_filter = StatusFilter::from_label(filter_str);
             if tmux_filter != self.last_saved_filter {
                 self.status_filter = tmux_filter;
@@ -152,5 +181,33 @@ impl GlobalState {
                 self.last_saved_repo_filter = tmux_repo;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    fn opts(pairs: &[(&str, &str)]) -> HashMap<String, String> {
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn a_pending_filter_save_is_not_overwritten_by_the_shared_value() {
+        // tmux rejected this instance's write, so the value tmux still
+        // holds is the stale one the instance is trying to replace.
+        // Adopting it would revert the user's choice.
+        let mut g = GlobalState::new();
+        g.last_saved_filter = StatusFilter::All;
+        g.status_filter = StatusFilter::Busy;
+        g.filter_save_pending = true;
+
+        g.apply_all(&opts(&[(tmux::SIDEBAR_FILTER, "all")]));
+
+        assert_eq!(g.status_filter, StatusFilter::Busy);
     }
 }
