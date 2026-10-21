@@ -65,6 +65,10 @@ pub fn draw(frame: &mut Frame, state: &mut AppState) {
     } else {
         state.bottom_panel_height
     };
+    // Publish the height this frame actually drew so the mouse handlers
+    // hit-test the drawn geometry (`FrameLayout::bottom_panel_height`),
+    // never the raw configured height.
+    state.layout.bottom_panel_height = bot_h;
     let divider_h = if bot_h > 0 && state.pet_enabled {
         PET_SCENE_HEIGHT
     } else {

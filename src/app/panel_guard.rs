@@ -52,7 +52,7 @@ pub fn position_target(
     let PanelGeometry { width, x, y, .. } = panel_geometry(window_width, window_height);
     Some(PanelPosition { width, x, y })
 }
-///
+
 /// The guard acts only while the pane is floating, only once the previous
 /// window height is known, and only when the window height changed. A
 /// height of 0 (the query failed, or tmux is too old to report the

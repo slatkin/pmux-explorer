@@ -61,6 +61,19 @@ pub fn clamp_bottom_height(bottom_height: u16, panel_height: u16) -> u16 {
     bottom_height.min(panel_height / 3)
 }
 
+/// The geometry to float the pane with, or `None` when the pane probe
+/// reported no usable window size. A `0` width or height means the
+/// query failed (or the pane is gone); asking tmux to float a pane with
+/// a 0 height is refused ("position too small"), which would flash a
+/// confusing refusal for what is really a failed probe — so an unknown
+/// size means "do not act", the same rule the guard modules apply.
+fn float_geometry(info: SidebarPaneInfo) -> Option<PanelGeometry> {
+    if info.window_width == 0 || info.window_height == 0 {
+        return None;
+    }
+    Some(panel_geometry(info.window_width, info.window_height))
+}
+
 impl AppState {
     /// The single action behind the pop-out control and the `p` key:
     /// float the pane when it is docked, dock it when it is floating.
@@ -68,6 +81,13 @@ impl AppState {
     /// pane's actual state even when the pane was floated by hand.
     pub fn toggle_popout(&mut self) {
         let info = tmux::get_sidebar_pane_info(&self.tmux_pane);
+        self.toggle_popout_with(info);
+    }
+
+    /// The dispatch behind [`Self::toggle_popout`], taking the pane probe
+    /// as a parameter so tests can drive both directions — including the
+    /// refusal paths — without a live tmux server.
+    pub(crate) fn toggle_popout_with(&mut self, info: SidebarPaneInfo) {
         if info.floating {
             self.pop_in_with(info);
         } else {
@@ -78,7 +98,9 @@ impl AppState {
     fn pop_out_with(&mut self, info: SidebarPaneInfo) {
         // Precondition: `toggle_popout` only routes a docked pane here.
         debug_assert!(!info.floating, "pop_out_with requires a docked pane");
-        let geometry = panel_geometry(info.window_width, info.window_height);
+        let Some(geometry) = float_geometry(info) else {
+            return; // unknown window size: the probe failed, do not act
+        };
         let result = tmux::float_pane(
             &self.tmux_pane,
             geometry.width,
@@ -104,12 +126,17 @@ impl AppState {
     }
 
     /// Apply the outcome of the `float_pane` call: on success record the
-    /// docked width for the pop-in to restore, on failure flash the
-    /// refusal and change nothing — the mode lives on the pane, which
-    /// stayed docked.
+    /// docked width for the pop-in to restore and mirror the new mode so
+    /// the control glyph and the bottom-panel clamp reflect it at once
+    /// (the next refresh tick would otherwise leave them stale for up to
+    /// a second), on failure flash the refusal and change nothing — the
+    /// mode lives on the pane, which stayed docked.
     pub(crate) fn apply_pop_out(&mut self, docked_width: u16, result: Result<(), String>) {
         match result {
-            Ok(()) => self.docked_width = Some(docked_width),
+            Ok(()) => {
+                self.docked_width = Some(docked_width);
+                self.sidebar_pane.floating = true;
+            }
             Err(err) => self.set_flash(format!("Pop-out refused: {err}")),
         }
     }
@@ -117,10 +144,16 @@ impl AppState {
     /// Apply the outcome of the `dock_pane` call. Returns the docked
     /// width to restore with `resize-pane -x`, or `None` when the dock
     /// was refused (flashed) or no width was captured because the pane
-    /// was already floating when the sidebar started.
+    /// was already floating when the sidebar started. On success the
+    /// mirrored mode is cleared at once, so the control glyph and the
+    /// bottom-panel clamp do not wait for the next refresh tick.
     pub(crate) fn apply_pop_in(&mut self, result: Result<(), String>) -> Option<u16> {
         match result {
-            Ok(()) => self.docked_width.take(),
+            Ok(()) => {
+                let width = self.docked_width.take();
+                self.sidebar_pane.floating = false;
+                width
+            }
             Err(err) => {
                 self.set_flash(format!("Pop-in refused: {err}"));
                 None
@@ -162,11 +195,15 @@ mod tests {
     // ─── apply_pop_out ───────────────────────────────────────────────
 
     #[test]
-    fn apply_pop_out_success_captures_the_docked_width() {
+    fn apply_pop_out_success_captures_the_docked_width_and_mirrors_the_mode() {
         let mut state = AppState::new("%99".into());
         state.apply_pop_out(25, Ok(()));
         assert_eq!(state.docked_width, Some(25));
         assert!(state.flash.is_none(), "a successful pop-out says nothing");
+        // The mirrored mode is updated at once so the control glyph and
+        // the bottom-panel clamp reflect the pop-out on the next frame,
+        // not only after the next refresh tick.
+        assert!(state.sidebar_pane.floating);
     }
 
     #[test]
@@ -182,6 +219,7 @@ mod tests {
         // must not record anything that would make the next tick or the
         // pop-in believe the panel is floating.
         assert_eq!(state.docked_width, None);
+        assert!(!state.sidebar_pane.floating);
     }
 
     // ─── apply_pop_in ────────────────────────────────────────────────
@@ -190,8 +228,12 @@ mod tests {
     fn apply_pop_in_returns_the_captured_width_for_the_restore() {
         let mut state = AppState::new("%99".into());
         state.docked_width = Some(25);
+        state.sidebar_pane.floating = true;
         assert_eq!(state.apply_pop_in(Ok(())), Some(25));
         assert_eq!(state.docked_width, None, "the capture is spent");
+        // The mirrored mode is cleared at once so the control glyph and
+        // the bottom-panel clamp go back to docked on the next frame.
+        assert!(!state.sidebar_pane.floating);
     }
 
     #[test]
@@ -207,6 +249,7 @@ mod tests {
     fn apply_pop_in_refusal_flashes_and_restores_nothing() {
         let mut state = AppState::new("%99".into());
         state.docked_width = Some(25);
+        state.sidebar_pane.floating = true;
         assert_eq!(state.apply_pop_in(Err("pane not found".into())), None);
         assert!(
             state
@@ -215,8 +258,64 @@ mod tests {
                 .is_some_and(|(msg, _)| msg.starts_with("Pop-in refused:"))
         );
         // A refused pop-in must not spend the capture — the width is
-        // still there for the next successful pop-in.
+        // still there for the next successful pop-in — and the pane
+        // stayed floating, so the mirrored mode must not change either.
         assert_eq!(state.docked_width, Some(25));
+        assert!(state.sidebar_pane.floating);
+    }
+
+    // ─── float_geometry ──────────────────────────────────────────────
+
+    #[test]
+    fn float_geometry_is_none_when_the_window_size_is_unknown() {
+        // A failed pane probe reports a 0 window size: tmux would refuse
+        // the 0-height float request, so the pop-out must not act at all.
+        let info = SidebarPaneInfo::FALLBACK;
+        assert_eq!(float_geometry(info), None);
+
+        let mut half_probed = info;
+        half_probed.window_width = 100;
+        assert_eq!(float_geometry(half_probed), None, "a 0 height alone blocks");
+
+        let mut probed = half_probed;
+        probed.window_height = 30;
+        assert_eq!(float_geometry(probed), Some(panel_geometry(100, 30)));
+    }
+
+    #[test]
+    fn toggle_popout_with_a_docked_pane_tmux_cannot_find_flashes() {
+        // A real-shaped docked pane that tmux cannot find: the float call
+        // runs with a real geometry and is refused — the flash proves the
+        // pop-out action ran, and the pane stays docked.
+        let mut state = AppState::new("%4294967295".into());
+        state.toggle_popout_with(SidebarPaneInfo {
+            pane_active: false,
+            window_active: false,
+            width: 28,
+            height: 24,
+            window_width: 100,
+            window_height: 30,
+            floating: false,
+        });
+        assert!(
+            state
+                .flash
+                .as_ref()
+                .is_some_and(|(msg, _)| msg.starts_with("Pop-out refused:")),
+            "a refused float must flash"
+        );
+        assert!(!state.sidebar_pane.floating);
+    }
+
+    #[test]
+    fn toggle_popout_with_an_unknown_window_size_does_not_act() {
+        // The probe failed (pane gone, tmux unreachable): no tmux call is
+        // made and nothing flashes — a failed probe is not a refusal.
+        let mut state = AppState::new("%4294967295".into());
+        state.toggle_popout_with(SidebarPaneInfo::FALLBACK);
+        assert!(state.flash.is_none());
+        assert_eq!(state.docked_width, None);
+        assert!(!state.sidebar_pane.floating);
     }
 
     // ─── clamp_bottom_height ─────────────────────────────────────────

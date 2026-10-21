@@ -59,6 +59,15 @@ pub struct FrameLayout {
     /// the renderer uses, so the drawn chips and the clickable chips
     /// cannot drift apart — including when chips are dropped for space.
     pub filter_bar_width: u16,
+    /// Effective height of the Activity/Git bottom panel as last
+    /// rendered: the configured height while docked, the clamped height
+    /// (at most a third of the panel) while the sidebar floats. `0`
+    /// before the first frame, which leaves the bottom panel
+    /// unclickable and routes every scroll to the agents panel. The
+    /// mouse handlers read this back instead of the raw
+    /// `bottom_panel_height`, so the hit-tested geometry is the drawn
+    /// geometry by construction — the two can never drift apart.
+    pub bottom_panel_height: u16,
     /// Click regions for the `[+]` spawn button rendered at the right
     /// edge of each repo-group header. One entry per visible repo group.
     pub repo_spawn_targets: Vec<RepoSpawnTarget>,
@@ -156,6 +165,29 @@ impl AppState {
             && !self.layout.pane_row_targets.is_empty()
         {
             self.global.selected_pane_row = self.layout.pane_row_targets.len() - 1;
+        }
+    }
+
+    /// Handle a left mouse click at (`row`, `col`) in a terminal
+    /// `term_height` rows tall. Clicks on the bottom panel's tab row (the
+    /// panel's first drawn row) go to the tab header, clicks above it to
+    /// the agents panel. Returns `true` when the click landed on the tab
+    /// row, so the caller can keep the background git poller in sync with
+    /// a possible tab switch.
+    ///
+    /// The bottom-panel height comes from [`FrameLayout`], the height the
+    /// last frame actually drew — while floating that is the clamped
+    /// height — so a click can only ever land on a row that was drawn.
+    pub fn handle_terminal_click(&mut self, row: u16, col: u16, term_height: u16) -> bool {
+        let bottom_start = term_height.saturating_sub(self.layout.bottom_panel_height);
+        if row < bottom_start {
+            self.handle_mouse_click(row, col);
+            false
+        } else if row == bottom_start {
+            self.handle_bottom_tab_click(col);
+            true
+        } else {
+            false
         }
     }
 

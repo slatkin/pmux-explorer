@@ -5,7 +5,8 @@ use test_helpers::*;
 use tmux_agent_sidebar::activity::ActivityEntry;
 use tmux_agent_sidebar::group::{PaneGitInfo, RepoGroup};
 use tmux_agent_sidebar::state::{
-    AppState, BottomTab, Focus, GlobalState, PopupState, RepoFilter, RowTarget, StatusFilter,
+    AppState, BottomTab, Focus, GlobalState, PopupState, RepoFilter, RowTarget, ScrollState,
+    StatusFilter,
 };
 use tmux_agent_sidebar::tmux::{
     self, AgentType, PaneInfo, PaneStatus, SessionInfo, WindowInfo, WorktreeMetadata,
@@ -1130,9 +1131,10 @@ fn rendered_filter_row_and_hit_test_agree_at_the_20_column_minimum() {
         }
     }
     let mut state = make_state(vec![]);
-    // A pane id no tmux server can ever have, so the pop-out branch of
-    // the toggle is exercised and refused instead of touching a live
-    // pane.
+    // A pane id no tmux server can ever have, so the control click's
+    // pop-out action probes a pane that does not exist and — an unknown
+    // window size meaning "do not act" — stays silent instead of touching
+    // a live pane or flashing a bogus refusal.
     state.tmux_pane = "%4294967295".into();
     state.repo_groups = vec![make_repo_group("project", panes)];
     state.rebuild_row_targets();
@@ -1191,10 +1193,130 @@ fn rendered_filter_row_and_hit_test_agree_at_the_20_column_minimum() {
         StatusFilter::Idle,
         "a click on the control must never change the filter"
     );
-    let flash = state.flash.as_ref().expect("the control click must toggle");
+    // The probe for the bogus pane failed, and the pop-out treats an
+    // unknown window size as "do not act": nothing flashes, nothing is
+    // refused — the refusal path itself is covered by the popout unit
+    // tests and the injected toggle test.
     assert!(
-        flash.0.starts_with("Pop-out refused:"),
-        "the control click must run the pop-out action: {:?}",
-        flash.0
+        state.flash.is_none(),
+        "a failed pane probe is silent, not a refusal"
+    );
+}
+
+#[test]
+fn floating_panel_clicks_hit_the_clamped_bottom_panel_geometry() {
+    // While the sidebar floats, the Activity/Git panel is clamped to a
+    // third of the panel height (20 → 12 of a 38-row panel). The mouse
+    // handlers must hit-test the clamped geometry the frame actually
+    // drew: the drawn tab row switches the tab, a drawn agent row in the
+    // band the unclamped height wrongly claimed selects that agent, and
+    // the wheel over those rows scrolls the agents list.
+    let mut panes = Vec::new();
+    for i in 0..20 {
+        let mut pane = make_pane(AgentType::Claude, PaneStatus::Idle);
+        pane.pane_id = format!("%{i}");
+        panes.push(pane);
+    }
+    let mut state = make_state(vec![]);
+    state.repo_groups = vec![make_repo_group("project", panes)];
+    state.sidebar_pane.floating = true;
+    state.bottom_panel_height = 20;
+
+    const TERM_WIDTH: u16 = 40;
+    const TERM_HEIGHT: u16 = 38;
+    let output = render_to_string(&mut state, TERM_WIDTH, TERM_HEIGHT);
+
+    // The frame snapshot pins the drawn geometry: the clamped 12-row
+    // bottom panel with its tab row, and the agent list running right up
+    // to the panel's border.
+    insta::assert_snapshot!(output, @"
+     ≡20 ●0 ◐0 ○20 ✕0                      ⤡
+    ⓘ                                    — ▾
+    project
+      ○ claude
+        Waiting for prompt…
+    ┃ ○ claude
+        Waiting for prompt…
+      ○ claude
+        Waiting for prompt…
+      ○ claude
+        Waiting for prompt…
+      ○ claude
+        Waiting for prompt…
+      ○ claude
+        Waiting for prompt…
+      ○ claude
+        Waiting for prompt…
+      ○ claude
+        Waiting for prompt…
+      ○ claude
+        Waiting for prompt…
+      ○ claude
+        Waiting for prompt…
+      ○ claude
+        Waiting for prompt…
+    ╭ Activity │ Git ──────────────────────╮
+    │            No activity yet           │
+    ╰──────────────────────────────────────╯
+    ");
+
+    // The frame published the height it drew: 38/3 clamps 20 → 12.
+    assert_eq!(state.layout.bottom_panel_height, 12);
+    let bottom_start = TERM_HEIGHT - state.layout.bottom_panel_height;
+    assert_eq!(bottom_start, 26, "the tab row is drawn at row 26");
+
+    // A click on the drawn tab row (row 26) switches the tab. With the
+    // unclamped height the boundary sat at row 18 and this click was
+    // swallowed.
+    state.bottom_tab = BottomTab::GitStatus;
+    assert!(
+        state.handle_terminal_click(bottom_start, 3, TERM_HEIGHT),
+        "the drawn tab row must be clickable"
+    );
+    assert_eq!(state.bottom_tab, BottomTab::Activity);
+
+    // A click on a drawn agent row inside the band 18..26 — above the
+    // clamped panel, below where the unclamped height put the boundary —
+    // selects that agent.
+    let line_index = (19 - 2) as usize;
+    assert_eq!(
+        state.layout.line_to_row[line_index],
+        Some(8),
+        "row 19 must be a drawn agent row (agent 8)"
+    );
+    assert!(
+        !state.handle_terminal_click(19, 5, TERM_HEIGHT),
+        "row 19 is above the clamped panel, so it is not the tab row"
+    );
+    assert_eq!(
+        state.global.selected_pane_row, 8,
+        "the click on the drawn agent row must select agent 8"
+    );
+
+    // The wheel over the same band scrolls the agents list, and the wheel
+    // over the drawn panel scrolls the bottom tab.
+    state.scrolls.panes = ScrollState {
+        offset: 0,
+        total_lines: 40,
+        visible_height: 20,
+    };
+    state.activity.scroll = ScrollState {
+        offset: 0,
+        total_lines: 30,
+        visible_height: 10,
+    };
+    state.handle_mouse_scroll(24, TERM_HEIGHT, state.layout.bottom_panel_height, 3);
+    assert_eq!(
+        state.scrolls.panes.offset, 3,
+        "row 24 is a drawn agent row: the wheel scrolls the agents list"
+    );
+    state.handle_mouse_scroll(28, TERM_HEIGHT, state.layout.bottom_panel_height, 3);
+    assert_eq!(
+        state.activity.scroll.offset, 3,
+        "row 28 is inside the drawn panel: the wheel scrolls the panel"
+    );
+    assert_eq!(
+        state.scrolls.panes.offset, 3,
+        "the panel wheel must not touch the agents list"
     );
 }

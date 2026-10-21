@@ -1084,6 +1084,94 @@ mod tests {
         assert_eq!(state.activity.scroll.offset, 0);
     }
 
+    // ─── handle_terminal_click tests ──────────────────────────────────
+
+    #[test]
+    fn terminal_click_on_the_tab_row_switches_the_tab() {
+        let mut state = AppState::new("%99".into());
+        state.layout.bottom_panel_height = 20;
+        state.bottom_tab = BottomTab::GitStatus;
+        // term_height=50, bottom panel 20 → tab row at row 30
+        assert!(state.handle_terminal_click(30, 3, 50));
+        assert_eq!(state.bottom_tab, BottomTab::Activity);
+    }
+
+    #[test]
+    fn terminal_click_above_the_tab_row_goes_to_the_agents_panel() {
+        let mut state = AppState::new("%99".into());
+        state.layout.bottom_panel_height = 20;
+        state.layout.pane_row_targets = vec![RowTarget {
+            pane_id: "%1".into(),
+        }];
+        state.layout.line_to_row = vec![Some(0), Some(0), Some(0)];
+        // row 3 → line_index 1 → agent row 0
+        assert!(!state.handle_terminal_click(3, 5, 50));
+        assert_eq!(state.global.selected_pane_row, 0);
+    }
+
+    #[test]
+    fn terminal_click_inside_the_panel_body_does_nothing() {
+        let mut state = AppState::new("%99".into());
+        state.layout.bottom_panel_height = 20;
+        // Row 35 is inside the panel, below its tab row at 30.
+        assert!(!state.handle_terminal_click(35, 5, 50));
+        assert!(state.flash.is_none());
+    }
+
+    #[test]
+    fn terminal_click_uses_the_clamped_height_while_floating() {
+        // The regression the frame-scoped height fixes: while floating
+        // the panel is drawn clamped (12 of a 38-row panel), so the hit
+        // test must agree with the drawn geometry — a click on the drawn
+        // tab row (26) hits the tab, and a click on a drawn agent row in
+        // the band the unclamped height wrongly claimed (18..26) selects
+        // the agent instead of being swallowed.
+        let mut state = AppState::new("%99".into());
+        state.sidebar_pane.floating = true;
+        state.bottom_panel_height = 20;
+        state.layout.bottom_panel_height = 12;
+        state.layout.pane_row_targets = vec![
+            RowTarget {
+                pane_id: "%1".into(),
+            },
+            RowTarget {
+                pane_id: "%2".into(),
+            },
+        ];
+        // Rows 2..26 all map to agent rows, so the band right above the
+        // clamped panel (rows 18..25) is clickable agent list.
+        state.layout.line_to_row = vec![Some(1); 24];
+        state.global.selected_pane_row = 0;
+        state.bottom_tab = BottomTab::GitStatus;
+
+        // Row 26 is the drawn tab row (38 - 12); the unclamped height
+        // would have put the boundary at row 18 and swallowed this click.
+        assert!(state.handle_terminal_click(26, 3, 38));
+        assert_eq!(state.bottom_tab, BottomTab::Activity);
+
+        // Row 25 is a drawn agent-list row above the clamped panel.
+        assert!(!state.handle_terminal_click(25, 5, 38));
+        assert_eq!(state.global.selected_pane_row, 1);
+
+        // The wheel over the same band scrolls the agents list, not the
+        // bottom panel, and the wheel over the panel scrolls the panel.
+        state.scrolls.panes = ScrollState {
+            offset: 0,
+            total_lines: 40,
+            visible_height: 20,
+        };
+        state.activity.scroll = ScrollState {
+            offset: 0,
+            total_lines: 30,
+            visible_height: 10,
+        };
+        state.handle_mouse_scroll(24, 38, state.layout.bottom_panel_height, 3);
+        assert_eq!(state.scrolls.panes.offset, 3);
+        state.handle_mouse_scroll(28, 38, state.layout.bottom_panel_height, 3);
+        assert_eq!(state.activity.scroll.offset, 3);
+        assert_eq!(state.scrolls.panes.offset, 3);
+    }
+
     // ─── move_pane_selection edge cases ─────────────────────────────
 
     #[test]
@@ -1609,12 +1697,13 @@ mod tests {
     }
 
     #[test]
-    fn filter_click_on_the_popout_control_toggles_and_keeps_the_filter() {
+    fn filter_click_on_the_popout_control_keeps_the_filter() {
         // The control is hit-tested before the chip walk: a click on its
         // column runs the pop-out action and never touches the status
         // filter. The pane id cannot exist in any tmux server, so the
-        // pop-out branch runs and is refused — the flash proves the
-        // action ran.
+        // pane probe fails and the pop-out does not act — an unknown
+        // window size means "do not act", not a refusal (the refusal
+        // flash itself is covered by the injected popout tests).
         let mut state = AppState::new("%4294967295".into());
         state.layout.filter_bar_width = 20;
         state.global.status_filter = StatusFilter::All;
@@ -1622,16 +1711,12 @@ mod tests {
         state.handle_filter_click(19);
         assert_eq!(state.global.status_filter, StatusFilter::All);
         assert!(
-            state
-                .flash
-                .as_ref()
-                .is_some_and(|(msg, _)| msg.starts_with("Pop-out refused:")),
-            "the control click must run the pop-out action"
+            state.flash.is_none(),
+            "a failed pane probe is silent, not a refusal"
         );
 
         // A click on a chip column still walks the chips and selects the
         // matching category even with the control column registered.
-        state.flash = None;
         reset_filter_debounce(&mut state);
         state.handle_filter_click(4); // "●" busy chip
         assert_eq!(state.global.status_filter, StatusFilter::Busy);
@@ -1647,6 +1732,9 @@ mod tests {
         state.global.status_filter = StatusFilter::All;
         reset_filter_debounce(&mut state);
         state.handle_filter_click(4);
+        // The second click must really reach the zero-width path: without
+        // resetting the debounce it is swallowed as a phantom double click.
+        reset_filter_debounce(&mut state);
         state.handle_filter_click(19);
         assert_eq!(state.global.status_filter, StatusFilter::All);
         assert!(state.flash.is_none());
