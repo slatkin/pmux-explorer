@@ -644,7 +644,7 @@ fn snapshot_git_more_than_5_files() {
     state.scrolls.git.offset = 5;
     let scrolled = render_to_string(&mut state, 28, 40);
     insta::assert_snapshot!(scrolled, @"
-     ≡1 ●1 ◐0 ○0 ✕0
+     ≡1 ●1 ◐0 ○0 ✕0            ⤢
     ⓘ                        — ▾
     project
     ┃ ● claude
@@ -734,7 +734,7 @@ fn snapshot_git_pr_number_ui() {
     // Styled snapshot locks in the PR link's underline + pr_link color (fg:117)
     // so future style regressions surface as a diff rather than a missed grep.
     insta::assert_snapshot!(render_to_styled_string(&mut state, 28, 14), @"
-     ≡[fg:111]1[fg:153] ●[fg:114]1[fg:255] ◐[fg:245]0[fg:245] ○[fg:245]0[fg:245] ✕[fg:245]0[fg:245]
+     ≡[fg:111]1[fg:153] ●[fg:114]1[fg:255] ◐[fg:245]0[fg:245] ○[fg:245]0[fg:245] ✕[fg:245]0[fg:245]            ⤢[fg:114]
 
     ╭[fg:153] [fg:153]A[fg:252]c[fg:252]t[fg:252]i[fg:252]v[fg:252]i[fg:252]t[fg:252]y[fg:252] [fg:240]│[fg:240] [fg:240]G[fg:153]i[fg:153]t[fg:153] [fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]╮[fg:153]
     │[fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153]│[fg:153]
