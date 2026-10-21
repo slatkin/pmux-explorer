@@ -29,6 +29,53 @@ pub fn run_tmux_capture(args: &[&str]) -> Result<String, String> {
     }
 }
 
+/// Pure builder for the `break-pane -W` argument list that floats `pane`
+/// with the given size and upper-left position (tmux 3.8). Kept separate
+/// from the tmux call, the way `cli/toggle.rs` builds its split flags, so
+/// a unit test can assert the exact arguments.
+fn break_pane_float_args(pane: &str, width: u16, height: u16, x: u16, y: u16) -> Vec<String> {
+    vec![
+        "break-pane".into(),
+        "-W".into(),
+        "-s".into(),
+        pane.into(),
+        "-x".into(),
+        width.to_string(),
+        "-y".into(),
+        height.to_string(),
+        "-X".into(),
+        x.to_string(),
+        "-Y".into(),
+        y.to_string(),
+    ]
+}
+
+/// Pure builder for the `join-pane` argument list that returns a floating
+/// `pane` to its previous position in the tiled layout. With the destination
+/// unspecified, tmux restores the layout position the pane had before it
+/// was floated (tmux 3.8).
+fn join_pane_dock_args(pane: &str) -> Vec<String> {
+    vec!["join-pane".into(), "-s".into(), pane.into()]
+}
+
+/// Float `pane`: lift it out of the tiled layout and make it a floating
+/// pane of its window with the given size and upper-left position. Needs
+/// tmux 3.8. Reports tmux's error, e.g. a zoomed window refuses with
+/// "can't float a pane while window is zoomed".
+pub fn float_pane(pane: &str, width: u16, height: u16, x: u16, y: u16) -> Result<(), String> {
+    let owned = break_pane_float_args(pane, width, height, x, y);
+    let args: Vec<&str> = owned.iter().map(String::as_str).collect();
+    run_tmux_capture(&args).map(|_| ())
+}
+
+/// Return floating `pane` to its previous position in the tiled layout of
+/// its window.
+pub fn dock_pane(pane: &str) -> Result<(), String> {
+    let owned = join_pane_dock_args(pane);
+    let args: Vec<&str> = owned.iter().map(String::as_str).collect();
+    run_tmux_capture(&args).map(|_| ())
+}
+
 pub fn display_message(target: &str, format: &str) -> String {
     run_tmux(&["display-message", "-t", target, "-p", format])
         .map(|s| s.trim().to_string())
@@ -106,4 +153,35 @@ pub fn select_pane(pane_id: &str) {
         let _ = run_tmux(&["select-window", "-t", &window_id]);
     }
     let _ = run_tmux(&["select-pane", "-t", pane_id]);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn break_pane_float_args_match_tmux_3_8_flags() {
+        assert_eq!(
+            break_pane_float_args("%5", 40, 24, 75, 3),
+            vec![
+                "break-pane",
+                "-W",
+                "-s",
+                "%5",
+                "-x",
+                "40",
+                "-y",
+                "24",
+                "-X",
+                "75",
+                "-Y",
+                "3",
+            ]
+        );
+    }
+
+    #[test]
+    fn join_pane_dock_args_match_tmux_3_8_flags() {
+        assert_eq!(join_pane_dock_args("%5"), vec!["join-pane", "-s", "%5"]);
+    }
 }

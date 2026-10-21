@@ -140,7 +140,9 @@ impl AppState {
     /// Returns whether the sidebar's window is the active tmux window.
     pub fn refresh(&mut self) -> bool {
         self.refresh_now();
-        let (focused, window_active, _, _) = tmux::get_sidebar_pane_info(&self.tmux_pane);
+        let info = tmux::get_sidebar_pane_info(&self.tmux_pane);
+        let focused = info.pane_active;
+        let window_active = info.window_active;
         let (mut sessions, mut process_snapshot) = tmux::query_sessions_with_process_snapshot();
         self.sweep_dead_bg_shells_if_due(&mut sessions, &mut process_snapshot);
         if let Some(process_snapshot) = self.refresh_port_data(&sessions, process_snapshot.as_ref())
