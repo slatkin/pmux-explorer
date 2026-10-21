@@ -141,8 +141,10 @@ impl AppState {
     /// Count agents per status across all repo groups.
     ///
     /// The busy count sums the running and the background panes.
+    /// Unknown-status panes belong to no category, but the `all`
+    /// count covers every pane the status filter can show.
     pub fn status_counts(&self) -> StatusCounts {
-        let (mut busy, mut waiting, mut idle, mut error) = (0, 0, 0, 0);
+        let (mut busy, mut waiting, mut idle, mut error, mut unknown) = (0, 0, 0, 0, 0);
         for group in &self.repo_groups {
             if !self.global.repo_filter.matches_group(&group.name) {
                 continue;
@@ -155,11 +157,11 @@ impl AppState {
                     crate::tmux::PaneStatus::Waiting => waiting += 1,
                     crate::tmux::PaneStatus::Idle => idle += 1,
                     crate::tmux::PaneStatus::Error => error += 1,
-                    crate::tmux::PaneStatus::Unknown => {}
+                    crate::tmux::PaneStatus::Unknown => unknown += 1,
                 }
             }
         }
-        let all = busy + waiting + idle + error;
+        let all = busy + waiting + idle + error + unknown;
         StatusCounts {
             all,
             busy,
@@ -372,6 +374,30 @@ mod tests {
         let counts = state.status_counts();
         assert_eq!(counts.all(), 3);
         assert_eq!(counts.count(StatusFilter::Busy), 2);
+        assert_eq!(counts.count(StatusFilter::Waiting), 0);
+        assert_eq!(counts.count(StatusFilter::Idle), 1);
+        assert_eq!(counts.count(StatusFilter::Error), 0);
+    }
+
+    #[test]
+    fn status_counts_all_covers_unknown_panes() {
+        let mut state = AppState::new("%99".into());
+        state.repo_groups = vec![RepoGroup {
+            name: "app".into(),
+            has_focus: true,
+            panes: vec![
+                (test_pane("%1", PaneStatus::Running), PaneGitInfo::default()),
+                (test_pane("%2", PaneStatus::Idle), PaneGitInfo::default()),
+                (test_pane("%3", PaneStatus::Unknown), PaneGitInfo::default()),
+            ],
+        }];
+
+        // The All filter shows every status, unknown included, so the
+        // all chip must count the unknown pane too. The unknown pane
+        // belongs to no category.
+        let counts = state.status_counts();
+        assert_eq!(counts.all(), 3);
+        assert_eq!(counts.count(StatusFilter::Busy), 1);
         assert_eq!(counts.count(StatusFilter::Waiting), 0);
         assert_eq!(counts.count(StatusFilter::Idle), 1);
         assert_eq!(counts.count(StatusFilter::Error), 0);
