@@ -16,6 +16,7 @@ use crate::state::BottomTab;
 mod input;
 mod render;
 mod setup;
+mod size_guard;
 mod workers;
 
 /// Run the TUI event loop. Returns when the loop exits (currently only on
@@ -93,6 +94,10 @@ pub fn run(
             }
             needs_redraw = true;
             if is_window_active {
+                // Grow the sidebar back when an orchestrator's new panes
+                // squeezed it below `@sidebar_min_width`.
+                let pane_width = terminal.size().map(|s| s.width).unwrap_or(0);
+                size_guard::enforce(&state.tmux_pane, pane_width);
                 if window_inactive_count >= 2 {
                     state.global.load_from_tmux();
                     state.rebuild_row_targets();

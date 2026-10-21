@@ -84,6 +84,10 @@ pub const PANE_WORKTREE_NAME: &str = "@pane_worktree_name";
 
 pub const SIDEBAR_PID: &str = "@sidebar_pid";
 pub const SIDEBAR_WIDTH: &str = "@sidebar_width";
+/// Floor for the sidebar pane's width in columns. When other panes squeeze
+/// the sidebar below this, the sidebar grows itself back with `resize-pane`.
+/// `0` disables the enforcement.
+pub const SIDEBAR_MIN_WIDTH: &str = "@sidebar_min_width";
 pub const SIDEBAR_POSITION: &str = "@sidebar_position";
 pub const SIDEBAR_FILTER: &str = "@sidebar_filter";
 pub const SIDEBAR_CURSOR: &str = "@sidebar_cursor";
