@@ -79,14 +79,20 @@ fn split_path(path: &str) -> Option<(&str, &str, &str)> {
 }
 
 /// Splits a stem into its name and its hyphen-plus-timestamp suffix. The name
-/// must be non-empty and the suffix must be a well-formed timestamp.
+/// must be non-empty UTF-8 and the suffix must be a hyphen followed by a
+/// well-formed timestamp. Byte-level checks keep a multi-byte stem from
+/// slicing at a non-char boundary.
 fn strip_timestamp(stem: &str) -> Option<&str> {
-    let name_len = stem.len().checked_sub(TIMESTAMP_LEN + 1)?;
-    if name_len == 0 {
+    let bytes = stem.as_bytes();
+    let name_len = bytes.len().checked_sub(TIMESTAMP_LEN + 1)?;
+    if bytes.get(name_len) != Some(&b'-') {
         return None;
     }
-    let (name, suffix) = stem.split_at(name_len);
-    if !is_timestamp(&suffix[1..]) {
+    if !is_timestamp(stem.get(name_len + 1..)?) {
+        return None;
+    }
+    let name = stem.get(..name_len)?;
+    if name.is_empty() {
         return None;
     }
     Some(name)
@@ -174,6 +180,36 @@ mod tests {
     #[test]
     fn non_pmux_file_path_is_rejected() {
         assert_eq!(parse_pmux_task("<file name=\"/home/me/notes.md\">"), None);
+    }
+
+    #[test]
+    fn separator_that_is_not_a_hyphen_is_rejected() {
+        // A letter where the hyphen before the timestamp belongs.
+        assert_eq!(
+            parse_pmux_task(&spawn_prompt("unit1X2026-09-07T15-18-30", "P1")),
+            None
+        );
+        // A digit in the same position.
+        assert_eq!(
+            parse_pmux_task(&spawn_prompt("unit12026-09-07T15-18-30", "P1")),
+            None
+        );
+    }
+
+    #[test]
+    fn multi_byte_stem_is_rejected_without_panic() {
+        // The name length lands inside the two-byte leading character, so the
+        // split is not a char boundary.
+        assert_eq!(
+            parse_pmux_task(&spawn_prompt("é2026-09-07T15-18-30", "P1")),
+            None
+        );
+    }
+
+    #[test]
+    fn valid_multi_byte_name_is_accepted() {
+        let task = parse_pmux_task(&spawn_prompt("café-unit-2026-09-07T15-18-30", "P1")).unwrap();
+        assert_eq!(task.task.as_deref(), Some("café unit"));
     }
 
     #[test]
