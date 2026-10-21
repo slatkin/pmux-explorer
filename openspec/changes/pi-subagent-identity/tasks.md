@@ -8,8 +8,8 @@
 
 - [x] 2.1 Add `pmux_task: Option<PmuxTask>` to `AgentEvent::UserPromptSubmit`; set `None` in the Claude, Codex and OpenCode adapters and in their tests; verify `cargo build` and the existing adapter tests pass
 - [x] 2.2 In `src/adapter/pi.rs`, call the parser on `prompt`; on a match set `pmux_task` and an empty `prompt` (design D1); verify new adapter tests for a spawn prompt, a resume prompt and a plain prompt (unchanged `prompt`, `pmux_task: None`)
-- [ ] 2.3 Add `@pane_subagent_kind`, `@pane_subagent_parent` and `@pane_subagent_task` to `src/tmux/options.rs` and to both sweep lists (`clear_all_meta`, `clear_agent_pane_state`); verify `clear_all_meta_drops_every_pane_option_we_own` is extended with the three keys and passes
-- [ ] 2.4 Pass `pmux_task` through `src/cli/hook.rs` to `on_user_prompt_submit` and write the three options on `Some` (unset the task option when there is no task); verify handler tests with the tmux mock: a match sets the options and leaves `@pane_prompt` unchanged and the status running; a later plain prompt keeps the options; a later resume match replaces them; `session-end` teardown removes them
+- [x] 2.3 Add `@pane_subagent_kind`, `@pane_subagent_parent` and `@pane_subagent_task` to `src/tmux/options.rs` and to both sweep lists (`clear_all_meta`, `clear_agent_pane_state`); verify `clear_all_meta_drops_every_pane_option_we_own` is extended with the three keys and passes
+- [x] 2.4 Pass `pmux_task` through `src/cli/hook.rs` to `on_user_prompt_submit` and write the three options on `Some` (unset the task option when there is no task); verify handler tests with the tmux mock: a match sets the options and leaves `@pane_prompt` unchanged and the status running; a later plain prompt keeps the options; a later resume match replaces them; `session-end` teardown removes them
 - [x] 2.5 Update `docs/state-management.md` (per-pane option table) and `docs/agent-protocol.md` (what the sidebar does with a pmux task prompt, and the "cannot report" list); verify the text names the three options and the two path shapes
 
 ## 3. Query: fields and parent resolution
