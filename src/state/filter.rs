@@ -1,20 +1,18 @@
 use super::AppState;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StatusFilter {
     All,
-    Running,
-    Background,
+    Busy,
     Waiting,
     Idle,
     Error,
 }
 
 impl StatusFilter {
-    pub const VARIANTS: [StatusFilter; 6] = [
+    pub const VARIANTS: [StatusFilter; 5] = [
         StatusFilter::All,
-        StatusFilter::Running,
-        StatusFilter::Background,
+        StatusFilter::Busy,
         StatusFilter::Waiting,
         StatusFilter::Idle,
         StatusFilter::Error,
@@ -40,20 +38,20 @@ impl StatusFilter {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::All => "all",
-            Self::Running => "running",
-            Self::Background => "background",
+            Self::Busy => "busy",
             Self::Waiting => "waiting",
             Self::Idle => "idle",
             Self::Error => "error",
         }
     }
 
-    /// Parse a tmux-option label into a `StatusFilter`. Unknown values
+    /// Parse a tmux-option label into a `StatusFilter`. The legacy
+    /// `running` and `background` labels both map onto `Busy`, so an
+    /// older sidebar's persisted filter keeps a filter. Unknown values
     /// fall back to `All`.
     pub fn from_label(s: &str) -> Self {
         match s {
-            "running" => Self::Running,
-            "background" => Self::Background,
+            "busy" | "running" | "background" => Self::Busy,
             "waiting" => Self::Waiting,
             "idle" => Self::Idle,
             "error" => Self::Error,
@@ -64,11 +62,41 @@ impl StatusFilter {
     pub fn matches(self, status: &crate::tmux::PaneStatus) -> bool {
         match self {
             StatusFilter::All => true,
-            StatusFilter::Running => *status == crate::tmux::PaneStatus::Running,
-            StatusFilter::Background => *status == crate::tmux::PaneStatus::Background,
+            // Busy covers both live states: a running turn and a
+            // finished turn with a live background command.
+            StatusFilter::Busy => matches!(
+                status,
+                crate::tmux::PaneStatus::Running | crate::tmux::PaneStatus::Background
+            ),
             StatusFilter::Waiting => *status == crate::tmux::PaneStatus::Waiting,
             StatusFilter::Idle => *status == crate::tmux::PaneStatus::Idle,
             StatusFilter::Error => *status == crate::tmux::PaneStatus::Error,
+        }
+    }
+}
+
+/// Agent counts keyed by [`StatusFilter`] rather than by position: the
+/// chip order lives in [`StatusFilter::VARIANTS`] alone, and every
+/// consumer looks a count up by filter instead of pairing two lists by
+/// index.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StatusCounts {
+    all: usize,
+    busy: usize,
+    waiting: usize,
+    idle: usize,
+    error: usize,
+}
+
+impl StatusCounts {
+    /// The count a chip for `filter` renders.
+    pub fn count(self, filter: StatusFilter) -> usize {
+        match filter {
+            StatusFilter::All => self.all,
+            StatusFilter::Busy => self.busy,
+            StatusFilter::Waiting => self.waiting,
+            StatusFilter::Idle => self.idle,
+            StatusFilter::Error => self.error,
         }
     }
 }
@@ -106,25 +134,36 @@ impl RepoFilter {
 
 impl AppState {
     /// Count agents per status across all repo groups.
-    pub fn status_counts(&self) -> (usize, usize, usize, usize, usize, usize) {
-        let (mut running, mut background, mut waiting, mut idle, mut error) = (0, 0, 0, 0, 0);
+    ///
+    /// The busy count sums the running and the background panes.
+    /// Unknown-status panes belong to no category, but the `all`
+    /// count covers every pane the status filter can show.
+    pub fn status_counts(&self) -> StatusCounts {
+        let (mut busy, mut waiting, mut idle, mut error, mut unknown) = (0, 0, 0, 0, 0);
         for group in &self.repo_groups {
             if !self.global.repo_filter.matches_group(&group.name) {
                 continue;
             }
             for (pane, _) in &group.panes {
                 match pane.status {
-                    crate::tmux::PaneStatus::Running => running += 1,
-                    crate::tmux::PaneStatus::Background => background += 1,
+                    crate::tmux::PaneStatus::Running | crate::tmux::PaneStatus::Background => {
+                        busy += 1
+                    }
                     crate::tmux::PaneStatus::Waiting => waiting += 1,
                     crate::tmux::PaneStatus::Idle => idle += 1,
                     crate::tmux::PaneStatus::Error => error += 1,
-                    crate::tmux::PaneStatus::Unknown => {}
+                    crate::tmux::PaneStatus::Unknown => unknown += 1,
                 }
             }
         }
-        let all = running + background + waiting + idle + error;
-        (all, running, background, waiting, idle, error)
+        let all = busy + waiting + idle + error + unknown;
+        StatusCounts {
+            all,
+            busy,
+            waiting,
+            idle,
+            error,
+        }
     }
 
     /// Return list of repo names for the popup: ["All", repo1, repo2, ...]
@@ -146,9 +185,8 @@ mod tests {
 
     #[test]
     fn status_filter_next_cycles() {
-        assert_eq!(StatusFilter::All.next(), StatusFilter::Running);
-        assert_eq!(StatusFilter::Running.next(), StatusFilter::Background);
-        assert_eq!(StatusFilter::Background.next(), StatusFilter::Waiting);
+        assert_eq!(StatusFilter::All.next(), StatusFilter::Busy);
+        assert_eq!(StatusFilter::Busy.next(), StatusFilter::Waiting);
         assert_eq!(StatusFilter::Waiting.next(), StatusFilter::Idle);
         assert_eq!(StatusFilter::Idle.next(), StatusFilter::Error);
         assert_eq!(StatusFilter::Error.next(), StatusFilter::All);
@@ -159,9 +197,8 @@ mod tests {
         assert_eq!(StatusFilter::All.prev(), StatusFilter::Error);
         assert_eq!(StatusFilter::Error.prev(), StatusFilter::Idle);
         assert_eq!(StatusFilter::Idle.prev(), StatusFilter::Waiting);
-        assert_eq!(StatusFilter::Waiting.prev(), StatusFilter::Background);
-        assert_eq!(StatusFilter::Background.prev(), StatusFilter::Running);
-        assert_eq!(StatusFilter::Running.prev(), StatusFilter::All);
+        assert_eq!(StatusFilter::Waiting.prev(), StatusFilter::Busy);
+        assert_eq!(StatusFilter::Busy.prev(), StatusFilter::All);
     }
 
     #[test]
@@ -172,14 +209,11 @@ mod tests {
         assert!(StatusFilter::All.matches(&PaneStatus::Waiting));
         assert!(StatusFilter::All.matches(&PaneStatus::Error));
 
-        assert!(StatusFilter::Running.matches(&PaneStatus::Running));
-        assert!(!StatusFilter::Running.matches(&PaneStatus::Background));
-        assert!(!StatusFilter::Running.matches(&PaneStatus::Idle));
-        assert!(!StatusFilter::Running.matches(&PaneStatus::Waiting));
-        assert!(!StatusFilter::Running.matches(&PaneStatus::Error));
-
-        assert!(StatusFilter::Background.matches(&PaneStatus::Background));
-        assert!(!StatusFilter::Background.matches(&PaneStatus::Running));
+        assert!(StatusFilter::Busy.matches(&PaneStatus::Running));
+        assert!(StatusFilter::Busy.matches(&PaneStatus::Background));
+        assert!(!StatusFilter::Busy.matches(&PaneStatus::Idle));
+        assert!(!StatusFilter::Busy.matches(&PaneStatus::Waiting));
+        assert!(!StatusFilter::Busy.matches(&PaneStatus::Error));
 
         assert!(StatusFilter::Waiting.matches(&PaneStatus::Waiting));
         assert!(!StatusFilter::Waiting.matches(&PaneStatus::Running));
@@ -196,8 +230,7 @@ mod tests {
     #[test]
     fn status_filter_as_str_all_variants() {
         assert_eq!(StatusFilter::All.as_str(), "all");
-        assert_eq!(StatusFilter::Running.as_str(), "running");
-        assert_eq!(StatusFilter::Background.as_str(), "background");
+        assert_eq!(StatusFilter::Busy.as_str(), "busy");
         assert_eq!(StatusFilter::Waiting.as_str(), "waiting");
         assert_eq!(StatusFilter::Idle.as_str(), "idle");
         assert_eq!(StatusFilter::Error.as_str(), "error");
@@ -206,14 +239,19 @@ mod tests {
     #[test]
     fn status_filter_from_str_all_variants() {
         assert_eq!(StatusFilter::from_label("all"), StatusFilter::All);
-        assert_eq!(StatusFilter::from_label("running"), StatusFilter::Running);
-        assert_eq!(
-            StatusFilter::from_label("background"),
-            StatusFilter::Background
-        );
+        assert_eq!(StatusFilter::from_label("busy"), StatusFilter::Busy);
         assert_eq!(StatusFilter::from_label("waiting"), StatusFilter::Waiting);
         assert_eq!(StatusFilter::from_label("idle"), StatusFilter::Idle);
         assert_eq!(StatusFilter::from_label("error"), StatusFilter::Error);
+    }
+
+    #[test]
+    fn status_filter_from_str_legacy_labels_map_to_busy() {
+        // The persisted `@sidebar_filter` may still hold the pre-busy
+        // category names; both must keep a filter instead of falling
+        // back to all.
+        assert_eq!(StatusFilter::from_label("running"), StatusFilter::Busy);
+        assert_eq!(StatusFilter::from_label("background"), StatusFilter::Busy);
     }
 
     #[test]
@@ -284,7 +322,15 @@ mod tests {
     #[test]
     fn status_counts_on_empty_state_is_all_zeroes() {
         let state = AppState::new("%99".into());
-        assert_eq!(state.status_counts(), (0, 0, 0, 0, 0, 0));
+        let counts = state.status_counts();
+        assert_eq!(counts.count(StatusFilter::All), 0);
+        for filter in StatusFilter::VARIANTS {
+            assert_eq!(
+                counts.count(filter),
+                0,
+                "{filter:?} count on an empty state"
+            );
+        }
     }
 
     #[test]
@@ -310,14 +356,46 @@ mod tests {
             },
         ];
 
-        // All repos: 4 total
-        let (all, r, b, w, i, e) = state.status_counts();
-        assert_eq!((all, r, b, w, i, e), (4, 1, 1, 1, 1, 0));
+        // All repos: 4 total, busy sums running + background
+        let counts = state.status_counts();
+        assert_eq!(counts.count(StatusFilter::All), 4);
+        assert_eq!(counts.count(StatusFilter::Busy), 2);
+        assert_eq!(counts.count(StatusFilter::Waiting), 1);
+        assert_eq!(counts.count(StatusFilter::Idle), 1);
+        assert_eq!(counts.count(StatusFilter::Error), 0);
 
         // Restrict to "app"
         state.global.repo_filter = RepoFilter::Repo("app".into());
-        let (all, r, b, w, i, e) = state.status_counts();
-        assert_eq!((all, r, b, w, i, e), (3, 1, 1, 0, 1, 0));
+        let counts = state.status_counts();
+        assert_eq!(counts.count(StatusFilter::All), 3);
+        assert_eq!(counts.count(StatusFilter::Busy), 2);
+        assert_eq!(counts.count(StatusFilter::Waiting), 0);
+        assert_eq!(counts.count(StatusFilter::Idle), 1);
+        assert_eq!(counts.count(StatusFilter::Error), 0);
+    }
+
+    #[test]
+    fn status_counts_all_covers_unknown_panes() {
+        let mut state = AppState::new("%99".into());
+        state.repo_groups = vec![RepoGroup {
+            name: "app".into(),
+            has_focus: true,
+            panes: vec![
+                (test_pane("%1", PaneStatus::Running), PaneGitInfo::default()),
+                (test_pane("%2", PaneStatus::Idle), PaneGitInfo::default()),
+                (test_pane("%3", PaneStatus::Unknown), PaneGitInfo::default()),
+            ],
+        }];
+
+        // The All filter shows every status, unknown included, so the
+        // all chip must count the unknown pane too. The unknown pane
+        // belongs to no category.
+        let counts = state.status_counts();
+        assert_eq!(counts.count(StatusFilter::All), 3);
+        assert_eq!(counts.count(StatusFilter::Busy), 1);
+        assert_eq!(counts.count(StatusFilter::Waiting), 0);
+        assert_eq!(counts.count(StatusFilter::Idle), 1);
+        assert_eq!(counts.count(StatusFilter::Error), 0);
     }
 
     #[test]

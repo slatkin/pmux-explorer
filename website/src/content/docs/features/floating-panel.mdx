@@ -1,0 +1,35 @@
+---
+title: Floating panel
+description: Pop the sidebar out of the window into a floating tmux panel — and back.
+---
+
+The sidebar is a docked column by default, sharing the window's width with the workspace panes. When you want the workspace back — or want to watch an agent closely without giving up the sidebar — the top row can pop the sidebar out of the window into a floating tmux panel, and pop it back in.
+
+## The pop-out control
+
+The sidebar's top row carries the control at its right edge. It shows `⤢` while the sidebar is docked and `⤡` while the sidebar is floating. Clicking it and pressing `p` do the same thing: pop out when docked, pop in when floating.
+
+The control reads the state of the sidebar pane itself, so a sidebar that was floated from the tmux command line shows the `⤡` glyph and can be popped back in from the sidebar.
+
+## The floating panel
+
+Popping the sidebar out turns it into a floating pane in the same window:
+
+- **40 columns wide**, as tall as the window, anchored to the right edge.
+- The workspace panes take the full width of the window again — a floating pane takes no space from the layout.
+
+While the sidebar floats, the Activity/Git bottom panel is clamped to at most a third of the panel height, so the agent list keeps the rest.
+
+## What survives the round trip
+
+The same sidebar process keeps running across the switch, so the status filter, the selection, the scroll position and the bottom tab are all still there when the sidebar floats back in.
+
+Popping the sidebar back in restores the docked width the sidebar had before the pop-out, so a sidebar you resized by hand keeps that width.
+
+## tmux version
+
+The floating panel needs **tmux 3.8**: it lifts the pane out of the layout with `break-pane -W` and puts it back with `join-pane`, and neither command exists in 3.7 or earlier. The rest of the sidebar works on tmux 3.0+.
+
+## When the pop-out is refused
+
+tmux refuses to float a pane out of a zoomed window. When that happens the sidebar stays docked and tells you the pop-out was refused.

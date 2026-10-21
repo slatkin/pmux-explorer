@@ -3,57 +3,87 @@ use ratatui::{
     text::{Line, Span},
 };
 
-use crate::state::{AppState, RepoFilter, StatusFilter};
+use crate::state::{AppState, RepoFilter, StatusFilter, filter_bar_layout};
 use crate::tmux::PaneStatus;
 
 use crate::ui::text::{display_width, truncate_to_width};
 
-/// Render the status filter bar.
-pub(super) fn render_filter_bar<'a>(state: &AppState) -> Line<'a> {
+/// Glyphs of the pop-out control on the right edge of the top row: the
+/// pop-out glyph while the sidebar is docked, the pop-in glyph while it
+/// floats. Which one shows follows the pane's `floating` flag, not a
+/// remembered mode.
+const POPOUT_GLYPH: &str = "⤢";
+const POPIN_GLYPH: &str = "⤡";
+
+/// Render the status filter bar, returning the line and the column of
+/// the pop-out control at the right edge (for click hit-testing).
+pub(super) fn render_filter_bar<'a>(state: &AppState, width: u16) -> (Line<'a>, Option<u16>) {
     let theme = &state.theme;
     let icons = &state.icons;
-    let (all, running, background, waiting, idle, error) = state.status_counts();
+    let counts = state.status_counts();
 
-    let icon_for = |s: PaneStatus| (icons.status_icon(&s), theme.status_color(&s, false));
-    let items: Vec<(StatusFilter, (&str, ratatui::style::Color), usize)> = vec![
-        (StatusFilter::All, (icons.all_icon(), theme.status_all), all),
-        (
-            StatusFilter::Running,
-            icon_for(PaneStatus::Running),
-            running,
-        ),
-        (
-            StatusFilter::Background,
-            icon_for(PaneStatus::Background),
-            background,
-        ),
-        (
-            StatusFilter::Waiting,
-            icon_for(PaneStatus::Waiting),
-            waiting,
-        ),
-        (StatusFilter::Idle, icon_for(PaneStatus::Idle), idle),
-        (StatusFilter::Error, icon_for(PaneStatus::Error), error),
-    ];
+    let icon_for = |filter: StatusFilter| -> (String, ratatui::style::Color) {
+        match filter {
+            StatusFilter::All => (icons.all_icon().to_string(), theme.status_all),
+            StatusFilter::Busy => (
+                icons.status_icon(&PaneStatus::Running).to_string(),
+                theme.status_running,
+            ),
+            StatusFilter::Waiting => (
+                icons.status_icon(&PaneStatus::Waiting).to_string(),
+                theme.status_color(&PaneStatus::Waiting, false),
+            ),
+            StatusFilter::Idle => (
+                icons.status_icon(&PaneStatus::Idle).to_string(),
+                theme.status_color(&PaneStatus::Idle, false),
+            ),
+            StatusFilter::Error => (
+                icons.status_icon(&PaneStatus::Error).to_string(),
+                theme.status_color(&PaneStatus::Error, false),
+            ),
+        }
+    };
+
+    // The chip layout (which chips fit before the control, and where
+    // each starts) comes from the same pure function the click hit test
+    // runs, so a drawn chip and a clickable chip are always the same
+    // chip, whatever the counts are.
+    let (chips, control_col) = filter_bar_layout(counts, width);
+    let Some(control_col) = control_col else {
+        return (Line::from(Vec::new()), None);
+    };
 
     let mut spans: Vec<Span<'a>> = Vec::new();
-    spans.push(Span::raw(" "));
+    // The leading gutter column, skipped on a one-column row so the
+    // control still fits.
+    if control_col > 0 {
+        spans.push(Span::raw(" "));
+    }
 
-    for (i, (filter, (icon, icon_color), count)) in items.into_iter().enumerate() {
+    // The busy chip always wears the running colour — running and
+    // background panes are both busy, so its icon carries no selection
+    // cue. The active chip is instead marked by its count, which is
+    // drawn in the accent colour.
+    for (i, chip) in chips.iter().enumerate() {
         if i > 0 {
-            spans.push(Span::raw("  "));
+            spans.push(Span::raw(" "));
         }
+        let filter = chip.filter;
+        let count = counts.count(filter);
+        let (icon, icon_color) = icon_for(filter);
 
         let is_selected = state.global.status_filter == filter;
-        let icon_style = if is_selected {
+        let icon_style = if is_selected || filter == StatusFilter::Busy {
             Style::default().fg(icon_color)
         } else {
             Style::default().fg(theme.filter_inactive)
         };
-        spans.push(Span::styled(icon.to_string(), icon_style));
+        spans.push(Span::styled(icon, icon_style));
 
         let count_str = format!("{count}");
-        let count_style = if count == 0 {
+        let count_style = if is_selected {
+            Style::default().fg(theme.accent)
+        } else if count == 0 {
             Style::default().fg(theme.filter_inactive)
         } else {
             Style::default().fg(theme.text_active)
@@ -61,7 +91,26 @@ pub(super) fn render_filter_bar<'a>(state: &AppState) -> Line<'a> {
         spans.push(Span::styled(count_str, count_style));
     }
 
-    Line::from(spans)
+    // The control sits at the right edge of the row, one glyph column
+    // wide, in the running colour — the row is as wide as the area, the
+    // way the secondary header right-aligns its repo button.
+    let control_glyph = if state.sidebar_pane.floating {
+        POPIN_GLYPH
+    } else {
+        POPOUT_GLYPH
+    };
+    // Everything drawn ends at or before the control column: the last
+    // drawn chip, or the leading gutter when every chip was dropped.
+    let drawn_end = chips
+        .last()
+        .map_or(control_col.min(1), |chip| chip.start + chip.width);
+    spans.push(Span::raw(" ".repeat((control_col - drawn_end) as usize)));
+    spans.push(Span::styled(
+        control_glyph,
+        Style::default().fg(theme.status_running),
+    ));
+
+    (Line::from(spans), Some(control_col))
 }
 
 pub(super) fn render_secondary_header<'a>(
@@ -212,9 +261,14 @@ mod tests {
         state
     }
 
-    fn filter_bar_text(state: &AppState) -> String {
-        let line = render_filter_bar(state);
+    /// Render the filter bar at a fixed test width and collect its text.
+    fn filter_bar_text_at(state: &AppState, width: u16) -> String {
+        let (line, _) = render_filter_bar(state, width);
         line.spans.iter().map(|s| s.content.as_ref()).collect()
+    }
+
+    fn filter_bar_text(state: &AppState) -> String {
+        filter_bar_text_at(state, 20)
     }
 
     #[test]
@@ -281,17 +335,17 @@ mod tests {
                 (pane2, PaneGitInfo::default()),
             ],
         }]);
-        state.global.status_filter = StatusFilter::Running;
+        state.global.status_filter = StatusFilter::Busy;
         let theme = &state.theme;
 
-        let line = render_filter_bar(&state);
+        let (line, _) = render_filter_bar(&state, 20);
         let cells: Vec<_> = line
             .spans
             .iter()
             .filter(|span| !span.content.as_ref().trim().is_empty())
             .collect();
 
-        assert_eq!(cells.len(), 12);
+        assert_eq!(cells.len(), 11);
 
         assert_eq!(cells[0].content.as_ref(), "≡");
         assert_eq!(cells[0].style.fg, Some(theme.filter_inactive));
@@ -300,36 +354,225 @@ mod tests {
         assert_eq!(cells[1].content.as_ref(), "2");
         assert_eq!(cells[1].style.fg, Some(theme.text_active));
 
+        // The busy chip icon wears the running colour even while busy is
+        // the active category, and its count carries the accent colour.
         assert_eq!(cells[2].content.as_ref(), "●");
         assert_eq!(cells[2].style.fg, Some(theme.status_running));
         assert!(!cells[2].style.add_modifier.contains(Modifier::UNDERLINED));
 
         assert_eq!(cells[3].content.as_ref(), "1");
-        assert_eq!(cells[3].style.fg, Some(theme.text_active));
+        assert_eq!(cells[3].style.fg, Some(theme.accent));
 
-        assert_eq!(cells[4].content.as_ref(), "◎");
+        assert_eq!(cells[4].content.as_ref(), "◐");
         assert_eq!(cells[4].style.fg, Some(theme.filter_inactive));
 
         assert_eq!(cells[5].content.as_ref(), "0");
         assert_eq!(cells[5].style.fg, Some(theme.filter_inactive));
 
-        assert_eq!(cells[6].content.as_ref(), "◐");
+        assert_eq!(cells[6].content.as_ref(), "○");
         assert_eq!(cells[6].style.fg, Some(theme.filter_inactive));
 
-        assert_eq!(cells[7].content.as_ref(), "0");
-        assert_eq!(cells[7].style.fg, Some(theme.filter_inactive));
+        assert_eq!(cells[7].content.as_ref(), "1");
+        assert_eq!(cells[7].style.fg, Some(theme.text_active));
 
-        assert_eq!(cells[8].content.as_ref(), "○");
+        assert_eq!(cells[8].content.as_ref(), "✕");
         assert_eq!(cells[8].style.fg, Some(theme.filter_inactive));
 
-        assert_eq!(cells[9].content.as_ref(), "1");
-        assert_eq!(cells[9].style.fg, Some(theme.text_active));
+        assert_eq!(cells[9].content.as_ref(), "0");
+        assert_eq!(cells[9].style.fg, Some(theme.filter_inactive));
+    }
 
-        assert_eq!(cells[10].content.as_ref(), "✕");
-        assert_eq!(cells[10].style.fg, Some(theme.filter_inactive));
+    #[test]
+    fn render_filter_bar_busy_icon_keeps_running_colour_when_inactive() {
+        let mut pane = test_filter_pane("%2", PaneStatus::Idle);
+        pane.agent = crate::tmux::AgentType::Codex;
+        let mut state = make_state_with_groups(vec![crate::group::RepoGroup {
+            name: "project".into(),
+            has_focus: true,
+            panes: vec![(pane, PaneGitInfo::default())],
+        }]);
+        state.global.status_filter = StatusFilter::Idle;
+        let theme = &state.theme;
 
-        assert_eq!(cells[11].content.as_ref(), "0");
-        assert_eq!(cells[11].style.fg, Some(theme.filter_inactive));
+        let (line, _) = render_filter_bar(&state, 20);
+        let cells: Vec<_> = line
+            .spans
+            .iter()
+            .filter(|span| !span.content.as_ref().trim().is_empty())
+            .collect();
+
+        // Busy is not active: its icon still wears the running colour,
+        // its count drops back to the ordinary text colour, and the
+        // active chip's count wears the accent colour.
+        assert_eq!(cells[2].content.as_ref(), "●");
+        assert_eq!(cells[2].style.fg, Some(theme.status_running));
+        assert_eq!(cells[3].content.as_ref(), "0");
+        assert_eq!(cells[3].style.fg, Some(theme.filter_inactive));
+
+        assert_eq!(cells[6].content.as_ref(), "○");
+        assert_eq!(cells[6].style.fg, Some(theme.status_idle));
+        assert_eq!(cells[7].content.as_ref(), "1");
+        assert_eq!(cells[7].style.fg, Some(theme.accent));
+    }
+
+    #[test]
+    fn render_filter_bar_busy_count_sums_running_and_background() {
+        let mut state = make_state_with_groups(vec![crate::group::RepoGroup {
+            name: "project".into(),
+            has_focus: true,
+            panes: vec![
+                (
+                    test_filter_pane("%1", PaneStatus::Running),
+                    PaneGitInfo::default(),
+                ),
+                (
+                    test_filter_pane("%2", PaneStatus::Background),
+                    PaneGitInfo::default(),
+                ),
+            ],
+        }]);
+        state.global.status_filter = StatusFilter::Busy;
+
+        let text = filter_bar_text(&state);
+        insta::assert_snapshot!(text, @" ≡2 ●2 ◐0 ○0 ✕0    ⤢");
+    }
+
+    // ─── the pop-out control ─────────────────────────────────
+
+    #[test]
+    fn snapshot_filter_bar_docked_shows_the_pop_out_glyph() {
+        // The zero-count docked row at the 20 column minimum: the
+        // snapshot pins the whole row, the renderer returns the control
+        // column and a full-width row at every width, and the control
+        // glyph wears the running colour. Direct equality checks sit
+        // alongside the snapshot because layout columns and colours are
+        // not visible characters.
+        let state = make_state_with_groups(vec![]);
+        assert!(!state.sidebar_pane.floating);
+        for width in [20u16, 30, 40] {
+            let (line, col) = render_filter_bar(&state, width);
+            let text = line_text(&line);
+            assert_eq!(col, Some(width - 1), "control column at width {width}");
+            assert_eq!(
+                display_width(&text),
+                width as usize,
+                "the row must be as wide as the area at width {width}"
+            );
+        }
+        let (line, _) = render_filter_bar(&state, 20);
+        insta::assert_snapshot!(line_text(&line), @" ≡0 ●0 ◐0 ○0 ✕0    ⤢");
+        let glyph = line.spans.last().unwrap();
+        assert_eq!(glyph.content.as_ref(), "⤢");
+        assert_eq!(glyph.style.fg, Some(state.theme.status_running));
+    }
+
+    #[test]
+    fn snapshot_filter_bar_floating_shows_the_pop_in_glyph() {
+        // The glyph follows the pane's floating flag, so a sidebar that
+        // was floated from the tmux command line shows the pop-in glyph.
+        let mut state = make_state_with_groups(vec![]);
+        state.sidebar_pane.floating = true;
+        let text = filter_bar_text(&state);
+        insta::assert_snapshot!(text, @" ≡0 ●0 ◐0 ○0 ✕0    ⤡");
+    }
+
+    // ─── the row with multi-digit counts (the 20 column minimum) ───
+
+    /// Ten panes of each of the four non-all statuses, so every chip
+    /// count renders with two digits and the chip run alone fills the
+    /// 20 column minimum.
+    fn state_with_two_digit_counts() -> AppState {
+        let mut panes = Vec::new();
+        for (status, n) in [
+            (PaneStatus::Running, 10),
+            (PaneStatus::Waiting, 10),
+            (PaneStatus::Idle, 10),
+            (PaneStatus::Error, 10),
+        ] {
+            for i in 0..n {
+                panes.push((
+                    test_filter_pane(&format!("%{i}x{status:?}"), status.clone()),
+                    PaneGitInfo::default(),
+                ));
+            }
+        }
+        make_state_with_groups(vec![crate::group::RepoGroup {
+            name: "project".into(),
+            has_focus: true,
+            panes,
+        }])
+    }
+
+    #[test]
+    fn rendered_icons_sit_exactly_on_the_layout_chip_columns() {
+        // The renderer and the hit test share one layout function; this
+        // pins the render half: every drawn icon sits on the column the
+        // layout names for its chip, at every width including the
+        // truncating one.
+        let state = state_with_two_digit_counts();
+        let counts = state.status_counts();
+        for width in [20u16, 24, 40] {
+            let (line, _) = render_filter_bar(&state, width);
+            let text = line_text(&line);
+            let (chips, _) = filter_bar_layout(counts, width);
+            let chars: Vec<char> = text.chars().collect();
+            for chip in &chips {
+                assert_eq!(
+                    chars[chip.start as usize],
+                    icon_of(&state, chip.filter).chars().next().unwrap(),
+                    "icon column mismatch at width {width}: {text}"
+                );
+            }
+            // A dropped chip must leave no drawn trace either.
+            if chips.len() < 5 {
+                assert_eq!(
+                    chars[control_col(width) as usize],
+                    '⤢',
+                    "the control stays at the right edge at width {width}"
+                );
+            }
+        }
+    }
+
+    /// The icon glyph the renderer draws for a chip of `filter`, keyed
+    /// by filter rather than by position.
+    fn icon_of(state: &AppState, filter: StatusFilter) -> String {
+        match filter {
+            StatusFilter::All => state.icons.all_icon().to_string(),
+            StatusFilter::Busy => state.icons.status_icon(&PaneStatus::Running).to_string(),
+            StatusFilter::Waiting => state.icons.status_icon(&PaneStatus::Waiting).to_string(),
+            StatusFilter::Idle => state.icons.status_icon(&PaneStatus::Idle).to_string(),
+            StatusFilter::Error => state.icons.status_icon(&PaneStatus::Error).to_string(),
+        }
+    }
+
+    fn control_col(width: u16) -> u16 {
+        width - 1
+    }
+
+    fn test_filter_pane(pane_id: &str, status: PaneStatus) -> crate::tmux::PaneInfo {
+        crate::tmux::PaneInfo {
+            pane_id: pane_id.into(),
+            pane_active: false,
+            status,
+            attention: false,
+            agent: crate::tmux::AgentType::Claude,
+            path: String::new(),
+            current_command: String::new(),
+            prompt: String::new(),
+            prompt_is_response: false,
+            started_at: None,
+            wait_reason: String::new(),
+            permission_mode: crate::tmux::PermissionMode::Default,
+            subagents: vec![],
+            pane_pid: None,
+            worktree: crate::tmux::WorktreeMetadata::default(),
+            session_id: None,
+            session_name: String::new(),
+            sidebar_spawned: false,
+            bg_shell_cmd: None,
+            subagent: None,
+        }
     }
 
     #[test]

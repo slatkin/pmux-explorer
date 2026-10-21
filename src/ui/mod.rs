@@ -13,6 +13,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout},
 };
 
+use crate::state::clamp_bottom_height;
 use crate::{state::AppState, tmux};
 
 pub const BOTTOM_PANEL_HEIGHT: u16 = 20;
@@ -57,7 +58,17 @@ pub fn draw(frame: &mut Frame, state: &mut AppState) {
     state.layout.hyperlink_overlays.clear();
     let area = frame.area();
 
-    let bot_h = state.bottom_panel_height;
+    let bot_h = if state.sidebar_pane.floating {
+        // A floating panel keeps the agent list readable: the Activity/Git
+        // bottom panel takes at most a third of the panel height.
+        clamp_bottom_height(state.bottom_panel_height, area.height)
+    } else {
+        state.bottom_panel_height
+    };
+    // Publish the height this frame actually drew so the mouse handlers
+    // hit-test the drawn geometry (`FrameLayout::bottom_panel_height`),
+    // never the raw configured height.
+    state.layout.bottom_panel_height = bot_h;
     let divider_h = if bot_h > 0 && state.pet_enabled {
         PET_SCENE_HEIGHT
     } else {

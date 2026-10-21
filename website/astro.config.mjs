@@ -106,6 +106,7 @@ export default defineConfig({
           label: 'Features',
           items: [
             { slug: 'features/agent-pane' },
+            { slug: 'features/floating-panel' },
             { slug: 'features/worktree' },
             { slug: 'features/activity-log' },
             { slug: 'features/git-status' },

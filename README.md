@@ -34,7 +34,7 @@ pi is supported through the pmux extension: pmux ships a pi extension that loads
 
 ## Requirements
 
-- tmux 3.0+
+- tmux 3.0+ (the floating panel — popping the sidebar out of the window — needs tmux 3.8, because it uses `break-pane -W` and `join-pane`)
 - [TPM](https://github.com/tmux-plugins/tpm) (or the manual install in [Installation](https://hiroppy.github.io/tmux-agent-sidebar/getting-started/installation/))
 - [GitHub CLI](https://cli.github.com/) (optional — required only for PR numbers in the Git tab)
 

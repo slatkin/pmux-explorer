@@ -1,5 +1,6 @@
 use std::time::Instant;
 
+use crate::tmux::SidebarPaneInfo;
 use crate::ui::colors::ColorTheme;
 use crate::ui::icons::StatusIcons;
 
@@ -11,6 +12,7 @@ mod layout;
 mod notices;
 mod pane_runtime;
 mod pet;
+mod popout;
 mod popup;
 mod refresh;
 mod scroll;
@@ -19,13 +21,15 @@ mod tab;
 mod timers;
 
 pub use activity::ActivityState;
-pub use filter::{RepoFilter, StatusFilter};
+pub use filter::{RepoFilter, StatusCounts, StatusFilter};
 pub use focus::{Focus, FocusState};
 pub use global::GlobalState;
+pub(crate) use layout::filter_bar_layout;
 pub use layout::{FrameLayout, HyperlinkOverlay, RepoSpawnTarget, RowTarget, SpawnRemoveTarget};
 pub(crate) use notices::debug_forced_display;
 pub use notices::{ClaudePluginNotice, NoticesCopyTarget, NoticesMissingHookGroup, NoticesState};
 pub use pane_runtime::{PaneRuntimeMap, PaneRuntimeState};
+pub use popout::{PanelGeometry, clamp_bottom_height, panel_geometry};
 pub use popup::{PopupState, SpawnField};
 #[cfg(test)]
 pub(crate) use refresh::{TaskProgressDecision, classify_task_progress};
@@ -56,6 +60,16 @@ pub struct AppState {
     pub layout: FrameLayout,
     pub activity: ActivityState,
     pub tmux_pane: String,
+    /// The sidebar's own pane state as tmux reported it on the last
+    /// refresh: focus, size, window size and the floating flag. The
+    /// docked-vs-floating mode is read from this, never remembered
+    /// separately.
+    pub sidebar_pane: SidebarPaneInfo,
+    /// Docked width captured when the sidebar was popped out, restored
+    /// by the pop-in with `resize-pane -x`. `None` while docked and when
+    /// the pane was already floating when the sidebar started (nothing
+    /// to restore).
+    pub docked_width: Option<u16>,
     /// Scroll offsets for the agents list and git tab. Activity tab
     /// scroll lives in [`ActivityState::scroll`].
     pub scrolls: ScrollStates,
@@ -152,6 +166,8 @@ impl AppState {
             icons: StatusIcons::default(),
             bottom_tab: BottomTab::Activity,
             git: crate::git::GitData::default(),
+            sidebar_pane: SidebarPaneInfo::FALLBACK,
+            docked_width: None,
             pane_states: PaneRuntimeMap::new(),
             timers: RefreshTimers::default(),
             popup: PopupState::None,
@@ -1068,6 +1084,94 @@ mod tests {
         assert_eq!(state.activity.scroll.offset, 0);
     }
 
+    // ─── handle_terminal_click tests ──────────────────────────────────
+
+    #[test]
+    fn terminal_click_on_the_tab_row_switches_the_tab() {
+        let mut state = AppState::new("%99".into());
+        state.layout.bottom_panel_height = 20;
+        state.bottom_tab = BottomTab::GitStatus;
+        // term_height=50, bottom panel 20 → tab row at row 30
+        assert!(state.handle_terminal_click(30, 3, 50));
+        assert_eq!(state.bottom_tab, BottomTab::Activity);
+    }
+
+    #[test]
+    fn terminal_click_above_the_tab_row_goes_to_the_agents_panel() {
+        let mut state = AppState::new("%99".into());
+        state.layout.bottom_panel_height = 20;
+        state.layout.pane_row_targets = vec![RowTarget {
+            pane_id: "%1".into(),
+        }];
+        state.layout.line_to_row = vec![Some(0), Some(0), Some(0)];
+        // row 3 → line_index 1 → agent row 0
+        assert!(!state.handle_terminal_click(3, 5, 50));
+        assert_eq!(state.global.selected_pane_row, 0);
+    }
+
+    #[test]
+    fn terminal_click_inside_the_panel_body_does_nothing() {
+        let mut state = AppState::new("%99".into());
+        state.layout.bottom_panel_height = 20;
+        // Row 35 is inside the panel, below its tab row at 30.
+        assert!(!state.handle_terminal_click(35, 5, 50));
+        assert!(state.flash.is_none());
+    }
+
+    #[test]
+    fn terminal_click_uses_the_clamped_height_while_floating() {
+        // The regression the frame-scoped height fixes: while floating
+        // the panel is drawn clamped (12 of a 38-row panel), so the hit
+        // test must agree with the drawn geometry — a click on the drawn
+        // tab row (26) hits the tab, and a click on a drawn agent row in
+        // the band the unclamped height wrongly claimed (18..26) selects
+        // the agent instead of being swallowed.
+        let mut state = AppState::new("%99".into());
+        state.sidebar_pane.floating = true;
+        state.bottom_panel_height = 20;
+        state.layout.bottom_panel_height = 12;
+        state.layout.pane_row_targets = vec![
+            RowTarget {
+                pane_id: "%1".into(),
+            },
+            RowTarget {
+                pane_id: "%2".into(),
+            },
+        ];
+        // Rows 2..26 all map to agent rows, so the band right above the
+        // clamped panel (rows 18..25) is clickable agent list.
+        state.layout.line_to_row = vec![Some(1); 24];
+        state.global.selected_pane_row = 0;
+        state.bottom_tab = BottomTab::GitStatus;
+
+        // Row 26 is the drawn tab row (38 - 12); the unclamped height
+        // would have put the boundary at row 18 and swallowed this click.
+        assert!(state.handle_terminal_click(26, 3, 38));
+        assert_eq!(state.bottom_tab, BottomTab::Activity);
+
+        // Row 25 is a drawn agent-list row above the clamped panel.
+        assert!(!state.handle_terminal_click(25, 5, 38));
+        assert_eq!(state.global.selected_pane_row, 1);
+
+        // The wheel over the same band scrolls the agents list, not the
+        // bottom panel, and the wheel over the panel scrolls the panel.
+        state.scrolls.panes = ScrollState {
+            offset: 0,
+            total_lines: 40,
+            visible_height: 20,
+        };
+        state.activity.scroll = ScrollState {
+            offset: 0,
+            total_lines: 30,
+            visible_height: 10,
+        };
+        state.handle_mouse_scroll(24, 38, state.layout.bottom_panel_height, 3);
+        assert_eq!(state.scrolls.panes.offset, 3);
+        state.handle_mouse_scroll(28, 38, state.layout.bottom_panel_height, 3);
+        assert_eq!(state.activity.scroll.offset, 3);
+        assert_eq!(state.scrolls.panes.offset, 3);
+    }
+
     // ─── move_pane_selection edge cases ─────────────────────────────
 
     #[test]
@@ -1163,8 +1267,8 @@ mod tests {
         state.rebuild_row_targets();
         assert_eq!(state.layout.pane_row_targets.len(), 3);
 
-        // Running filter: only 2 panes
-        state.global.status_filter = StatusFilter::Running;
+        // Busy filter: only 2 panes
+        state.global.status_filter = StatusFilter::Busy;
         state.rebuild_row_targets();
         assert_eq!(state.layout.pane_row_targets.len(), 2);
         assert_eq!(state.layout.pane_row_targets[0].pane_id, "%1");
@@ -1207,8 +1311,8 @@ mod tests {
         state.rebuild_row_targets();
         state.global.selected_pane_row = 2;
 
-        // Switch to Running filter (only 1 pane) — cursor should clamp
-        state.global.status_filter = StatusFilter::Running;
+        // Switch to Busy filter (only 1 pane) — cursor should clamp
+        state.global.status_filter = StatusFilter::Busy;
         state.rebuild_row_targets();
         assert_eq!(state.global.selected_pane_row, 0);
         assert_eq!(state.layout.pane_row_targets[0].pane_id, "%1");
@@ -1242,6 +1346,7 @@ mod tests {
     #[test]
     fn mouse_click_on_filter_bar_changes_filter() {
         let mut state = AppState::new("%99".into());
+        state.layout.filter_bar_width = 30;
         state.layout.pane_row_targets = vec![RowTarget {
             pane_id: "%1".into(),
         }];
@@ -1254,10 +1359,10 @@ mod tests {
         state.handle_mouse_click(0, 1);
         assert_eq!(state.global.status_filter, StatusFilter::All);
 
-        // Click on Running icon area (x=6..) should switch to Running
+        // Click on the busy icon area (x=4..) should switch to Busy
         reset_filter_debounce(&mut state);
-        state.handle_mouse_click(0, 6);
-        assert_eq!(state.global.status_filter, StatusFilter::Running);
+        state.handle_mouse_click(0, 4);
+        assert_eq!(state.global.status_filter, StatusFilter::Busy);
 
         // agent selection unchanged
         assert_eq!(state.global.selected_pane_row, 0);
@@ -1394,7 +1499,15 @@ mod tests {
     #[test]
     fn status_counts_empty() {
         let state = AppState::new("%99".into());
-        assert_eq!(state.status_counts(), (0, 0, 0, 0, 0, 0));
+        let counts = state.status_counts();
+        assert_eq!(counts.count(StatusFilter::All), 0);
+        for filter in StatusFilter::VARIANTS {
+            assert_eq!(
+                counts.count(filter),
+                0,
+                "{filter:?} count on an empty state"
+            );
+        }
     }
 
     #[test]
@@ -1422,8 +1535,13 @@ mod tests {
                 (p5, PaneGitInfo::default()),
             ],
         }];
-        // (all, running, background, waiting, idle, error)
-        assert_eq!(state.status_counts(), (5, 1, 1, 1, 1, 1));
+        // busy sums running + background
+        let counts = state.status_counts();
+        assert_eq!(counts.count(StatusFilter::All), 5);
+        assert_eq!(counts.count(StatusFilter::Busy), 2);
+        assert_eq!(counts.count(StatusFilter::Waiting), 1);
+        assert_eq!(counts.count(StatusFilter::Idle), 1);
+        assert_eq!(counts.count(StatusFilter::Error), 1);
     }
 
     // ─── handle_filter_click tests ───────────────────────────────────
@@ -1431,84 +1549,83 @@ mod tests {
     #[test]
     fn filter_click_all_positions() {
         let mut state = AppState::new("%99".into());
-        // With 0 agents, counts are all 0, so layout: " All  ●0  ◎0  ◐0  ○0  ✕0"
+        state.layout.filter_bar_width = 30;
+        // With 0 agents, counts are all 0, so layout: " ≡0 ●0 ◐0 ○0 ✕0"
         //                                              0123456789...
 
-        // "All" at x=1..3
-        state.global.status_filter = StatusFilter::Running;
+        // "≡0" at x=1..2
+        state.global.status_filter = StatusFilter::Busy;
         reset_filter_debounce(&mut state);
         state.handle_filter_click(1);
         assert_eq!(state.global.status_filter, StatusFilter::All);
 
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(3);
+        state.handle_filter_click(2);
         assert_eq!(state.global.status_filter, StatusFilter::All);
 
-        // "●0" at x=6..7
+        // "●0" at x=4..5
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(6);
-        assert_eq!(state.global.status_filter, StatusFilter::Running);
+        state.handle_filter_click(4);
+        assert_eq!(state.global.status_filter, StatusFilter::Busy);
 
-        // "◎0" at x=10..11
+        // "◐0" at x=7..8
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(10);
-        assert_eq!(state.global.status_filter, StatusFilter::Background);
-
-        // "◐0" at x=14..15
-        reset_filter_debounce(&mut state);
-        state.handle_filter_click(14);
+        state.handle_filter_click(7);
         assert_eq!(state.global.status_filter, StatusFilter::Waiting);
 
-        // "○0" at x=18..19
+        // "○0" at x=10..11
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(18);
+        state.handle_filter_click(10);
         assert_eq!(state.global.status_filter, StatusFilter::Idle);
 
-        // "✕0" at x=22..23
+        // "✕0" at x=13..14
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(22);
+        state.handle_filter_click(13);
         assert_eq!(state.global.status_filter, StatusFilter::Error);
     }
 
     #[test]
     fn filter_click_gap_does_nothing() {
         let mut state = AppState::new("%99".into());
+        state.layout.filter_bar_width = 30;
         state.global.status_filter = StatusFilter::All;
 
-        // x=0 is leading space, x=4 and x=5 are separator
+        // x=0 is leading space, x=3/6/9/12 are separators
         state.handle_filter_click(0);
         assert_eq!(state.global.status_filter, StatusFilter::All);
 
-        state.handle_filter_click(4);
+        state.handle_filter_click(3);
         assert_eq!(state.global.status_filter, StatusFilter::All);
 
-        state.handle_filter_click(5);
+        state.handle_filter_click(6);
         assert_eq!(state.global.status_filter, StatusFilter::All);
     }
 
     #[test]
     fn filter_click_debounce_ignores_rapid_clicks() {
         let mut state = AppState::new("%99".into());
+        state.layout.filter_bar_width = 30;
         state.global.status_filter = StatusFilter::All;
 
         // First click within debounce window should be ignored
         // (AppState::new sets last_filter_click to now)
-        state.handle_filter_click(6); // would be Running
+        state.handle_filter_click(4); // would be Busy
         assert_eq!(state.global.status_filter, StatusFilter::All); // unchanged due to debounce
 
         // After resetting debounce, click should work
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(6);
-        assert_eq!(state.global.status_filter, StatusFilter::Running);
+        state.handle_filter_click(4);
+        assert_eq!(state.global.status_filter, StatusFilter::Busy);
 
         // Immediate second click should be debounced
         state.handle_filter_click(1); // would be All
-        assert_eq!(state.global.status_filter, StatusFilter::Running); // unchanged
+        assert_eq!(state.global.status_filter, StatusFilter::Busy); // unchanged
     }
 
     #[test]
     fn filter_click_with_large_counts() {
         let mut state = AppState::new("%99".into());
+        state.layout.filter_bar_width = 30;
         // Add 10 running agents to shift positions
         let panes: Vec<_> = (0..10)
             .map(|i| {
@@ -1522,30 +1639,26 @@ mod tests {
             has_focus: true,
             panes,
         }];
-        // Layout: " All  ●10  ◎0  ◐0  ○0  ✕0"
+        // Layout: " ≡10 ●10 ◐0 ○0 ✕0"
         //          0123456789...
-        // "●10" at x=6..8 (icon + "10")
+        // "●10" at x=5..7 (icon + "10")
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(6);
-        assert_eq!(state.global.status_filter, StatusFilter::Running);
+        state.handle_filter_click(5);
+        assert_eq!(state.global.status_filter, StatusFilter::Busy);
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(8);
-        assert_eq!(state.global.status_filter, StatusFilter::Running);
+        state.handle_filter_click(7);
+        assert_eq!(state.global.status_filter, StatusFilter::Busy);
 
-        // "◎0" shifts to x=11..12
+        // "◐0" shifts to x=9..10
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(11);
-        assert_eq!(state.global.status_filter, StatusFilter::Background);
-
-        // "◐0" shifts to x=15..16
-        reset_filter_debounce(&mut state);
-        state.handle_filter_click(15);
+        state.handle_filter_click(9);
         assert_eq!(state.global.status_filter, StatusFilter::Waiting);
     }
 
     #[test]
     fn filter_click_rebuilds_row_targets() {
         let mut state = AppState::new("%99".into());
+        state.layout.filter_bar_width = 30;
         let mut p1 = test_pane("%1");
         p1.status = PaneStatus::Running;
         let mut p2 = test_pane("%2");
@@ -1565,22 +1678,72 @@ mod tests {
         state.rebuild_row_targets();
         assert_eq!(state.layout.pane_row_targets.len(), 3);
 
-        // Click Running filter — row_targets should update immediately
-        // Layout: " All  ●2  ◎0  ◐0  ○1  ✕0" → Running at x=6
+        // Click Busy filter — row_targets should update immediately
+        // Layout: " ≡3 ●2 ◐0 ○1 ✕0" → Busy at x=4
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(6);
-        assert_eq!(state.global.status_filter, StatusFilter::Running);
+        state.handle_filter_click(4);
+        assert_eq!(state.global.status_filter, StatusFilter::Busy);
         assert_eq!(state.layout.pane_row_targets.len(), 2);
         assert_eq!(state.layout.pane_row_targets[0].pane_id, "%1");
         assert_eq!(state.layout.pane_row_targets[1].pane_id, "%3");
 
         // Click Idle filter — row_targets should update again
-        // Layout: " All  ●2  ◎0  ◐0  ○1  ✕0" → Idle at x=18
+        // Layout: " ≡3 ●2 ◐0 ○1 ✕0" → Idle at x=10
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(18);
+        state.handle_filter_click(10);
         assert_eq!(state.global.status_filter, StatusFilter::Idle);
         assert_eq!(state.layout.pane_row_targets.len(), 1);
         assert_eq!(state.layout.pane_row_targets[0].pane_id, "%2");
+    }
+
+    #[test]
+    fn filter_click_on_the_popout_control_pops_out_and_keeps_the_filter() {
+        // The control is hit-tested before the chip walk: a click on its
+        // column runs the pop-out action and never touches the status
+        // filter. The pane id cannot exist in any tmux server, so the
+        // pane probe fails and the action reports the unreadable window
+        // size instead of acting — the flash is the proof that the click
+        // reached the pop-out (the refusal flash itself is covered by
+        // the injected popout tests).
+        let mut state = AppState::new("%4294967295".into());
+        state.layout.filter_bar_width = 20;
+        state.global.status_filter = StatusFilter::All;
+        reset_filter_debounce(&mut state);
+        state.handle_filter_click(19);
+        assert_eq!(state.global.status_filter, StatusFilter::All);
+        assert!(
+            state
+                .flash
+                .as_ref()
+                .is_some_and(|(msg, _)| msg.starts_with("Pop-out unavailable:")),
+            "clicking the control must reach the pop-out action"
+        );
+
+        // A click on a chip column still walks the chips and selects the
+        // matching category even with the control column registered, and
+        // it must not pop out.
+        state.flash = None;
+        reset_filter_debounce(&mut state);
+        state.handle_filter_click(4); // "●" busy chip
+        assert_eq!(state.global.status_filter, StatusFilter::Busy);
+        assert!(state.flash.is_none(), "a chip click must not pop out");
+    }
+
+    #[test]
+    fn filter_click_before_the_first_frame_does_nothing() {
+        // Before the first frame the row width is unknown (0): no chip
+        // and no control is clickable, and nothing toggles.
+        let mut state = AppState::new("%4294967295".into());
+        assert_eq!(state.layout.filter_bar_width, 0);
+        state.global.status_filter = StatusFilter::All;
+        reset_filter_debounce(&mut state);
+        state.handle_filter_click(4);
+        // The second click must really reach the zero-width path: without
+        // resetting the debounce it is swallowed as a phantom double click.
+        reset_filter_debounce(&mut state);
+        state.handle_filter_click(19);
+        assert_eq!(state.global.status_filter, StatusFilter::All);
+        assert!(state.flash.is_none());
     }
 
     // ─── StatusFilter / RepoFilter pure tests live in state/filter.rs ─
@@ -1649,10 +1812,10 @@ mod tests {
             },
         ];
         state.global.repo_filter = RepoFilter::Repo("app".into());
-        state.global.status_filter = StatusFilter::Running;
+        state.global.status_filter = StatusFilter::Busy;
         state.rebuild_row_targets();
 
-        // Only Running panes in "app" group
+        // Only busy (running) panes in "app" group
         assert_eq!(state.layout.pane_row_targets.len(), 1);
         assert_eq!(state.layout.pane_row_targets[0].pane_id, "%1");
     }
@@ -1710,16 +1873,16 @@ mod tests {
 
         // All repos: 2 total
         state.global.repo_filter = RepoFilter::All;
-        let (all, running, _, _, idle, _) = state.status_counts();
-        assert_eq!(all, 2);
-        assert_eq!(running, 1);
-        assert_eq!(idle, 1);
+        let counts = state.status_counts();
+        assert_eq!(counts.count(StatusFilter::All), 2);
+        assert_eq!(counts.count(StatusFilter::Busy), 1);
+        assert_eq!(counts.count(StatusFilter::Idle), 1);
 
         // Filter to "app" only: 1 Running
         state.global.repo_filter = RepoFilter::Repo("app".into());
-        let (all, running, _, _, idle, _) = state.status_counts();
-        assert_eq!(all, 1);
-        assert_eq!(running, 1);
-        assert_eq!(idle, 0);
+        let counts = state.status_counts();
+        assert_eq!(counts.count(StatusFilter::All), 1);
+        assert_eq!(counts.count(StatusFilter::Busy), 1);
+        assert_eq!(counts.count(StatusFilter::Idle), 0);
     }
 }

@@ -1,4 +1,4 @@
-use super::{AppState, RepoFilter, StatusFilter};
+use super::{AppState, RepoFilter, StatusCounts, StatusFilter};
 
 #[derive(Debug, Clone)]
 pub struct RowTarget {
@@ -52,6 +52,22 @@ pub struct FrameLayout {
     /// X column of the repo filter button in the secondary header. `None`
     /// when the button is hidden. Used for click hit-testing.
     pub repo_button_col: Option<u16>,
+    /// Width of the filter bar row (row 0) as last rendered. `0` before
+    /// the first frame, which leaves the row's chips and control
+    /// unclickable. The hit test recomputes the chip layout from this
+    /// width and the live counts through the same [`filter_bar_layout`]
+    /// the renderer uses, so the drawn chips and the clickable chips
+    /// cannot drift apart — including when chips are dropped for space.
+    pub filter_bar_width: u16,
+    /// Effective height of the Activity/Git bottom panel as last
+    /// rendered: the configured height while docked, the clamped height
+    /// (at most a third of the panel) while the sidebar floats. `0`
+    /// before the first frame, which leaves the bottom panel
+    /// unclickable and routes every scroll to the agents panel. The
+    /// mouse handlers read this back instead of the raw
+    /// `bottom_panel_height`, so the hit-tested geometry is the drawn
+    /// geometry by construction — the two can never drift apart.
+    pub bottom_panel_height: u16,
     /// Click regions for the `[+]` spawn button rendered at the right
     /// edge of each repo-group header. One entry per visible repo group.
     pub repo_spawn_targets: Vec<RepoSpawnTarget>,
@@ -65,6 +81,59 @@ pub struct FrameLayout {
 
 pub(super) fn point_in_rect(row: u16, col: u16, rect: ratatui::layout::Rect) -> bool {
     rect.contains(ratatui::layout::Position { x: col, y: row })
+}
+
+/// One chip of the status filter row: its category and the columns it
+/// occupies on screen (icon plus count digits).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FilterChip {
+    pub filter: StatusFilter,
+    /// Column of the chip's icon.
+    pub start: u16,
+    /// Number of columns the chip occupies.
+    pub width: u16,
+}
+
+/// Number of decimal digits `n` renders as; `0` renders as one digit.
+fn count_digits(n: usize) -> u16 {
+    n.checked_ilog10().map_or(1, |d| d + 1) as u16
+}
+
+/// Compute the layout of the status filter row for a row `width` columns
+/// wide with the per-filter status counts (see [`StatusCounts`]).
+///
+/// The pop-out control owns the last column of the row, and the chips
+/// fill from the left with a single-space separator after one gutter
+/// column. A chip that would no longer fit before the control is
+/// dropped whole — never partially drawn — together with every chip
+/// after it. Returns the chips that fit and the control's column
+/// (`None` for a zero-width row, where nothing is drawn).
+///
+/// Both the renderer and the click hit test run through this function,
+/// so a click can only ever select a chip that is actually drawn.
+pub(crate) fn filter_bar_layout(
+    counts: StatusCounts,
+    width: u16,
+) -> (Vec<FilterChip>, Option<u16>) {
+    if width == 0 {
+        return (Vec::new(), None);
+    }
+    let control_col = width - 1;
+    let mut chips = Vec::new();
+    let mut start: u16 = 1; // leading gutter column
+    for filter in StatusFilter::VARIANTS {
+        let chip_width = 1 + count_digits(counts.count(filter));
+        if start + chip_width > control_col {
+            break;
+        }
+        chips.push(FilterChip {
+            filter,
+            start,
+            width: chip_width,
+        });
+        start += chip_width + 1; // single-space separator
+    }
+    (chips, Some(control_col))
 }
 
 impl AppState {
@@ -96,6 +165,29 @@ impl AppState {
             && !self.layout.pane_row_targets.is_empty()
         {
             self.global.selected_pane_row = self.layout.pane_row_targets.len() - 1;
+        }
+    }
+
+    /// Handle a left mouse click at (`row`, `col`) in a terminal
+    /// `term_height` rows tall. Clicks on the bottom panel's tab row (the
+    /// panel's first drawn row) go to the tab header, clicks above it to
+    /// the agents panel. Returns `true` when the click landed on the tab
+    /// row, so the caller can keep the background git poller in sync with
+    /// a possible tab switch.
+    ///
+    /// The bottom-panel height comes from [`FrameLayout`], the height the
+    /// last frame actually drew — while floating that is the clamped
+    /// height — so a click can only ever land on a row that was drawn.
+    pub fn handle_terminal_click(&mut self, row: u16, col: u16, term_height: u16) -> bool {
+        let bottom_start = term_height.saturating_sub(self.layout.bottom_panel_height);
+        if row < bottom_start {
+            self.handle_mouse_click(row, col);
+            false
+        } else if row == bottom_start {
+            self.handle_bottom_tab_click(col);
+            true
+        } else {
+            false
         }
     }
 
@@ -131,31 +223,26 @@ impl AppState {
         }
         self.timers.last_filter_click = now;
 
-        let (all, running, background, waiting, idle, error) = self.status_counts();
-        // Layout: " ∑N  ●N  ◎N  ◐N  ○N  ✕N"
-        // Each filter item renders as `icon(1) + count`, so the clickable
-        // width is `1 + digits(count)`.
-        let mut x = 1usize; // leading space
-        let items: Vec<(StatusFilter, usize)> = vec![
-            (StatusFilter::All, 1 + format!("{all}").len()),
-            (StatusFilter::Running, 1 + format!("{running}").len()),
-            (StatusFilter::Background, 1 + format!("{background}").len()),
-            (StatusFilter::Waiting, 1 + format!("{waiting}").len()),
-            (StatusFilter::Idle, 1 + format!("{idle}").len()),
-            (StatusFilter::Error, 1 + format!("{error}").len()),
-        ];
-        let col = col as usize;
-        for (i, (filter, width)) in items.iter().enumerate() {
-            if i > 0 {
-                x += 2; // "  " separator
-            }
-            if col >= x && col < x + width {
-                self.global.status_filter = *filter;
+        // The row's chip layout comes from the same pure function the
+        // renderer used for the current frame, keyed on the width that
+        // frame rendered with. The pop-out control is hit-tested before
+        // the chip walk, so a click on it never changes the status
+        // filter.
+        let (chips, control_col) =
+            filter_bar_layout(self.status_counts(), self.layout.filter_bar_width);
+        if let Some(control_col) = control_col
+            && col == control_col
+        {
+            self.toggle_popout();
+            return;
+        }
+        for chip in &chips {
+            if col >= chip.start && col < chip.start + chip.width {
+                self.global.status_filter = chip.filter;
                 self.global.save_filter();
                 self.rebuild_row_targets();
                 return;
             }
-            x += width;
         }
     }
 

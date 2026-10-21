@@ -12,7 +12,7 @@ reloaded on SIGUSR1.
 
 | Field | Tmux Variable | Update Trigger | Description |
 |-------|--------------|----------------|-------------|
-| `status_filter` | `@sidebar_filter` | User input (left/right key) | Active status filter (All/Running/Background/Waiting/Idle/Error) |
+| `status_filter` | `@sidebar_filter` | User input (left/right key) | Active status filter (All/Busy/Waiting/Idle/Error) |
 | `selected_pane_row` | `@sidebar_cursor` | User input (j/k key); tmux write flushed after a short debounce | Cursor position in agent list |
 | `repo_filter` | `@sidebar_repo_filter` | User input (repo popup) | Repository filter (All or specific repo) |
 
@@ -97,7 +97,7 @@ Per-pane file-based state:
 | `bottom_tab` | On user input / auto-switch | Current bottom panel tab |
 | `theme` | Once at startup | Color theme from tmux `@sidebar_color_*` variables |
 | `popup` | On user input / render | `PopupState` enum: `None` / `Repo { selected, area }` / `Notices { area }`. Enforces "at most one popup open" via the type system |
-| `layout` | Every frame (render) | `FrameLayout` sub-struct bundling the ephemeral fields the UI rewrites every frame for click hit-testing: `pane_row_targets`, `line_to_row`, `repo_button_col`, `repo_spawn_targets`, `spawn_remove_targets`, `hyperlink_overlays` |
+| `layout` | Every frame (render) | `FrameLayout` sub-struct bundling the ephemeral fields the UI rewrites every frame for click hit-testing: `pane_row_targets`, `line_to_row`, `repo_button_col`, `repo_spawn_targets`, `spawn_remove_targets`, `hyperlink_overlays`, `filter_bar_width` (the width the filter row was rendered with, which the click hit test uses) |
 | `notices` | Once at startup / on copy | `NoticesState` sub-struct: `button_col`, `missing_hook_groups`, `claude_plugin_status`, `claude_settings_has_residual_hooks`, `claude_plugin_notice`, `copy_targets`, `copied_at` |
 | `timers` | Refresh cycle / on user input | `RefreshTimers` sub-struct gating periodic work: `last_filter_click` (debounce), `last_port_refresh`, `port_scan_initialized` |
 | `pending_osc52_copy` | On successful copy / frame flush | OSC 52 clipboard payload queued for terminal forwarding |
@@ -109,6 +109,8 @@ Per-pane file-based state:
 | `spinner_frame` | Every 200ms (animation) | Spinner animation frame counter |
 | `icons` | Once at startup | `StatusIcons` theme (overridable via tmux options) |
 | `tmux_pane` | Once at startup | This sidebar's own tmux pane ID |
+| `sidebar_pane` | Every 1s (refresh cycle) | This sidebar's own pane info as tmux reported it on the last refresh (`SidebarPaneInfo`): the pane's active flags, the pane's width, the window's size, and the pane's floating flag. The floating flag is the truth for the docked-vs-floating mode — it is read from the pane, never remembered separately |
+| `docked_width` | On pop-out / pop-in (user input) | The pane width captured when the sidebar was popped out, restored by the pop-in with `resize-pane -x` (`src/state/popout.rs`). `None` while docked and when the pane was already floating when the sidebar started |
 | `pane_states.seen` | Every 1s | Set of pane IDs that have been seen as agents (bundled with `pane_states.map` under the `PaneRuntimeMap` wrapper) |
 | `version_notice` | Once at startup (bg fetch) | GitHub release update notice, `None` when up-to-date |
 | `sessions.names` | Every 10s (background thread) | `session_id → session name` map; scanned by `session_poll_loop` in `app/workers.rs` so the TUI thread never blocks on filesystem I/O |
@@ -125,7 +127,7 @@ Per-pane file-based state:
 ├─────────────────────────────────────────────────────────────┤
 │  Every 1s (refresh cycle)                                   │
 │  repo_groups, focus_state.focused_pane_id,                  │
-│  layout.pane_row_targets, activity.entries,                 │
+│  sidebar_pane, layout.pane_row_targets, activity.entries,   │
 │  pane_states.map[..].task_progress                          │
 ├─────────────────────────────────────────────────────────────┤
 │  Every 10s (port scan, background)                          │
@@ -151,7 +153,7 @@ Per-pane file-based state:
 │  On user input                                              │
 │  focus_state.focus, scrolls.*, activity.scroll, bottom_tab, │
 │  GlobalState fields, popup (PopupState enum),               │
-│  timers.last_filter_click,                                  │
+│  timers.last_filter_click, pop-out / pop-in (docked_width), │
 │  immediate selection / active-pane redraw                   │
 ├─────────────────────────────────────────────────────────────┤
 │  Every frame (render)                                       │
@@ -171,7 +173,7 @@ Agent hooks (hook.sh)
     → resolve_adapter() (event.rs) → adapter.parse() → AgentEvent
     → handle_event() writes @pane_* tmux options + /tmp activity log files
                         ↓
-TUI main loop (app::run in app.rs; submodules app/{setup,workers,input,render})
+TUI main loop (app::run in app.rs; submodules app/{setup,workers,input,render,panel_guard})
   → startup plugin-state reads (cli/plugin_state.rs)
     → installed_plugins.json / ~/.claude/settings.json
     → initializes Claude notices state once
@@ -197,7 +199,7 @@ TUI main loop (app::run in app.rs; submodules app/{setup,workers,input,render})
 
 ```rust
 enum Focus { Filter, Panes, ActivityLog }
-enum StatusFilter { All, Running, Background, Waiting, Idle, Error }
+enum StatusFilter { All, Busy, Waiting, Idle, Error }
 enum RepoFilter { All, Repo(String) }
 enum BottomTab { Activity, GitStatus }
 enum PaneStatus { Running, Background, Waiting, Idle, Error, Unknown }
@@ -305,6 +307,7 @@ struct FrameLayout {
     repo_spawn_targets: Vec<RepoSpawnTarget>,
     spawn_remove_targets: Vec<SpawnRemoveTarget>,
     hyperlink_overlays: Vec<HyperlinkOverlay>,
+    filter_bar_width: u16,
 }
 
 /// Periodic-refresh bookkeeping. session_names refresh is intentionally

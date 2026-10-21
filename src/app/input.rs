@@ -22,14 +22,15 @@ pub(super) fn handle_event(
         Event::Key(key) => handle_key_event(key, state, git_tab_active),
         Event::Mouse(mouse) => {
             let term_height = terminal.size().map(|s| s.height).unwrap_or(0);
-            let bottom_h = state.bottom_panel_height;
+            // The height the last frame actually drew — clamped while the
+            // sidebar floats, `0` before the first frame (nothing has
+            // been drawn, so nothing is clickable as a bottom panel).
+            // Hit-testing the raw configured height would put the tab row
+            // and the panel boundary where nothing was drawn.
+            let bottom_h = state.layout.bottom_panel_height;
             match mouse.kind {
                 MouseEventKind::Down(MouseButton::Left) => {
-                    let bottom_start = term_height.saturating_sub(bottom_h);
-                    if mouse.row < bottom_start {
-                        state.handle_mouse_click(mouse.row, mouse.column);
-                    } else if mouse.row == bottom_start {
-                        state.handle_bottom_tab_click(mouse.column);
+                    if state.handle_terminal_click(mouse.row, mouse.column, term_height) {
                         // Keep the background git poller in sync immediately — the
                         // keyboard `BackTab` path does the same update. Without this,
                         // clicking into Git Status leaves polling disabled until the
@@ -118,6 +119,7 @@ pub(super) fn handle_key_event(
         KeyCode::Char('n') if ctrl => pane_nav_down(state),
         KeyCode::Char('k') | KeyCode::Up => pane_nav_up(state),
         KeyCode::Char('p') if ctrl => pane_nav_up(state),
+        KeyCode::Char('p') => state.toggle_popout(),
         KeyCode::Char('h') | KeyCode::Left => {
             if state.focus_state.focus == Focus::Filter {
                 state.global.status_filter = state.global.status_filter.prev();
@@ -321,12 +323,49 @@ mod tests {
     }
 
     #[test]
-    fn bare_p_is_unbound_in_panes_focus() {
+    fn bare_p_toggles_the_popout_and_does_not_navigate() {
+        // The bare `p` runs the pop-out action, not navigation. The pane
+        // id cannot exist in any tmux server, so the pane probe fails and
+        // the action reports the unreadable window size instead of acting
+        // — the flash is the proof that `p` reached the pop-out (the
+        // refusal flash itself is covered by the injected popout tests).
+        // The selection starts off row 0, so a `p` that navigated would
+        // move it and fail here.
         let mut state = state_with_three_panes();
+        state.tmux_pane = "%4294967295".into();
         state.global.selected_pane_row = 1;
         let flag = AtomicBool::new(false);
         handle_key_event(key(KeyCode::Char('p')), &mut state, &flag);
         assert_eq!(state.global.selected_pane_row, 1);
+        assert!(
+            state
+                .flash
+                .as_ref()
+                .is_some_and(|(msg, _)| msg.starts_with("Pop-out unavailable:")),
+            "pressing `p` must reach the pop-out action"
+        );
+    }
+
+    #[test]
+    fn bare_p_does_not_toggle_while_a_popup_is_open() {
+        // Popups swallow every key: the bare `p` must not float the pane
+        // behind the repo popup's back.
+        let mut state = state_with_repo_popup_open();
+        state.tmux_pane = "%4294967295".into();
+        let flag = AtomicBool::new(false);
+        handle_key_event(key(KeyCode::Char('p')), &mut state, &flag);
+        assert!(state.flash.is_none(), "no pop-out while a popup is open");
+        assert!(state.is_repo_popup_open());
+    }
+
+    #[test]
+    fn ctrl_p_still_navigates_panes_after_p_is_bound() {
+        let mut state = state_with_three_panes();
+        state.global.selected_pane_row = 2;
+        let flag = AtomicBool::new(false);
+        handle_key_event(ctrl_key('p'), &mut state, &flag);
+        assert_eq!(state.global.selected_pane_row, 1);
+        assert!(state.flash.is_none());
     }
 
     #[test]
