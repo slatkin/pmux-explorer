@@ -98,20 +98,22 @@ the fifth appears only with `--all-targets`.
 
 ## 5.4 — the resize behaviour (added after the code review)
 
-Observed on 2026-10-21 against a live tmux 3.8, in the same dedicated
-detached session (`sidebar-popout-check`, 120x40) as the checks above,
-against a debug build of the branch at `89c94c1`.
+Observed on 2026-10-21 against a live tmux 3.8, in a dedicated detached
+session on its own tmux socket (so the session in daily use was not
+touched), 120x40, against a debug build of the branch. The sidebar pane
+was the session's own pane `%1`; the geometry below is the same on the
+builds at `89c94c1` and at `8534644`.
 
 Docked, before the pop-out:
 
 ```text
-%150  25x39  left=95   float=0
+%1  25x39  left=95   float=0
 ```
 
 After `p` and one refresh (floating):
 
 ```text
-%150  38x38  left=81   float=1
+%1  38x38  left=81   float=1
 ```
 
 38 columns of content — 40 columns of outer box, tmux draws the border
@@ -121,7 +123,7 @@ of the 120-column window, since 120 - 40 = 80.
 The window was then resized to 100 columns:
 
 ```text
-%150  38x38  left=61   float=1
+%1  38x38  left=61   float=1
 ```
 
 The panel stayed 38 wide and moved to left=61 — flush with the new right
@@ -130,7 +132,7 @@ edge, since 100 - 40 = 60.
 After a second `p` (docked again):
 
 ```text
-%150  25x39  left=95   float=0
+%1  25x39  left=95   float=0
 ```
 
 The pane is a tiled pane again at the 25 docked columns it had before the
