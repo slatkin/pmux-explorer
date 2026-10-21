@@ -3,20 +3,26 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 static ISOLATED: AtomicBool = AtomicBool::new(false);
 
-/// Point every later `tmux` call at an empty socket directory, so a test
-/// cannot read or write the developer's live tmux server. Unit tests get
+/// Point every later `tmux` call at a named socket no server listens on, so a
+/// test cannot read or write the developer's live tmux server. Unit tests get
 /// this automatically; integration tests (which link the library without
 /// `cfg(test)`) must call it. Without it, a test that clicked a status
 /// chip overwrote the shared `@sidebar_filter` of every running sidebar.
+///
+/// The isolation uses `tmux -L <name>` rather than a bogus `TMUX_TMPDIR`:
+/// when the `TMUX_TMPDIR` path cannot hold a socket, tmux silently falls
+/// back to the default `/tmp/tmux-$UID` socket where the live server sits,
+/// so the old trick isolated nothing.
 pub fn isolate_from_live_server() {
     ISOLATED.store(true, Ordering::Relaxed);
 }
 
-fn tmux_command() -> Command {
+const ISOLATION_SOCKET: &str = "sidebar-test-isolated";
+
+pub fn tmux_command() -> Command {
     let mut cmd = Command::new("tmux");
     if cfg!(test) || ISOLATED.load(Ordering::Relaxed) {
-        cmd.env_remove("TMUX")
-            .env("TMUX_TMPDIR", "/nonexistent-tmux-test-socket-dir");
+        cmd.env_remove("TMUX").args(["-L", ISOLATION_SOCKET]);
     }
     cmd
 }

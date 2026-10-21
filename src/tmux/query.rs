@@ -139,10 +139,13 @@ impl SubagentResolution {
     fn observe(&mut self, pane: &PaneInfo, pane_fields: &[String]) {
         if let Some(session_id) = &pane.session_id {
             let title = &pane_fields[pane_line_field::PANE_TITLE];
-            let label = if title.is_empty() {
-                pane.pane_id.clone()
-            } else {
-                title.clone()
+            // Use the same trimmed pane name the parent's own status row
+            // shows, so the parent label is consistent across rows; fall
+            // back to the raw title, then the pane id, as before.
+            let label = match &pane.pane_name {
+                Some(name) => name.clone(),
+                None if title.is_empty() => pane.pane_id.clone(),
+                None => title.clone(),
             };
             self.parent_labels
                 .entry(session_id.clone())
@@ -418,7 +421,7 @@ fn parse_pane_fields_with_processes(
         && !pane_title.starts_with("✳ ")
     {
         let before_dash = pane_title.split('—').next().unwrap_or(pane_title);
-        Some(before_dash.trim_end().to_string())
+        Some(before_dash.trim().to_string()).filter(|s| !s.is_empty())
     } else {
         None
     };
@@ -1036,6 +1039,8 @@ mod tests {
             ("edit — fix bug", Some("edit")),  // em dash: keep only the text before it
             ("edit—fix bug", Some("edit")),    // em dash with no surrounding spaces
             ("edit — ", Some("edit")),         // em dash with nothing after it
+            ("— fix bug", None),               // leading em dash trims to empty: not a name
+            ("—", None),                       // a lone em dash is not a name
         ];
         for (title, expected) in cases {
             let mut fields = full_fields();

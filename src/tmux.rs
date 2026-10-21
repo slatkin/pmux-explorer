@@ -7,7 +7,7 @@ mod types;
 pub use commands::{
     display_message, dock_pane, float_pane, isolate_from_live_server, kill_window, move_pane,
     new_window, pane_session_name, run_tmux, run_tmux_capture, select_pane, send_command,
-    set_window_option,
+    set_window_option, tmux_command,
 };
 pub use options::{
     AGENT_SESSION_PANE_OPTIONS, BG_CMD_PLACEHOLDER, NEVER_SWEPT_PANE_OPTIONS, PANE_AGENT,

@@ -1,5 +1,3 @@
-use std::process::Command;
-
 /// Per-pane geometry as emitted by `tmux list-panes -F`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PaneGeom {
@@ -48,7 +46,7 @@ pub fn list_panes(session: &str, window: Option<&str>) -> Result<Vec<PaneGeom>, 
         Some(w) => format!("{session}:{w}"),
         None => session.to_string(),
     };
-    let out = Command::new("tmux")
+    let out = crate::tmux::tmux_command()
         .args([
             "list-panes",
             "-t",
@@ -70,7 +68,7 @@ pub fn list_panes(session: &str, window: Option<&str>) -> Result<Vec<PaneGeom>, 
 
 /// Capture one pane as ANSI-coloured bytes via `capture-pane -p -e`.
 pub fn capture_pane(pane_id: &str) -> Result<Vec<u8>, String> {
-    let out = Command::new("tmux")
+    let out = crate::tmux::tmux_command()
         .args(["capture-pane", "-p", "-e", "-t", pane_id])
         .output()
         .map_err(|e| format!("spawning tmux: {e}"))?;

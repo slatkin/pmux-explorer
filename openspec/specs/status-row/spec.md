@@ -27,8 +27,10 @@ the pane has any other name.
 
 The status row SHALL show the pane's tmux title after the badge slot when
 the title is a real name. A title is a real name when it is non-empty,
-differs from the host name, and is not an agent-set OSC title. The
-window's `automatic-rename` setting SHALL NOT affect the result.
+differs from the host name, and does not start with a known agent OSC
+prefix (`π - ` from pi, `✳ ` from Claude Code); other agents' OSC titles
+are a known gap and may show as a name. The window's `automatic-rename`
+setting SHALL NOT affect the result.
 
 #### Scenario: A pane pmux named
 

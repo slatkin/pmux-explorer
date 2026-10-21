@@ -87,13 +87,13 @@ pub(super) fn render_pane_lines_with_ports(
     if let Some(cmd) = pane.bg_shell_cmd.as_deref() {
         out.push(background_hint_row(ctx, cmd));
     }
-    // The pmux identity row takes the slot the wrapped prompt text occupies
-    // on a non-subagent pane, so a subagent never shows a prompt there.
-    if pane.subagent.is_some() {
-        if let Some(line) = subagent_identity_row(pane.subagent.as_ref(), ctx) {
-            out.push(line);
-        }
-    } else if !pane.prompt.is_empty() {
+    // The pmux identity row sits above the prompt text so a subagent pane
+    // shows who it belongs to first; the prompt/response preview below it
+    // still renders, per the pi-agent-support spec.
+    if let Some(line) = subagent_identity_row(pane.subagent.as_ref(), ctx) {
+        out.push(line);
+    }
+    if !pane.prompt.is_empty() {
         out.extend(prompt_rows(pane, ctx));
     } else if matches!(pane.status, PaneStatus::Idle) {
         out.push(idle_hint_row(ctx));
@@ -1309,14 +1309,15 @@ mod tests {
     }
 
     #[test]
-    fn identity_row_sits_below_branch_row_replacing_prompt() {
+    fn identity_row_sits_below_branch_row_above_prompt() {
         let theme = ColorTheme::default();
         let mut p = pi_subagent(
             PmuxTaskKind::Spawned,
             SubagentParent::Pane("orchestrator".into()),
             Some("unit1 idle collapse"),
         );
-        p.prompt = "should never render".into();
+        p.prompt = "Task completed".into();
+        p.prompt_is_response = true;
         let lines = render_pane_lines_with_ports(
             &p,
             &PaneGitInfo {
@@ -1344,11 +1345,12 @@ mod tests {
         ● pi ♟
           main
         ▷ orchestrator  unit1 idle collapse
+        ▷ Task completed
         "
         );
         assert!(
-            !joined.contains("should never render"),
-            "a subagent's prompt must be replaced by the identity row"
+            joined.contains("Task completed"),
+            "a subagent's response preview must still render below the identity row"
         );
     }
 

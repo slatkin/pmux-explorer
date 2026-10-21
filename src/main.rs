@@ -58,7 +58,7 @@ fn main() -> io::Result<()> {
     }
 
     let pid = std::process::id();
-    let _ = std::process::Command::new("tmux")
+    let _ = tmux::tmux_command()
         .args([
             "set",
             "-t",

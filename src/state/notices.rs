@@ -165,7 +165,7 @@ impl AppState {
         let clip_ok = arboard::Clipboard::new()
             .and_then(|mut c| c.set_text(prompt.clone()))
             .is_ok();
-        let tmux_ok = std::process::Command::new("tmux")
+        let tmux_ok = crate::tmux::tmux_command()
             .args(["set-buffer", &prompt])
             .status()
             .map(|s| s.success())
