@@ -286,8 +286,9 @@ mod tests {
         // The Stop event is the one our SessionEnd notification is gated on;
         // `enabled: true` plus the Stop event lets `notify_if_allowed` reach
         // the point where it writes the dedup stamp in the tmux mock. The
-        // real `send_desktop_notification` is still a process spawn, so if it
-        // ever runs in CI it just fails silently and leaves the stamp unset.
+        // send path itself is guarded by `SIDEBAR_DISABLE_DESKTOP_NOTIFICATIONS`
+        // (set for this repo via `.cargo/config.toml`), so it is a no-op in
+        // test runs and the stamp still gets written.
         desktop_notification::DesktopNotificationSettings {
             enabled: true,
             events: [desktop_notification::DesktopNotificationEvent::Stop]
@@ -324,11 +325,9 @@ mod tests {
             "logout",
             &notifications_enabled_all(),
         );
-        // If `send_desktop_notification` succeeds (local dev with notify-send
-        // / osascript available), the stamp is written; if it fails (headless
-        // CI), the stamp stays unset but we at least verified the gate let
-        // the call through. The stronger check — that the gate opens — is
-        // covered by `notifications_enabled_all` only containing `Stop`.
+        // `send_desktop_notification` succeeds (it is a no-op under the
+        // `SIDEBAR_DISABLE_DESKTOP_NOTIFICATIONS` guard), so the stamp is
+        // always written and the fingerprint assertion below always runs.
         let stamp_key = tmux::PANE_OS_NOTIFY_TASK_COMPLETED;
         if tmux::test_mock::contains(pane, stamp_key) {
             let raw = tmux::test_mock::get(pane, stamp_key).unwrap_or_default();
