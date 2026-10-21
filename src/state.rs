@@ -1,5 +1,6 @@
 use std::time::Instant;
 
+use crate::tmux::SidebarPaneInfo;
 use crate::ui::colors::ColorTheme;
 use crate::ui::icons::StatusIcons;
 
@@ -11,6 +12,7 @@ mod layout;
 mod notices;
 mod pane_runtime;
 mod pet;
+mod popout;
 mod popup;
 mod refresh;
 mod scroll;
@@ -26,6 +28,7 @@ pub use layout::{FrameLayout, HyperlinkOverlay, RepoSpawnTarget, RowTarget, Spaw
 pub(crate) use notices::debug_forced_display;
 pub use notices::{ClaudePluginNotice, NoticesCopyTarget, NoticesMissingHookGroup, NoticesState};
 pub use pane_runtime::{PaneRuntimeMap, PaneRuntimeState};
+pub use popout::clamp_bottom_height;
 pub use popup::{PopupState, SpawnField};
 #[cfg(test)]
 pub(crate) use refresh::{TaskProgressDecision, classify_task_progress};
@@ -56,6 +59,16 @@ pub struct AppState {
     pub layout: FrameLayout,
     pub activity: ActivityState,
     pub tmux_pane: String,
+    /// The sidebar's own pane state as tmux reported it on the last
+    /// refresh: focus, size, window size and the floating flag. The
+    /// docked-vs-floating mode is read from this, never remembered
+    /// separately.
+    pub sidebar_pane: SidebarPaneInfo,
+    /// Docked width captured when the sidebar was popped out, restored
+    /// by the pop-in with `resize-pane -x`. `None` while docked and when
+    /// the pane was already floating when the sidebar started (nothing
+    /// to restore).
+    pub docked_width: Option<u16>,
     /// Scroll offsets for the agents list and git tab. Activity tab
     /// scroll lives in [`ActivityState::scroll`].
     pub scrolls: ScrollStates,
@@ -152,6 +165,8 @@ impl AppState {
             icons: StatusIcons::default(),
             bottom_tab: BottomTab::Activity,
             git: crate::git::GitData::default(),
+            sidebar_pane: SidebarPaneInfo::FALLBACK,
+            docked_width: None,
             pane_states: PaneRuntimeMap::new(),
             timers: RefreshTimers::default(),
             popup: PopupState::None,

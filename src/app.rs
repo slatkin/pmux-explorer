@@ -14,6 +14,7 @@ use crate::SPINNER_PULSE;
 use crate::state::BottomTab;
 
 mod input;
+mod panel_guard;
 mod render;
 mod setup;
 mod size_guard;
@@ -44,6 +45,7 @@ pub fn run(
 
     let mut last_refresh = std::time::Instant::now();
     let mut last_spinner = std::time::Instant::now();
+    let mut last_window_height: Option<u16> = None;
     let refresh_interval = Duration::from_secs(1);
     let spinner_interval = Duration::from_millis(200);
     let mut needs_redraw = true;
@@ -98,6 +100,14 @@ pub fn run(
                 // squeezed it below `@sidebar_min_width`.
                 let pane_width = terminal.size().map(|s| s.width).unwrap_or(0);
                 size_guard::enforce(&state.tmux_pane, pane_width);
+                // Keep a floating panel as tall as its window after the
+                // window resized.
+                panel_guard::enforce(
+                    &state.tmux_pane,
+                    state.sidebar_pane.window_height,
+                    &mut last_window_height,
+                    state.sidebar_pane.floating,
+                );
                 if window_inactive_count >= 2 {
                     state.global.load_from_tmux();
                     state.rebuild_row_targets();

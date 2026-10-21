@@ -7,6 +7,13 @@ pub struct SidebarPaneInfo {
     pub window_active: bool,
     pub width: u16,
     pub height: u16,
+    /// Width of the pane's window (`#{window_width}`). `0` when the query
+    /// failed or tmux is too old to report the floating flag.
+    pub window_width: u16,
+    /// Height of the pane's window (`#{window_height}`). In a default
+    /// session this counts the status-line row, so the pane area can be
+    /// one row shorter.
+    pub window_height: u16,
     /// Whether the pane is a floating pane (`#{pane_floating_flag}`,
     /// tmux 3.8+). Always `false` when tmux is too old to report the
     /// flag, so the sidebar behaves as docked there.
@@ -15,23 +22,27 @@ pub struct SidebarPaneInfo {
 
 impl SidebarPaneInfo {
     /// Values used when the pane is gone or the query failed: not focused,
-    /// not the active window, and the historical default pane size.
-    const FALLBACK: Self = Self {
+    /// not the active window, and the historical default pane size. The
+    /// window size is unknown (`0`), so nothing sizes from it.
+    pub(crate) const FALLBACK: Self = Self {
         pane_active: false,
         window_active: false,
         width: 28,
         height: 24,
+        window_width: 0,
+        window_height: 0,
         floating: false,
     };
 }
 
 /// Parse the `#{pane_active} #{window_active} #{pane_width} #{pane_height}
-/// #{pane_floating_flag}` output. Fewer than the four core fields (the pane
-/// is gone, or the query failed) yields [`SidebarPaneInfo::FALLBACK`]; a
-/// missing fifth field (tmux older than 3.8 has no `pane_floating_flag`)
-/// keeps the core fields and reports not-floating.
+/// #{window_width} #{window_height} #{pane_floating_flag}` output. Fewer
+/// than the four core fields (the pane is gone, or the query failed) yields
+/// [`SidebarPaneInfo::FALLBACK`]; missing window fields or a missing
+/// floating flag (tmux older than 3.8 has no `pane_floating_flag`) keep
+/// the parsed fields and report a zero window size / not-floating.
 pub(crate) fn parse_sidebar_pane_info(out: &str) -> SidebarPaneInfo {
-    let parts: Vec<&str> = out.splitn(5, ' ').collect();
+    let parts: Vec<&str> = out.split_whitespace().collect();
     if parts.len() < 4 {
         return SidebarPaneInfo::FALLBACK;
     }
@@ -40,14 +51,17 @@ pub(crate) fn parse_sidebar_pane_info(out: &str) -> SidebarPaneInfo {
         window_active: parts[1] == "1",
         width: parts[2].parse().unwrap_or(28),
         height: parts[3].parse().unwrap_or(24),
-        floating: parts.get(4).copied() == Some("1"),
+        window_width: parts.get(4).and_then(|s| s.parse().ok()).unwrap_or(0),
+        window_height: parts.get(5).and_then(|s| s.parse().ok()).unwrap_or(0),
+        floating: parts.get(6).copied() == Some("1"),
     }
 }
 
 pub fn get_sidebar_pane_info(tmux_pane: &str) -> SidebarPaneInfo {
     let out = display_message(
         tmux_pane,
-        "#{pane_active} #{window_active} #{pane_width} #{pane_height} #{pane_floating_flag}",
+        "#{pane_active} #{window_active} #{pane_width} #{pane_height} \
+         #{window_width} #{window_height} #{pane_floating_flag}",
     );
     parse_sidebar_pane_info(&out)
 }
@@ -164,30 +178,37 @@ mod tests {
 
     #[test]
     fn parse_sidebar_pane_info_parses_floating_flag() {
-        let info = parse_sidebar_pane_info("1 1 40 30 1");
+        let info = parse_sidebar_pane_info("1 1 40 30 100 30 1");
         assert!(info.floating);
         assert!(info.pane_active);
         assert!(info.window_active);
         assert_eq!(info.width, 40);
         assert_eq!(info.height, 30);
+        assert_eq!(info.window_width, 100);
+        assert_eq!(info.window_height, 30);
 
-        let docked = parse_sidebar_pane_info("0 1 80 24 0");
+        let docked = parse_sidebar_pane_info("0 1 80 24 120 40 0");
         assert!(!docked.floating);
         assert!(!docked.pane_active);
         assert_eq!(docked.width, 80);
         assert_eq!(docked.height, 24);
+        assert_eq!(docked.window_width, 120);
+        assert_eq!(docked.window_height, 40);
     }
 
     #[test]
     fn parse_sidebar_pane_info_without_floating_field_reports_docked() {
         // tmux older than 3.8 has no `#{pane_floating_flag}`: the core
-        // fields must survive and the pane must read as docked.
-        let info = parse_sidebar_pane_info("0 1 80 24");
+        // fields and the window size must survive and the pane must read
+        // as docked.
+        let info = parse_sidebar_pane_info("0 1 80 24 120 40");
         assert!(!info.floating);
         assert!(!info.pane_active);
         assert!(info.window_active);
         assert_eq!(info.width, 80);
         assert_eq!(info.height, 24);
+        assert_eq!(info.window_width, 120);
+        assert_eq!(info.window_height, 40);
     }
 
     #[test]

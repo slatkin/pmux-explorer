@@ -141,6 +141,7 @@ impl AppState {
     pub fn refresh(&mut self) -> bool {
         self.refresh_now();
         let info = tmux::get_sidebar_pane_info(&self.tmux_pane);
+        self.sidebar_pane = info;
         let focused = info.pane_active;
         let window_active = info.window_active;
         let (mut sessions, mut process_snapshot) = tmux::query_sessions_with_process_snapshot();
