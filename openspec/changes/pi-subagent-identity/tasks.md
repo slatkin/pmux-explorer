@@ -27,7 +27,7 @@
 ## 5. Integration
 
 - [x] 5.1 Run `cargo fmt`, `cargo clippy` and `cargo test`; verify all pass with no new warnings
-- [ ] 5.2 Run `cargo build --release`, restart the sidebar, spawn a pmux scout from a pi pane whose title is set with `select-pane -T`; verify the scout row shows the `subagent` badge, the parent title and the fuzzy task, no `<file` text, and `ORPHANED` in red after the parent pi exits
+- [x] 5.2 Run `cargo build --release`, restart the sidebar, spawn a pmux scout from a pi pane whose title is set with `select-pane -T`; verify the scout row shows the `subagent` badge, the parent title and the fuzzy task, no `<file` text, and `ORPHANED` in red after the parent pi exits
 
 ## Workflow follow-up
 
