@@ -302,6 +302,7 @@ mod tests {
             session_id: None,
             session_name: String::new(),
             sidebar_spawned: false,
+            pane_name: None,
             bg_shell_cmd: None,
             subagent: None,
         };
@@ -324,6 +325,7 @@ mod tests {
             session_id: None,
             session_name: String::new(),
             sidebar_spawned: false,
+            pane_name: None,
             bg_shell_cmd: None,
             subagent: None,
         };
@@ -570,6 +572,7 @@ mod tests {
             session_id: None,
             session_name: String::new(),
             sidebar_spawned: false,
+            pane_name: None,
             bg_shell_cmd: None,
             subagent: None,
         }

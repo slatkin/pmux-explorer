@@ -120,6 +120,7 @@ fn test_line_to_row_two_agents() {
         session_id: None,
         session_name: String::new(),
         sidebar_spawned: false,
+        pane_name: None,
         bg_shell_cmd: None,
         subagent: None,
     };
@@ -142,6 +143,7 @@ fn test_line_to_row_two_agents() {
         session_id: None,
         session_name: String::new(),
         sidebar_spawned: false,
+        pane_name: None,
         bg_shell_cmd: None,
         subagent: None,
     };

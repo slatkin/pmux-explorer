@@ -167,9 +167,9 @@ fn snapshot_single_agent_running_with_elapsed() {
 }
 
 #[test]
-fn snapshot_long_session_name_truncated_keeps_elapsed_visible() {
+fn snapshot_long_pane_name_truncated_keeps_elapsed_visible() {
     let mut pane = make_pane(AgentType::Claude, PaneStatus::Running);
-    pane.session_name = "this-is-a-ridiculously-long-session-name-that-will-not-fit".into();
+    pane.pane_name = Some("this-is-a-ridiculously-long-pane-name-that-will-not-fit".into());
     pane.started_at = Some(FIXED_NOW - 125); // 2m5s ago
 
     let mut state = make_state(vec![SessionInfo {
@@ -190,7 +190,7 @@ fn snapshot_long_session_name_truncated_keeps_elapsed_visible() {
      ≡1 ●1 ◐0 ○0 ✕0            ⤢
     ⓘ                        — ▾
     dotfiles
-    ┃ ● this-is-a-ridiculo… 2m5s
+    ┃ ● claude this-is-a-r… 2m5s
     ╭ Activity │ Git ──────────╮
     │      No activity yet     │
     ╰──────────────────────────╯
@@ -309,6 +309,7 @@ fn snapshot_two_agents_same_window_ui() {
         session_id: None,
         session_name: String::new(),
         sidebar_spawned: false,
+        pane_name: None,
         bg_shell_cmd: None,
         subagent: None,
     };
@@ -331,6 +332,7 @@ fn snapshot_two_agents_same_window_ui() {
         session_id: None,
         session_name: String::new(),
         sidebar_spawned: false,
+        pane_name: None,
         bg_shell_cmd: None,
         subagent: None,
     };

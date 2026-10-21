@@ -141,6 +141,7 @@ mod tests {
             session_id: None,
             session_name: String::new(),
             sidebar_spawned: false,
+            pane_name: None,
             bg_shell_cmd: None,
             subagent: None,
         }
@@ -212,7 +213,10 @@ mod tests {
     }
 
     #[test]
-    fn render_pane_lines_shows_session_name_instead_of_agent() {
+    fn render_pane_lines_session_name_does_not_change_the_title_slot() {
+        // The status row never shows the agent's session name: the agent
+        // label always leads the title slot, and the session name's
+        // presence changes nothing.
         let theme = ColorTheme::default();
         let mut p = pane(PermissionMode::Default, PaneStatus::Running, "");
         p.session_name = "fix-csv-aliases".into();
@@ -230,26 +234,18 @@ mod tests {
             0,
         );
 
-        let status = line_text(&lines[0]);
-        assert!(
-            status.contains("fix-csv-aliases"),
-            "session name should appear in status row, got: {status}"
-        );
-        assert!(
-            !status.contains("codex"),
-            "agent label should be replaced by session name, got: {status}"
-        );
+        insta::assert_snapshot!(line_text(&lines[0]), @"  ● codex");
     }
 
     #[test]
-    fn render_pane_lines_truncates_long_session_name_to_keep_elapsed_visible() {
-        // Regression: a user-supplied `/rename` title can be arbitrarily
-        // long and would push the elapsed counter off-screen if we did
-        // not truncate it first. The width budget reserves room for the
-        // status icon, the badge, and the elapsed label.
+    fn render_pane_lines_truncates_long_pane_name_to_keep_elapsed_visible() {
+        // Regression: a pane name can be arbitrarily long and would push
+        // the elapsed counter off-screen if we did not truncate it first.
+        // The width budget reserves room for the status icon, the agent
+        // label, and the elapsed label.
         let theme = ColorTheme::default();
         let mut p = pane(PermissionMode::Default, PaneStatus::Running, "");
-        p.session_name = "this-is-a-ridiculously-long-session-name-that-will-not-fit".into();
+        p.pane_name = Some("this-is-a-ridiculously-long-pane-name-that-will-not-fit".into());
         // started_at must be > 0 for elapsed_label to render.
         // started_at=1, now=66 → elapsed=65s → "1m5s".
         p.started_at = Some(1);
@@ -268,18 +264,9 @@ mod tests {
         );
 
         let status = line_text(&lines[0]);
-        // The elapsed counter must remain visible — that is the whole
-        // point of capping the title width.
-        assert!(
-            status.contains("1m5s"),
-            "elapsed must stay visible when session name is long, got: {status}"
-        );
-        // The full title must NOT fit; it should be replaced by a
-        // truncated form ending in the standard ellipsis character.
-        assert!(
-            !status.contains("not-fit"),
-            "long session name must be truncated, got: {status}"
-        );
+        // The elapsed counter stays fully visible, the agent label leads
+        // the row untruncated, and the pane name is cut with an ellipsis.
+        insta::assert_snapshot!(status, @"  ● codex this-is-a-ridi… 1m5s");
         // Each rendered cell should fit inside the 30-column width.
         let visible_width = display_width(&status);
         assert!(
@@ -1214,7 +1201,7 @@ mod tests {
         let ctx = test_ctx(&theme, 40, false);
         let p = pi_subagent(PmuxTaskKind::Resumed, SubagentParent::Orphaned, None);
         let line = status_row(&p, &ctx, &StatusIcons::default(), 0, 0);
-        insta::assert_snapshot!(line_text(&line), @"  ● pi resumed");
+        insta::assert_snapshot!(line_text(&line), @"  ● pi ↻");
     }
 
     #[test]
@@ -1227,19 +1214,56 @@ mod tests {
     }
 
     #[test]
+    fn status_row_pane_without_name_shows_only_agent_label() {
+        // A pane with no pane name shows only the agent label in the
+        // title slot — no placeholder, no session name.
+        let theme = ColorTheme::default();
+        let ctx = test_ctx(&theme, 40, false);
+        let mut p = pi_pane();
+        p.pane_name = None;
+        let line = status_row(&p, &ctx, &StatusIcons::default(), 0, 0);
+        insta::assert_snapshot!(line_text(&line), @"  ● pi");
+    }
+
+    #[test]
+    fn status_row_named_pane_shows_agent_label_then_pane_name() {
+        let theme = ColorTheme::default();
+        let ctx = test_ctx(&theme, 40, false);
+        let mut p = pi_pane();
+        p.pane_name = Some("my-task".into());
+        let line = status_row(&p, &ctx, &StatusIcons::default(), 0, 0);
+        insta::assert_snapshot!(line_text(&line), @"  ● pi my-task");
+    }
+
+    #[test]
+    fn status_row_long_pane_name_truncates_keeps_label_and_elapsed() {
+        // A pane name longer than the space left after the status icon,
+        // the agent label, and the elapsed label is cut with an ellipsis;
+        // the agent label and the elapsed label stay fully visible.
+        let theme = ColorTheme::default();
+        let ctx = test_ctx(&theme, 30, false);
+        let mut p = pi_pane();
+        p.pane_name = Some("a-very-long-pane-name-that-will-not-fit".into());
+        p.started_at = Some(1);
+        let line = status_row(&p, &ctx, &StatusIcons::default(), 0, 66);
+        let text = line_text(&line);
+        insta::assert_snapshot!(text, @"  ● pi a-very-long-pane-na… 1m5s");
+    }
+
+    #[test]
     fn status_row_subagent_badge_counts_toward_width_budget() {
         // The badge eats into the title budget the same way a permission
         // badge does, so the elapsed label keeps its place on the row.
         let theme = ColorTheme::default();
         let ctx = test_ctx(&theme, 30, false);
         let mut p = pi_subagent(PmuxTaskKind::Spawned, SubagentParent::Orphaned, None);
-        p.session_name = "a-very-long-session-name-that-will-not-fit".into();
+        p.pane_name = Some("a-very-long-session-name-that-will-not-fit".into());
         p.started_at = Some(1);
         let line = status_row(&p, &ctx, &StatusIcons::default(), 0, 66);
         let text = line_text(&line);
         insta::assert_snapshot!(
             text,
-            @"  ● a-very-long-session-… ♟ 1m5s"
+            @"  ● pi a-very-long-sessi… ♟ 1m5s"
         );
         assert!(
             display_width(text.trim_end()) <= ctx.inner_width + 2,

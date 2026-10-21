@@ -24,6 +24,12 @@ pub struct PaneInfo {
     pub worktree: WorktreeMetadata,
     pub session_id: Option<String>,
     pub session_name: String,
+    /// The pane's own tmux title (`pane_title`) when it is a real name:
+    /// non-empty, different from the host name, and not an agent-set OSC
+    /// title (`π - …` from pi, `✳ …` from Claude Code). `None` otherwise.
+    /// Set by pmux's `select-pane -T`; shown after the agent label in the
+    /// status row.
+    pub pane_name: Option<String>,
     /// `true` when the window this pane lives in was created by the
     /// sidebar's spawn flow (via the `@agent-sidebar-spawned` window
     /// option). Used by the row renderer to show a clickable red `×`
