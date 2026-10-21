@@ -14,7 +14,7 @@
 - [x] 2.2 Draw the control at the right edge of the top row in the running colour, with the pop-out glyph when the sidebar is docked and the pop-in glyph when it is floating. Verify: a snapshot test shows the row with the control.
 - [x] 2.3 Hit-test the control in the click handler before the chip walk, so a click on the control never changes the status filter. Verify: a unit test clicks the control column and asserts the filter is unchanged.
 - [x] 2.4 Wire the `p` key to the same action as the control. Verify: a unit test in `src/app/input.rs` drives the `p` key and asserts the toggle happened.
-- [ ] 2.5 Add the `p` shortcut to the keybindings table in `website/src/content/docs/reference/keybindings.md`. Verify: the table lists `p` for popping the sidebar out and in.
+- [x] 2.5 Add the `p` shortcut to the keybindings table in `website/src/content/docs/reference/keybindings.md`. Verify: the table lists `p` for popping the sidebar out and in.
 
 ## 3. Floating and docking the pane
 
@@ -24,7 +24,7 @@
 - [x] 3.4 Report a refused pop-out with `AppState::set_flash`, so a zoomed window leaves the sidebar docked and tells the user. Verify: a unit test asserts that a failed call sets the flash message and leaves the mode unchanged.
 - [x] 3.5 Implement the pop-in: join the pane back into the layout and restore the captured docked width with `resize-pane -x`. Verify: a unit test asserts the restored width, and the live check in group 5 confirms it.
 - [x] 3.6 Clamp the Activity/Git bottom panel to a third of the panel height while the sidebar floats. Verify: a unit test asserts the clamped height for a given panel height.
-- [ ] 3.7 Document the floating panel in `website/src/content/docs/features/` and note in the README requirements that the floating panel needs tmux 3.8 while the rest of the sidebar works on tmux 3.0+. Verify: the feature page describes the control, the geometry and the tmux version, and the README states the version.
+- [x] 3.7 Document the floating panel in `website/src/content/docs/features/` and note in the README requirements that the floating panel needs tmux 3.8 while the rest of the sidebar works on tmux 3.0+. Verify: the feature page describes the control, the geometry and the tmux version, and the README states the version.
 
 ## 4. Keeping the floating panel sized
 
