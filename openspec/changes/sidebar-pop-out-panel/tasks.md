@@ -2,11 +2,11 @@
 
 ## 1. Status filter categories
 
-- [ ] 1.1 Replace the `background` category with `busy` in `src/state/filter.rs`: the enum, `VARIANTS`, `next`, `prev`, `as_str`, `from_label` (both `running` and `background` map onto `busy`), `matches` (busy matches the running and the background pane status) and `status_counts` (five counts, the busy count summing running and background). Verify: the unit tests in `src/state/filter.rs` cover the new category, the two old persisted labels, and the cycle order, and `cargo test filter` passes.
-- [ ] 1.2 Render the five chips in `src/ui/panes/filter_bar.rs` with a single space between them, and count the busy chip as running plus background. Verify: a unit test asserts the rendered row text.
-- [ ] 1.3 Map a click column to a category in `src/state/layout.rs` with the new categories and the single-space separator, so the hit test matches the drawn chips. Verify: a unit test clicks a column of each chip and asserts the selected category.
-- [ ] 1.4 Draw the busy chip icon in the running colour whether or not the busy chip is active, and draw the active chip's count in the accent colour. Verify: a unit test asserts the foreground of the busy icon and of the active count.
-- [ ] 1.5 Update the UI snapshots that show the chip row. Verify: `cargo insta accept` followed by `cargo test` passes.
+- [x] 1.1 Replace the `background` category with `busy` in `src/state/filter.rs`: the enum, `VARIANTS`, `next`, `prev`, `as_str`, `from_label` (both `running` and `background` map onto `busy`), `matches` (busy matches the running and the background pane status) and `status_counts` (five counts, the busy count summing running and background). Verify: the unit tests in `src/state/filter.rs` cover the new category, the two old persisted labels, and the cycle order, and `cargo test filter` passes.
+- [x] 1.2 Render the five chips in `src/ui/panes/filter_bar.rs` with a single space between them, and count the busy chip as running plus background. Verify: a unit test asserts the rendered row text.
+- [x] 1.3 Map a click column to a category in `src/state/layout.rs` with the new categories and the single-space separator, so the hit test matches the drawn chips. Verify: a unit test clicks a column of each chip and asserts the selected category.
+- [x] 1.4 Draw the busy chip icon in the running colour whether or not the busy chip is active, and draw the active chip's count in the accent colour. Verify: a unit test asserts the foreground of the busy icon and of the active count.
+- [x] 1.5 Update the UI snapshots that show the chip row. Verify: `cargo insta accept` followed by `cargo test` passes.
 
 ## 2. The pop-out control on the top row
 
