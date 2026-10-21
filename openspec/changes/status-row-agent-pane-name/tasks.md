@@ -13,7 +13,7 @@
 
 ## 3. Session-name pipeline removal
 
-- [ ] 3.1 Remove the session-name pipeline: `src/session.rs` and `pub mod session` in `src/lib.rs`, the `session_poll_loop` thread in `src/app/workers.rs`, the initial scan in `src/app/setup.rs`, `refresh_session_names` and the `sessions.names` map in `src/state/` (not the unrelated `mod session` at `src/state.rs:19`), and the `PaneInfo.session_name` field with its fixture hits. Verify `cargo build` reports no unused-code warnings and `rg session_name src/` returns only unrelated matches (git rename detection, test fixture names).
+- [x] 3.1 Remove the session-name pipeline: `src/session.rs` and `pub mod session` in `src/lib.rs`, the `session_poll_loop` thread in `src/app/workers.rs`, the initial scan in `src/app/setup.rs`, `refresh_session_names` and the `sessions.names` map in `src/state/` (not the unrelated `mod session` at `src/state.rs:19`), and the `PaneInfo.session_name` field with its fixture hits. Verify `cargo build` reports no unused-code warnings and `rg session_name src/` returns only unrelated matches (git rename detection, test fixture names).
 - [x] 3.2 Update the row tests that asserted the session-name replacement behaviour (`src/ui/panes/row.rs` "session name should appear / agent label replaced") to assert the new composition instead; verify `cargo test` passes.
 
 ## 4. Docs and gates
