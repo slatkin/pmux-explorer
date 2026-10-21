@@ -21,7 +21,7 @@ mod tab;
 mod timers;
 
 pub use activity::ActivityState;
-pub use filter::{RepoFilter, StatusFilter};
+pub use filter::{RepoFilter, StatusCounts, StatusFilter};
 pub use focus::{Focus, FocusState};
 pub use global::GlobalState;
 pub(crate) use layout::filter_bar_layout;
@@ -1411,7 +1411,15 @@ mod tests {
     #[test]
     fn status_counts_empty() {
         let state = AppState::new("%99".into());
-        assert_eq!(state.status_counts(), (0, 0, 0, 0, 0));
+        let counts = state.status_counts();
+        assert_eq!(counts.all(), 0);
+        for filter in StatusFilter::VARIANTS {
+            assert_eq!(
+                counts.count(filter),
+                0,
+                "{filter:?} count on an empty state"
+            );
+        }
     }
 
     #[test]
@@ -1439,8 +1447,13 @@ mod tests {
                 (p5, PaneGitInfo::default()),
             ],
         }];
-        // (all, busy, waiting, idle, error) — busy sums running + background
-        assert_eq!(state.status_counts(), (5, 2, 1, 1, 1));
+        // busy sums running + background
+        let counts = state.status_counts();
+        assert_eq!(counts.all(), 5);
+        assert_eq!(counts.count(StatusFilter::Busy), 2);
+        assert_eq!(counts.count(StatusFilter::Waiting), 1);
+        assert_eq!(counts.count(StatusFilter::Idle), 1);
+        assert_eq!(counts.count(StatusFilter::Error), 1);
     }
 
     // ─── handle_filter_click tests ───────────────────────────────────
@@ -1766,16 +1779,16 @@ mod tests {
 
         // All repos: 2 total
         state.global.repo_filter = RepoFilter::All;
-        let (all, busy, _, idle, _) = state.status_counts();
-        assert_eq!(all, 2);
-        assert_eq!(busy, 1);
-        assert_eq!(idle, 1);
+        let counts = state.status_counts();
+        assert_eq!(counts.all(), 2);
+        assert_eq!(counts.count(StatusFilter::Busy), 1);
+        assert_eq!(counts.count(StatusFilter::Idle), 1);
 
         // Filter to "app" only: 1 Running
         state.global.repo_filter = RepoFilter::Repo("app".into());
-        let (all, busy, _, idle, _) = state.status_counts();
-        assert_eq!(all, 1);
-        assert_eq!(busy, 1);
-        assert_eq!(idle, 0);
+        let counts = state.status_counts();
+        assert_eq!(counts.all(), 1);
+        assert_eq!(counts.count(StatusFilter::Busy), 1);
+        assert_eq!(counts.count(StatusFilter::Idle), 0);
     }
 }

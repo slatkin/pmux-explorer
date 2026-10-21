@@ -75,6 +75,37 @@ impl StatusFilter {
     }
 }
 
+/// Agent counts keyed by [`StatusFilter`] rather than by position: the
+/// chip order lives in [`StatusFilter::VARIANTS`] alone, and every
+/// consumer looks a count up by filter instead of pairing two lists by
+/// index.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StatusCounts {
+    all: usize,
+    busy: usize,
+    waiting: usize,
+    idle: usize,
+    error: usize,
+}
+
+impl StatusCounts {
+    /// The count a chip for `filter` renders.
+    pub fn count(self, filter: StatusFilter) -> usize {
+        match filter {
+            StatusFilter::All => self.all,
+            StatusFilter::Busy => self.busy,
+            StatusFilter::Waiting => self.waiting,
+            StatusFilter::Idle => self.idle,
+            StatusFilter::Error => self.error,
+        }
+    }
+
+    /// Total panes counted, i.e. the `All` chip's count.
+    pub fn all(self) -> usize {
+        self.all
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum RepoFilter {
     All,
@@ -109,9 +140,8 @@ impl RepoFilter {
 impl AppState {
     /// Count agents per status across all repo groups.
     ///
-    /// Returns `(all, busy, waiting, idle, error)`; the busy count sums
-    /// the running and the background panes.
-    pub fn status_counts(&self) -> (usize, usize, usize, usize, usize) {
+    /// The busy count sums the running and the background panes.
+    pub fn status_counts(&self) -> StatusCounts {
         let (mut busy, mut waiting, mut idle, mut error) = (0, 0, 0, 0);
         for group in &self.repo_groups {
             if !self.global.repo_filter.matches_group(&group.name) {
@@ -130,7 +160,13 @@ impl AppState {
             }
         }
         let all = busy + waiting + idle + error;
-        (all, busy, waiting, idle, error)
+        StatusCounts {
+            all,
+            busy,
+            waiting,
+            idle,
+            error,
+        }
     }
 
     /// Return list of repo names for the popup: ["All", repo1, repo2, ...]
@@ -289,7 +325,15 @@ mod tests {
     #[test]
     fn status_counts_on_empty_state_is_all_zeroes() {
         let state = AppState::new("%99".into());
-        assert_eq!(state.status_counts(), (0, 0, 0, 0, 0));
+        let counts = state.status_counts();
+        assert_eq!(counts.all(), 0);
+        for filter in StatusFilter::VARIANTS {
+            assert_eq!(
+                counts.count(filter),
+                0,
+                "{filter:?} count on an empty state"
+            );
+        }
     }
 
     #[test]
@@ -316,13 +360,21 @@ mod tests {
         ];
 
         // All repos: 4 total, busy sums running + background
-        let (all, busy, w, i, e) = state.status_counts();
-        assert_eq!((all, busy, w, i, e), (4, 2, 1, 1, 0));
+        let counts = state.status_counts();
+        assert_eq!(counts.all(), 4);
+        assert_eq!(counts.count(StatusFilter::Busy), 2);
+        assert_eq!(counts.count(StatusFilter::Waiting), 1);
+        assert_eq!(counts.count(StatusFilter::Idle), 1);
+        assert_eq!(counts.count(StatusFilter::Error), 0);
 
         // Restrict to "app"
         state.global.repo_filter = RepoFilter::Repo("app".into());
-        let (all, busy, w, i, e) = state.status_counts();
-        assert_eq!((all, busy, w, i, e), (3, 2, 0, 1, 0));
+        let counts = state.status_counts();
+        assert_eq!(counts.all(), 3);
+        assert_eq!(counts.count(StatusFilter::Busy), 2);
+        assert_eq!(counts.count(StatusFilter::Waiting), 0);
+        assert_eq!(counts.count(StatusFilter::Idle), 1);
+        assert_eq!(counts.count(StatusFilter::Error), 0);
     }
 
     #[test]

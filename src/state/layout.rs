@@ -1,4 +1,4 @@
-use super::{AppState, RepoFilter, StatusFilter};
+use super::{AppState, RepoFilter, StatusCounts, StatusFilter};
 
 #[derive(Debug, Clone)]
 pub struct RowTarget {
@@ -91,8 +91,7 @@ fn count_digits(n: usize) -> u16 {
 }
 
 /// Compute the layout of the status filter row for a row `width` columns
-/// wide with the five status counts in chip order (all, busy, waiting,
-/// idle, error).
+/// wide with the per-filter status counts (see [`StatusCounts`]).
 ///
 /// The pop-out control owns the last column of the row, and the chips
 /// fill from the left with a single-space separator after one gutter
@@ -103,22 +102,18 @@ fn count_digits(n: usize) -> u16 {
 ///
 /// Both the renderer and the click hit test run through this function,
 /// so a click can only ever select a chip that is actually drawn.
-pub(crate) fn filter_bar_layout(counts: [usize; 5], width: u16) -> (Vec<FilterChip>, Option<u16>) {
+pub(crate) fn filter_bar_layout(
+    counts: StatusCounts,
+    width: u16,
+) -> (Vec<FilterChip>, Option<u16>) {
     if width == 0 {
         return (Vec::new(), None);
     }
     let control_col = width - 1;
-    let order = [
-        (StatusFilter::All, counts[0]),
-        (StatusFilter::Busy, counts[1]),
-        (StatusFilter::Waiting, counts[2]),
-        (StatusFilter::Idle, counts[3]),
-        (StatusFilter::Error, counts[4]),
-    ];
     let mut chips = Vec::new();
     let mut start: u16 = 1; // leading gutter column
-    for (filter, count) in order {
-        let chip_width = 1 + count_digits(count);
+    for filter in StatusFilter::VARIANTS {
+        let chip_width = 1 + count_digits(counts.count(filter));
         if start + chip_width > control_col {
             break;
         }
@@ -201,13 +196,8 @@ impl AppState {
         // frame rendered with. The pop-out control is hit-tested before
         // the chip walk, so a click on it never changes the status
         // filter.
-        let (chips, control_col) = {
-            let (all, busy, waiting, idle, error) = self.status_counts();
-            filter_bar_layout(
-                [all, busy, waiting, idle, error],
-                self.layout.filter_bar_width,
-            )
-        };
+        let (chips, control_col) =
+            filter_bar_layout(self.status_counts(), self.layout.filter_bar_width);
         if let Some(control_col) = control_col
             && col == control_col
         {

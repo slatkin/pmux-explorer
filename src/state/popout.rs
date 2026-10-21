@@ -76,9 +76,8 @@ impl AppState {
     }
 
     fn pop_out_with(&mut self, info: SidebarPaneInfo) {
-        if info.floating {
-            return;
-        }
+        // Precondition: `toggle_popout` only routes a docked pane here.
+        debug_assert!(!info.floating, "pop_out_with requires a docked pane");
         let geometry = panel_geometry(info.window_width, info.window_height);
         let result = tmux::float_pane(
             &self.tmux_pane,
@@ -91,9 +90,8 @@ impl AppState {
     }
 
     fn pop_in_with(&mut self, info: SidebarPaneInfo) {
-        if !info.floating {
-            return;
-        }
+        // Precondition: `toggle_popout` only routes a floating pane here.
+        debug_assert!(info.floating, "pop_in_with requires a floating pane");
         if let Some(width) = self.apply_pop_in(tmux::dock_pane(&self.tmux_pane)) {
             let _ = tmux::run_tmux(&[
                 "resize-pane",

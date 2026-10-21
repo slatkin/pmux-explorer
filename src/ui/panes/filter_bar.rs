@@ -20,37 +20,35 @@ const POPIN_GLYPH: &str = "⤡";
 pub(super) fn render_filter_bar<'a>(state: &AppState, width: u16) -> (Line<'a>, Option<u16>) {
     let theme = &state.theme;
     let icons = &state.icons;
-    let (all, busy, waiting, idle, error) = state.status_counts();
+    let counts = state.status_counts();
 
-    // The busy chip always wears the running colour — running and
-    // background panes are both busy, so its icon carries no selection
-    // cue. The active chip is instead marked by its count, which is
-    // drawn in the accent colour.
-    let icon_for = |s: PaneStatus| (icons.status_icon(&s), theme.status_color(&s, false));
-    let items: Vec<(StatusFilter, (&str, ratatui::style::Color), usize)> = vec![
-        (StatusFilter::All, (icons.all_icon(), theme.status_all), all),
-        (
-            StatusFilter::Busy,
-            (
-                icons.status_icon(&PaneStatus::Running),
+    let icon_for = |filter: StatusFilter| -> (String, ratatui::style::Color) {
+        match filter {
+            StatusFilter::All => (icons.all_icon().to_string(), theme.status_all),
+            StatusFilter::Busy => (
+                icons.status_icon(&PaneStatus::Running).to_string(),
                 theme.status_running,
             ),
-            busy,
-        ),
-        (
-            StatusFilter::Waiting,
-            icon_for(PaneStatus::Waiting),
-            waiting,
-        ),
-        (StatusFilter::Idle, icon_for(PaneStatus::Idle), idle),
-        (StatusFilter::Error, icon_for(PaneStatus::Error), error),
-    ];
+            StatusFilter::Waiting => (
+                icons.status_icon(&PaneStatus::Waiting).to_string(),
+                theme.status_color(&PaneStatus::Waiting, false),
+            ),
+            StatusFilter::Idle => (
+                icons.status_icon(&PaneStatus::Idle).to_string(),
+                theme.status_color(&PaneStatus::Idle, false),
+            ),
+            StatusFilter::Error => (
+                icons.status_icon(&PaneStatus::Error).to_string(),
+                theme.status_color(&PaneStatus::Error, false),
+            ),
+        }
+    };
 
     // The chip layout (which chips fit before the control, and where
     // each starts) comes from the same pure function the click hit test
     // runs, so a drawn chip and a clickable chip are always the same
     // chip, whatever the counts are.
-    let (chips, control_col) = filter_bar_layout([all, busy, waiting, idle, error], width);
+    let (chips, control_col) = filter_bar_layout(counts, width);
     let Some(control_col) = control_col else {
         return (Line::from(Vec::new()), None);
     };
@@ -70,21 +68,22 @@ pub(super) fn render_filter_bar<'a>(state: &AppState, width: u16) -> (Line<'a>, 
         if i > 0 {
             spans.push(Span::raw(" "));
         }
-        let (filter, (icon, icon_color), count) = &items[i];
-        debug_assert_eq!(*filter, chip.filter, "chip order must match the layout");
+        let filter = chip.filter;
+        let count = counts.count(filter);
+        let (icon, icon_color) = icon_for(filter);
 
-        let is_selected = state.global.status_filter == *filter;
-        let icon_style = if is_selected || *filter == StatusFilter::Busy {
-            Style::default().fg(*icon_color)
+        let is_selected = state.global.status_filter == filter;
+        let icon_style = if is_selected || filter == StatusFilter::Busy {
+            Style::default().fg(icon_color)
         } else {
             Style::default().fg(theme.filter_inactive)
         };
-        spans.push(Span::styled(icon.to_string(), icon_style));
+        spans.push(Span::styled(icon, icon_style));
 
         let count_str = format!("{count}");
         let count_style = if is_selected {
             Style::default().fg(theme.accent)
-        } else if *count == 0 {
+        } else if count == 0 {
             Style::default().fg(theme.filter_inactive)
         } else {
             Style::default().fg(theme.text_active)
@@ -520,7 +519,16 @@ mod tests {
         // — the row never overflows the area and the control column is
         // always a column a click can land on.
         let state = state_with_two_digit_counts();
-        assert_eq!(state.status_counts(), (40, 10, 10, 10, 10));
+        let counts = state.status_counts();
+        assert_eq!(counts.all(), 40);
+        for filter in [
+            StatusFilter::Busy,
+            StatusFilter::Waiting,
+            StatusFilter::Idle,
+            StatusFilter::Error,
+        ] {
+            assert_eq!(counts.count(filter), 10, "{filter:?} count");
+        }
 
         let (line, col) = render_filter_bar(&state, 20);
         let text = line_text(&line);
@@ -544,17 +552,16 @@ mod tests {
         // layout names for its chip, at every width including the
         // truncating one.
         let state = state_with_two_digit_counts();
-        let (all, busy, waiting, idle, error) = state.status_counts();
+        let counts = state.status_counts();
         for width in [20u16, 24, 40] {
             let (line, _) = render_filter_bar(&state, width);
             let text = line_text(&line);
-            let (chips, _) = filter_bar_layout([all, busy, waiting, idle, error], width);
+            let (chips, _) = filter_bar_layout(counts, width);
             let chars: Vec<char> = text.chars().collect();
-            let icons = icons_of(&state);
-            for (i, chip) in chips.iter().enumerate() {
+            for chip in &chips {
                 assert_eq!(
                     chars[chip.start as usize],
-                    icons[i].chars().next().unwrap(),
+                    icon_of(&state, chip.filter).chars().next().unwrap(),
                     "icon column mismatch at width {width}: {text}"
                 );
             }
@@ -569,14 +576,16 @@ mod tests {
         }
     }
 
-    fn icons_of(state: &AppState) -> Vec<String> {
-        vec![
-            state.icons.all_icon().to_string(),
-            state.icons.status_icon(&PaneStatus::Running).to_string(),
-            state.icons.status_icon(&PaneStatus::Waiting).to_string(),
-            state.icons.status_icon(&PaneStatus::Idle).to_string(),
-            state.icons.status_icon(&PaneStatus::Error).to_string(),
-        ]
+    /// The icon glyph the renderer draws for a chip of `filter`, keyed
+    /// by filter rather than by position.
+    fn icon_of(state: &AppState, filter: StatusFilter) -> String {
+        match filter {
+            StatusFilter::All => state.icons.all_icon().to_string(),
+            StatusFilter::Busy => state.icons.status_icon(&PaneStatus::Running).to_string(),
+            StatusFilter::Waiting => state.icons.status_icon(&PaneStatus::Waiting).to_string(),
+            StatusFilter::Idle => state.icons.status_icon(&PaneStatus::Idle).to_string(),
+            StatusFilter::Error => state.icons.status_icon(&PaneStatus::Error).to_string(),
+        }
     }
 
     fn control_col(width: u16) -> u16 {

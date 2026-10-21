@@ -49,8 +49,8 @@ pub(crate) fn parse_sidebar_pane_info(out: &str) -> SidebarPaneInfo {
     SidebarPaneInfo {
         pane_active: parts[0] == "1",
         window_active: parts[1] == "1",
-        width: parts[2].parse().unwrap_or(28),
-        height: parts[3].parse().unwrap_or(24),
+        width: parts[2].parse().unwrap_or(SidebarPaneInfo::FALLBACK.width),
+        height: parts[3].parse().unwrap_or(SidebarPaneInfo::FALLBACK.height),
         window_width: parts.get(4).and_then(|s| s.parse().ok()).unwrap_or(0),
         window_height: parts.get(5).and_then(|s| s.parse().ok()).unwrap_or(0),
         floating: parts.get(6).copied() == Some("1"),
