@@ -18,8 +18,8 @@
 
 ## 3. Floating and docking the pane
 
-- [ ] 3.1 Add the tmux calls in `src/tmux/commands.rs`: a `break-pane -W` that floats the pane with a given size and position, and a `join-pane` that puts it back, both reporting tmux's error. Build the argument lists in pure functions, the way `src/cli/toggle.rs` builds its split flags. Verify: unit tests assert the argument lists.
-- [ ] 3.2 Read the floating flag of the sidebar's own pane in the existing pane query, so the sidebar knows its mode from the pane and not from a remembered flag. Verify: a unit test asserts the parsed flag.
+- [x] 3.1 Add the tmux calls in `src/tmux/commands.rs`: a `break-pane -W` that floats the pane with a given size and position, and a `join-pane` that puts it back, both reporting tmux's error. Build the argument lists in pure functions, the way `src/cli/toggle.rs` builds its split flags. Verify: unit tests assert the argument lists.
+- [x] 3.2 Read the floating flag of the sidebar's own pane in the existing pane query, so the sidebar knows its mode from the pane and not from a remembered flag. Verify: a unit test asserts the parsed flag.
 - [ ] 3.3 Implement the pop-out: capture the docked width, compute the panel geometry from the window size (40 columns wide, as tall as the window, anchored to the right edge), and float the pane. Verify: a unit test asserts the computed geometry for a given window size.
 - [ ] 3.4 Report a refused pop-out with `AppState::set_flash`, so a zoomed window leaves the sidebar docked and tells the user. Verify: a unit test asserts that a failed call sets the flash message and leaves the mode unchanged.
 - [ ] 3.5 Implement the pop-in: join the pane back into the layout and restore the captured docked width with `resize-pane -x`. Verify: a unit test asserts the restored width, and the live check in group 4 confirms it.
