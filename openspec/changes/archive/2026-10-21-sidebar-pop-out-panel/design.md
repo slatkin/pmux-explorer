@@ -128,7 +128,8 @@ instead.
 A floating pane keeps its size when the window resizes, so the panel would
 stay the height it had. The geometry guard that already runs on every
 refresh tick, next to `size_guard::enforce` in `src/app.rs`, re-asserts the
-panel height when the window height changed.
+panel height when the window height changed, and re-asserts the panel
+width and its right-edge anchor when the window width changed.
 
 Re-asserting on every tick would fight a user who drags the panel edge, so
 the guard only acts when the window size itself changed.
@@ -185,11 +186,14 @@ already had a filter keeps a filter instead of falling back to all.
   the covered area goes to the panel. -> The panel is narrow and anchored to
   the right edge, and the user pops it back in with one key press.
 - The control glyph `⤢` and `⤡` may be missing from a terminal font.
-  -> Fall back to `>>` and `<<` if the font cannot show them.
-- The panel height is re-asserted when the window changes, so a panel the
-  user deliberately resized by hand is snapped back on the next window
-  resize. -> The guard only acts on a window size change, and the panel
-  keeps its own size otherwise.
+  -> The control uses those two glyphs, and the app cannot detect which
+  glyphs a terminal font has, so there is no ASCII fallback. A font
+  without them shows a placeholder for the control, and the `p` key
+  still pops the sidebar out and in.
+- The panel height and width are re-asserted when the window changes, so a
+  panel the user deliberately resized by hand is snapped back on the next
+  window resize. -> The guard only acts on a window size change, and the
+  panel keeps its own size otherwise.
 - Merging the two busy categories removes the way to list only the panes
   with a live background command. -> The row still shows the command on a
   background pane, so they can be spotted by reading.

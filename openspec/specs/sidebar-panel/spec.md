@@ -45,7 +45,9 @@ the control and pressing the `p` key SHALL do the same thing.
 Popping the sidebar out SHALL turn the sidebar pane into a floating pane in
 the same window, 40 columns wide, as tall as the window, and anchored to the
 right edge. The workspace panes SHALL take the full width of the window
-again, because a floating pane does not take space from the layout.
+again, because a floating pane does not take space from the layout. The
+floating panel SHALL keep that width and that anchor when the window is
+resized.
 
 #### Scenario: the panel floats over the workspace
 - **WHEN** the user pops the sidebar out
@@ -54,6 +56,10 @@ again, because a floating pane does not take space from the layout.
 #### Scenario: the panel keeps its own content
 - **WHEN** the user pops the sidebar out
 - **THEN** the same sidebar process keeps running with the same filter, selection, scroll position and bottom tab as before
+
+#### Scenario: the window is resized while the panel floats
+- **WHEN** the window is resized while the sidebar floats
+- **THEN** the panel is 40 columns wide again and its right edge is flush with the right edge of the window
 
 ### Requirement: popping back in restores the docked width
 
