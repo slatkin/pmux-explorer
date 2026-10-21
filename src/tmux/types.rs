@@ -1,3 +1,5 @@
+use crate::pmux_task::PmuxTaskKind;
+
 pub const CLAUDE_AGENT: &str = "claude";
 pub const CODEX_AGENT: &str = "codex";
 pub const OPENCODE_AGENT: &str = "opencode";
@@ -31,6 +33,29 @@ pub struct PaneInfo {
     /// pane status is `Background` (or `Running` with a backgrounded shell
     /// still alive) so the row body can surface the actual command.
     pub bg_shell_cmd: Option<String>,
+    /// Pmux subagent identity parsed from the `@pane_subagent_*` options.
+    /// `None` for every pane that is not a pmux subagent.
+    pub subagent: Option<SubagentInfo>,
+}
+
+/// The pmux subagent identity of a pane, parsed from the `@pane_subagent_*`
+/// options the hook writes on a recognised pmux task prompt.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SubagentInfo {
+    pub kind: PmuxTaskKind,
+    /// The fuzzy task name, or `None` when pmux used its fallback stem.
+    pub task: Option<String>,
+    /// The resolved parent, filled in by the resolution post-pass.
+    pub parent: SubagentParent,
+}
+
+/// The parent of a subagent: the label (tmux title, or pane id when the
+/// title is empty) of the live agent pane with the recorded session id, or
+/// `Orphaned` when no pane reports that session id.
+#[derive(Debug, Clone, PartialEq)]
+pub enum SubagentParent {
+    Pane(String),
+    Orphaned,
 }
 
 #[derive(Debug, Clone, Default)]
