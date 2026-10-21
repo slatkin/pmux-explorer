@@ -95,3 +95,50 @@ test-only warning, `tests/state_tests.rs:1158` "variable does not need to be
 mutable" on the `let mut click` closure introduced by `60a77a2`. Plain
 `cargo clippy` (what CI runs) reports only the four pre-existing warnings;
 the fifth appears only with `--all-targets`.
+
+## 5.4 — the resize behaviour (added after the code review)
+
+Observed on 2026-10-21 against a live tmux 3.8, in the same dedicated
+detached session (`sidebar-popout-check`, 120x40) as the checks above,
+against a debug build of the branch at `89c94c1`.
+
+Docked, before the pop-out:
+
+```text
+%150  25x39  left=95   float=0
+```
+
+After `p` and one refresh (floating):
+
+```text
+%150  38x38  left=81   float=1
+```
+
+38 columns of content — 40 columns of outer box, tmux draws the border
+outside the content area as in 5.1 — at left=81, flush with the right edge
+of the 120-column window, since 120 - 40 = 80.
+
+The window was then resized to 100 columns:
+
+```text
+%150  38x38  left=61   float=1
+```
+
+The panel stayed 38 wide and moved to left=61 — flush with the new right
+edge, since 100 - 40 = 60.
+
+After a second `p` (docked again):
+
+```text
+%150  25x39  left=95   float=0
+```
+
+The pane is a tiled pane again at the 25 docked columns it had before the
+pop-out.
+
+The top row of the floating sidebar rendered the five chips with the
+control glyph at the right edge:
+
+```text
+ ≡0 ●0 ◐0 ○0 ✕0         ⤢
+```

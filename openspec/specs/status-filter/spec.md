@@ -51,9 +51,12 @@ that the active category stays visible when its icon colour does not change.
 - **WHEN** the busy category is the active one
 - **THEN** the busy chip count is drawn in the accent colour
 
-#### Scenario: an inactive chip
-- **WHEN** the busy category is the active one
-- **THEN** the counts of the other chips are drawn in the ordinary text colour
+#### Scenario: the chip counts
+- **WHEN** the status filter row is rendered
+- **THEN** the count of the active chip is drawn in the accent colour, a
+  non-zero count on an inactive chip is drawn in the ordinary text colour,
+  and a zero count on an inactive chip is drawn dimmed in the inactive
+  chip colour
 
 ### Requirement: the chips are separated by a single space
 

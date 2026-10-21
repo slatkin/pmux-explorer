@@ -1,9 +1,11 @@
 //! Keep the floating panel as tall and as wide as its window, anchored
 //! to the window's right edge.
 //!
-//! A floating pane keeps its size and position when the window resizes, so
-//! a panel popped out of a 120-column, 40-row window would keep both after
-//! the window shrinks — and on a narrower window it hangs off the side. On
+//! A floating pane keeps its size and position when the window resizes.
+//! When the window grows, tmux leaves the pane's left edge where it was,
+//! so a panel that was flush with the right edge drifts away from the new
+//! right edge; when the window shrinks, tmux pulls the pane back into the
+//! window and clamps it, so the panel stays inside on its own. On
 //! every refresh tick, next to the width guard ([`super::size_guard`]),
 //! the guard re-asserts the panel height with `resize-pane -y` when the
 //! window height changed, and the panel width with `resize-pane -x` plus
@@ -100,10 +102,11 @@ pub fn enforce(
             "-x",
             &position.width.to_string(),
         ]);
-        // A floating pane keeps its position across a window resize, so
-        // the width re-assert alone would leave the panel hanging off the
-        // right edge; `move-pane` (never a re-float — `break-pane -W`
-        // fails on an already floating pane) puts it back flush.
+        // A floating pane keeps its left edge across a window resize, so
+        // after a window grows the width re-assert alone would leave the
+        // panel short of the new right edge; `move-pane` (never a re-float
+        // — `break-pane -W` fails on an already floating pane) puts it
+        // back flush.
         let _ = tmux::move_pane(pane_id, position.x, position.y);
     }
     *last_window_width = Some(window_width);

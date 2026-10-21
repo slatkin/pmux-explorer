@@ -36,7 +36,7 @@ Setting `@sidebar_min_width` to `0` disables the width floor entirely.
 | Option                            | Default         | What it paints                                                    |
 | --------------------------------- | --------------- | ----------------------------------------------------------------- |
 | `@sidebar_color_all`              | `111`&nbsp;(sky blue)| Selected "all" filter icon                                        |
-| `@sidebar_color_running`          | `114`&nbsp;(green)   | Selected running/background filter icon and running/background pane status |
+| `@sidebar_color_running`          | `114`&nbsp;(green)   | Busy chip icon (selected or not), the pop-out control glyph, and running/background pane status |
 | `@sidebar_color_waiting`          | `221`&nbsp;(yellow)  | Selected waiting filter icon, waiting pane status, version banner |
 | `@sidebar_color_idle`             | `110`&nbsp;(soft blue) | Selected idle filter icon and idle pane status                  |
 | `@sidebar_color_error`            | `167`&nbsp;(soft red) | Selected error filter icon and error pane status                 |

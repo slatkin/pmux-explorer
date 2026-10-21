@@ -126,10 +126,15 @@ instead.
 ### The floating panel is re-sized when the window changes
 
 A floating pane keeps its size when the window resizes, so the panel would
-stay the height it had. The geometry guard that already runs on every
-refresh tick, next to `size_guard::enforce` in `src/app.rs`, re-asserts the
-panel height when the window height changed, and re-asserts the panel
-width and its right-edge anchor when the window width changed.
+stay the height it had. Its position keeps no right-edge anchor either:
+when the window grows, tmux leaves the floating pane's left edge where it
+was, so a panel that was flush with the right edge drifts away from the
+new right edge; when the window shrinks, tmux pulls the pane back into
+the window and clamps it, so the panel stays inside on its own. The
+geometry guard that already runs on every refresh tick, next to
+`size_guard::enforce` in `src/app.rs`, re-asserts the panel height when
+the window height changed, and re-asserts the panel width and its
+right-edge anchor when the window width changed.
 
 Re-asserting on every tick would fight a user who drags the panel edge, so
 the guard only acts when the window size itself changed.
