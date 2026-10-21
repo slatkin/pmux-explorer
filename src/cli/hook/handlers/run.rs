@@ -1,7 +1,7 @@
 use crate::cli::{sanitize_tmux_value, set_attention, set_status};
 use crate::desktop_notification;
 use crate::desktop_notification::DesktopNotificationKind;
-use crate::pmux_task::{PmuxTask, PmuxTaskKind};
+use crate::pmux_task::PmuxTask;
 use crate::tmux;
 
 use crate::time::now_epoch_secs;
@@ -16,23 +16,11 @@ use super::super::notifications::{
 };
 use super::status_priority::resolve_stop_status;
 
-/// Maps the parsed pmux task kind to its pane-option string.
-fn subagent_kind_value(kind: PmuxTaskKind) -> &'static str {
-    match kind {
-        PmuxTaskKind::Spawned => "spawned",
-        PmuxTaskKind::Resumed => "resumed",
-    }
-}
-
 /// Records the pmux subagent identity carried by a recognised task prompt.
 /// A later match replaces the earlier identity; the task option is unset
 /// when the matched prompt had no usable task name.
 fn store_pmux_identity(pane: &str, task: &PmuxTask) {
-    tmux::set_pane_option(
-        pane,
-        tmux::PANE_SUBAGENT_KIND,
-        subagent_kind_value(task.kind),
-    );
+    tmux::set_pane_option(pane, tmux::PANE_SUBAGENT_KIND, task.kind.as_str());
     tmux::set_pane_option(
         pane,
         tmux::PANE_SUBAGENT_PARENT,
@@ -184,6 +172,7 @@ pub(in crate::cli::hook) fn on_task_completed(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::pmux_task::PmuxTaskKind;
 
     #[test]
     fn on_user_prompt_submit_sets_running_and_stores_prompt() {

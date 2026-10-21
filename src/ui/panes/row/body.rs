@@ -1,5 +1,5 @@
 use ratatui::{
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
 };
 
@@ -23,65 +23,44 @@ pub(super) fn subagent_identity_row(
         SubagentParent::Pane(label) => (label.as_str(), theme.text_inactive),
         SubagentParent::Orphaned => ("ORPHANED", theme.status_error),
     };
-    let task_suffix = info
-        .task
-        .as_deref()
-        .map(|task| format!("  {task}"))
-        .unwrap_or_default();
+    let task = info.task.as_deref().map(|task| format!("  {task}"));
 
-    let full = format!("▷ {parent_label}{task_suffix}");
+    let full = format!("▷ {parent_label}{}", task.as_deref().unwrap_or(""));
     let shown = truncate_to_width(&full, ctx.inner_width);
 
     // The surviving text is a char prefix of `full`, possibly closed by the
-    // truncation ellipsis. Walk it and hand each piece its own colour, so a
-    // cut still leaves the parent label and the task in their own styles.
+    // truncation ellipsis.
     let (body, ellipsis) = if shown.ends_with('\u{2026}') && shown != full {
         (&shown[..shown.len() - '\u{2026}'.len_utf8()], true)
     } else {
         (shown.as_str(), false)
     };
+    let kept = body.chars().count();
 
-    // Exclusive char-index boundaries where each coloured piece ends.
-    let boundaries = [
-        2usize,
-        2 + parent_label.chars().count(),
-        full.chars().count(),
-    ];
+    // Exclusive char-index boundaries where each coloured piece ends; each
+    // piece keeps its own colour when the cut lands inside it.
+    let boundaries = [2, 2 + parent_label.chars().count(), full.chars().count()];
     let colors = [theme.response_arrow, parent_color, theme.text_muted];
-    let piece_color = |index: usize| -> Color {
-        let piece = boundaries.iter().position(|end| index < *end);
-        match piece {
-            Some(i) => colors[i],
-            // The cut landed past every piece (only possible when the
-            // ellipsis stands alone), so keep the last piece's colour.
-            None => colors[colors.len() - 1],
-        }
-    };
 
     let mut spans: Vec<Span<'static>> = Vec::with_capacity(4);
-    let mut current_color = colors[0];
-    let mut buf = String::new();
-    for (index, ch) in body.chars().enumerate() {
-        let color = piece_color(index);
-        if color != current_color && !buf.is_empty() {
+    let mut start = 0usize;
+    for (index, end) in boundaries.into_iter().enumerate() {
+        let end = end.min(kept);
+        if end > start {
             spans.push(Span::styled(
-                std::mem::take(&mut buf),
-                ctx.apply_bg(Style::default().fg(current_color)),
+                full.chars()
+                    .skip(start)
+                    .take(end - start)
+                    .collect::<String>(),
+                ctx.apply_bg(Style::default().fg(colors[index])),
             ));
         }
-        current_color = color;
-        buf.push(ch);
-    }
-    if !buf.is_empty() {
-        spans.push(Span::styled(
-            buf,
-            ctx.apply_bg(Style::default().fg(current_color)),
-        ));
+        start = end;
     }
     if ellipsis {
         // The ellipsis continues the piece whose first dropped character
         // sits at the cut point.
-        let cut_color = piece_color(body.chars().count());
+        let cut_color = colors[boundaries.iter().position(|end| kept < *end).unwrap_or(2)];
         spans.push(Span::styled(
             "\u{2026}".to_string(),
             ctx.apply_bg(Style::default().fg(cut_color)),

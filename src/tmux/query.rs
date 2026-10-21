@@ -437,18 +437,13 @@ fn parse_pane_fields_with_processes(
 /// value; the parent starts `Orphaned` and is resolved by the post-pass
 /// [`resolve_subagent_parents`] once the whole `list-panes` output is seen.
 fn parse_subagent_identity(kind_raw: &str, task_raw: &str) -> Option<SubagentInfo> {
-    let kind = match kind_raw {
-        "spawned" => PmuxTaskKind::Spawned,
-        "resumed" => PmuxTaskKind::Resumed,
-        _ => return None,
-    };
     let task = if task_raw.is_empty() {
         None
     } else {
         Some(task_raw.to_string())
     };
     Some(SubagentInfo {
-        kind,
+        kind: PmuxTaskKind::from_label(kind_raw)?,
         task,
         parent: SubagentParent::Orphaned,
     })

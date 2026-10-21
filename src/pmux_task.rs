@@ -20,6 +20,26 @@ pub enum PmuxTaskKind {
     Resumed,
 }
 
+impl PmuxTaskKind {
+    /// The pane-option value the hook writes for this kind.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            PmuxTaskKind::Spawned => "spawned",
+            PmuxTaskKind::Resumed => "resumed",
+        }
+    }
+
+    /// The kind behind a `@pane_subagent_kind` option value, or `None` when
+    /// the value is not one of [`PmuxTaskKind::as_str`]'s values.
+    pub fn from_label(value: &str) -> Option<Self> {
+        match value {
+            "spawned" => Some(PmuxTaskKind::Spawned),
+            "resumed" => Some(PmuxTaskKind::Resumed),
+            _ => None,
+        }
+    }
+}
+
 /// The subagent identity parsed from a recognised pmux task prompt.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PmuxTask {
@@ -133,6 +153,21 @@ mod tests {
 
     fn resume_prompt(stem: &str, id: &str) -> String {
         format!("<file name=\"/s/artifacts/{id}/pmux-resume/{stem}.md\">")
+    }
+
+    #[test]
+    fn kind_round_trips_through_the_pane_option_value() {
+        assert_eq!(PmuxTaskKind::Spawned.as_str(), "spawned");
+        assert_eq!(PmuxTaskKind::Resumed.as_str(), "resumed");
+        assert_eq!(
+            PmuxTaskKind::from_label("spawned"),
+            Some(PmuxTaskKind::Spawned)
+        );
+        assert_eq!(
+            PmuxTaskKind::from_label("resumed"),
+            Some(PmuxTaskKind::Resumed)
+        );
+        assert_eq!(PmuxTaskKind::from_label("maybe"), None);
     }
 
     #[test]
