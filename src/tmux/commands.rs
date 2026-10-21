@@ -1,7 +1,28 @@
 use std::process::Command;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+static ISOLATED: AtomicBool = AtomicBool::new(false);
+
+/// Point every later `tmux` call at an empty socket directory, so a test
+/// cannot read or write the developer's live tmux server. Unit tests get
+/// this automatically; integration tests (which link the library without
+/// `cfg(test)`) must call it. Without it, a test that clicked a status
+/// chip overwrote the shared `@sidebar_filter` of every running sidebar.
+pub fn isolate_from_live_server() {
+    ISOLATED.store(true, Ordering::Relaxed);
+}
+
+fn tmux_command() -> Command {
+    let mut cmd = Command::new("tmux");
+    if cfg!(test) || ISOLATED.load(Ordering::Relaxed) {
+        cmd.env_remove("TMUX")
+            .env("TMUX_TMPDIR", "/nonexistent-tmux-test-socket-dir");
+    }
+    cmd
+}
 
 pub fn run_tmux(args: &[&str]) -> Option<String> {
-    let output = Command::new("tmux").args(args).output().ok()?;
+    let output = tmux_command().args(args).output().ok()?;
     if output.status.success() {
         Some(String::from_utf8_lossy(&output.stdout).to_string())
     } else {
@@ -13,7 +34,7 @@ pub fn run_tmux(args: &[&str]) -> Option<String> {
 /// Used by the spawn/remove flow so the UI can surface a meaningful error message
 /// instead of a silent fallthrough.
 pub fn run_tmux_capture(args: &[&str]) -> Result<String, String> {
-    let output = Command::new("tmux")
+    let output = tmux_command()
         .args(args)
         .output()
         .map_err(|e| format!("failed to spawn tmux: {e}"))?;

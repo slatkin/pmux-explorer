@@ -144,6 +144,9 @@ pub fn make_repo_group(name: &str, panes: Vec<PaneInfo>) -> tmux_agent_sidebar::
 /// `AppState`. Callers that need a populated tree should set
 /// `state.repo_groups` directly (which they already do).
 pub fn make_state(_sessions: Vec<SessionInfo>) -> AppState {
+    // Clicking a status chip saves the filter through `tmux set -g`; keep
+    // that away from the developer's live server.
+    tmux_agent_sidebar::tmux::isolate_from_live_server();
     let mut state = AppState::new("%99".into());
     state.now = FIXED_NOW;
     state.focus_state.sidebar_focused = true;
