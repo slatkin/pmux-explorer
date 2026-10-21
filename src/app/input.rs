@@ -155,9 +155,14 @@ pub(super) fn handle_key_event(
             }
         }
         KeyCode::Tab => {
-            state.global.status_filter = state.global.status_filter.next();
-            state.global.save_filter();
-            state.rebuild_row_targets();
+            // Tab only cycles the status filter while the filter bar has
+            // focus, exactly like the Left/Right keys. Cycling it from the
+            // agent list made Tab change a server-wide setting by accident.
+            if state.focus_state.focus == Focus::Filter {
+                state.global.status_filter = state.global.status_filter.next();
+                state.global.save_filter();
+                state.rebuild_row_targets();
+            }
         }
         KeyCode::BackTab => {
             state.next_bottom_tab();
@@ -393,5 +398,34 @@ mod tests {
         // Below 0 the popup nav helper is a no-op.
         handle_key_event(ctrl_key('p'), &mut state, &flag);
         assert_eq!(state.repo_popup_selected(), 0);
+    }
+
+    #[test]
+    fn tab_from_the_agent_list_does_not_change_the_status_filter() {
+        // Tab used to cycle the status filter with no focus check, so a
+        // Tab pressed while working in the agent list silently changed a
+        // setting every sidebar on the tmux server shares.
+        let mut state = state_with_three_panes();
+        let flag = AtomicBool::new(false);
+        let before = state.global.status_filter;
+
+        handle_key_event(key(KeyCode::Tab), &mut state, &flag);
+
+        assert_eq!(
+            state.global.status_filter, before,
+            "Tab from the agent list must not change the status filter"
+        );
+    }
+
+    #[test]
+    fn tab_still_cycles_the_status_filter_while_it_has_focus() {
+        let mut state = state_with_three_panes();
+        state.focus_state.focus = Focus::Filter;
+        let flag = AtomicBool::new(false);
+        let before = state.global.status_filter;
+
+        handle_key_event(key(KeyCode::Tab), &mut state, &flag);
+
+        assert_eq!(state.global.status_filter, before.next());
     }
 }

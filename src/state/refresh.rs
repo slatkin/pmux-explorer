@@ -113,6 +113,10 @@ impl AppState {
     /// Returns whether the sidebar's window is the active tmux window.
     pub fn refresh(&mut self) -> bool {
         self.refresh_now();
+        // Retry a filter write tmux rejected before reading the shared
+        // options, so the read below sees the value this instance just
+        // tried to write instead of the stale one it replaces.
+        self.global.retry_pending_filter_save();
         let reading = tmux::get_sidebar_pane_reading(&self.tmux_pane);
         self.sidebar_pane = reading.info;
         // The shared settings ride along on the same per-tick
