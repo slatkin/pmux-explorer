@@ -1193,13 +1193,16 @@ fn rendered_filter_row_and_hit_test_agree_at_the_20_column_minimum() {
         StatusFilter::Idle,
         "a click on the control must never change the filter"
     );
-    // The probe for the bogus pane failed, and the pop-out treats an
-    // unknown window size as "do not act": nothing flashes, nothing is
-    // refused — the refusal path itself is covered by the popout unit
-    // tests and the injected toggle test.
+    // The probe for the bogus pane failed, and the pop-out reports the
+    // unreadable window size instead of acting — the flash is the proof
+    // that the click reached the pop-out (the refusal flash itself is
+    // covered by the popout unit tests and the injected toggle test).
     assert!(
-        state.flash.is_none(),
-        "a failed pane probe is silent, not a refusal"
+        state
+            .flash
+            .as_ref()
+            .is_some_and(|(msg, _)| msg.starts_with("Pop-out unavailable:")),
+        "a click on the control must reach the pop-out action"
     );
 }
 
