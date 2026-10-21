@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::LazyLock;
 
 use super::commands::{display_message, run_tmux};
 use super::options::{SIDEBAR_CURSOR, SIDEBAR_FILTER, SIDEBAR_REPO_FILTER};
@@ -22,14 +23,36 @@ pub struct SidebarPaneInfo {
     pub floating: bool,
 }
 
-/// The fixed part of the format `get_sidebar_pane_reading` expands in
-/// one `display-message` call: the pane fields and the shared options,
-/// each separated by one space. The repo filter is last because a repo
+/// The pane-state fields that precede the shared options in the reading
+/// format: `pane_active`, `window_active`, `pane_width`, `window_width`,
+/// `window_height`, `pane_floating_flag`.
+const SIDEBAR_CORE_FIELD_COUNT: usize = 6;
+
+/// The shared sidebar options, in the order they are appended after the
+/// pane fields of the reading format. The query string
+/// ([`SIDEBAR_PANE_QUERY`]) and the parse split count both derive from
+/// this one list, so adding or reordering a shared option cannot
+/// silently shift the field every later position reads.
+const SHARED_OPTION_FIELDS: [&str; 3] = [SIDEBAR_FILTER, SIDEBAR_CURSOR, SIDEBAR_REPO_FILTER];
+
+/// The query `get_sidebar_pane_reading` expands in one
+/// `display-message` call: the pane fields and the shared options, each
+/// separated by one space, with [`SIDEBAR_REPO_FIELD_END`] after the
+/// repo filter. Built from [`SHARED_OPTION_FIELDS`] so the field order
+/// cannot drift from the parse. The repo filter is last because a repo
 /// name can contain spaces, so the parse takes the rest of the line for
-/// it; [`SIDEBAR_REPO_FIELD_END`] is appended after it.
-const SIDEBAR_PANE_FORMAT: &str = "#{pane_active} #{window_active} #{pane_width} \
-#{window_width} #{window_height} #{pane_floating_flag} #{@sidebar_filter} \
-#{@sidebar_cursor} #{@sidebar_repo_filter} ";
+/// it.
+static SIDEBAR_PANE_QUERY: LazyLock<String> = LazyLock::new(|| {
+    let mut format = String::from(
+        "#{pane_active} #{window_active} #{pane_width} \
+#{window_width} #{window_height} #{pane_floating_flag} ",
+    );
+    for option in SHARED_OPTION_FIELDS {
+        format.push_str(&format!("#{{{}}} ", option));
+    }
+    format.push_str(SIDEBAR_REPO_FIELD_END);
+    format
+});
 
 /// The end-of-fields terminator appended after `#{@sidebar_repo_filter}`.
 /// `display_message` trims its output, which would strip trailing
@@ -84,7 +107,7 @@ pub(crate) fn parse_sidebar_pane_reading(out: &str) -> SidebarPaneReading {
             options: HashMap::new(),
         };
     }
-    let mut fields = out.splitn(9, ' ');
+    let mut fields = out.splitn(SIDEBAR_CORE_FIELD_COUNT + SHARED_OPTION_FIELDS.len(), ' ');
     let pane_active = fields.next() == Some("1");
     let window_active = fields.next() == Some("1");
     let width = fields
@@ -136,8 +159,7 @@ pub(crate) fn parse_sidebar_pane_reading(out: &str) -> SidebarPaneReading {
 /// window, session and then global scope, so the global value a peer
 /// instance wrote comes back in the same call.
 pub fn get_sidebar_pane_reading(tmux_pane: &str) -> SidebarPaneReading {
-    let format = format!("{SIDEBAR_PANE_FORMAT}{SIDEBAR_REPO_FIELD_END}");
-    let out = display_message(tmux_pane, &format);
+    let out = display_message(tmux_pane, &SIDEBAR_PANE_QUERY);
     parse_sidebar_pane_reading(&out)
 }
 
@@ -374,5 +396,19 @@ mod tests {
             reading.options.get(SIDEBAR_REPO_FILTER),
             Some(&"repo-x".into())
         );
+    }
+
+    #[test]
+    fn reading_query_expands_the_shared_options_in_list_order() {
+        // The query is built from SHARED_OPTION_FIELDS; this pins that
+        // the expansions really appear in list order, each with one
+        // separating space, right before the repo terminator — the
+        // positional contract the parse's field locals rely on.
+        let mut expected = String::new();
+        for option in SHARED_OPTION_FIELDS {
+            expected.push_str(&format!("#{{{}}} ", option));
+        }
+        expected.push_str(SIDEBAR_REPO_FIELD_END);
+        assert!((*SIDEBAR_PANE_QUERY).ends_with(&expected));
     }
 }

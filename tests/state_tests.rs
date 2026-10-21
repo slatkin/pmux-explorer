@@ -556,36 +556,6 @@ fn test_cursor_sync_clamped_by_rebuild() {
     assert_eq!(state.global.selected_pane_row, 0);
 }
 
-#[test]
-fn test_per_tick_shared_options_change_visible_rows() {
-    // Another instance writes the waiting filter to tmux; the per-tick
-    // pane query reads it back and `apply_all` applies it
-    // before the same tick's `rebuild_row_targets` — the call
-    // `apply_session_snapshot` already makes — re-filters the rows.
-    let running_pane = PaneInfo {
-        pane_id: "%1".into(),
-        status: PaneStatus::Running,
-        ..make_pane(AgentType::Claude, PaneStatus::Running)
-    };
-    let waiting_pane = PaneInfo {
-        pane_id: "%2".into(),
-        status: PaneStatus::Waiting,
-        ..make_pane(AgentType::Claude, PaneStatus::Waiting)
-    };
-    let mut state = make_state(vec![]);
-    state.repo_groups = vec![make_repo_group("project", vec![running_pane, waiting_pane])];
-    state.rebuild_row_targets();
-    assert_eq!(state.layout.pane_row_targets.len(), 2);
-
-    state
-        .global
-        .apply_all(&make_opts(&[(tmux::SIDEBAR_FILTER, "waiting")]));
-    state.rebuild_row_targets();
-
-    assert_eq!(state.layout.pane_row_targets.len(), 1);
-    assert_eq!(state.layout.pane_row_targets[0].pane_id, "%2");
-}
-
 // ─── GlobalState tests ──────────────────────────────────────────────
 
 fn make_opts(pairs: &[(&str, &str)]) -> std::collections::HashMap<String, String> {
@@ -599,10 +569,16 @@ fn make_global() -> GlobalState {
     GlobalState::new()
 }
 
-// ─── apply_all (full sync: startup + SIGUSR1) tests ─────────────────
+// ─── apply_all shared-options sync tests ────────────────────────────
+//
+// apply_all is the only sync path: `load_from_tmux` runs it once at
+// startup and the main loop runs it on every refresh tick. The
+// `last_saved_*` guards are the only protection a window-activation
+// flicker needs: a tick changes a field only when another instance
+// wrote a value the guard does not already know about.
 
 #[test]
-fn full_sync_ignores_tmux_filter_matching_last_saved() {
+fn apply_all_ignores_tmux_filter_matching_last_saved() {
     let mut g = make_global();
     g.status_filter = StatusFilter::Busy;
 
@@ -617,7 +593,7 @@ fn full_sync_ignores_tmux_filter_matching_last_saved() {
 }
 
 #[test]
-fn full_sync_applies_filter_from_tmux() {
+fn apply_all_applies_filter_from_tmux() {
     let mut g = make_global();
 
     let opts = make_opts(&[(tmux::SIDEBAR_FILTER, "waiting")]);
@@ -627,7 +603,7 @@ fn full_sync_applies_filter_from_tmux() {
 }
 
 #[test]
-fn full_sync_applies_cursor_from_tmux() {
+fn apply_all_applies_cursor_from_tmux() {
     let mut g = make_global();
 
     let opts = make_opts(&[(tmux::SIDEBAR_CURSOR, "3")]);
@@ -637,21 +613,7 @@ fn full_sync_applies_cursor_from_tmux() {
 }
 
 #[test]
-fn full_sync_ignores_cursor_matching_last_saved() {
-    let mut g = make_global();
-    g.selected_pane_row = 5;
-
-    let opts = make_opts(&[(tmux::SIDEBAR_CURSOR, "0")]);
-    g.apply_all(&opts);
-
-    assert_eq!(
-        g.selected_pane_row, 5,
-        "should not overwrite local cursor when tmux matches last_saved"
-    );
-}
-
-#[test]
-fn full_sync_applies_repo_filter_from_tmux() {
+fn apply_all_applies_repo_filter_from_tmux() {
     let mut g = make_global();
 
     let opts = make_opts(&[(tmux::SIDEBAR_REPO_FILTER, "my-app")]);
@@ -661,7 +623,7 @@ fn full_sync_applies_repo_filter_from_tmux() {
 }
 
 #[test]
-fn full_sync_empty_opts_changes_nothing() {
+fn apply_all_empty_opts_changes_nothing() {
     let mut g = make_global();
     g.status_filter = StatusFilter::Busy;
     g.repo_filter = RepoFilter::Repo("app".into());
@@ -675,7 +637,7 @@ fn full_sync_empty_opts_changes_nothing() {
 }
 
 #[test]
-fn full_sync_applies_error_filter_from_tmux() {
+fn apply_all_applies_error_filter_from_tmux() {
     let mut g = make_global();
 
     let opts = make_opts(&[(tmux::SIDEBAR_FILTER, "error")]);
@@ -685,7 +647,7 @@ fn full_sync_applies_error_filter_from_tmux() {
 }
 
 #[test]
-fn full_sync_invalid_filter_defaults_to_all() {
+fn apply_all_invalid_filter_defaults_to_all() {
     let mut g = make_global();
     g.status_filter = StatusFilter::Busy;
 
@@ -701,7 +663,7 @@ fn full_sync_invalid_filter_defaults_to_all() {
 }
 
 #[test]
-fn full_sync_applies_all_three_from_tmux() {
+fn apply_all_applies_all_three_from_tmux() {
     let mut g = make_global();
 
     let opts = make_opts(&[
@@ -719,7 +681,7 @@ fn full_sync_applies_all_three_from_tmux() {
 // ─── last_saved guard tests (protects against save failure revert) ───
 
 #[test]
-fn sync_does_not_revert_filter_after_save_failure() {
+fn apply_all_does_not_revert_filter_after_save_failure() {
     // The original bug scenario:
     // 1. Startup: tmux has "error", sidebar adopts it
     // 2. User changes filter to Running, but save_filter fails
@@ -746,34 +708,9 @@ fn sync_does_not_revert_filter_after_save_failure() {
 }
 
 #[test]
-fn full_sync_does_not_revert_filter_after_save_failure() {
-    // Same as the periodic version, but for SIGUSR1 (apply_all).
-    // apply_all has last_saved guard so it should also be safe.
-    let mut g = make_global();
-
-    // Startup: adopt "error"
-    g.apply_all(&make_opts(&[(tmux::SIDEBAR_FILTER, "error")]));
-    assert_eq!(g.status_filter, StatusFilter::Error);
-
-    // User changes filter locally, save_filter fails
-    // (last_saved_filter stays Error)
-    g.status_filter = StatusFilter::Busy;
-
-    // SIGUSR1 triggers apply_all: tmux still has "error",
-    // but last_saved is also Error → equal → no overwrite
-    g.apply_all(&make_opts(&[(tmux::SIDEBAR_FILTER, "error")]));
-
-    assert_eq!(
-        g.status_filter,
-        StatusFilter::Busy,
-        "full sync must not revert filter when save failed"
-    );
-}
-
-#[test]
-fn full_sync_picks_up_change_from_another_instance() {
+fn apply_all_picks_up_change_from_another_instance() {
     // Simulates: this instance saved "running", another instance later
-    // saved "waiting". SIGUSR1 should pick up "waiting".
+    // saved "waiting". The next tick should pick up "waiting".
     let mut g = make_global();
 
     // Startup: this instance starts with default (All)
@@ -782,18 +719,18 @@ fn full_sync_picks_up_change_from_another_instance() {
     // last_saved_filter is now Running
 
     // Another instance changes filter to Waiting (writes to tmux)
-    // This instance's SIGUSR1 fires:
+    // The next tick applies the value the other instance wrote:
     g.apply_all(&make_opts(&[(tmux::SIDEBAR_FILTER, "waiting")]));
 
     assert_eq!(
         g.status_filter,
         StatusFilter::Waiting,
-        "SIGUSR1 should pick up filter changed by another instance"
+        "apply_all should pick up a filter changed by another instance"
     );
 }
 
 #[test]
-fn full_sync_picks_up_cursor_from_another_instance() {
+fn apply_all_picks_up_cursor_from_another_instance() {
     let mut g = make_global();
 
     g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "3")]));
@@ -805,42 +742,12 @@ fn full_sync_picks_up_cursor_from_another_instance() {
 
     assert_eq!(
         g.selected_pane_row, 7,
-        "SIGUSR1 should pick up cursor changed by another instance"
-    );
-}
-
-// ─── Per-tick shared options sync tests ─────────────────────────
-// The main loop applies the shared tmux options on every refresh tick
-// (`GlobalState::apply_all`). The
-// `last_saved_*` guards are the only protection a window-activation
-// flicker needs: a tick changes a field only when another instance
-// wrote a value the guard does not already know about.
-
-#[test]
-fn per_tick_does_not_revert_filter_after_failed_save() {
-    // The sidebar adopts "running" from tmux, then the user switches to
-    // Idle but the save fails (last_saved_filter stays Busy). Every
-    // later tick re-reads "running", which equals last_saved → no change.
-    let mut g = make_global();
-
-    g.apply_all(&make_opts(&[(tmux::SIDEBAR_FILTER, "running")]));
-    assert_eq!(g.status_filter, StatusFilter::Busy);
-    g.status_filter = StatusFilter::Idle;
-
-    // Several refresh ticks pass with the failed save never succeeding.
-    g.apply_all(&make_opts(&[(tmux::SIDEBAR_FILTER, "running")]));
-    g.apply_all(&make_opts(&[(tmux::SIDEBAR_FILTER, "running")]));
-    g.apply_all(&make_opts(&[(tmux::SIDEBAR_FILTER, "running")]));
-
-    assert_eq!(
-        g.status_filter,
-        StatusFilter::Idle,
-        "per-tick sync must not revert a filter whose save failed"
+        "apply_all should pick up a cursor changed by another instance"
     );
 }
 
 #[test]
-fn per_tick_does_not_revert_pending_cursor_save() {
+fn apply_all_does_not_revert_pending_cursor_save() {
     // The user navigates to row 5 but the debounced save has not fired
     // yet, so tmux still holds 2 (= last_saved_cursor). Ticks that run
     // before the flush must not drag the cursor back to 2.
@@ -857,12 +764,33 @@ fn per_tick_does_not_revert_pending_cursor_save() {
 
     assert_eq!(
         g.selected_pane_row, 5,
-        "per-tick sync must not revert a cursor whose save is pending"
+        "apply_all must not revert a cursor whose save is pending"
     );
 }
 
 #[test]
-fn per_tick_picks_up_cursor_and_repo_filter_from_another_instance() {
+fn apply_all_does_not_clobber_a_pending_cursor_move_with_a_remote_value() {
+    // The user navigates to row 5; before the debounced write lands,
+    // another instance writes row 9 to tmux. The pending local move
+    // must win — adopting 9 now would both show the wrong row and make
+    // the flush persist the peer's value instead of the user's.
+    let mut g = make_global();
+
+    g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "2")]));
+    assert_eq!(g.selected_pane_row, 2);
+    g.selected_pane_row = 5;
+    g.queue_cursor_save();
+
+    g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "9")]));
+
+    assert_eq!(
+        g.selected_pane_row, 5,
+        "a remote cursor value must not clobber a pending local move"
+    );
+}
+
+#[test]
+fn apply_all_picks_up_cursor_and_repo_filter_from_another_instance() {
     // Both instances start from the same synced values; the other one
     // then writes a new cursor and repo filter, and this instance's
     // next tick adopts both in a single apply.
@@ -892,7 +820,7 @@ fn per_tick_picks_up_cursor_and_repo_filter_from_another_instance() {
 }
 
 #[test]
-fn per_tick_unchanged_tmux_value_leaves_local_change_alone() {
+fn apply_all_unchanged_tmux_value_leaves_local_change_alone() {
     // The user narrows the repo filter locally but the write has not
     // landed, so tmux keeps "app" — the same value as last_saved. Ticks
     // that keep re-reading it must not clobber the local choice.

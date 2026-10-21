@@ -129,7 +129,7 @@ Per-pane file-based state:
 │  repo_groups, focus_state.focused_pane_id,                  │
 │  sidebar_pane, layout.pane_row_targets, activity.entries,   │
 │  pane_states.map[..].task_progress,                         │
-│  GlobalState reloaded from tmux variables                   │
+│  GlobalState shared options re-read every tick              │
 ├─────────────────────────────────────────────────────────────┤
 │  pane_states.map[..].ports, agent liveness cleanup          │
 ├─────────────────────────────────────────────────────────────┤
@@ -176,6 +176,8 @@ TUI main loop (app::run in app.rs; submodules app/{setup,workers,input,render,pa
     → initializes Claude notices state once
                         ↓
   → refresh() every 1s
+    → get_sidebar_pane_reading()     ← reads pane state + @sidebar_* in one display-message
+    → global.apply_all()             ← applies the shared options under the last_saved_* guards
     → query_sessions() (tmux.rs)     ← reads @pane_* via `tmux list-panes -a`
     → group_panes_by_repo() (group.rs)
     → rebuild_row_targets()          ← applies GlobalState filters
