@@ -1,18 +1,20 @@
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::path::Path;
 
+use crate::pmux_task::PmuxTaskKind;
 use crate::process::{ProcessSnapshot, command_basename};
 
 use super::commands::run_tmux;
 use super::options::{
-    PANE_AGENT, PANE_ATTENTION, PANE_BG_CMD, PANE_CWD, PANE_NAME, PANE_PENDING_SESSION_END,
-    PANE_PENDING_WORKTREE_REMOVE, PANE_PERMISSION_MODE, PANE_PROMPT, PANE_PROMPT_SOURCE, PANE_ROLE,
-    PANE_SESSION_ID, PANE_STARTED_AT, PANE_STATUS, PANE_SUBAGENTS, PANE_WAIT_REASON,
-    PANE_WORKTREE_BRANCH, PANE_WORKTREE_NAME, unset_pane_option,
+    AGENT_SESSION_PANE_OPTIONS, PANE_AGENT, PANE_ATTENTION, PANE_BG_CMD, PANE_CWD, PANE_NAME,
+    PANE_PERMISSION_MODE, PANE_PROMPT, PANE_PROMPT_SOURCE, PANE_ROLE, PANE_SESSION_ID,
+    PANE_STARTED_AT, PANE_STATUS, PANE_SUBAGENT_KIND, PANE_SUBAGENT_PARENT, PANE_SUBAGENT_TASK,
+    PANE_SUBAGENTS, PANE_WAIT_REASON, PANE_WORKTREE_BRANCH, PANE_WORKTREE_NAME, unset_pane_option,
 };
 use super::types::{
-    AgentType, CODEX_AGENT, PaneInfo, PaneStatus, PermissionMode, SessionInfo, WindowInfo,
-    WorktreeMetadata,
+    AgentType, CODEX_AGENT, PaneInfo, PaneStatus, PermissionMode, SessionInfo, SubagentInfo,
+    SubagentParent, WindowInfo, WorktreeMetadata,
 };
 use crate::worktree::SPAWNED_OPTION;
 
@@ -28,7 +30,7 @@ mod session_line_field {
     /// Index where the per-pane field suffix consumed by `parse_pane_line` begins.
     pub const PANE_LINE_OFFSET: usize = 6;
     /// Minimum number of fields a valid `pane_format()` line must contain.
-    pub const MIN_FIELDS: usize = 28;
+    pub const MIN_FIELDS: usize = 32;
 }
 
 // Indices into the pane-line suffix that `parse_pane_line` operates on.
@@ -57,9 +59,13 @@ pub(super) mod pane_line_field {
     pub const SESSION_ID: usize = 19; // absolute 25 (@pane_session_id)
     pub const SIDEBAR_SPAWNED: usize = 20; // absolute 26 (@agent-sidebar-spawned)
     pub const BG_CMD: usize = 21; // absolute 27 (@pane_bg_cmd)
+    pub const SUBAGENT_KIND: usize = 22; // absolute 28 (@pane_subagent_kind)
+    pub const SUBAGENT_PARENT: usize = 23; // absolute 29 (@pane_subagent_parent)
+    pub const SUBAGENT_TASK: usize = 24; // absolute 30 (@pane_subagent_task)
+    pub const PANE_TITLE: usize = 25; // absolute 31 (pane_title)
     /// Minimum number of fields the pane-line suffix must contain.
     /// Equals `session_line_field::MIN_FIELDS - PANE_LINE_OFFSET`.
-    pub const MIN_FIELDS: usize = 22;
+    pub const MIN_FIELDS: usize = 26;
 }
 
 /// Build the tmux `list-panes -F` format used by [`query_sessions`].
@@ -95,6 +101,10 @@ fn pane_format() -> String {
         q(PANE_SESSION_ID),
         q(SPAWNED_OPTION),
         q(PANE_BG_CMD),
+        q(PANE_SUBAGENT_KIND),
+        q(PANE_SUBAGENT_PARENT),
+        q(PANE_SUBAGENT_TASK),
+        q("pane_title"),
     ]
     .join("|")
 }
@@ -108,6 +118,42 @@ type SessionMap = indexmap::IndexMap<String, indexmap::IndexMap<String, WindowIn
 /// (window_id, pane_index_in_window, pane_pid) — the minimum info needed to
 /// later retarget a permission-mode update at the right pane.
 type CodexPidEntry = (String, usize, u32);
+
+/// Parent-resolution data collected while the pane lines are parsed, and
+/// applied by [`resolve_subagent_parents`] once every line is seen.
+#[derive(Default)]
+struct SubagentResolution {
+    /// `@pane_session_id` -> parent label (`pane_title`, or the pane id when
+    /// the title is empty) for every parsed agent pane. The first pane that
+    /// reports a session id wins.
+    parent_labels: HashMap<String, String>,
+    /// pane_id -> recorded parent session id for every parsed subagent pane.
+    pending: HashMap<String, String>,
+}
+
+impl SubagentResolution {
+    /// Records one parsed pane: its label when it reports a session id, and
+    /// its pending parent lookup when it is a subagent.
+    fn observe(&mut self, pane: &PaneInfo, pane_fields: &[String]) {
+        if let Some(session_id) = &pane.session_id {
+            let title = &pane_fields[pane_line_field::PANE_TITLE];
+            let label = if title.is_empty() {
+                pane.pane_id.clone()
+            } else {
+                title.clone()
+            };
+            self.parent_labels
+                .entry(session_id.clone())
+                .or_insert(label);
+        }
+        if pane.subagent.is_some() {
+            self.pending.insert(
+                pane.pane_id.clone(),
+                pane_fields[pane_line_field::SUBAGENT_PARENT].clone(),
+            );
+        }
+    }
+}
 
 /// Query all sessions, windows, and panes in a single `tmux list-panes -a` call
 /// (plus one optional `ps` call for process-backed agent checks), instead of
@@ -125,8 +171,9 @@ pub(crate) fn query_sessions_with_process_snapshot() -> (Vec<SessionInfo>, Optio
     };
 
     let process_snapshot = process_snapshot_for_panes(&all_panes_output);
-    let (mut sessions_map, codex_pids) =
+    let (mut sessions_map, codex_pids, subagent_resolution) =
         build_session_hierarchy(&all_panes_output, process_snapshot.as_ref());
+    resolve_subagent_parents(&mut sessions_map, &subagent_resolution);
     if !codex_pids.is_empty()
         && let Some(snapshot) = &process_snapshot
     {
@@ -141,10 +188,11 @@ pub(crate) fn query_sessions_with_process_snapshot() -> (Vec<SessionInfo>, Optio
 fn build_session_hierarchy(
     all_panes_output: &str,
     process_snapshot: Option<&ProcessSnapshot>,
-) -> (SessionMap, Vec<CodexPidEntry>) {
+) -> (SessionMap, Vec<CodexPidEntry>, SubagentResolution) {
     let mut sessions_map: SessionMap = indexmap::IndexMap::new();
     let mut codex_pids: Vec<CodexPidEntry> = Vec::new();
     let mut seen_pids: HashSet<u32> = HashSet::new();
+    let mut subagent_resolution = SubagentResolution::default();
 
     for line in all_panes_output.lines() {
         let parts = split_tmux_fields(line, '|');
@@ -189,11 +237,35 @@ fn build_session_hierarchy(
             {
                 codex_pids.push((window_id.to_string(), window.panes.len(), pid));
             }
+            subagent_resolution.observe(&pane, pane_fields);
             window.panes.push(pane);
         }
     }
 
-    (sessions_map, codex_pids)
+    (sessions_map, codex_pids, subagent_resolution)
+}
+
+/// Set each subagent pane's parent from the collected session-id -> label
+/// map, or `Orphaned` when no live pane reports the recorded session id.
+/// Runs before any repository filter, so a parent row the filter hides still
+/// resolves.
+fn resolve_subagent_parents(sessions_map: &mut SessionMap, resolution: &SubagentResolution) {
+    for windows in sessions_map.values_mut() {
+        for window in windows.values_mut() {
+            for pane in &mut window.panes {
+                let Some(parent_session_id) = resolution.pending.get(&pane.pane_id) else {
+                    continue;
+                };
+                if let Some(info) = &mut pane.subagent {
+                    info.parent = resolution
+                        .parent_labels
+                        .get(parent_session_id)
+                        .cloned()
+                        .map_or(SubagentParent::Orphaned, SubagentParent::Pane);
+                }
+            }
+        }
+    }
 }
 
 /// Fan out Codex permission mode updates to every Codex pane across every
@@ -322,6 +394,12 @@ fn parse_pane_fields_with_processes(
         Some(parts[pane_line_field::SESSION_ID].to_string())
     };
 
+    let subagent = parse_subagent_identity(
+        &agent,
+        &parts[pane_line_field::SUBAGENT_KIND],
+        &parts[pane_line_field::SUBAGENT_TASK],
+    );
+
     Some(PaneInfo {
         pane_active: parts[pane_line_field::PANE_ACTIVE] == "1",
         status: PaneStatus::from_label(&parts[pane_line_field::PANE_STATUS]),
@@ -352,6 +430,36 @@ fn parse_pane_fields_with_processes(
                 Some(raw.to_string())
             }
         },
+        subagent,
+    })
+}
+
+/// Parse the pmux subagent identity from the `@pane_subagent_*` fields.
+/// The three options are pi-only (`docs/agent-protocol.md`), so a pane
+/// whose agent is not pi is never a subagent, mirroring the agent-gated
+/// `permission_mode` read — a pi pane that flipped to another agent
+/// without an intervening shell keeps the stale options (no sweep runs
+/// and SessionStart preserves them). Within a pi pane, a subagent
+/// identity exists only when `@pane_subagent_kind` holds a known kind
+/// value; the parent starts `Orphaned` and is resolved by the post-pass
+/// [`resolve_subagent_parents`] once the whole `list-panes` output is seen.
+fn parse_subagent_identity(
+    agent: &AgentType,
+    kind_raw: &str,
+    task_raw: &str,
+) -> Option<SubagentInfo> {
+    if *agent != AgentType::Pi {
+        return None;
+    }
+    let task = if task_raw.is_empty() {
+        None
+    } else {
+        Some(task_raw.to_string())
+    };
+    Some(SubagentInfo {
+        kind: PmuxTaskKind::from_label(kind_raw)?,
+        task,
+        parent: SubagentParent::Orphaned,
     })
 }
 
@@ -359,30 +467,12 @@ fn parse_pane_fields_with_processes(
 /// `pane_id`. Triggered by `parse_pane_fields` when it detects a Codex or
 /// OpenCode pane that has dropped back to the user's shell, since neither
 /// CLI fires a reliable process-exit hook. Claude panes are never routed
-/// here because Claude has its own SessionEnd hook. The set of keys
-/// mirrors `clear_all_meta` + `clear_run_state` + status/attention clears
-/// in `src/cli/hook/context.rs`; keep them in sync when a new `@pane_*`
-/// key is added.
+/// here because Claude has its own SessionEnd hook. The key set is the
+/// full [`AGENT_SESSION_PANE_OPTIONS`] lifecycle list from
+/// `tmux/options.rs` — the single enumeration shared by every teardown
+/// sweep, each of which skips only the keys it deliberately keeps.
 fn clear_agent_pane_state(pane_id: &str) {
-    const KEYS: &[&str] = &[
-        PANE_AGENT,
-        PANE_PROMPT,
-        PANE_PROMPT_SOURCE,
-        PANE_BG_CMD,
-        PANE_SUBAGENTS,
-        PANE_CWD,
-        PANE_PERMISSION_MODE,
-        PANE_WORKTREE_NAME,
-        PANE_WORKTREE_BRANCH,
-        PANE_SESSION_ID,
-        PANE_PENDING_SESSION_END,
-        PANE_PENDING_WORKTREE_REMOVE,
-        PANE_STARTED_AT,
-        PANE_WAIT_REASON,
-        PANE_ATTENTION,
-        PANE_STATUS,
-    ];
-    for key in KEYS {
+    for key in AGENT_SESSION_PANE_OPTIONS {
         unset_pane_option(pane_id, key);
     }
     let log_path = crate::activity::log_file_path(pane_id);
@@ -612,6 +702,7 @@ mod tests {
             session_name: String::new(),
             sidebar_spawned: false,
             bg_shell_cmd: None,
+            subagent: None,
         }
     }
 
@@ -802,6 +893,10 @@ mod tests {
             "",                   // 19: @pane_session_id
             "",                   // 20: @agent-sidebar-spawned
             "",                   // 21: @pane_bg_cmd
+            "",                   // 22: @pane_subagent_kind
+            "",                   // 23: @pane_subagent_parent
+            "",                   // 24: @pane_subagent_task
+            "",                   // 25: pane_title
         ]
     }
 
@@ -816,7 +911,7 @@ mod tests {
     #[test]
     fn parse_pane_line_full_fields() {
         let line = make_pane_line(&full_fields());
-        let pane = parse_pane_line(&line).expect("should parse 22 fields");
+        let pane = parse_pane_line(&line).expect("should parse 26 fields");
         assert!(pane.pane_active);
         assert_eq!(pane.status, PaneStatus::Running);
         assert_eq!(pane.agent, AgentType::Claude);
@@ -829,6 +924,10 @@ mod tests {
         assert_eq!(pane.pane_pid, Some(12345));
         assert_eq!(pane.subagents, vec!["Explore", "Plan"]);
         assert_eq!(pane.permission_mode, PermissionMode::Auto);
+        assert!(
+            pane.subagent.is_none(),
+            "no subagent options -> no identity"
+        );
     }
 
     #[test]
@@ -869,7 +968,8 @@ mod tests {
             "15 fields should be rejected"
         );
 
-        // 21 fields — still rejected (need 22 including @pane_bg_cmd).
+        // 21 fields — still rejected (need 26 including the four new tail
+        // fields: the three `@pane_subagent_*` options and `pane_title`).
         let fields_21 = "1|running||claude|name|/path|fish||%1|prompt|user|1700000000||12345|Explore|/cwd|auto||||";
         assert!(
             parse_pane_line(fields_21).is_none(),
@@ -894,6 +994,93 @@ mod tests {
             pane.bg_shell_cmd.is_none(),
             "empty @pane_bg_cmd should parse as None"
         );
+    }
+
+    // ─── parse_subagent_identity tests ────────────────────────────
+
+    #[test]
+    fn parse_pane_line_subagent_options_parse_into_identity() {
+        let mut fields = full_fields();
+        fields[pane_line_field::AGENT] = "pi";
+        fields[pane_line_field::PANE_CURRENT_COMMAND] = "node";
+        fields[pane_line_field::SUBAGENT_KIND] = "spawned";
+        fields[pane_line_field::SUBAGENT_PARENT] = "P1";
+        fields[pane_line_field::SUBAGENT_TASK] = "unit one";
+        let pane = parse_pane_line(&make_pane_line(&fields)).unwrap();
+
+        let info = pane
+            .subagent
+            .expect("the three options should mark the pane as a subagent");
+        assert_eq!(info.kind, PmuxTaskKind::Spawned);
+        assert_eq!(info.task.as_deref(), Some("unit one"));
+        assert_eq!(info.parent, SubagentParent::Orphaned);
+    }
+
+    #[test]
+    fn parse_pane_line_subagent_empty_task_means_no_task() {
+        let mut fields = full_fields();
+        fields[pane_line_field::AGENT] = "pi";
+        fields[pane_line_field::PANE_CURRENT_COMMAND] = "node";
+        fields[pane_line_field::SUBAGENT_KIND] = "resumed";
+        fields[pane_line_field::SUBAGENT_PARENT] = "P1";
+        let pane = parse_pane_line(&make_pane_line(&fields)).unwrap();
+
+        let info = pane.subagent.expect("a known kind value marks the pane");
+        assert_eq!(info.kind, PmuxTaskKind::Resumed);
+        assert_eq!(info.task, None, "an empty task option means no task");
+    }
+
+    #[test]
+    fn parse_pane_line_unknown_subagent_kind_is_not_a_subagent() {
+        let mut fields = full_fields();
+        fields[pane_line_field::AGENT] = "pi";
+        fields[pane_line_field::PANE_CURRENT_COMMAND] = "node";
+        fields[pane_line_field::SUBAGENT_KIND] = "maybe";
+        fields[pane_line_field::SUBAGENT_PARENT] = "P1";
+        fields[pane_line_field::SUBAGENT_TASK] = "unit one";
+        let pane = parse_pane_line(&make_pane_line(&fields)).unwrap();
+
+        assert!(
+            pane.subagent.is_none(),
+            "an unknown kind value must not mark the pane"
+        );
+    }
+
+    #[test]
+    fn parse_pane_line_ignores_subagent_options_for_non_pi_agents() {
+        // The `@pane_subagent_*` options are pi-only. A pane that flipped
+        // from pi to another agent without an intervening shell keeps the
+        // stale options (no sweep runs and SessionStart preserves them),
+        // so the reader must gate on the pane's agent the way the
+        // neighbouring `permission_mode` read does.
+        let mut fields = full_fields();
+        fields[pane_line_field::SUBAGENT_KIND] = "spawned";
+        fields[pane_line_field::SUBAGENT_PARENT] = "P1";
+        fields[pane_line_field::SUBAGENT_TASK] = "unit one";
+        let pane = parse_pane_line(&make_pane_line(&fields)).unwrap();
+
+        assert!(
+            pane.subagent.is_none(),
+            "a non-pi pane must not be reported as a subagent even with the options set"
+        );
+    }
+
+    #[test]
+    fn clear_agent_pane_state_clears_every_agent_session_option() {
+        let _guard = test_mock::install();
+        let pane = "%SWEEP_ALL";
+        for key in AGENT_SESSION_PANE_OPTIONS {
+            test_mock::set(pane, key, "x");
+        }
+
+        clear_agent_pane_state(pane);
+
+        for key in AGENT_SESSION_PANE_OPTIONS {
+            assert!(
+                !test_mock::contains(pane, key),
+                "{key} must be cleared by the shell-fallback sweep"
+            );
+        }
     }
 
     #[test]
@@ -1308,6 +1495,7 @@ mod tests {
                     session_name: String::new(),
                     sidebar_spawned: false,
                     bg_shell_cmd: None,
+                    subagent: None,
                 }],
             },
         );
@@ -1368,9 +1556,12 @@ mod tests {
         // 17:@pane_started_at|18:@pane_wait_reason|19:pane_pid|
         // 20:@pane_subagents|21:@pane_cwd|22:@pane_permission_mode|
         // 23:@pane_worktree_name|24:@pane_worktree_branch|
-        // 25:@pane_session_id|26:@agent-sidebar-spawned|27:@pane_bg_cmd
-        // 28 total fields (MIN_FIELDS = 28)
-        let mut fields: Vec<&str> = vec![""; 28];
+        // 25:@pane_session_id|26:@agent-sidebar-spawned|27:@pane_bg_cmd|
+        // 28:@pane_subagent_kind|29:@pane_subagent_parent|
+        // 30:@pane_subagent_task|31:pane_title
+
+        // 32 total fields (MIN_FIELDS = 32)
+        let mut fields: Vec<&str> = vec![""; 32];
         fields[0] = session_name;
         fields[1] = "@0"; // window_id
         fields[3] = "win"; // window_name
@@ -1394,7 +1585,7 @@ mod tests {
         let line_d = make_full_pane_line("grouped", 0);
 
         let input = format!("{line_a}\n{line_b}\n{line_c}\n{line_d}");
-        let (sessions_map, _) = build_session_hierarchy(&input, None);
+        let (sessions_map, _, _) = build_session_hierarchy(&input, None);
         let sessions = finalize_sessions(sessions_map);
 
         // Should produce two sessions: "primary" and "grouped"
@@ -1427,6 +1618,117 @@ mod tests {
             grouped.windows[0].panes[0].pane_pid,
             Some(0),
             "retained pane should be the zero-pid one"
+        );
+    }
+
+    // ─── subagent parent resolution ──────────────────────────────────
+
+    /// Build a full 32-field hierarchy line for the parent-resolution
+    /// tests: an agent pane in `session_name` with the given pane id,
+    /// `@pane_session_id`, `pane_title`, and optionally the three
+    /// `@pane_subagent_*` options (kind, parent session id, task).
+    #[allow(clippy::type_complexity)]
+    fn make_hierarchy_line(
+        session_name: &str,
+        pane_id: &str,
+        session_id: &str,
+        title: &str,
+        subagent: Option<(&str, &str, &str)>,
+    ) -> String {
+        let mut fields: Vec<&str> = vec![""; 32];
+        fields[0] = session_name;
+        fields[1] = "@0"; // window_id
+        fields[3] = "win"; // window_name
+        fields[4] = "1"; // window_active
+        fields[9] = "pi"; // @pane_agent
+        fields[14] = pane_id;
+        fields[25] = session_id;
+        if let Some((kind, parent, task)) = subagent {
+            fields[28] = kind;
+            fields[29] = parent;
+            fields[30] = task;
+        }
+        fields[31] = title;
+        fields.join("|")
+    }
+
+    /// Parse the lines, run the parent-resolution post-pass, and flatten
+    /// the result into the parsed panes.
+    fn resolve_in(input: &str) -> Vec<PaneInfo> {
+        let (sessions_map, _, resolution) = build_session_hierarchy(input, None);
+        let mut sessions_map = sessions_map;
+        resolve_subagent_parents(&mut sessions_map, &resolution);
+        finalize_sessions(sessions_map)
+            .into_iter()
+            .flat_map(|session| session.windows.into_iter().flat_map(|window| window.panes))
+            .collect()
+    }
+
+    fn subagent_parent_of(panes: &[PaneInfo], pane_id: &str) -> SubagentParent {
+        let pane = panes
+            .iter()
+            .find(|pane| pane.pane_id == pane_id)
+            .unwrap_or_else(|| panic!("pane {pane_id} should be parsed"));
+        pane.subagent
+            .as_ref()
+            .unwrap_or_else(|| panic!("pane {pane_id} should be a subagent"))
+            .parent
+            .clone()
+    }
+
+    #[test]
+    fn resolve_subagent_parents_uses_the_parent_title() {
+        let input = format!(
+            "{}\n{}",
+            make_hierarchy_line("main", "%0", "P1", "orchestrator", None),
+            make_hierarchy_line("main", "%1", "", "", Some(("spawned", "P1", ""))),
+        );
+        let panes = resolve_in(&input);
+        assert_eq!(
+            subagent_parent_of(&panes, "%1"),
+            SubagentParent::Pane("orchestrator".to_string()),
+            "a live parent with a title resolves to that title"
+        );
+    }
+
+    #[test]
+    fn resolve_subagent_parents_falls_back_to_the_pane_id_without_a_title() {
+        let input = format!(
+            "{}\n{}",
+            make_hierarchy_line("main", "%0", "P1", "", None),
+            make_hierarchy_line("main", "%1", "", "", Some(("resumed", "P1", ""))),
+        );
+        let panes = resolve_in(&input);
+        assert_eq!(
+            subagent_parent_of(&panes, "%1"),
+            SubagentParent::Pane("%0".to_string()),
+            "a live parent with an empty title resolves to its pane id"
+        );
+    }
+
+    #[test]
+    fn resolve_subagent_parents_leaves_a_subagent_orphaned_without_a_parent() {
+        let input = make_hierarchy_line("main", "%1", "", "", Some(("spawned", "P1", "")));
+        let panes = resolve_in(&input);
+        assert_eq!(
+            subagent_parent_of(&panes, "%1"),
+            SubagentParent::Orphaned,
+            "no pane reports the recorded session id, so the subagent is orphaned"
+        );
+    }
+
+    #[test]
+    fn resolve_subagent_parents_resolves_a_parent_in_another_session() {
+        let input = format!(
+            "{}\n{}",
+            make_hierarchy_line("other", "%0", "P1", "orchestrator", None),
+            make_hierarchy_line("main", "%1", "", "", Some(("spawned", "P1", ""))),
+        );
+        let panes = resolve_in(&input);
+        assert_eq!(
+            subagent_parent_of(&panes, "%1"),
+            SubagentParent::Pane("orchestrator".to_string()),
+            "the parent lookup spans every session in the list-panes output"
         );
     }
 }

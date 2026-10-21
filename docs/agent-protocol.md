@@ -54,7 +54,7 @@ The agent started, or resumed.
 | `cwd` | The working directory of the agent. |
 | `session_id` | The agent's own identifier for this session. The sidebar uses it to find the session's name and its transcript. |
 | `source` | Why the session started. Free text. |
-| `permission_mode` | The agent's permission mode, if it has one. Only Claude reports it, and only Claude shows the badge. |
+| `permission_mode` | The agent's permission mode, if it has one. Only Claude reports it, and only Claude shows the permission-mode badge. pi reports none. The badge slot is shared: a pmux subagent pane shows a `subagent`/`resumed` badge there instead. |
 | `agent_id` | The identifier of a subagent, when the event is about one. |
 | `worktree` | An object with `name`, `path`, `branch` and `originalRepoDir`, when the agent works in a worktree. |
 
@@ -79,6 +79,32 @@ running without touching the prompt text it shows.
 | `session_id` | The session identifier. |
 | `permission_mode` | The agent's permission mode. |
 | `worktree` | The worktree object, if any. |
+
+### A pmux task prompt
+
+pmux starts a pi subagent with its task written as a prompt file. The prompt
+starts with a `<file name="...">` tag, and the path inside the tag has one of
+two shapes:
+
+- spawn: `<sessionDir>/artifacts/<parent session id>/context/<name>-<timestamp>.md`
+- resume: `<sessionDir>/artifacts/<parent session id>/pmux-resume/<name>-<timestamp>.md`
+
+When a pi pane sends a `user-prompt-submit` prompt that starts with a tag of
+that shape, the sidebar reads only the `name` attribute. The body of the file
+is never read. The prompt is not stored as the pane prompt, so the prompt row
+keeps what it showed before. Instead the sidebar writes three options:
+`@pane_subagent_kind` (`spawned` or `resumed`), `@pane_subagent_parent` (the
+parent session id) and `@pane_subagent_task` (the fuzzy task, unset when
+there is none). The task is the `<name>` part of the file name, that is the
+stem without its `-YYYY-MM-DDTHH-MM-SS` timestamp, and each hyphen in it is
+shown as a space, so `unit1-idle-collapse` shows as `unit1 idle collapse`.
+pmux writes the fallback stems `subagent` (a spawned subagent) and `resume`
+(a resumed subagent) when it has no usable name, and those give no task at
+all. A later recognised prompt replaces them. The identity stays
+until the session ends or the pane's pi state is cleared.
+
+A prompt that starts with a `<file name="...">` tag of any other shape, or a
+prompt from another agent, is stored and shown as before.
 
 ### `notification`
 
@@ -201,6 +227,9 @@ writes a tmux option itself.
 | `@pane_permission_mode` | Claude only. |
 | `@pane_worktree_name`, `@pane_worktree_branch` | The worktree. |
 | `@pane_subagents` | The subagent tree. |
+| `@pane_subagent_kind` | A recognised pmux task prompt (pi only). `spawned` or `resumed`. |
+| `@pane_subagent_parent` | A recognised pmux task prompt. The parent session id. |
+| `@pane_subagent_task` | A recognised pmux task prompt. The fuzzy task, unset when there is none. |
 
 The activity log is a file next to those options, one per pane, written by
 the same command.
@@ -212,11 +241,13 @@ agents do not all report the same things. A producer that cannot report
 something leaves it out, and the sidebar shows less rather than guessing.
 
 - The permission mode badge is a Claude feature. pi has no permission mode
-  the sidebar can read.
+  the sidebar can read. A pmux subagent pane is still marked with a
+  `subagent`/`resumed` badge in that slot, which is not a permission mode.
 - The task progress needs a task tool. Claude has one, pi does not.
 - The subagent tree needs subagents inside the agent's process. pmux runs
   child agents in their own panes, and the sidebar shows each of those panes
-  on its own.
+  on its own. A pmux subagent pane is marked as a subagent instead, with its
+  parent session and its task (see "A pmux task prompt" above).
 - The attention badge needs a signal that the agent waits for a human. Claude
   has one in its hooks. pi has one in its `ui_prompt` events, which a
   producer turns into `notification` and then into an empty

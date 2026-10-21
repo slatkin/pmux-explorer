@@ -8,6 +8,23 @@ use crate::time::now_epoch_secs;
 use crate::tmux;
 
 pub(crate) const DESKTOP_NOTIFICATION_COOLDOWN_SECS: u64 = 120;
+
+/// Environment variable that turns the desktop-notification send path into
+/// a no-op. This repository's committed `.cargo/config.toml` sets it for
+/// every cargo invocation so that `cargo test` (unit tests build real
+/// `DesktopNotificationSettings` with notifications enabled) can never
+/// spawn `notify-send` or `osascript` and light up the developer's
+/// desktop. A `#[cfg(test)]` guard alone would not cover integration
+/// tests, which compile the library without `cfg(test)`.
+const TEST_NOTIFICATION_GUARD_ENV: &str = "SIDEBAR_DISABLE_DESKTOP_NOTIFICATIONS";
+
+/// True when the test-suite guard is active. Only set by
+/// `.cargo/config.toml`; a normal (non-cargo) run of the sidebar leaves
+/// it unset, so production behaviour is unchanged.
+fn notifications_disabled_by_env() -> bool {
+    std::env::var_os(TEST_NOTIFICATION_GUARD_ENV).is_some_and(|value| !value.is_empty())
+}
+
 const DESKTOP_NOTIFICATION_TIMEOUT: Duration = Duration::from_secs(3);
 const DESKTOP_NOTIFICATION_PROBE_TIMEOUT: Duration = Duration::from_secs(1);
 
@@ -233,6 +250,12 @@ fn normalize_fingerprint(value: &str) -> String {
 }
 
 fn send_desktop_notification(title: &str, body: &str) -> Result<(), String> {
+    // Test-suite guard: never spawn a real notification command while the
+    // guard from `.cargo/config.toml` is active.
+    if notifications_disabled_by_env() {
+        return Ok(());
+    }
+
     #[cfg(target_os = "macos")]
     {
         let script = format!(
@@ -277,6 +300,12 @@ fn send_desktop_notification(title: &str, body: &str) -> Result<(), String> {
 }
 
 fn notification_backend_available() -> bool {
+    // Same guard: the backend probe also spawns `notify-send --version`
+    // / `osascript -e "return 0"`, which `cargo test` must not do.
+    if notifications_disabled_by_env() {
+        return false;
+    }
+
     #[cfg(target_os = "macos")]
     {
         let mut command = Command::new("osascript");

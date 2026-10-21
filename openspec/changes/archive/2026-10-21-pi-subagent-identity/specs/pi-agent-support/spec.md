@@ -1,0 +1,177 @@
+# Spec Delta
+
+## ADDED Requirements
+
+### Requirement: a pmux task prompt marks the pane as a subagent
+
+The sidebar SHALL recognise a pi `user-prompt-submit` prompt that starts with
+`<file name="PATH">`, where PATH ends in
+`/artifacts/<id>/context/<stem>.md` (spawned) or
+`/artifacts/<id>/pmux-resume/<stem>.md` (resumed), and `<stem>` is a name, a
+hyphen and a timestamp `YYYY-MM-DDTHH-MM-SS`. It SHALL read only that
+attribute, never the text inside the tag.
+
+#### Scenario: A spawn prompt
+- **WHEN** a pi pane sends `user-prompt-submit` with a prompt that starts with `<file name="/s/artifacts/P1/context/unit1-idle-collapse-2026-09-07T15-18-30.md">`
+- **THEN** the pane is a spawned subagent with parent session id `P1` and task `unit1 idle collapse`
+
+#### Scenario: A resume prompt
+- **WHEN** a pi pane sends `user-prompt-submit` with a prompt that starts with `<file name="/s/artifacts/P1/pmux-resume/u1-placement-2026-10-21T05-41-15.md">`
+- **THEN** the pane is a resumed subagent with parent session id `P1` and task `u1 placement`
+
+#### Scenario: Another file prompt
+- **WHEN** a pi pane sends a prompt that starts with `<file name="/home/me/notes.md">`
+- **THEN** the pane is not marked as a subagent and the prompt is stored as before
+
+#### Scenario: A stem without a timestamp
+- **WHEN** the PATH has the spawn shape but its stem does not end with a hyphen and a timestamp
+- **THEN** the pane is not marked as a subagent and the prompt is stored as before
+
+#### Scenario: The tag is not at the start
+- **WHEN** a prompt holds a matching `<file name="…">` tag after other text
+- **THEN** the pane is not marked as a subagent
+
+#### Scenario: Another agent
+- **WHEN** a Claude, Codex or OpenCode pane sends a prompt that starts with a matching tag
+- **THEN** the pane is not marked as a subagent
+
+### Requirement: the fuzzy task comes from the name
+
+The fuzzy task SHALL be the stem without its hyphen and timestamp, with each
+hyphen shown as a space. The stems `subagent` (spawned) and `resume`
+(resumed) SHALL give no task, because pmux writes them when the subagent has
+no usable name.
+
+#### Scenario: A hyphenated name
+- **WHEN** the stem is `review-unit1-2026-09-07T15-26-50`
+- **THEN** the task is `review unit1`
+
+#### Scenario: The spawn fallback stem
+- **WHEN** a spawn PATH has the stem `subagent-2026-09-07T15-26-50`
+- **THEN** the pane is a spawned subagent with no task
+
+#### Scenario: The resume fallback stem
+- **WHEN** a resume PATH has the stem `resume-2026-10-21T05-41-15`
+- **THEN** the pane is a resumed subagent with no task
+
+### Requirement: a pmux task prompt is not shown
+
+The sidebar SHALL NOT store or show the text of a recognised pmux task prompt
+as the pane's prompt. The prompt row keeps what it showed before the prompt
+arrived. Response previews SHALL be shown as for any other pi pane.
+
+#### Scenario: A recognised prompt
+- **WHEN** a pi pane sends a recognised pmux task prompt
+- **THEN** the pane status becomes running and no prompt row shows the tag or its body
+
+#### Scenario: A finished turn of a subagent
+- **WHEN** a subagent pane sends `stop` with `last_assistant_message`
+- **THEN** the pane shows that message as the response preview
+
+### Requirement: the subagent identity persists for the session
+
+The subagent identity SHALL stay on the pane across later prompts and turns.
+A later recognised prompt SHALL replace it. `session-end`, and the clearing of
+a pi pane whose pi process is gone, SHALL remove it.
+
+#### Scenario: A later plain prompt
+- **WHEN** a subagent pane later sends `user-prompt-submit` with a prompt that is not a recognised pmux task prompt
+- **THEN** the pane is still a subagent with the same parent and task
+
+#### Scenario: A later resume prompt
+- **WHEN** a spawned subagent pane later sends a recognised resume prompt
+- **THEN** the pane is a resumed subagent with the parent and task of that prompt
+
+#### Scenario: The end of the session
+- **WHEN** a subagent pane sends `session-end`
+- **THEN** the pane is no longer a subagent
+
+#### Scenario: The pi process is gone
+- **WHEN** a subagent pane's pi process has exited and the pane's pi state is cleared
+- **THEN** the subagent identity is cleared with it
+
+### Requirement: the parent is resolved at each refresh
+
+At each refresh, the sidebar SHALL take as parent the agent pane whose
+reported session id equals the recorded parent session id. It SHALL show the
+parent by that pane's tmux title, or by its pane id when the title is empty.
+When no pane has that session id, it SHALL show `ORPHANED` in the theme's
+error colour.
+
+#### Scenario: The parent is live and named
+- **WHEN** a subagent records parent session id `P1` and pane `%0` reports session id `P1` with the title `orchestrator`
+- **THEN** the subagent shows the parent as `orchestrator`
+
+#### Scenario: The parent has no title
+- **WHEN** the parent pane `%0` has an empty title
+- **THEN** the subagent shows the parent as `%0`
+
+#### Scenario: The parent is gone
+- **WHEN** no pane reports session id `P1`
+- **THEN** the subagent shows `ORPHANED` in the error colour
+
+#### Scenario: The parent comes back
+- **WHEN** a pane that reports session id `P1` appears after the subagent was shown as orphaned
+- **THEN** the next refresh shows that pane as the parent
+
+#### Scenario: The parent is hidden by a filter
+- **WHEN** the parent pane is live but the sidebar's repository filter hides its row
+- **THEN** the subagent still shows that pane as its parent
+
+### Requirement: a subagent pane carries a badge
+
+The status row of a subagent pane SHALL show the badge `subagent` for a
+spawned subagent and the badge `resumed` for a resumed subagent, in the place
+where a permission mode badge is shown for other agents.
+
+#### Scenario: A spawned subagent
+- **WHEN** a spawned subagent pane is listed
+- **THEN** its status row shows the badge `subagent`
+
+#### Scenario: A resumed subagent
+- **WHEN** a resumed subagent pane is listed
+- **THEN** its status row shows the badge `resumed`
+
+#### Scenario: A pi pane that is not a subagent
+- **WHEN** a pi pane without a subagent identity is listed
+- **THEN** its status row shows no badge
+
+### Requirement: a subagent pane shows its parent and task
+
+The pane row of a subagent SHALL show a line directly under the status row
+that names the parent (or `ORPHANED`) and, when there is one, the fuzzy task.
+The line SHALL be cut to the row width.
+
+#### Scenario: Parent and task
+- **WHEN** a subagent with parent `orchestrator` and task `unit1 idle collapse` is listed
+- **THEN** the line under its status row shows `orchestrator` and `unit1 idle collapse`
+
+#### Scenario: No task
+- **WHEN** a subagent with parent `orchestrator` has no task
+- **THEN** the line under its status row shows only `orchestrator`
+
+#### Scenario: A narrow sidebar
+- **WHEN** the line is wider than the row
+- **THEN** the line is cut to the row width and the row count does not change
+
+## MODIFIED Requirements
+
+### Requirement: the gaps stay gaps
+
+The sidebar SHALL NOT report a permission mode or a task progress for a pi
+pane, because pi reports neither of them. The pi adapter SHALL report the
+default permission mode. The sidebar SHALL NOT report an in-process subagent
+tree for a pi pane; a pmux subagent runs in its own pane and is marked on
+that pane instead.
+
+#### Scenario: A pi pane with a finished turn
+- **WHEN** a pi turn ends
+- **THEN** the pane shows the idle status and no permission mode badge
+
+#### Scenario: The permission mode of a pi pane
+- **WHEN** a pi pane is listed
+- **THEN** the pane carries no permission mode badge
+
+#### Scenario: No in-process subagent tree for pi
+- **WHEN** a pi pane is listed
+- **THEN** the pane shows no in-process subagent rows

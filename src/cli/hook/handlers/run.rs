@@ -1,6 +1,7 @@
 use crate::cli::{sanitize_tmux_value, set_attention, set_status};
 use crate::desktop_notification;
 use crate::desktop_notification::DesktopNotificationKind;
+use crate::pmux_task::PmuxTask;
 use crate::tmux;
 
 use crate::time::now_epoch_secs;
@@ -15,10 +16,29 @@ use super::super::notifications::{
 };
 use super::status_priority::resolve_stop_status;
 
+/// Records the pmux subagent identity carried by a recognised task prompt.
+/// A later match replaces the earlier identity; the task option is unset
+/// when the matched prompt had no usable task name.
+fn store_pmux_identity(pane: &str, task: &PmuxTask) {
+    tmux::set_pane_option(pane, tmux::PANE_SUBAGENT_KIND, task.kind.as_str());
+    tmux::set_pane_option(
+        pane,
+        tmux::PANE_SUBAGENT_PARENT,
+        &sanitize_tmux_value(&task.parent_session_id),
+    );
+    match &task.task {
+        Some(name) => {
+            tmux::set_pane_option(pane, tmux::PANE_SUBAGENT_TASK, &sanitize_tmux_value(name))
+        }
+        None => tmux::unset_pane_option(pane, tmux::PANE_SUBAGENT_TASK),
+    }
+}
+
 pub(in crate::cli::hook) fn on_user_prompt_submit(
     pane: &str,
     ctx: &AgentContext<'_>,
     prompt: &str,
+    pmux_task: Option<&PmuxTask>,
 ) -> i32 {
     set_agent_meta(pane, ctx);
     set_attention(pane, "clear");
@@ -28,6 +48,9 @@ pub(in crate::cli::hook) fn on_user_prompt_submit(
         let p = sanitize_tmux_value(prompt);
         tmux::set_pane_option(pane, tmux::PANE_PROMPT, &p);
         tmux::set_pane_option(pane, tmux::PANE_PROMPT_SOURCE, "user");
+    }
+    if let Some(task) = pmux_task {
+        store_pmux_identity(pane, task);
     }
     tmux::set_pane_option(pane, tmux::PANE_STARTED_AT, &now_epoch_secs().to_string());
     tmux::unset_pane_option(pane, tmux::PANE_WAIT_REASON);
@@ -149,6 +172,7 @@ pub(in crate::cli::hook) fn on_task_completed(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::pmux_task::PmuxTaskKind;
 
     #[test]
     fn on_user_prompt_submit_sets_running_and_stores_prompt() {
@@ -161,7 +185,7 @@ mod tests {
             worktree: &None,
             session_id: &None,
         };
-        let exit = on_user_prompt_submit(pane, &ctx, "fix the bug");
+        let exit = on_user_prompt_submit(pane, &ctx, "fix the bug", None);
         assert_eq!(exit, 0);
         assert_eq!(
             tmux::test_mock::get(pane, tmux::PANE_STATUS).as_deref(),
@@ -189,7 +213,12 @@ mod tests {
             worktree: &None,
             session_id: &None,
         };
-        on_user_prompt_submit(pane, &ctx, "<system-reminder>ignore me</system-reminder>");
+        on_user_prompt_submit(
+            pane,
+            &ctx,
+            "<system-reminder>ignore me</system-reminder>",
+            None,
+        );
         assert!(
             !tmux::test_mock::contains(pane, tmux::PANE_PROMPT),
             "system messages should not be stored as user prompt"
@@ -214,12 +243,157 @@ mod tests {
             worktree: &None,
             session_id: &None,
         };
-        on_user_prompt_submit(pane, &ctx, "new prompt");
+        on_user_prompt_submit(pane, &ctx, "new prompt", None);
         assert!(!tmux::test_mock::contains(pane, tmux::PANE_WAIT_REASON));
         assert_eq!(
             tmux::test_mock::get(pane, tmux::PANE_BG_CMD).as_deref(),
             Some("npm run dev"),
             "bg command must survive a new user turn — the shell is still running",
+        );
+    }
+
+    // ─── pmux subagent identity ────────────────────────────────────
+
+    fn pmux_task(kind: PmuxTaskKind, parent: &str, task: Option<&str>) -> Option<PmuxTask> {
+        Some(PmuxTask {
+            kind,
+            parent_session_id: parent.to_string(),
+            task: task.map(str::to_string),
+        })
+    }
+
+    fn ctx() -> AgentContext<'static> {
+        AgentContext {
+            agent: "pi",
+            cwd: "/repo",
+            permission_mode: "default",
+            worktree: &None,
+            session_id: &None,
+        }
+    }
+
+    #[test]
+    fn pmux_spawn_match_sets_identity_keeps_prompt_and_runs() {
+        let _guard = tmux::test_mock::install();
+        let pane = "%PMUX_SPAWN";
+        tmux::test_mock::set(pane, tmux::PANE_PROMPT, "previous prompt");
+
+        let exit = on_user_prompt_submit(
+            pane,
+            &ctx(),
+            "",
+            pmux_task(PmuxTaskKind::Spawned, "P1", Some("unit1 idle collapse")).as_ref(),
+        );
+
+        assert_eq!(exit, 0);
+        assert_eq!(
+            tmux::test_mock::get(pane, tmux::PANE_SUBAGENT_KIND).as_deref(),
+            Some("spawned")
+        );
+        assert_eq!(
+            tmux::test_mock::get(pane, tmux::PANE_SUBAGENT_PARENT).as_deref(),
+            Some("P1")
+        );
+        assert_eq!(
+            tmux::test_mock::get(pane, tmux::PANE_SUBAGENT_TASK).as_deref(),
+            Some("unit1 idle collapse")
+        );
+        // A recognised pmux task prompt is not stored as the pane prompt.
+        assert_eq!(
+            tmux::test_mock::get(pane, tmux::PANE_PROMPT).as_deref(),
+            Some("previous prompt")
+        );
+        assert_eq!(
+            tmux::test_mock::get(pane, tmux::PANE_STATUS).as_deref(),
+            Some("running")
+        );
+    }
+
+    #[test]
+    fn later_plain_prompt_keeps_subagent_identity() {
+        let _guard = tmux::test_mock::install();
+        let pane = "%PMUX_PLAIN";
+        on_user_prompt_submit(
+            pane,
+            &ctx(),
+            "",
+            pmux_task(PmuxTaskKind::Spawned, "P1", Some("unit1 idle collapse")).as_ref(),
+        );
+
+        on_user_prompt_submit(pane, &ctx(), "please continue", None);
+
+        assert_eq!(
+            tmux::test_mock::get(pane, tmux::PANE_SUBAGENT_KIND).as_deref(),
+            Some("spawned"),
+            "a non-matching prompt must not touch the identity"
+        );
+        assert_eq!(
+            tmux::test_mock::get(pane, tmux::PANE_SUBAGENT_PARENT).as_deref(),
+            Some("P1")
+        );
+        assert_eq!(
+            tmux::test_mock::get(pane, tmux::PANE_SUBAGENT_TASK).as_deref(),
+            Some("unit1 idle collapse")
+        );
+    }
+
+    #[test]
+    fn later_resume_match_replaces_subagent_identity() {
+        let _guard = tmux::test_mock::install();
+        let pane = "%PMUX_RESUME";
+        on_user_prompt_submit(
+            pane,
+            &ctx(),
+            "",
+            pmux_task(PmuxTaskKind::Spawned, "P1", Some("unit1 idle collapse")).as_ref(),
+        );
+
+        on_user_prompt_submit(
+            pane,
+            &ctx(),
+            "",
+            pmux_task(PmuxTaskKind::Resumed, "P2", Some("unit2 placement")).as_ref(),
+        );
+
+        assert_eq!(
+            tmux::test_mock::get(pane, tmux::PANE_SUBAGENT_KIND).as_deref(),
+            Some("resumed")
+        );
+        assert_eq!(
+            tmux::test_mock::get(pane, tmux::PANE_SUBAGENT_PARENT).as_deref(),
+            Some("P2")
+        );
+        assert_eq!(
+            tmux::test_mock::get(pane, tmux::PANE_SUBAGENT_TASK).as_deref(),
+            Some("unit2 placement")
+        );
+    }
+
+    #[test]
+    fn pmux_match_without_task_name_unsets_the_task_option() {
+        let _guard = tmux::test_mock::install();
+        let pane = "%PMUX_NO_TASK";
+        // A previous identity with a task must not leak into the new one.
+        tmux::test_mock::set(pane, tmux::PANE_SUBAGENT_TASK, "stale task");
+
+        on_user_prompt_submit(
+            pane,
+            &ctx(),
+            "",
+            pmux_task(PmuxTaskKind::Resumed, "P3", None).as_ref(),
+        );
+
+        assert_eq!(
+            tmux::test_mock::get(pane, tmux::PANE_SUBAGENT_KIND).as_deref(),
+            Some("resumed")
+        );
+        assert_eq!(
+            tmux::test_mock::get(pane, tmux::PANE_SUBAGENT_PARENT).as_deref(),
+            Some("P3")
+        );
+        assert!(
+            !tmux::test_mock::contains(pane, tmux::PANE_SUBAGENT_TASK),
+            "a match without a task name must unset the task option, not write an empty value"
         );
     }
 

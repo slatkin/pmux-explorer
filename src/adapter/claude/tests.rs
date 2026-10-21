@@ -80,6 +80,7 @@ fn user_prompt_submit() {
             worktree: None,
             agent_id: None,
             session_id: None,
+            pmux_task: None,
         }
     );
 }

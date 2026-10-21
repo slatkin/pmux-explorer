@@ -128,6 +128,7 @@ impl EventAdapter for ClaudeAdapter {
                 worktree: parse_worktree(input),
                 agent_id: optional_str(input, "agent_id"),
                 session_id: optional_str(input, "session_id"),
+                pmux_task: None,
             }),
             "notification" => {
                 let wait_reason = json_str(input, "notification_type");

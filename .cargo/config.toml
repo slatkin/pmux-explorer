@@ -1,0 +1,12 @@
+# `cargo test` in this repository must never post a real desktop
+# notification. Unit tests build `DesktopNotificationSettings` with
+# notifications enabled, so a test run can otherwise reach the real
+# `notify-send` / `osascript` spawn in `src/desktop_notification.rs`.
+#
+# `send_desktop_notification` and `notification_backend_available` check
+# this variable and become no-ops when it is set. Cargo applies `[env]`
+# to every process it spawns from this checkout, so a plain `cargo test`
+# is safe by default. Note this also applies to `cargo run` from this
+# checkout; a release binary built here and run elsewhere is unaffected.
+[env]
+SIDEBAR_DISABLE_DESKTOP_NOTIFICATIONS = "1"

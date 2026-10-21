@@ -1,5 +1,4 @@
 use super::location::{pane_writes_allowed, sync_pane_location};
-use super::pending::{PENDING_SESSION_END, PENDING_WORKTREE_REMOVE};
 use crate::event::WorktreeInfo;
 use crate::tmux;
 
@@ -54,20 +53,21 @@ pub(in crate::cli::hook) fn is_system_message(s: &str) -> bool {
 }
 
 pub(in crate::cli::hook) fn clear_all_meta(pane: &str) {
-    for key in &[
-        tmux::PANE_AGENT,
-        tmux::PANE_PROMPT,
-        tmux::PANE_PROMPT_SOURCE,
-        tmux::PANE_BG_CMD,
-        tmux::PANE_SUBAGENTS,
-        tmux::PANE_CWD,
-        tmux::PANE_PERMISSION_MODE,
-        tmux::PANE_WORKTREE_NAME,
-        tmux::PANE_WORKTREE_BRANCH,
-        tmux::PANE_SESSION_ID,
-        PENDING_SESSION_END,
-        PENDING_WORKTREE_REMOVE,
-    ] {
+    // Every lifecycle key from the single sweep list
+    // `tmux::AGENT_SESSION_PANE_OPTIONS`, except the two handler-owned
+    // keys (`@pane_status` / `@pane_attention` are set and cleared per
+    // event transition) and the run-state pair that `clear_run_state`
+    // below owns.
+    for key in tmux::AGENT_SESSION_PANE_OPTIONS {
+        if matches!(
+            *key,
+            tmux::PANE_STATUS
+                | tmux::PANE_ATTENTION
+                | tmux::PANE_STARTED_AT
+                | tmux::PANE_WAIT_REASON
+        ) {
+            continue;
+        }
         tmux::unset_pane_option(pane, key);
     }
     clear_run_state(pane);
@@ -261,44 +261,21 @@ mod tests {
     fn clear_all_meta_drops_every_pane_option_we_own() {
         let _guard = tmux::test_mock::install();
         let pane = "%CLEAR_ALL";
-        for key in [
-            tmux::PANE_AGENT,
-            tmux::PANE_PROMPT,
-            tmux::PANE_PROMPT_SOURCE,
-            tmux::PANE_SUBAGENTS,
-            tmux::PANE_CWD,
-            tmux::PANE_PERMISSION_MODE,
-            tmux::PANE_WORKTREE_NAME,
-            tmux::PANE_WORKTREE_BRANCH,
-            tmux::PANE_SESSION_ID,
-            tmux::PANE_STARTED_AT,
-            tmux::PANE_WAIT_REASON,
-            PENDING_SESSION_END,
-            PENDING_WORKTREE_REMOVE,
-        ] {
+        for key in tmux::AGENT_SESSION_PANE_OPTIONS {
             tmux::test_mock::set(pane, key, "x");
         }
 
         clear_all_meta(pane);
 
-        for key in [
-            tmux::PANE_AGENT,
-            tmux::PANE_PROMPT,
-            tmux::PANE_PROMPT_SOURCE,
-            tmux::PANE_SUBAGENTS,
-            tmux::PANE_CWD,
-            tmux::PANE_PERMISSION_MODE,
-            tmux::PANE_WORKTREE_NAME,
-            tmux::PANE_WORKTREE_BRANCH,
-            tmux::PANE_SESSION_ID,
-            tmux::PANE_STARTED_AT,
-            tmux::PANE_WAIT_REASON,
-            PENDING_SESSION_END,
-            PENDING_WORKTREE_REMOVE,
-        ] {
-            assert!(
-                !tmux::test_mock::contains(pane, key),
-                "expected {key} cleared"
+        // Every lifecycle key is cleared except `@pane_status` and
+        // `@pane_attention`, which the event handlers own directly.
+        for key in tmux::AGENT_SESSION_PANE_OPTIONS {
+            let preserved = matches!(*key, tmux::PANE_STATUS | tmux::PANE_ATTENTION);
+            assert_eq!(
+                tmux::test_mock::contains(pane, key),
+                preserved,
+                "expected {key} {}",
+                if preserved { "preserved" } else { "cleared" }
             );
         }
     }

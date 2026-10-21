@@ -78,6 +78,7 @@ impl EventAdapter for OpenCodeAdapter {
                 worktree: None,
                 agent_id: None,
                 session_id: optional_str(input, "session_id"),
+                pmux_task: None,
             }),
             "notification" => Some(AgentEvent::Notification {
                 agent: OPENCODE_AGENT.into(),
@@ -174,6 +175,7 @@ mod tests {
                 worktree: None,
                 agent_id: None,
                 session_id: None,
+                pmux_task: None,
             }
         );
     }

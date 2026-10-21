@@ -62,6 +62,7 @@ impl EventAdapter for CodexAdapter {
                 worktree: None,
                 agent_id: None,
                 session_id: optional_str(input, "session_id"),
+                pmux_task: None,
             }),
             "stop" => Some(AgentEvent::Stop {
                 agent: CODEX_AGENT.into(),
@@ -143,6 +144,7 @@ mod tests {
                 worktree: None,
                 agent_id: None,
                 session_id: Some("sess-codex-2".into()),
+                pmux_task: None,
             }
         );
     }
