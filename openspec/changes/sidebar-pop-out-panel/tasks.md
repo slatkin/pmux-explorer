@@ -32,6 +32,6 @@
 
 ## 5. Live verification
 
-- [ ] 5.1 Pop the sidebar out and back in against a live tmux: the panel floats at the right edge, the workspace panes take the full width, the filter, selection, scroll and bottom tab survive the round trip, and the docked width comes back. Verify: the round trip is run in a tmux window and the observed geometry and state are recorded in the change notes.
-- [ ] 5.2 Pop the sidebar out in a zoomed window: the sidebar stays docked and the notice appears. Verify: the zoomed case is run against a live tmux and the notice is observed.
-- [ ] 5.3 Run the repository gates: `cargo fmt`, `cargo test`, `cargo clippy` and `cargo fmt --check`. Verify: all four pass.
+- [x] 5.1 Pop the sidebar out and back in against a live tmux: the panel floats at the right edge, the workspace panes take the full width, the filter, selection, scroll and bottom tab survive the round trip, and the docked width comes back. Verify: the round trip is run in a tmux window and the observed geometry and state are recorded in the change notes.
+- [x] 5.2 Pop the sidebar out in a zoomed window: the sidebar stays docked and the notice appears. Verify: the zoomed case is run against a live tmux and the notice is observed.
+- [x] 5.3 Run the repository gates: `cargo fmt`, `cargo test`, `cargo clippy` and `cargo fmt --check`. Verify: all four pass.
