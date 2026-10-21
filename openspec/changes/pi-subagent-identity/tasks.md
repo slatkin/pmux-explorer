@@ -2,7 +2,7 @@
 
 ## 1. Task tag parser
 
-- [ ] 1.1 Add the leaf module with `PmuxTaskKind`, `PmuxTask` and `parse_pmux_task` (design D2), registered in `src/lib.rs` like the other leaf helpers; verify unit tests pass for: a spawn path, a resume path, a hyphenated name (`review-unit1` -> `review unit1`), the `subagent` and `resume` fallback stems (no task), a non-pmux `<file>` path, a stem without a timestamp, a malformed timestamp, an empty id, a tag that is not at the start, and an image-style `<file name="…"></file>` with a pmux path (still matches, body ignored)
+- [x] 1.1 Add the leaf module with `PmuxTaskKind`, `PmuxTask` and `parse_pmux_task` (design D2), registered in `src/lib.rs` like the other leaf helpers; verify unit tests pass for: a spawn path, a resume path, a hyphenated name (`review-unit1` -> `review unit1`), the `subagent` and `resume` fallback stems (no task), a non-pmux `<file>` path, a stem without a timestamp, a malformed timestamp, an empty id, a tag that is not at the start, and an image-style `<file name="…"></file>` with a pmux path (still matches, body ignored)
 
 ## 2. Hook: recognise and store the identity
 
