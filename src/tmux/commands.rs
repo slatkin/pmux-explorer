@@ -58,6 +58,23 @@ fn join_pane_dock_args(pane: &str) -> Vec<String> {
     vec!["join-pane".into(), "-s".into(), pane.into()]
 }
 
+/// Pure builder for the `move-pane` argument list that moves floating
+/// `pane` so its upper-left corner sits at (`x`, `y`) in its window
+/// (tmux 3.8; the reported `pane_left` is 1-based, so `-X 40` puts the
+/// pane's left edge at x=40). Kept separate from the tmux call, like the
+/// other builders here, so a unit test can assert the exact arguments.
+fn move_pane_args(pane: &str, x: u16, y: u16) -> Vec<String> {
+    vec![
+        "move-pane".into(),
+        "-s".into(),
+        pane.into(),
+        "-X".into(),
+        x.to_string(),
+        "-Y".into(),
+        y.to_string(),
+    ]
+}
+
 /// Float `pane`: lift it out of the tiled layout and make it a floating
 /// pane of its window with the given size and upper-left position. Needs
 /// tmux 3.8. Reports tmux's error, e.g. a zoomed window refuses with
@@ -72,6 +89,15 @@ pub fn float_pane(pane: &str, width: u16, height: u16, x: u16, y: u16) -> Result
 /// its window.
 pub fn dock_pane(pane: &str) -> Result<(), String> {
     let owned = join_pane_dock_args(pane);
+    let args: Vec<&str> = owned.iter().map(String::as_str).collect();
+    run_tmux_capture(&args).map(|_| ())
+}
+
+/// Move floating `pane` so its upper-left corner sits at (`x`, `y`) in
+/// its window. The reposition used after a window resize, never a
+/// re-float — `break-pane -W` fails on an already floating pane.
+pub fn move_pane(pane: &str, x: u16, y: u16) -> Result<(), String> {
+    let owned = move_pane_args(pane, x, y);
     let args: Vec<&str> = owned.iter().map(String::as_str).collect();
     run_tmux_capture(&args).map(|_| ())
 }
@@ -183,5 +209,13 @@ mod tests {
     #[test]
     fn join_pane_dock_args_match_tmux_3_8_flags() {
         assert_eq!(join_pane_dock_args("%5"), vec!["join-pane", "-s", "%5"]);
+    }
+
+    #[test]
+    fn move_pane_args_match_tmux_3_8_flags() {
+        assert_eq!(
+            move_pane_args("%5", 80, 0),
+            vec!["move-pane", "-s", "%5", "-X", "80", "-Y", "0"]
+        );
     }
 }

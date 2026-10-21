@@ -29,7 +29,7 @@ pub use layout::{FrameLayout, HyperlinkOverlay, RepoSpawnTarget, RowTarget, Spaw
 pub(crate) use notices::debug_forced_display;
 pub use notices::{ClaudePluginNotice, NoticesCopyTarget, NoticesMissingHookGroup, NoticesState};
 pub use pane_runtime::{PaneRuntimeMap, PaneRuntimeState};
-pub use popout::clamp_bottom_height;
+pub use popout::{PanelGeometry, clamp_bottom_height, panel_geometry};
 pub use popup::{PopupState, SpawnField};
 #[cfg(test)]
 pub(crate) use refresh::{TaskProgressDecision, classify_task_progress};
