@@ -52,12 +52,21 @@ the one number worth noticing.
 ## Impact
 
 - **Code**: `src/ui/panes/filter_bar.rs` (chip row, the new control, the
-  click columns), `src/state/layout.rs` (click targets and the chip hit
-  test), `src/state/filter.rs` (the `StatusFilter` categories and their
-  matching), `src/app/input.rs` (the `p` shortcut), `src/tmux/commands.rs`
-  (the tmux calls that float and dock the pane), `src/cli/toggle.rs` (the
-  docked width the pop-in restores), and the sidebar's geometry guard next to
-  `src/app/size_guard.rs`.
+  click columns), `src/state/layout.rs` (click targets, the chip hit
+  test, and `filter_bar_width`), `src/state/filter.rs` (the
+  `StatusFilter` categories and their matching), `src/state/popout.rs`
+  (the pop-out/pop-in action, the panel geometry, the bottom-panel
+  clamp), `src/app/input.rs` (the `p` shortcut), `src/app/panel_guard.rs`
+  (the floating-panel height guard), `src/tmux/commands.rs` (the tmux
+  calls that float and dock the pane), `src/tmux/panes.rs` (the pane
+  query that reports the floating flag and the sidebar's own pane
+  state), and small wiring in `src/state.rs`, `src/state/refresh.rs`,
+  `src/app.rs`, `src/ui/mod.rs` and `src/ui/panes.rs`.
+- **Website**: the new feature page
+  `website/src/content/docs/features/floating-panel.mdx` (wired into the
+  sidebar list in `website/astro.config.mjs`), the `p` shortcut in
+  `website/src/content/docs/reference/keybindings.md`, and the matching
+  section in `README.md`.
 - **tmux**: the floating panel needs tmux 3.8. `break-pane -W` lifts a tiled
   pane out of the layout, and `join-pane` puts a floating pane back into the
   layout; both exist in 3.8 and neither exists in 3.7.
