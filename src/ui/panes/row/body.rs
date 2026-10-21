@@ -1,13 +1,95 @@
 use ratatui::{
-    style::{Modifier, Style},
+    style::{Color, Modifier, Style},
     text::{Line, Span},
 };
 
 use super::ctx::RowCtx;
-use crate::tmux::PaneStatus;
+use crate::tmux::{PaneStatus, SubagentInfo, SubagentParent};
 use crate::ui::text::{
     display_width, truncate_to_width, wait_reason_label, wrap_text, wrap_text_char,
 };
+
+/// Renders the pmux identity row of a subagent pane: the response-row arrow,
+/// then the parent label (or `ORPHANED`), then two spaces and the fuzzy task.
+/// The whole line is cut to the inner width in one pass, so it is always a
+/// single row no matter how long the parent label and task are.
+pub(super) fn subagent_identity_row(
+    subagent: Option<&SubagentInfo>,
+    ctx: &RowCtx,
+) -> Option<Line<'static>> {
+    let info = subagent?;
+    let theme = ctx.theme;
+    let (parent_label, parent_color) = match &info.parent {
+        SubagentParent::Pane(label) => (label.as_str(), theme.text_inactive),
+        SubagentParent::Orphaned => ("ORPHANED", theme.status_error),
+    };
+    let task_suffix = info
+        .task
+        .as_deref()
+        .map(|task| format!("  {task}"))
+        .unwrap_or_default();
+
+    let full = format!("▷ {parent_label}{task_suffix}");
+    let shown = truncate_to_width(&full, ctx.inner_width);
+
+    // The surviving text is a char prefix of `full`, possibly closed by the
+    // truncation ellipsis. Walk it and hand each piece its own colour, so a
+    // cut still leaves the parent label and the task in their own styles.
+    let (body, ellipsis) = if shown.ends_with('\u{2026}') && shown != full {
+        (&shown[..shown.len() - '\u{2026}'.len_utf8()], true)
+    } else {
+        (shown.as_str(), false)
+    };
+
+    // Exclusive char-index boundaries where each coloured piece ends.
+    let boundaries = [
+        2usize,
+        2 + parent_label.chars().count(),
+        full.chars().count(),
+    ];
+    let colors = [theme.response_arrow, parent_color, theme.text_muted];
+    let piece_color = |index: usize| -> Color {
+        let piece = boundaries.iter().position(|end| index < *end);
+        match piece {
+            Some(i) => colors[i],
+            // The cut landed past every piece (only possible when the
+            // ellipsis stands alone), so keep the last piece's colour.
+            None => colors[colors.len() - 1],
+        }
+    };
+
+    let mut spans: Vec<Span<'static>> = Vec::with_capacity(4);
+    let mut current_color = colors[0];
+    let mut buf = String::new();
+    for (index, ch) in body.chars().enumerate() {
+        let color = piece_color(index);
+        if color != current_color && !buf.is_empty() {
+            spans.push(Span::styled(
+                std::mem::take(&mut buf),
+                ctx.apply_bg(Style::default().fg(current_color)),
+            ));
+        }
+        current_color = color;
+        buf.push(ch);
+    }
+    if !buf.is_empty() {
+        spans.push(Span::styled(
+            buf,
+            ctx.apply_bg(Style::default().fg(current_color)),
+        ));
+    }
+    if ellipsis {
+        // The ellipsis continues the piece whose first dropped character
+        // sits at the cut point.
+        let cut_color = piece_color(body.chars().count());
+        spans.push(Span::styled(
+            "\u{2026}".to_string(),
+            ctx.apply_bg(Style::default().fg(cut_color)),
+        ));
+    }
+
+    Some(ctx.row_line(spans, display_width(&shown)))
+}
 
 pub(super) fn task_progress_row(
     task_progress: Option<&crate::activity::TaskProgress>,

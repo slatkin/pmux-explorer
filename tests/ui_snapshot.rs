@@ -4,9 +4,11 @@ mod test_helpers;
 use test_helpers::*;
 use tmux_agent_sidebar::activity::{ActivityEntry, TaskProgress, TaskStatus};
 use tmux_agent_sidebar::group::{PaneGitInfo, RepoGroup};
+use tmux_agent_sidebar::pmux_task::PmuxTaskKind;
 use tmux_agent_sidebar::state::{Focus, PopupState, RepoFilter, StatusFilter};
 use tmux_agent_sidebar::tmux::{
-    AgentType, PaneInfo, PaneStatus, PermissionMode, SessionInfo, WindowInfo, WorktreeMetadata,
+    AgentType, PaneInfo, PaneStatus, PermissionMode, SessionInfo, SubagentInfo, SubagentParent,
+    WindowInfo, WorktreeMetadata,
 };
 
 // ─── UI Snapshot Tests ─────────────────────────────────────────────
@@ -2412,5 +2414,60 @@ fn snapshot_background_long_command_truncates_with_ellipsis() {
     ╭ Activity │ Git ──────────╮
     │      No activity yet     │
     ╰──────────────────────────╯
+    ");
+}
+
+// Row 4.3: a subagent pane must keep its identity row even when the parent
+// pane's own row is hidden by the repository filter — the parent label lives
+// on the subagent pane, not on the parent's row.
+#[test]
+fn snapshot_subagent_identity_survives_repo_filter_hiding_parent() {
+    let parent = {
+        let mut p = make_pane(AgentType::Pi, PaneStatus::Running);
+        p.pane_id = "%1".into();
+        p.session_name = "orchestrator".into();
+        p
+    };
+    let subagent = {
+        let mut p = make_pane(AgentType::Pi, PaneStatus::Running);
+        p.pane_id = "%2".into();
+        p.pane_active = false;
+        p.path = "/home/user/project-sub".into();
+        p.subagent = Some(SubagentInfo {
+            kind: PmuxTaskKind::Spawned,
+            task: Some("unit1 idle collapse".into()),
+            parent: SubagentParent::Pane("orchestrator".into()),
+        });
+        p
+    };
+
+    let mut state = make_state(vec![SessionInfo {
+        session_name: "main".into(),
+        windows: vec![WindowInfo {
+            window_id: "@1".into(),
+            window_name: "project".into(),
+            window_active: true,
+            auto_rename: false,
+            panes: vec![parent.clone(), subagent.clone()],
+        }],
+    }]);
+    state.repo_groups = vec![
+        make_repo_group("project", vec![parent]),
+        make_repo_group("project-sub", vec![subagent]),
+    ];
+    // The filter keeps only the subagent's group, hiding the parent's row.
+    state.global.repo_filter = RepoFilter::Repo("project-sub".into());
+    state.rebuild_row_targets();
+
+    let output = render_to_string(&mut state, 60, 40);
+    insta::assert_snapshot!(output, @r"
+     ≡1  ●1  ◎0  ◐0  ○0  ✕0
+    ⓘ                                              project-sub ▾
+    project-sub
+      ● pi subagent
+      ▷ orchestrator  unit1 idle collapse
+    ╭ Activity │ Git ──────────────────────────────────────────╮
+    │                      No activity yet                     │
+    ╰──────────────────────────────────────────────────────────╯
     ");
 }

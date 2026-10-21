@@ -10,8 +10,8 @@ mod ctx;
 mod status;
 
 use body::{
-    background_hint_row, idle_hint_row, prompt_rows, subagent_rows, task_progress_row,
-    wait_reason_row,
+    background_hint_row, idle_hint_row, prompt_rows, subagent_identity_row, subagent_rows,
+    task_progress_row, wait_reason_row,
 };
 use branch::branch_ports_row;
 use ctx::{RowCtx, SELECTION_MARKER};
@@ -73,6 +73,11 @@ pub(super) fn render_pane_lines_with_ports(
 
     let mut out: Vec<Line<'static>> = Vec::with_capacity(8);
     out.push(status_row(pane, &marker_ctx, icons, spinner_frame, now));
+    // The pmux identity row sits directly under the status row and uses the
+    // plain context, like the other detail rows.
+    if let Some(line) = subagent_identity_row(pane.subagent.as_ref(), &plain_ctx) {
+        out.push(line);
+    }
     if let Some(line) = branch_ports_row(git_info, ports, pane.sidebar_spawned, &marker_ctx) {
         out.push(line);
     }
@@ -99,7 +104,10 @@ pub(super) fn render_pane_lines_with_ports(
 mod tests {
     use super::*;
     use crate::group::PaneGitInfo;
-    use crate::tmux::{AgentType, PaneInfo, PermissionMode, WorktreeMetadata};
+    use crate::pmux_task::PmuxTaskKind;
+    use crate::tmux::{
+        AgentType, PaneInfo, PermissionMode, SubagentInfo, SubagentParent, WorktreeMetadata,
+    };
     use crate::ui::icons::StatusIcons;
     use crate::ui::text::display_width;
     use ratatui::style::{Color, Modifier};
@@ -1171,5 +1179,193 @@ mod tests {
                 "each wrapped line should carry the left padding, got: {text}"
             );
         }
+    }
+
+    // ─── pmux subagent badge and identity row (rows 4.1 / 4.2) ───
+
+    fn pi_pane() -> PaneInfo {
+        let mut p = pane(PermissionMode::Default, PaneStatus::Running, "");
+        p.agent = AgentType::Pi;
+        p
+    }
+
+    fn pi_subagent(kind: PmuxTaskKind, parent: SubagentParent, task: Option<&str>) -> PaneInfo {
+        let mut p = pi_pane();
+        p.subagent = Some(SubagentInfo {
+            kind,
+            task: task.map(str::to_string),
+            parent,
+        });
+        p
+    }
+
+    #[test]
+    fn status_row_spawned_subagent_shows_badge() {
+        let theme = ColorTheme::default();
+        let ctx = test_ctx(&theme, 40, false);
+        let p = pi_subagent(PmuxTaskKind::Spawned, SubagentParent::Orphaned, None);
+        let line = status_row(&p, &ctx, &StatusIcons::default(), 0, 0);
+        insta::assert_snapshot!(line_text(&line), @"  ● pi subagent");
+    }
+
+    #[test]
+    fn status_row_resumed_subagent_shows_badge() {
+        let theme = ColorTheme::default();
+        let ctx = test_ctx(&theme, 40, false);
+        let p = pi_subagent(PmuxTaskKind::Resumed, SubagentParent::Orphaned, None);
+        let line = status_row(&p, &ctx, &StatusIcons::default(), 0, 0);
+        insta::assert_snapshot!(line_text(&line), @"  ● pi resumed");
+    }
+
+    #[test]
+    fn status_row_plain_pi_pane_shows_no_badge() {
+        let theme = ColorTheme::default();
+        let ctx = test_ctx(&theme, 40, false);
+        let p = pi_pane();
+        let line = status_row(&p, &ctx, &StatusIcons::default(), 0, 0);
+        insta::assert_snapshot!(line_text(&line), @"  ● pi");
+    }
+
+    #[test]
+    fn status_row_subagent_badge_counts_toward_width_budget() {
+        // The badge eats into the title budget the same way a permission
+        // badge does, so the elapsed label keeps its place on the row.
+        let theme = ColorTheme::default();
+        let ctx = test_ctx(&theme, 30, false);
+        let mut p = pi_subagent(PmuxTaskKind::Spawned, SubagentParent::Orphaned, None);
+        p.session_name = "a-very-long-session-name-that-will-not-fit".into();
+        p.started_at = Some(1);
+        let line = status_row(&p, &ctx, &StatusIcons::default(), 0, 66);
+        let text = line_text(&line);
+        insta::assert_snapshot!(
+            text,
+            @"  ● a-very-long-s… subagent 1m5s"
+        );
+        assert!(
+            display_width(text.trim_end()) <= ctx.inner_width + 2,
+            "row must stay within marker + inner_width 30: {text}"
+        );
+    }
+
+    #[test]
+    fn identity_row_parent_and_task() {
+        let theme = ColorTheme::default();
+        let ctx = test_ctx(&theme, 40, false);
+        let p = pi_subagent(
+            PmuxTaskKind::Spawned,
+            SubagentParent::Pane("orchestrator".into()),
+            Some("unit1 idle collapse"),
+        );
+        let line = subagent_identity_row(p.subagent.as_ref(), &ctx).unwrap();
+        insta::assert_snapshot!(line_text(&line), @"  ▷ orchestrator  unit1 idle collapse");
+    }
+
+    #[test]
+    fn identity_row_parent_without_task() {
+        let theme = ColorTheme::default();
+        let ctx = test_ctx(&theme, 40, false);
+        let p = pi_subagent(
+            PmuxTaskKind::Spawned,
+            SubagentParent::Pane("orchestrator".into()),
+            None,
+        );
+        let line = subagent_identity_row(p.subagent.as_ref(), &ctx).unwrap();
+        insta::assert_snapshot!(line_text(&line), @"  ▷ orchestrator");
+    }
+
+    #[test]
+    fn identity_row_orphaned() {
+        let theme = ColorTheme::default();
+        let ctx = test_ctx(&theme, 40, false);
+        let p = pi_subagent(
+            PmuxTaskKind::Resumed,
+            SubagentParent::Orphaned,
+            Some("review unit2"),
+        );
+        let line = subagent_identity_row(p.subagent.as_ref(), &ctx).unwrap();
+        insta::assert_snapshot!(line_text(&line), @"  ▷ ORPHANED  review unit2");
+        // ORPHANED must be painted in the error colour.
+        let orphan_span = line
+            .spans
+            .iter()
+            .find(|s| s.content.contains("ORPHANED"))
+            .expect("ORPHANED span");
+        assert_eq!(orphan_span.style.fg, Some(theme.status_error));
+    }
+
+    #[test]
+    fn identity_row_cuts_to_one_line_at_narrow_width() {
+        let theme = ColorTheme::default();
+        let ctx = test_ctx(&theme, 18, false);
+        let p = pi_subagent(
+            PmuxTaskKind::Spawned,
+            SubagentParent::Pane("a-very-long-parent-title".into()),
+            Some("a-fuzzy-task-name"),
+        );
+        let line = subagent_identity_row(p.subagent.as_ref(), &ctx).unwrap();
+        insta::assert_snapshot!(line_text(&line), @"  ▷ a-very-long-par…");
+        assert!(
+            display_width(line_text(&line).trim_end()) <= ctx.inner_width + 2,
+            "row must stay within marker + inner_width 18"
+        );
+    }
+
+    #[test]
+    fn identity_row_sits_between_status_row_and_branch_row() {
+        let theme = ColorTheme::default();
+        let p = pi_subagent(
+            PmuxTaskKind::Spawned,
+            SubagentParent::Pane("orchestrator".into()),
+            Some("unit1 idle collapse"),
+        );
+        let lines = render_pane_lines_with_ports(
+            &p,
+            &PaneGitInfo {
+                repo_root: Some("/tmp/project".into()),
+                branch: Some("main".into()),
+                is_worktree: false,
+                worktree_name: None,
+            },
+            None,
+            None,
+            false,
+            false,
+            40,
+            &StatusIcons::default(),
+            &theme,
+            0,
+            0,
+        );
+        let joined = lines
+            .iter()
+            .map(|l| line_text(l).trim_end().to_string())
+            .collect::<Vec<_>>()
+            .join("\n");
+        insta::assert_snapshot!(joined, @r#"
+● pi subagent
+▷ orchestrator  unit1 idle collapse
+  main
+        "#
+        );
+    }
+
+    #[test]
+    fn non_subagent_pane_has_no_identity_row() {
+        let theme = ColorTheme::default();
+        let p = pi_pane();
+        let lines = render_pane_lines_with_ports(
+            &p,
+            &PaneGitInfo::default(),
+            None,
+            None,
+            false,
+            false,
+            40,
+            &StatusIcons::default(),
+            &theme,
+            0,
+            0,
+        );
+        assert_eq!(lines.len(), 1);
     }
 }

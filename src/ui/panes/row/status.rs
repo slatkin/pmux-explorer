@@ -4,6 +4,7 @@ use ratatui::{
 };
 
 use super::ctx::RowCtx;
+use crate::pmux_task::PmuxTaskKind;
 use crate::tmux::PaneStatus;
 use crate::ui::icons::StatusIcons;
 use crate::ui::text::{display_width, elapsed_label, truncate_to_width};
@@ -26,7 +27,15 @@ pub(super) fn status_row(
     } else {
         &pane.session_name
     };
-    let badge = pane.permission_mode.badge();
+    // A subagent pane owns the badge slot: a pi pane always has the default
+    // permission mode, whose badge is empty, so the pmux identity can use it.
+    let (badge, badge_override) = match &pane.subagent {
+        Some(info) => match info.kind {
+            PmuxTaskKind::Spawned => ("subagent", Some(theme.badge_plan)),
+            PmuxTaskKind::Resumed => ("resumed", Some(theme.badge_auto)),
+        },
+        None => (pane.permission_mode.badge(), None),
+    };
     let elapsed = elapsed_label(pane.started_at, now);
 
     let title_fg = theme.agent_color(&pane.agent);
@@ -64,7 +73,7 @@ pub(super) fn status_row(
         ctx.apply_bg(Style::default().fg(title_fg)),
     ));
     if !badge.is_empty() {
-        let badge_color = match pane.permission_mode {
+        let badge_color = badge_override.unwrap_or(match pane.permission_mode {
             PermissionMode::BypassPermissions => theme.badge_danger,
             PermissionMode::Auto => theme.badge_auto,
             PermissionMode::DontAsk => theme.badge_auto,
@@ -72,7 +81,7 @@ pub(super) fn status_row(
             PermissionMode::AcceptEdits => theme.badge_auto,
             PermissionMode::Defer => theme.badge_auto,
             PermissionMode::Default => theme.text_muted,
-        };
+        });
         left_spans.push(Span::styled(
             format!(" {}", badge),
             ctx.apply_bg(Style::default().fg(badge_color)),
