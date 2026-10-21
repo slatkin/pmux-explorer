@@ -18,7 +18,7 @@
 
 ## 4. Docs and gates
 
-- [ ] 4.1 Update `docs/state-management.md`: add `pane_name` to the `PaneInfo` field list and data-flow description; remove the session-name map from the state tables and the frequency diagram; verify the documented flow matches the code by re-reading both.
+- [x] 4.1 Update `docs/state-management.md`: add `pane_name` to the `PaneInfo` field list and data-flow description; remove the session-name map from the state tables and the frequency diagram; verify the documented flow matches the code by re-reading both.
 - [ ] 4.2 Run the full gate suite and verify all pass: `cargo fmt`, `cargo clippy` with no new warnings, `cargo test`, and `cargo build --release`.
 
 ## Workflow follow-up
