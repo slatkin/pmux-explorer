@@ -33,8 +33,8 @@ pub use options::{
     get_pane_option_value, set_pane_option, unset_pane_option,
 };
 pub use panes::{
-    SidebarPaneInfo, find_active_pane, focused_pane_path, get_pane_path, get_sidebar_pane_info,
-    query_active_window_panes,
+    SidebarPaneInfo, SidebarPaneReading, find_active_pane, focused_pane_path, get_pane_path,
+    get_sidebar_pane_info, get_sidebar_pane_reading, query_active_window_panes,
 };
 pub use query::query_sessions;
 pub(crate) use query::query_sessions_with_process_snapshot;

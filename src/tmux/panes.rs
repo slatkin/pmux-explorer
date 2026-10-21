@@ -1,4 +1,7 @@
+use std::collections::HashMap;
+
 use super::commands::{display_message, run_tmux};
+use super::options::{SIDEBAR_CURSOR, SIDEBAR_FILTER, SIDEBAR_REPO_FILTER};
 
 /// The sidebar's own pane state, read from tmux on every refresh.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -19,6 +22,24 @@ pub struct SidebarPaneInfo {
     pub floating: bool,
 }
 
+/// The format `get_sidebar_pane_reading` expands in one
+/// `display-message` call. The repo filter is last because a repo name
+/// can contain spaces, so the parse takes the rest of the line for it.
+const SIDEBAR_PANE_FORMAT: &str = "#{pane_active} #{window_active} #{pane_width} \
+#{window_width} #{window_height} #{pane_floating_flag} #{@sidebar_filter} \
+#{@sidebar_cursor} #{@sidebar_repo_filter}";
+
+/// One `display-message` reading: the sidebar pane state plus the shared
+/// sidebar options seen in the same call.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SidebarPaneReading {
+    pub info: SidebarPaneInfo,
+    /// The `@sidebar_*` options that were set at read time, keyed by
+    /// option name. An option that expands to an empty string is not
+    /// set and is left out, which preserves the unset behavior.
+    pub options: HashMap<String, String>,
+}
+
 impl SidebarPaneInfo {
     /// Values used when the pane is gone or the query failed: not focused,
     /// not the active window, and the historical default pane width. The
@@ -34,33 +55,71 @@ impl SidebarPaneInfo {
 }
 
 /// Parse the `#{pane_active} #{window_active} #{pane_width} #{window_width}
-/// #{window_height} #{pane_floating_flag}` output. Fewer than the three
-/// core fields (the pane is gone, or the query failed) yields
-/// [`SidebarPaneInfo::FALLBACK`]; missing window fields or a missing
-/// floating flag (tmux older than 3.8 has no `pane_floating_flag`) keep
-/// the parsed fields and report a zero window size / not-floating.
-pub(crate) fn parse_sidebar_pane_info(out: &str) -> SidebarPaneInfo {
-    let parts: Vec<&str> = out.split_whitespace().collect();
-    if parts.len() < 3 {
-        return SidebarPaneInfo::FALLBACK;
+/// #{window_height} #{pane_floating_flag} #{@sidebar_filter} #{@sidebar_cursor}
+/// #{@sidebar_repo_filter}` output. Fewer than the three core fields (the
+/// pane is gone, or the query failed) yields [`SidebarPaneInfo::FALLBACK`]
+/// with no options; missing window fields or a missing floating flag
+/// (tmux older than 3.8 has no `pane_floating_flag`) keep the parsed
+/// fields and report a zero window size / not-floating.
+///
+/// The fields are split on single spaces so an option that expands to
+/// an empty string keeps its position, and the repo filter (last field)
+/// keeps the rest of the line, spaces included.
+pub(crate) fn parse_sidebar_pane_reading(out: &str) -> SidebarPaneReading {
+    if out.split_whitespace().count() < 3 {
+        return SidebarPaneReading {
+            info: SidebarPaneInfo::FALLBACK,
+            options: HashMap::new(),
+        };
     }
-    SidebarPaneInfo {
-        pane_active: parts[0] == "1",
-        window_active: parts[1] == "1",
-        width: parts[2].parse().unwrap_or(SidebarPaneInfo::FALLBACK.width),
-        window_width: parts.get(3).and_then(|s| s.parse().ok()).unwrap_or(0),
-        window_height: parts.get(4).and_then(|s| s.parse().ok()).unwrap_or(0),
-        floating: parts.get(5).copied() == Some("1"),
+    let mut fields = out.splitn(9, ' ');
+    let pane_active = fields.next() == Some("1");
+    let window_active = fields.next() == Some("1");
+    let width = fields
+        .next()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(SidebarPaneInfo::FALLBACK.width);
+    let window_width = fields.next().and_then(|s| s.parse().ok()).unwrap_or(0);
+    let window_height = fields.next().and_then(|s| s.parse().ok()).unwrap_or(0);
+    let floating = fields.next() == Some("1");
+    let filter = fields.next().unwrap_or("");
+    let cursor = fields.next().unwrap_or("");
+    let repo_filter = fields.next().unwrap_or("");
+
+    let mut options = HashMap::new();
+    for (key, value) in [
+        (SIDEBAR_FILTER, filter),
+        (SIDEBAR_CURSOR, cursor),
+        (SIDEBAR_REPO_FILTER, repo_filter),
+    ] {
+        if !value.is_empty() {
+            options.insert(key.to_string(), value.to_string());
+        }
+    }
+    SidebarPaneReading {
+        info: SidebarPaneInfo {
+            pane_active,
+            window_active,
+            width,
+            window_width,
+            window_height,
+            floating,
+        },
+        options,
     }
 }
 
+/// Query the sidebar pane state and the shared sidebar options in one
+/// `display-message` call. tmux resolves `#{@sidebar_*}` through pane,
+/// window, session and then global scope, so the global value a peer
+/// instance wrote comes back in the same call.
+pub fn get_sidebar_pane_reading(tmux_pane: &str) -> SidebarPaneReading {
+    let out = display_message(tmux_pane, SIDEBAR_PANE_FORMAT);
+    parse_sidebar_pane_reading(&out)
+}
+
 pub fn get_sidebar_pane_info(tmux_pane: &str) -> SidebarPaneInfo {
-    let out = display_message(
-        tmux_pane,
-        "#{pane_active} #{window_active} #{pane_width} \
-         #{window_width} #{window_height} #{pane_floating_flag}",
-    );
-    parse_sidebar_pane_info(&out)
+    get_sidebar_pane_reading(tmux_pane).info
 }
 
 pub fn get_pane_path(pane_id: &str) -> Option<String> {
@@ -171,44 +230,105 @@ mod tests {
         assert!(pick_active_pane("%99", &panes).is_none());
     }
 
-    // ─── parse_sidebar_pane_info ──────────────────────────────────
+    // ─── parse_sidebar_pane_reading ───────────────────────────────
 
     #[test]
-    fn parse_sidebar_pane_info_parses_floating_flag() {
-        let info = parse_sidebar_pane_info("1 1 40 100 30 1");
-        assert!(info.floating);
-        assert!(info.pane_active);
-        assert!(info.window_active);
-        assert_eq!(info.width, 40);
-        assert_eq!(info.window_width, 100);
-        assert_eq!(info.window_height, 30);
+    fn parse_sidebar_pane_reading_parses_floating_flag() {
+        let reading = parse_sidebar_pane_reading("1 1 40 100 30 1");
+        assert!(reading.info.floating);
+        assert!(reading.info.pane_active);
+        assert!(reading.info.window_active);
+        assert_eq!(reading.info.width, 40);
+        assert_eq!(reading.info.window_width, 100);
+        assert_eq!(reading.info.window_height, 30);
+        assert!(reading.options.is_empty());
 
-        let docked = parse_sidebar_pane_info("0 1 80 120 40 0");
-        assert!(!docked.floating);
-        assert!(!docked.pane_active);
-        assert_eq!(docked.width, 80);
-        assert_eq!(docked.window_width, 120);
-        assert_eq!(docked.window_height, 40);
+        let docked = parse_sidebar_pane_reading("0 1 80 120 40 0");
+        assert!(!docked.info.floating);
+        assert!(!docked.info.pane_active);
+        assert_eq!(docked.info.width, 80);
+        assert_eq!(docked.info.window_width, 120);
+        assert_eq!(docked.info.window_height, 40);
     }
 
     #[test]
-    fn parse_sidebar_pane_info_without_floating_field_reports_docked() {
+    fn parse_sidebar_pane_reading_without_floating_field_reports_docked() {
         // tmux older than 3.8 has no `#{pane_floating_flag}`: the core
         // fields and the window size must survive and the pane must read
         // as docked.
-        let info = parse_sidebar_pane_info("0 1 80 120 40");
-        assert!(!info.floating);
-        assert!(!info.pane_active);
-        assert!(info.window_active);
-        assert_eq!(info.width, 80);
-        assert_eq!(info.window_width, 120);
-        assert_eq!(info.window_height, 40);
+        let reading = parse_sidebar_pane_reading("0 1 80 120 40");
+        assert!(!reading.info.floating);
+        assert!(!reading.info.pane_active);
+        assert!(reading.info.window_active);
+        assert_eq!(reading.info.width, 80);
+        assert_eq!(reading.info.window_width, 120);
+        assert_eq!(reading.info.window_height, 40);
     }
 
     #[test]
-    fn parse_sidebar_pane_info_falls_back_when_query_fails() {
-        let info = parse_sidebar_pane_info("");
-        assert_eq!(info, SidebarPaneInfo::FALLBACK);
-        assert!(!info.floating);
+    fn parse_sidebar_pane_reading_falls_back_when_query_fails() {
+        let reading = parse_sidebar_pane_reading("");
+        assert_eq!(reading.info, SidebarPaneInfo::FALLBACK);
+        assert!(!reading.info.floating);
+        assert!(reading.options.is_empty());
+    }
+
+    #[test]
+    fn parse_sidebar_pane_reading_parses_all_set_options() {
+        let reading = parse_sidebar_pane_reading("1 1 40 100 30 1 waiting 7 my-repo");
+        assert_eq!(reading.options.get(SIDEBAR_FILTER), Some(&"waiting".into()));
+        assert_eq!(reading.options.get(SIDEBAR_CURSOR), Some(&"7".into()));
+        assert_eq!(
+            reading.options.get(SIDEBAR_REPO_FILTER),
+            Some(&"my-repo".into())
+        );
+        assert_eq!(reading.options.len(), 3);
+    }
+
+    #[test]
+    fn parse_sidebar_pane_reading_leaves_unset_options_out_of_the_map() {
+        // `#{@sidebar_filter}` expands to an empty string when the
+        // option is not set, which collapses to nothing between the
+        // spaces — the cursor must keep its position and the filter
+        // key must stay out of the map.
+        let reading = parse_sidebar_pane_reading("0 1 80 120 40 0  12");
+        assert!(!reading.options.contains_key(SIDEBAR_FILTER));
+        assert_eq!(reading.options.get(SIDEBAR_CURSOR), Some(&"12".into()));
+        assert!(!reading.options.contains_key(SIDEBAR_REPO_FILTER));
+
+        // Trailing empty fields are trimmed away by `display-message`,
+        // so a set filter with unset cursor and repo filter must still
+        // land on the right key.
+        let only_filter = parse_sidebar_pane_reading("0 1 80 120 40 0 busy");
+        assert_eq!(
+            only_filter.options.get(SIDEBAR_FILTER),
+            Some(&"busy".into())
+        );
+        assert_eq!(only_filter.options.len(), 1);
+    }
+
+    #[test]
+    fn parse_sidebar_pane_reading_keeps_spaces_in_the_repo_filter() {
+        let reading = parse_sidebar_pane_reading("0 1 80 120 40 0 all 2 My Repo Dir");
+        assert_eq!(
+            reading.options.get(SIDEBAR_REPO_FILTER),
+            Some(&"My Repo Dir".into())
+        );
+        assert_eq!(reading.options.get(SIDEBAR_CURSOR), Some(&"2".into()));
+        assert_eq!(reading.options.get(SIDEBAR_FILTER), Some(&"all".into()));
+    }
+
+    #[test]
+    fn parse_sidebar_pane_reading_keeps_unset_filter_position_before_repo() {
+        // Filter unset, cursor unset, repo set: both empty fields must
+        // be skipped so the repo lands on its own key, not on the
+        // filter's.
+        let reading = parse_sidebar_pane_reading("1 1 40 100 30 1   repo-x");
+        assert!(!reading.options.contains_key(SIDEBAR_FILTER));
+        assert!(!reading.options.contains_key(SIDEBAR_CURSOR));
+        assert_eq!(
+            reading.options.get(SIDEBAR_REPO_FILTER),
+            Some(&"repo-x".into())
+        );
     }
 }

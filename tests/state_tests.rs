@@ -556,6 +556,34 @@ fn test_cursor_sync_clamped_by_rebuild() {
     assert_eq!(state.global.selected_pane_row, 0);
 }
 
+#[test]
+fn test_per_tick_shared_options_change_visible_rows() {
+    // Another instance writes the waiting filter to tmux; the per-tick
+    // pane query reads it back and `apply_shared_options` applies it
+    // before the same tick's `rebuild_row_targets` — the call
+    // `apply_session_snapshot` already makes — re-filters the rows.
+    let running_pane = PaneInfo {
+        pane_id: "%1".into(),
+        status: PaneStatus::Running,
+        ..make_pane(AgentType::Claude, PaneStatus::Running)
+    };
+    let waiting_pane = PaneInfo {
+        pane_id: "%2".into(),
+        status: PaneStatus::Waiting,
+        ..make_pane(AgentType::Claude, PaneStatus::Waiting)
+    };
+    let mut state = make_state(vec![]);
+    state.repo_groups = vec![make_repo_group("project", vec![running_pane, waiting_pane])];
+    state.rebuild_row_targets();
+    assert_eq!(state.layout.pane_row_targets.len(), 2);
+
+    state.apply_shared_options(&make_opts(&[(tmux::SIDEBAR_FILTER, "waiting")]));
+    state.rebuild_row_targets();
+
+    assert_eq!(state.layout.pane_row_targets.len(), 1);
+    assert_eq!(state.layout.pane_row_targets[0].pane_id, "%2");
+}
+
 // ─── GlobalState tests ──────────────────────────────────────────────
 
 fn make_opts(pairs: &[(&str, &str)]) -> std::collections::HashMap<String, String> {

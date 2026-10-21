@@ -130,6 +130,16 @@ impl AppState {
         out
     }
 
+    /// Apply the shared sidebar options read on this tick
+    /// (`@sidebar_filter`, `@sidebar_cursor`, `@sidebar_repo_filter`) to
+    /// [`GlobalState`]. [`GlobalState::apply_all`] guards every field
+    /// with its matching `last_saved_*` value, so a local change that
+    /// tmux already holds is not reverted. Exposed separately from
+    /// `refresh` so tests can hand in a map without tmux.
+    pub fn apply_shared_options(&mut self, options: &HashMap<String, String>) {
+        self.global.apply_all(options);
+    }
+
     fn refresh_activity_data(&mut self) {
         self.refresh_activity_log();
         self.refresh_task_progress();
@@ -140,7 +150,13 @@ impl AppState {
     /// Returns whether the sidebar's window is the active tmux window.
     pub fn refresh(&mut self) -> bool {
         self.refresh_now();
-        self.sidebar_pane = tmux::get_sidebar_pane_info(&self.tmux_pane);
+        let reading = tmux::get_sidebar_pane_reading(&self.tmux_pane);
+        self.sidebar_pane = reading.info;
+        // The shared settings ride along on the same per-tick
+        // `display-message` call: applying them here means the
+        // `rebuild_row_targets` inside `apply_session_snapshot` already
+        // sees the filters another instance wrote.
+        self.apply_shared_options(&reading.options);
         // The flags are read back from the state (not from a local probe
         // copy) so every field the state holds has a reader.
         let focused = self.sidebar_pane.pane_active;
