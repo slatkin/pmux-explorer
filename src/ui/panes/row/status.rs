@@ -31,7 +31,7 @@ pub(super) fn status_row(
     // permission mode, whose badge is empty, so the pmux identity can use it.
     let (badge, badge_override) = match &pane.subagent {
         Some(info) => match info.kind {
-            PmuxTaskKind::Spawned => ("subagent", Some(theme.badge_plan)),
+            PmuxTaskKind::Spawned => ("♟", Some(theme.badge_plan)),
             PmuxTaskKind::Resumed => ("resumed", Some(theme.badge_auto)),
         },
         None => (pane.permission_mode.badge(), None),
