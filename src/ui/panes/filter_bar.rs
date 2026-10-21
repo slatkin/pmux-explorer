@@ -3,7 +3,7 @@ use ratatui::{
     text::{Line, Span},
 };
 
-use crate::state::{AppState, RepoFilter, StatusFilter};
+use crate::state::{AppState, RepoFilter, StatusFilter, filter_bar_layout};
 use crate::tmux::PaneStatus;
 
 use crate::ui::text::{display_width, truncate_to_width};
@@ -46,17 +46,36 @@ pub(super) fn render_filter_bar<'a>(state: &AppState, width: u16) -> (Line<'a>, 
         (StatusFilter::Error, icon_for(PaneStatus::Error), error),
     ];
 
-    let mut spans: Vec<Span<'a>> = Vec::new();
-    spans.push(Span::raw(" "));
+    // The chip layout (which chips fit before the control, and where
+    // each starts) comes from the same pure function the click hit test
+    // runs, so a drawn chip and a clickable chip are always the same
+    // chip, whatever the counts are.
+    let (chips, control_col) = filter_bar_layout([all, busy, waiting, idle, error], width);
+    let Some(control_col) = control_col else {
+        return (Line::from(Vec::new()), None);
+    };
 
-    for (i, (filter, (icon, icon_color), count)) in items.into_iter().enumerate() {
+    let mut spans: Vec<Span<'a>> = Vec::new();
+    // The leading gutter column, skipped on a one-column row so the
+    // control still fits.
+    if control_col > 0 {
+        spans.push(Span::raw(" "));
+    }
+
+    // The busy chip always wears the running colour — running and
+    // background panes are both busy, so its icon carries no selection
+    // cue. The active chip is instead marked by its count, which is
+    // drawn in the accent colour.
+    for (i, chip) in chips.iter().enumerate() {
         if i > 0 {
             spans.push(Span::raw(" "));
         }
+        let (filter, (icon, icon_color), count) = &items[i];
+        debug_assert_eq!(*filter, chip.filter, "chip order must match the layout");
 
-        let is_selected = state.global.status_filter == filter;
-        let icon_style = if is_selected || filter == StatusFilter::Busy {
-            Style::default().fg(icon_color)
+        let is_selected = state.global.status_filter == *filter;
+        let icon_style = if is_selected || *filter == StatusFilter::Busy {
+            Style::default().fg(*icon_color)
         } else {
             Style::default().fg(theme.filter_inactive)
         };
@@ -65,7 +84,7 @@ pub(super) fn render_filter_bar<'a>(state: &AppState, width: u16) -> (Line<'a>, 
         let count_str = format!("{count}");
         let count_style = if is_selected {
             Style::default().fg(theme.accent)
-        } else if count == 0 {
+        } else if *count == 0 {
             Style::default().fg(theme.filter_inactive)
         } else {
             Style::default().fg(theme.text_active)
@@ -74,22 +93,19 @@ pub(super) fn render_filter_bar<'a>(state: &AppState, width: u16) -> (Line<'a>, 
     }
 
     // The control sits at the right edge of the row, one glyph column
-    // wide, with the gap between the chips and the control filling the
-    // rest — the row is as wide as the area, the way the secondary
-    // header right-aligns its repo button.
+    // wide, in the running colour — the row is as wide as the area, the
+    // way the secondary header right-aligns its repo button.
     let control_glyph = if state.sidebar_pane.floating {
         POPIN_GLYPH
     } else {
         POPOUT_GLYPH
     };
-    let chip_width: usize = spans
-        .iter()
-        .map(|span| display_width(span.content.as_ref()))
-        .sum();
-    let control_width = display_width(control_glyph);
-    let gap = (width as usize).saturating_sub(chip_width + control_width);
-    let control_col = (chip_width + gap) as u16;
-    spans.push(Span::raw(" ".repeat(gap)));
+    // Everything drawn ends at or before the control column: the last
+    // drawn chip, or the leading gutter when every chip was dropped.
+    let drawn_end = chips
+        .last()
+        .map_or(control_col.min(1), |chip| chip.start + chip.width);
+    spans.push(Span::raw(" ".repeat((control_col - drawn_end) as usize)));
     spans.push(Span::styled(
         control_glyph,
         Style::default().fg(theme.status_running),
@@ -467,6 +483,104 @@ mod tests {
         let glyph = line.spans.last().unwrap();
         assert_eq!(glyph.content.as_ref(), "⤢");
         assert_eq!(glyph.style.fg, Some(state.theme.status_running));
+    }
+
+    // ─── the row with multi-digit counts (the 20 column minimum) ───
+
+    /// Ten panes of each of the four non-all statuses, so every chip
+    /// count renders with two digits and the chip run alone fills the
+    /// 20 column minimum.
+    fn state_with_two_digit_counts() -> AppState {
+        let mut panes = Vec::new();
+        for (status, n) in [
+            (PaneStatus::Running, 10),
+            (PaneStatus::Waiting, 10),
+            (PaneStatus::Idle, 10),
+            (PaneStatus::Error, 10),
+        ] {
+            for i in 0..n {
+                panes.push((
+                    test_filter_pane(&format!("%{i}x{status:?}"), status.clone()),
+                    PaneGitInfo::default(),
+                ));
+            }
+        }
+        make_state_with_groups(vec![crate::group::RepoGroup {
+            name: "project".into(),
+            has_focus: true,
+            panes,
+        }])
+    }
+
+    #[test]
+    fn render_filter_bar_keeps_the_control_drawn_when_the_chips_fill_the_row() {
+        // The regression case: at the 20 column minimum with every count
+        // at two digits the chip run alone is 20 columns. The error chip
+        // is dropped whole and the control stays drawn at the right edge
+        // — the row never overflows the area and the control column is
+        // always a column a click can land on.
+        let state = state_with_two_digit_counts();
+        assert_eq!(state.status_counts(), (40, 10, 10, 10, 10));
+
+        let (line, col) = render_filter_bar(&state, 20);
+        let text = line_text(&line);
+        assert_eq!(col, Some(19), "the control column must sit inside the row");
+        assert_eq!(
+            display_width(&text),
+            20,
+            "the row must not overflow the 20 column area: {text}"
+        );
+        insta::assert_snapshot!(text, @" ≡40 ●10 ◐10 ○10   ⤢");
+        assert!(
+            !text.contains('✕'),
+            "a chip that no longer fits must be dropped whole, not clipped: {text}"
+        );
+    }
+
+    #[test]
+    fn rendered_icons_sit_exactly_on_the_layout_chip_columns() {
+        // The renderer and the hit test share one layout function; this
+        // pins the render half: every drawn icon sits on the column the
+        // layout names for its chip, at every width including the
+        // truncating one.
+        let state = state_with_two_digit_counts();
+        let (all, busy, waiting, idle, error) = state.status_counts();
+        for width in [20u16, 24, 40] {
+            let (line, _) = render_filter_bar(&state, width);
+            let text = line_text(&line);
+            let (chips, _) = filter_bar_layout([all, busy, waiting, idle, error], width);
+            let chars: Vec<char> = text.chars().collect();
+            let icons = icons_of(&state);
+            for (i, chip) in chips.iter().enumerate() {
+                assert_eq!(
+                    chars[chip.start as usize],
+                    icons[i].chars().next().unwrap(),
+                    "icon column mismatch at width {width}: {text}"
+                );
+            }
+            // A dropped chip must leave no drawn trace either.
+            if chips.len() < 5 {
+                assert_eq!(
+                    chars[control_col(width) as usize],
+                    '⤢',
+                    "the control stays at the right edge at width {width}"
+                );
+            }
+        }
+    }
+
+    fn icons_of(state: &AppState) -> Vec<String> {
+        vec![
+            state.icons.all_icon().to_string(),
+            state.icons.status_icon(&PaneStatus::Running).to_string(),
+            state.icons.status_icon(&PaneStatus::Waiting).to_string(),
+            state.icons.status_icon(&PaneStatus::Idle).to_string(),
+            state.icons.status_icon(&PaneStatus::Error).to_string(),
+        ]
+    }
+
+    fn control_col(width: u16) -> u16 {
+        width - 1
     }
 
     fn test_filter_pane(pane_id: &str, status: PaneStatus) -> crate::tmux::PaneInfo {

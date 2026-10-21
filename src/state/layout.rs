@@ -52,10 +52,13 @@ pub struct FrameLayout {
     /// X column of the repo filter button in the secondary header. `None`
     /// when the button is hidden. Used for click hit-testing.
     pub repo_button_col: Option<u16>,
-    /// X column of the pop-out control at the right edge of the filter
-    /// bar (row 0). `None` when the row is not rendered. Used for click
-    /// hit-testing.
-    pub popout_button_col: Option<u16>,
+    /// Width of the filter bar row (row 0) as last rendered. `0` before
+    /// the first frame, which leaves the row's chips and control
+    /// unclickable. The hit test recomputes the chip layout from this
+    /// width and the live counts through the same [`filter_bar_layout`]
+    /// the renderer uses, so the drawn chips and the clickable chips
+    /// cannot drift apart — including when chips are dropped for space.
+    pub filter_bar_width: u16,
     /// Click regions for the `[+]` spawn button rendered at the right
     /// edge of each repo-group header. One entry per visible repo group.
     pub repo_spawn_targets: Vec<RepoSpawnTarget>,
@@ -69,6 +72,64 @@ pub struct FrameLayout {
 
 pub(super) fn point_in_rect(row: u16, col: u16, rect: ratatui::layout::Rect) -> bool {
     rect.contains(ratatui::layout::Position { x: col, y: row })
+}
+
+/// One chip of the status filter row: its category and the columns it
+/// occupies on screen (icon plus count digits).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FilterChip {
+    pub filter: StatusFilter,
+    /// Column of the chip's icon.
+    pub start: u16,
+    /// Number of columns the chip occupies.
+    pub width: u16,
+}
+
+/// Number of decimal digits `n` renders as; `0` renders as one digit.
+fn count_digits(n: usize) -> u16 {
+    n.checked_ilog10().map_or(1, |d| d + 1) as u16
+}
+
+/// Compute the layout of the status filter row for a row `width` columns
+/// wide with the five status counts in chip order (all, busy, waiting,
+/// idle, error).
+///
+/// The pop-out control owns the last column of the row, and the chips
+/// fill from the left with a single-space separator after one gutter
+/// column. A chip that would no longer fit before the control is
+/// dropped whole — never partially drawn — together with every chip
+/// after it. Returns the chips that fit and the control's column
+/// (`None` for a zero-width row, where nothing is drawn).
+///
+/// Both the renderer and the click hit test run through this function,
+/// so a click can only ever select a chip that is actually drawn.
+pub(crate) fn filter_bar_layout(counts: [usize; 5], width: u16) -> (Vec<FilterChip>, Option<u16>) {
+    if width == 0 {
+        return (Vec::new(), None);
+    }
+    let control_col = width - 1;
+    let order = [
+        (StatusFilter::All, counts[0]),
+        (StatusFilter::Busy, counts[1]),
+        (StatusFilter::Waiting, counts[2]),
+        (StatusFilter::Idle, counts[3]),
+        (StatusFilter::Error, counts[4]),
+    ];
+    let mut chips = Vec::new();
+    let mut start: u16 = 1; // leading gutter column
+    for (filter, count) in order {
+        let chip_width = 1 + count_digits(count);
+        if start + chip_width > control_col {
+            break;
+        }
+        chips.push(FilterChip {
+            filter,
+            start,
+            width: chip_width,
+        });
+        start += chip_width + 1; // single-space separator
+    }
+    (chips, Some(control_col))
 }
 
 impl AppState {
@@ -135,42 +196,31 @@ impl AppState {
         }
         self.timers.last_filter_click = now;
 
-        // The pop-out control at the right edge is hit-tested before the
-        // chip walk, so a click on it never changes the status filter.
-        if self
-            .layout
-            .popout_button_col
-            .is_some_and(|control_col| col == control_col)
+        // The row's chip layout comes from the same pure function the
+        // renderer used for the current frame, keyed on the width that
+        // frame rendered with. The pop-out control is hit-tested before
+        // the chip walk, so a click on it never changes the status
+        // filter.
+        let (chips, control_col) = {
+            let (all, busy, waiting, idle, error) = self.status_counts();
+            filter_bar_layout(
+                [all, busy, waiting, idle, error],
+                self.layout.filter_bar_width,
+            )
+        };
+        if let Some(control_col) = control_col
+            && col == control_col
         {
             self.toggle_popout();
             return;
         }
-
-        let (all, busy, waiting, idle, error) = self.status_counts();
-        // Layout: " ≡N ●N ◐N ○N ✕N"
-        // Each filter item renders as `icon(1) + count`, so the clickable
-        // width is `1 + digits(count)`. Chips are separated by a single
-        // space.
-        let mut x = 1usize; // leading space
-        let items: Vec<(StatusFilter, usize)> = vec![
-            (StatusFilter::All, 1 + format!("{all}").len()),
-            (StatusFilter::Busy, 1 + format!("{busy}").len()),
-            (StatusFilter::Waiting, 1 + format!("{waiting}").len()),
-            (StatusFilter::Idle, 1 + format!("{idle}").len()),
-            (StatusFilter::Error, 1 + format!("{error}").len()),
-        ];
-        let col = col as usize;
-        for (i, (filter, width)) in items.iter().enumerate() {
-            if i > 0 {
-                x += 1; // " " separator
-            }
-            if col >= x && col < x + width {
-                self.global.status_filter = *filter;
+        for chip in &chips {
+            if col >= chip.start && col < chip.start + chip.width {
+                self.global.status_filter = chip.filter;
                 self.global.save_filter();
                 self.rebuild_row_targets();
                 return;
             }
-            x += width;
         }
     }
 

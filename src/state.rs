@@ -24,6 +24,7 @@ pub use activity::ActivityState;
 pub use filter::{RepoFilter, StatusFilter};
 pub use focus::{Focus, FocusState};
 pub use global::GlobalState;
+pub(crate) use layout::filter_bar_layout;
 pub use layout::{FrameLayout, HyperlinkOverlay, RepoSpawnTarget, RowTarget, SpawnRemoveTarget};
 pub(crate) use notices::debug_forced_display;
 pub use notices::{ClaudePluginNotice, NoticesCopyTarget, NoticesMissingHookGroup, NoticesState};
@@ -1257,6 +1258,7 @@ mod tests {
     #[test]
     fn mouse_click_on_filter_bar_changes_filter() {
         let mut state = AppState::new("%99".into());
+        state.layout.filter_bar_width = 30;
         state.layout.pane_row_targets = vec![RowTarget {
             pane_id: "%1".into(),
         }];
@@ -1446,6 +1448,7 @@ mod tests {
     #[test]
     fn filter_click_all_positions() {
         let mut state = AppState::new("%99".into());
+        state.layout.filter_bar_width = 30;
         // With 0 agents, counts are all 0, so layout: " ≡0 ●0 ◐0 ○0 ✕0"
         //                                              0123456789...
 
@@ -1483,6 +1486,7 @@ mod tests {
     #[test]
     fn filter_click_gap_does_nothing() {
         let mut state = AppState::new("%99".into());
+        state.layout.filter_bar_width = 30;
         state.global.status_filter = StatusFilter::All;
 
         // x=0 is leading space, x=3/6/9/12 are separators
@@ -1499,6 +1503,7 @@ mod tests {
     #[test]
     fn filter_click_debounce_ignores_rapid_clicks() {
         let mut state = AppState::new("%99".into());
+        state.layout.filter_bar_width = 30;
         state.global.status_filter = StatusFilter::All;
 
         // First click within debounce window should be ignored
@@ -1519,6 +1524,7 @@ mod tests {
     #[test]
     fn filter_click_with_large_counts() {
         let mut state = AppState::new("%99".into());
+        state.layout.filter_bar_width = 30;
         // Add 10 running agents to shift positions
         let panes: Vec<_> = (0..10)
             .map(|i| {
@@ -1551,6 +1557,7 @@ mod tests {
     #[test]
     fn filter_click_rebuilds_row_targets() {
         let mut state = AppState::new("%99".into());
+        state.layout.filter_bar_width = 30;
         let mut p1 = test_pane("%1");
         p1.status = PaneStatus::Running;
         let mut p2 = test_pane("%2");
@@ -1596,7 +1603,7 @@ mod tests {
         // pop-out branch runs and is refused — the flash proves the
         // action ran.
         let mut state = AppState::new("%4294967295".into());
-        state.layout.popout_button_col = Some(19);
+        state.layout.filter_bar_width = 20;
         state.global.status_filter = StatusFilter::All;
         reset_filter_debounce(&mut state);
         state.handle_filter_click(19);
@@ -1619,15 +1626,16 @@ mod tests {
     }
 
     #[test]
-    fn filter_click_without_a_control_column_walks_the_chips() {
-        // Before the first frame there is no control column: the click
-        // must fall through to the chip walk, not panic or toggle.
+    fn filter_click_before_the_first_frame_does_nothing() {
+        // Before the first frame the row width is unknown (0): no chip
+        // and no control is clickable, and nothing toggles.
         let mut state = AppState::new("%4294967295".into());
-        assert_eq!(state.layout.popout_button_col, None);
+        assert_eq!(state.layout.filter_bar_width, 0);
         state.global.status_filter = StatusFilter::All;
         reset_filter_debounce(&mut state);
         state.handle_filter_click(4);
-        assert_eq!(state.global.status_filter, StatusFilter::Busy);
+        state.handle_filter_click(19);
+        assert_eq!(state.global.status_filter, StatusFilter::All);
         assert!(state.flash.is_none());
     }
 

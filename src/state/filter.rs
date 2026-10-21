@@ -1,6 +1,6 @@
 use super::AppState;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StatusFilter {
     All,
     Busy,

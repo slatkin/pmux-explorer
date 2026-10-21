@@ -1102,3 +1102,99 @@ fn handle_mouse_click_routes_spawn_remove_targets_to_open_remove_confirm() {
         flash.0
     );
 }
+
+// ─── Filter row: render ↔ hit-test agreement ─────────────────────────
+
+#[test]
+fn rendered_filter_row_and_hit_test_agree_at_the_20_column_minimum() {
+    // Ten panes of each of the four counted statuses put every chip
+    // count at two digits, so at the 20 column minimum the chip run no
+    // longer fits beside the pop-out control. The renderer drops the
+    // error chip whole, and the hit test must agree with what was
+    // drawn: every drawn chip's start column selects exactly that
+    // chip, the dropped chip's columns do nothing, and the control
+    // column toggles instead of filtering.
+    let mut panes = Vec::new();
+    let mut id = 0;
+    for status in [
+        PaneStatus::Running,
+        PaneStatus::Waiting,
+        PaneStatus::Idle,
+        PaneStatus::Error,
+    ] {
+        for _ in 0..10 {
+            let mut pane = make_pane(AgentType::Claude, status.clone());
+            pane.pane_id = format!("%{id}");
+            id += 1;
+            panes.push(pane);
+        }
+    }
+    let mut state = make_state(vec![]);
+    // A pane id no tmux server can ever have, so the pop-out branch of
+    // the toggle is exercised and refused instead of touching a live
+    // pane.
+    state.tmux_pane = "%4294967295".into();
+    state.repo_groups = vec![make_repo_group("project", panes)];
+    state.rebuild_row_targets();
+    state.global.status_filter = StatusFilter::All;
+
+    let output = render_to_string(&mut state, 20, 12);
+    let row = output.lines().next().unwrap();
+
+    // The rendered row fills the 20 columns and the control sits on the
+    // last one, inside the area.
+    assert_eq!(row.chars().count(), 20, "row must not overflow: {row}");
+    assert_eq!(
+        row.chars().nth(19),
+        Some('⤢'),
+        "control at the right edge: {row}"
+    );
+    assert!(!row.contains('✕'), "the error chip is dropped whole: {row}");
+
+    // The hit test runs on the width the frame actually rendered with.
+    assert_eq!(state.layout.filter_bar_width, 20);
+
+    let past = std::time::Instant::now() - std::time::Duration::from_millis(200);
+    let mut click = |state: &mut AppState, col: u16| {
+        state.timers.last_filter_click = past;
+        state.handle_mouse_click(0, col);
+    };
+
+    // Every drawn chip's start column selects exactly that chip.
+    for (col, expected) in [
+        (1, StatusFilter::All),
+        (5, StatusFilter::Busy),
+        (9, StatusFilter::Waiting),
+        (13, StatusFilter::Idle),
+    ] {
+        click(&mut state, col);
+        assert_eq!(
+            state.global.status_filter, expected,
+            "click on column {col} must select the drawn chip: {row}"
+        );
+    }
+
+    // The dropped chip's columns and the gap do nothing.
+    for col in [16, 17, 18] {
+        click(&mut state, col);
+        assert_eq!(
+            state.global.status_filter,
+            StatusFilter::Idle,
+            "click on undrawn column {col} must not change the filter: {row}"
+        );
+    }
+
+    // The control column toggles the pop-out instead of filtering.
+    click(&mut state, 19);
+    assert_eq!(
+        state.global.status_filter,
+        StatusFilter::Idle,
+        "a click on the control must never change the filter"
+    );
+    let flash = state.flash.as_ref().expect("the control click must toggle");
+    assert!(
+        flash.0.starts_with("Pop-out refused:"),
+        "the control click must run the pop-out action: {:?}",
+        flash.0
+    );
+}
