@@ -22,12 +22,21 @@ pub struct SidebarPaneInfo {
     pub floating: bool,
 }
 
-/// The format `get_sidebar_pane_reading` expands in one
-/// `display-message` call. The repo filter is last because a repo name
-/// can contain spaces, so the parse takes the rest of the line for it.
+/// The fixed part of the format `get_sidebar_pane_reading` expands in
+/// one `display-message` call: the pane fields and the shared options,
+/// each separated by one space. The repo filter is last because a repo
+/// name can contain spaces, so the parse takes the rest of the line for
+/// it; [`SIDEBAR_REPO_FIELD_END`] is appended after it.
 const SIDEBAR_PANE_FORMAT: &str = "#{pane_active} #{window_active} #{pane_width} \
 #{window_width} #{window_height} #{pane_floating_flag} #{@sidebar_filter} \
-#{@sidebar_cursor} #{@sidebar_repo_filter}";
+#{@sidebar_cursor} #{@sidebar_repo_filter} ";
+
+/// The end-of-fields terminator appended after `#{@sidebar_repo_filter}`.
+/// `display_message` trims its output, which would strip trailing
+/// whitespace from a repo name on every tick, so the repo field is cut at
+/// this token instead of at the end of the line. `/` cannot appear in a
+/// repo directory name, so a value can never contain the token.
+const SIDEBAR_REPO_FIELD_END: &str = "/eot/";
 
 /// One `display-message` reading: the sidebar pane state plus the shared
 /// sidebar options seen in the same call.
@@ -56,15 +65,18 @@ impl SidebarPaneInfo {
 
 /// Parse the `#{pane_active} #{window_active} #{pane_width} #{window_width}
 /// #{window_height} #{pane_floating_flag} #{@sidebar_filter} #{@sidebar_cursor}
-/// #{@sidebar_repo_filter}` output. Fewer than the three core fields (the
-/// pane is gone, or the query failed) yields [`SidebarPaneInfo::FALLBACK`]
-/// with no options; missing window fields or a missing floating flag
-/// (tmux older than 3.8 has no `pane_floating_flag`) keep the parsed
-/// fields and report a zero window size / not-floating.
+/// #{@sidebar_repo_filter} /eot/` output. Fewer than the three core fields
+/// (the pane is gone, or the query failed) yields
+/// [`SidebarPaneInfo::FALLBACK`] with no options; missing window fields or
+/// a missing floating flag (tmux older than 3.8 has no
+/// `pane_floating_flag`) keep the parsed fields and report a zero window
+/// size / not-floating.
 ///
-/// The fields are split on single spaces so an option that expands to
-/// an empty string keeps its position, and the repo filter (last field)
-/// keeps the rest of the line, spaces included.
+/// The fields are split on single spaces so an option that expands to an
+/// empty string keeps its position, and the repo filter (last field) keeps
+/// the rest of the line up to the [`SIDEBAR_REPO_FIELD_END`] terminator,
+/// spaces included; the single separator space before the terminator is
+/// dropped so a repo name with trailing spaces round-trips intact.
 pub(crate) fn parse_sidebar_pane_reading(out: &str) -> SidebarPaneReading {
     if out.split_whitespace().count() < 3 {
         return SidebarPaneReading {
@@ -84,7 +96,17 @@ pub(crate) fn parse_sidebar_pane_reading(out: &str) -> SidebarPaneReading {
     let floating = fields.next() == Some("1");
     let filter = fields.next().unwrap_or("");
     let cursor = fields.next().unwrap_or("");
-    let repo_filter = fields.next().unwrap_or("");
+    let repo_field = fields.next().unwrap_or("");
+    // Cut at the terminator so the `trim()` inside `display_message`
+    // cannot eat trailing whitespace from the repo name. The field is
+    // `value` + the single separator space + the terminator, so exactly
+    // one trailing space is dropped with it.
+    let repo_filter = match repo_field.rfind(SIDEBAR_REPO_FIELD_END) {
+        Some(end) => repo_field[..end]
+            .strip_suffix(' ')
+            .unwrap_or(&repo_field[..end]),
+        None => "",
+    };
 
     let mut options = HashMap::new();
     for (key, value) in [
@@ -114,7 +136,8 @@ pub(crate) fn parse_sidebar_pane_reading(out: &str) -> SidebarPaneReading {
 /// window, session and then global scope, so the global value a peer
 /// instance wrote comes back in the same call.
 pub fn get_sidebar_pane_reading(tmux_pane: &str) -> SidebarPaneReading {
-    let out = display_message(tmux_pane, SIDEBAR_PANE_FORMAT);
+    let format = format!("{SIDEBAR_PANE_FORMAT}{SIDEBAR_REPO_FIELD_END}");
+    let out = display_message(tmux_pane, &format);
     parse_sidebar_pane_reading(&out)
 }
 
@@ -275,7 +298,7 @@ mod tests {
 
     #[test]
     fn parse_sidebar_pane_reading_parses_all_set_options() {
-        let reading = parse_sidebar_pane_reading("1 1 40 100 30 1 waiting 7 my-repo");
+        let reading = parse_sidebar_pane_reading("1 1 40 100 30 1 waiting 7 my-repo /eot/");
         assert_eq!(reading.options.get(SIDEBAR_FILTER), Some(&"waiting".into()));
         assert_eq!(reading.options.get(SIDEBAR_CURSOR), Some(&"7".into()));
         assert_eq!(
@@ -291,7 +314,7 @@ mod tests {
         // option is not set, which collapses to nothing between the
         // spaces — the cursor must keep its position and the filter
         // key must stay out of the map.
-        let reading = parse_sidebar_pane_reading("0 1 80 120 40 0  12");
+        let reading = parse_sidebar_pane_reading("0 1 80 120 40 0  12 /eot/");
         assert!(!reading.options.contains_key(SIDEBAR_FILTER));
         assert_eq!(reading.options.get(SIDEBAR_CURSOR), Some(&"12".into()));
         assert!(!reading.options.contains_key(SIDEBAR_REPO_FILTER));
@@ -299,7 +322,7 @@ mod tests {
         // Trailing empty fields are trimmed away by `display-message`,
         // so a set filter with unset cursor and repo filter must still
         // land on the right key.
-        let only_filter = parse_sidebar_pane_reading("0 1 80 120 40 0 busy");
+        let only_filter = parse_sidebar_pane_reading("0 1 80 120 40 0 busy  /eot/");
         assert_eq!(
             only_filter.options.get(SIDEBAR_FILTER),
             Some(&"busy".into())
@@ -309,7 +332,7 @@ mod tests {
 
     #[test]
     fn parse_sidebar_pane_reading_keeps_spaces_in_the_repo_filter() {
-        let reading = parse_sidebar_pane_reading("0 1 80 120 40 0 all 2 My Repo Dir");
+        let reading = parse_sidebar_pane_reading("0 1 80 120 40 0 all 2 My Repo Dir /eot/");
         assert_eq!(
             reading.options.get(SIDEBAR_REPO_FILTER),
             Some(&"My Repo Dir".into())
@@ -319,11 +342,36 @@ mod tests {
     }
 
     #[test]
+    fn parse_sidebar_pane_reading_round_trips_trailing_space_in_repo_filter() {
+        // `display_message` trims its output; the `/eot/` terminator
+        // anchors the end of the repo field so a repo name with a
+        // trailing space survives the read instead of being corrupted
+        // tick after tick.
+        let reading = parse_sidebar_pane_reading("1 1 40 100 30 1 busy 3 My Repo  /eot/");
+        assert_eq!(
+            reading.options.get(SIDEBAR_REPO_FILTER),
+            Some(&"My Repo ".into())
+        );
+        assert_eq!(reading.options.get(SIDEBAR_FILTER), Some(&"busy".into()));
+        assert_eq!(reading.options.get(SIDEBAR_CURSOR), Some(&"3".into()));
+    }
+
+    #[test]
+    fn parse_sidebar_pane_reading_omits_unset_repo_filter_before_terminator() {
+        // Repo filter unset: the leftover separator space between the
+        // cursor field and the terminator must not become a repo value.
+        let reading = parse_sidebar_pane_reading("1 1 40 100 30 1 waiting 7  /eot/");
+        assert!(!reading.options.contains_key(SIDEBAR_REPO_FILTER));
+        assert_eq!(reading.options.get(SIDEBAR_CURSOR), Some(&"7".into()));
+        assert_eq!(reading.options.get(SIDEBAR_FILTER), Some(&"waiting".into()));
+    }
+
+    #[test]
     fn parse_sidebar_pane_reading_keeps_unset_filter_position_before_repo() {
         // Filter unset, cursor unset, repo set: both empty fields must
         // be skipped so the repo lands on its own key, not on the
         // filter's.
-        let reading = parse_sidebar_pane_reading("1 1 40 100 30 1   repo-x");
+        let reading = parse_sidebar_pane_reading("1 1 40 100 30 1   repo-x /eot/");
         assert!(!reading.options.contains_key(SIDEBAR_FILTER));
         assert!(!reading.options.contains_key(SIDEBAR_CURSOR));
         assert_eq!(
