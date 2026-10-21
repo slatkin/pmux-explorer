@@ -81,7 +81,7 @@ impl AppState {
     /// The mode is read from the pane here, so the action follows the
     /// pane's actual state even when the pane was floated by hand.
     pub fn toggle_popout(&mut self) {
-        let info = tmux::get_sidebar_pane_info(&self.tmux_pane);
+        let info = tmux::get_sidebar_pane_reading(&self.tmux_pane).info;
         self.toggle_popout_with(info);
     }
 

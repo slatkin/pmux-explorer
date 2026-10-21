@@ -141,10 +141,6 @@ pub fn get_sidebar_pane_reading(tmux_pane: &str) -> SidebarPaneReading {
     parse_sidebar_pane_reading(&out)
 }
 
-pub fn get_sidebar_pane_info(tmux_pane: &str) -> SidebarPaneInfo {
-    get_sidebar_pane_reading(tmux_pane).info
-}
-
 pub fn get_pane_path(pane_id: &str) -> Option<String> {
     Some(display_message(pane_id, "#{pane_current_path}")).filter(|s| !s.is_empty())
 }

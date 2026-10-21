@@ -559,7 +559,7 @@ fn test_cursor_sync_clamped_by_rebuild() {
 #[test]
 fn test_per_tick_shared_options_change_visible_rows() {
     // Another instance writes the waiting filter to tmux; the per-tick
-    // pane query reads it back and `apply_shared_options` applies it
+    // pane query reads it back and `apply_all` applies it
     // before the same tick's `rebuild_row_targets` — the call
     // `apply_session_snapshot` already makes — re-filters the rows.
     let running_pane = PaneInfo {
@@ -577,7 +577,9 @@ fn test_per_tick_shared_options_change_visible_rows() {
     state.rebuild_row_targets();
     assert_eq!(state.layout.pane_row_targets.len(), 2);
 
-    state.apply_shared_options(&make_opts(&[(tmux::SIDEBAR_FILTER, "waiting")]));
+    state
+        .global
+        .apply_all(&make_opts(&[(tmux::SIDEBAR_FILTER, "waiting")]));
     state.rebuild_row_targets();
 
     assert_eq!(state.layout.pane_row_targets.len(), 1);
@@ -809,7 +811,7 @@ fn full_sync_picks_up_cursor_from_another_instance() {
 
 // ─── Per-tick shared options sync tests ─────────────────────────
 // The main loop applies the shared tmux options on every refresh tick
-// (`apply_shared_options` → `GlobalState::apply_all`). The
+// (`GlobalState::apply_all`). The
 // `last_saved_*` guards are the only protection a window-activation
 // flicker needs: a tick changes a field only when another instance
 // wrote a value the guard does not already know about.
