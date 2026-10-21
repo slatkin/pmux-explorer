@@ -6,7 +6,7 @@ use crate::tmux;
 use super::filter::{RepoFilter, StatusFilter};
 
 /// State shared across all sidebar instances via tmux global variables.
-/// Synced from tmux at startup and on pane focus change (SIGUSR1).
+/// Synced from tmux at startup.
 pub struct GlobalState {
     pub status_filter: StatusFilter,
     pub selected_pane_row: usize,
@@ -116,7 +116,7 @@ impl GlobalState {
     }
 
     /// Load all global state from tmux variables.
-    /// Called at startup and on SIGUSR1 (pane focus change).
+    /// Called at startup.
     pub fn load_from_tmux(&mut self) {
         let opts = tmux::get_all_global_options();
         self.apply_all(&opts);

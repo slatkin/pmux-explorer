@@ -8,7 +8,7 @@ Every piece of state belongs to one of three scopes: **Global** (shared across a
 
 Stored in `GlobalState`. Written to tmux on change, with the cursor save
 debounced briefly so selection changes do not block redraw/input handling;
-reloaded on SIGUSR1.
+read from tmux on every refresh tick.
 
 | Field | Tmux Variable | Update Trigger | Description |
 |-------|--------------|----------------|-------------|
@@ -128,9 +128,9 @@ Per-pane file-based state:
 │  Every 1s (refresh cycle)                                   │
 │  repo_groups, focus_state.focused_pane_id,                  │
 │  sidebar_pane, layout.pane_row_targets, activity.entries,   │
-│  pane_states.map[..].task_progress                          │
+│  pane_states.map[..].task_progress,                         │
+│  GlobalState reloaded from tmux variables                   │
 ├─────────────────────────────────────────────────────────────┤
-│  Every 10s (port scan, background)                          │
 │  pane_states.map[..].ports, agent liveness cleanup          │
 ├─────────────────────────────────────────────────────────────┤
 │  Every 10s (session_names background thread)                │
@@ -143,9 +143,6 @@ Per-pane file-based state:
 ├─────────────────────────────────────────────────────────────┤
 │  Every 2s (git background thread)                           │
 │  git (branch, diff, ahead/behind, PR)                       │
-├─────────────────────────────────────────────────────────────┤
-│  On SIGUSR1 (tmux focus change)                             │
-│  GlobalState reloaded from tmux variables                   │
 ├─────────────────────────────────────────────────────────────┤
 │  Event-driven (agent hooks)                                 │
 │  @pane_* tmux options, activity log files                   │
