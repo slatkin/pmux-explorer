@@ -14,9 +14,9 @@
 
 ## 3. Query: fields and parent resolution
 
-- [ ] 3.1 Append the three options and `pane_title` to `pane_format()`, add their `pane_line_field` indices and grow both `MIN_FIELDS` by four (design D4); verify the existing query tests pass after their line builders are extended
-- [ ] 3.2 Add `subagent: Option<SubagentInfo>` to `PaneInfo` (design D5), set `None` at every other construction site, and parse it from the new fields with parent `Orphaned`; verify a parse test for a pane with and without the options, and that an unknown kind value gives `None`
-- [ ] 3.3 Build the session-id -> label map in `build_session_hierarchy` and add the resolution post-pass next to `resolve_codex_permission_modes`; verify query tests: a live parent with a title, a live parent with an empty title (label is the pane id), no parent (`Orphaned`), and a parent in another tmux session
+- [x] 3.1 Append the three options and `pane_title` to `pane_format()`, add their `pane_line_field` indices and grow both `MIN_FIELDS` by four (design D4); verify the existing query tests pass after their line builders are extended
+- [x] 3.2 Add `subagent: Option<SubagentInfo>` to `PaneInfo` (design D5), set `None` at every other construction site, and parse it from the new fields with parent `Orphaned`; verify a parse test for a pane with and without the options, and that an unknown kind value gives `None`
+- [x] 3.3 Build the session-id -> label map in `build_session_hierarchy` and add the resolution post-pass next to `resolve_codex_permission_modes`; verify query tests: a live parent with a title, a live parent with an empty title (label is the pane id), no parent (`Orphaned`), and a parent in another tmux session
 
 ## 4. Rendering
 
