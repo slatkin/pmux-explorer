@@ -1,6 +1,7 @@
 use serde_json::{Map, Value};
 
 use crate::event::{AgentEvent, AgentEventKind, EventAdapter};
+use crate::pmux_task::parse_pmux_task;
 use crate::tmux::PI_AGENT;
 use crate::tool_name::CanonicalTool;
 
@@ -146,15 +147,21 @@ impl EventAdapter for PiAdapter {
             "session-end" => Some(AgentEvent::SessionEnd {
                 end_reason: json_str(input, "end_reason").into(),
             }),
-            "user-prompt-submit" => Some(AgentEvent::UserPromptSubmit {
-                agent: PI_AGENT.into(),
-                cwd: json_str(input, "cwd").into(),
-                permission_mode: json_str(input, "permission_mode").into(),
-                prompt: json_str(input, "prompt").into(),
-                worktree: parse_worktree(input),
-                agent_id: optional_str(input, "agent_id"),
-                session_id: optional_str(input, "session_id"),
-            }),
+            "user-prompt-submit" => {
+                let prompt = json_str(input, "prompt");
+                let pmux_task = parse_pmux_task(prompt);
+                let prompt = if pmux_task.is_some() { "" } else { prompt };
+                Some(AgentEvent::UserPromptSubmit {
+                    agent: PI_AGENT.into(),
+                    cwd: json_str(input, "cwd").into(),
+                    permission_mode: json_str(input, "permission_mode").into(),
+                    prompt: prompt.into(),
+                    worktree: parse_worktree(input),
+                    agent_id: optional_str(input, "agent_id"),
+                    session_id: optional_str(input, "session_id"),
+                    pmux_task,
+                })
+            }
             "notification" => {
                 let wait_reason = notification_reason(input);
                 let meta_only = wait_reason == "idle_prompt";
@@ -210,6 +217,7 @@ impl EventAdapter for PiAdapter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::pmux_task::PmuxTaskKind;
     use serde_json::json;
 
     #[test]
@@ -276,8 +284,63 @@ mod tests {
                 worktree: None,
                 agent_id: None,
                 session_id: None,
+                pmux_task: None,
             }
         );
+    }
+
+    #[test]
+    fn user_prompt_submit_parses_a_spawn_prompt() {
+        let adapter = PiAdapter;
+        let event = adapter
+            .parse(
+                "user-prompt-submit",
+                &json!({
+                    "cwd": "/tmp",
+                    "prompt":
+                        "<file name=\"/s/artifacts/P1/context/unit1-idle-collapse-2026-09-07T15-18-30.md\">"
+                }),
+            )
+            .unwrap();
+        match event {
+            AgentEvent::UserPromptSubmit {
+                prompt, pmux_task, ..
+            } => {
+                assert_eq!(prompt, "");
+                let task = pmux_task.expect("spawn prompt carries the pmux task");
+                assert_eq!(task.kind, PmuxTaskKind::Spawned);
+                assert_eq!(task.parent_session_id, "P1");
+                assert_eq!(task.task.as_deref(), Some("unit1 idle collapse"));
+            }
+            other => panic!("expected UserPromptSubmit, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn user_prompt_submit_parses_a_resume_prompt() {
+        let adapter = PiAdapter;
+        let event = adapter
+            .parse(
+                "user-prompt-submit",
+                &json!({
+                    "cwd": "/tmp",
+                    "prompt":
+                        "<file name=\"/s/artifacts/P1/pmux-resume/u1-placement-2026-10-21T05-41-15.md\">"
+                }),
+            )
+            .unwrap();
+        match event {
+            AgentEvent::UserPromptSubmit {
+                prompt, pmux_task, ..
+            } => {
+                assert_eq!(prompt, "");
+                let task = pmux_task.expect("resume prompt carries the pmux task");
+                assert_eq!(task.kind, PmuxTaskKind::Resumed);
+                assert_eq!(task.parent_session_id, "P1");
+                assert_eq!(task.task.as_deref(), Some("u1 placement"));
+            }
+            other => panic!("expected UserPromptSubmit, got {:?}", other),
+        }
     }
 
     #[test]

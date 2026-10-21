@@ -6,6 +6,8 @@ pub use kind::AgentEventKind;
 
 use serde_json::Value;
 
+use crate::pmux_task::PmuxTask;
+
 /// Worktree metadata from Claude Code hook payloads.
 /// Present only when the agent is running in a worktree; `None` otherwise.
 #[derive(Debug, Clone, PartialEq)]
@@ -40,6 +42,7 @@ pub enum AgentEvent {
         worktree: Option<WorktreeInfo>,
         agent_id: Option<String>,
         session_id: Option<String>,
+        pmux_task: Option<PmuxTask>,
     },
     Notification {
         agent: String,
