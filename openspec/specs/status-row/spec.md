@@ -25,14 +25,10 @@ the pane has any other name.
 
 ### Requirement: a named pane shows its pane name
 
-When the pane's tmux title is non-empty, differs from the host name, and is not
-an agent-set OSC title — it does not start with `π - ` (which pi writes) or
-`✳ ` (which Claude Code writes) — the status row SHALL show that title after
-the badge slot, which follows the agent label and holds the subagent badge
-(♟ for spawned, ↻ for resumed) or the permission mode badge. A title that is
-the host name (tmux's default) or an agent-set OSC title SHALL NOT be shown,
-because it is not a name given to the pane. The window's `automatic-rename`
-setting SHALL NOT affect the result.
+The status row SHALL show the pane's tmux title after the badge slot when
+the title is a real name. A title is a real name when it is non-empty,
+differs from the host name, and is not an agent-set OSC title. The
+window's `automatic-rename` setting SHALL NOT affect the result.
 
 #### Scenario: A pane pmux named
 
@@ -48,7 +44,8 @@ setting SHALL NOT affect the result.
 
 #### Scenario: A pane whose title is the host name
 
-- **WHEN** the pane's title equals the host name
+- **WHEN** the pane's title equals the host name (tmux's default, not a name
+  given to the pane)
 - **THEN** the status row shows only the agent label
 
 #### Scenario: A pi pane with pi's own title
@@ -60,6 +57,12 @@ setting SHALL NOT affect the result.
 
 - **WHEN** the pane runs claude and its title is `✳ Claude Code`
 - **THEN** the status row shows only `claude`
+
+#### Scenario: A title carrying an em dash
+
+- **WHEN** the pane's title is `edit — fix bug`, `edit—fix bug`, or `edit — `
+- **THEN** the status row shows the pane name as `edit`: only the text before
+  an em dash is kept, because the suffix is decoration, not the name
 
 #### Scenario: A pane with an empty title
 
