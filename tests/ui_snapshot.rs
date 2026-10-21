@@ -307,7 +307,6 @@ fn snapshot_two_agents_same_window_ui() {
         pane_pid: None,
         worktree: WorktreeMetadata::default(),
         session_id: None,
-        session_name: String::new(),
         sidebar_spawned: false,
         pane_name: None,
         bg_shell_cmd: None,
@@ -330,7 +329,6 @@ fn snapshot_two_agents_same_window_ui() {
         pane_pid: None,
         worktree: WorktreeMetadata::default(),
         session_id: None,
-        session_name: String::new(),
         sidebar_spawned: false,
         pane_name: None,
         bg_shell_cmd: None,
@@ -2427,7 +2425,6 @@ fn snapshot_subagent_identity_survives_repo_filter_hiding_parent() {
     let parent = {
         let mut p = make_pane(AgentType::Pi, PaneStatus::Running);
         p.pane_id = "%1".into();
-        p.session_name = "orchestrator".into();
         p
     };
     let subagent = {

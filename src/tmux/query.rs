@@ -440,7 +440,6 @@ fn parse_pane_fields_with_processes(
             branch: parts[pane_line_field::WORKTREE_BRANCH].to_string(),
         },
         session_id,
-        session_name: String::new(),
         pane_name,
         sidebar_spawned: parts[pane_line_field::SIDEBAR_SPAWNED] == "1",
         bg_shell_cmd: {
@@ -720,7 +719,6 @@ mod tests {
             pane_pid: None,
             worktree: WorktreeMetadata::default(),
             session_id: None,
-            session_name: String::new(),
             sidebar_spawned: false,
             pane_name: None,
             bg_shell_cmd: None,
@@ -1573,7 +1571,6 @@ mod tests {
                     pane_pid: None,
                     worktree: WorktreeMetadata::default(),
                     session_id: None,
-                    session_name: String::new(),
                     sidebar_spawned: false,
                     pane_name: None,
                     bg_shell_cmd: None,

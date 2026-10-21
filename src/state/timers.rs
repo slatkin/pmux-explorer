@@ -4,10 +4,6 @@ use std::time::Instant;
 /// gate refresh cadence in `state/refresh.rs` (port scan, filter-bar
 /// debounce, and the "first port scan completed" flag) so they live as
 /// a unit instead of cluttering [`AppState`].
-///
-/// `session_names` is intentionally NOT here: the polling lives in a
-/// dedicated background thread (`session_poll_loop` in `main.rs`) so the
-/// TUI thread never performs blocking filesystem I/O.
 #[derive(Debug, Clone)]
 pub struct RefreshTimers {
     /// Last time a mouse click was processed on the filter bar (debounce).

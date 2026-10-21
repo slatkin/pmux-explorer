@@ -23,7 +23,6 @@ pub struct PaneInfo {
     pub pane_pid: Option<u32>,
     pub worktree: WorktreeMetadata,
     pub session_id: Option<String>,
-    pub session_name: String,
     /// The pane's own tmux title (`pane_title`) when it is a real name:
     /// non-empty, different from the host name, and not an agent-set OSC
     /// title (`π - …` from pi, `✳ …` from Claude Code). `None` otherwise.

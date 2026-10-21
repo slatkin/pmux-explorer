@@ -37,7 +37,6 @@ pub fn run(
     let workers = workers::spawn(&state);
     let workers::Workers {
         git_rx,
-        session_rx,
         version_rx,
         git_tab_active,
     } = workers;
@@ -117,12 +116,6 @@ pub fn run(
 
         if let Ok(data) = git_rx.try_recv() {
             state.apply_git_data(data);
-            needs_redraw = true;
-        }
-
-        if let Ok(names) = session_rx.try_recv() {
-            state.sessions.names = names;
-            state.sessions.dirty = true;
             needs_redraw = true;
         }
 

@@ -16,7 +16,6 @@ mod popout;
 mod popup;
 mod refresh;
 mod scroll;
-mod session;
 mod tab;
 mod timers;
 
@@ -34,7 +33,6 @@ pub use popup::{PopupState, SpawnField};
 #[cfg(test)]
 pub(crate) use refresh::{TaskProgressDecision, classify_task_progress};
 pub use scroll::{ScrollState, ScrollStates};
-pub use session::SessionNamesState;
 pub use timers::RefreshTimers;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -78,7 +76,7 @@ pub struct AppState {
     pub bottom_tab: BottomTab,
     pub git: crate::git::GitData,
     pub pane_states: PaneRuntimeMap,
-    /// Periodic-refresh clocks (port scan, session-name scan, filter
+    /// Periodic-refresh clocks (port scan, filter
     /// debounce, port-scan first-run flag).
     pub timers: RefreshTimers,
     /// Current popup state. At most one popup is open at a time; the enum
@@ -136,15 +134,6 @@ pub struct AppState {
     /// Height of the bottom panel in lines. Loaded once at startup from
     /// the `@sidebar_bottom_height` tmux option. A value of 0 hides the panel.
     pub bottom_panel_height: u16,
-    /// Maps session_id → session name, refreshed periodically from
-    /// `~/.claude/sessions/*.json` files. The `dirty` flag is `true` when
-    /// the map has changed since the last `refresh_session_names`
-    /// application. Set by the main loop after receiving a fresh map from
-    /// `session_poll_loop`, cleared by `refresh_session_names` once the
-    /// map has been propagated to every pane. Avoids re-walking every
-    /// pane each tick when the map is unchanged (the polling thread only
-    /// updates it every 10s).
-    pub sessions: SessionNamesState,
     /// Whether the pet animation is drawn and ticked. Loaded once at startup
     /// from the `@sidebar_pet` tmux option. Defaults to `false`.
     pub pet_enabled: bool,
@@ -195,7 +184,6 @@ impl AppState {
             version_notice: None,
             global: GlobalState::new(),
             bottom_panel_height: crate::ui::BOTTOM_PANEL_HEIGHT,
-            sessions: SessionNamesState::new(),
             pet_enabled: false,
         };
         crate::state::pet::reseed_pet_idle_motion(&mut state);
@@ -235,7 +223,6 @@ mod tests {
             pane_pid: None,
             worktree: WorktreeMetadata::default(),
             session_id: None,
-            session_name: String::new(),
             sidebar_spawned: false,
             pane_name: None,
             bg_shell_cmd: None,

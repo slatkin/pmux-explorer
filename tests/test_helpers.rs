@@ -119,7 +119,6 @@ pub fn make_pane(agent: AgentType, status: PaneStatus) -> PaneInfo {
         pane_pid: None,
         worktree: WorktreeMetadata::default(),
         session_id: None,
-        session_name: String::new(),
         sidebar_spawned: false,
         pane_name: None,
         bg_shell_cmd: None,

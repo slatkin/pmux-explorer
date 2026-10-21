@@ -139,7 +139,6 @@ mod tests {
             pane_pid: None,
             worktree: WorktreeMetadata::default(),
             session_id: None,
-            session_name: String::new(),
             sidebar_spawned: false,
             pane_name: None,
             bg_shell_cmd: None,
@@ -210,31 +209,6 @@ mod tests {
             status.contains(" codex defer"),
             "defer permission mode should render its badge, got: {status}"
         );
-    }
-
-    #[test]
-    fn render_pane_lines_session_name_does_not_change_the_title_slot() {
-        // The status row never shows the agent's session name: the agent
-        // label always leads the title slot, and the session name's
-        // presence changes nothing.
-        let theme = ColorTheme::default();
-        let mut p = pane(PermissionMode::Default, PaneStatus::Running, "");
-        p.session_name = "fix-csv-aliases".into();
-        let lines = render_pane_lines_with_ports(
-            &p,
-            &PaneGitInfo::default(),
-            None,
-            None,
-            false,
-            false,
-            40,
-            &StatusIcons::default(),
-            &theme,
-            0,
-            0,
-        );
-
-        insta::assert_snapshot!(line_text(&lines[0]), @"  ● codex");
     }
 
     #[test]
