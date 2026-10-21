@@ -20,13 +20,13 @@
 
 ## 4. Rendering
 
-- [ ] 4.1 Show the `subagent` / `resumed` badge in `status_row` (design D6); verify inline `insta` snapshots for a spawned subagent, a resumed subagent, and a plain pi pane (no badge)
-- [ ] 4.2 Add the identity row directly under the status row (parent label or red `ORPHANED`, then the task); verify inline `insta` snapshots for parent and task, parent without task, `ORPHANED`, and a narrow width where the row is cut to one line, plus a color test that `ORPHANED` uses `status_error`
-- [ ] 4.3 Verify a full-frame inline snapshot in `tests/ui_snapshot.rs` with a parent pi pane and a subagent pi pane whose parent row is hidden by the repository filter: the subagent still shows the parent label
+- [x] 4.1 Show the `subagent` / `resumed` badge in `status_row` (design D6); verify inline `insta` snapshots for a spawned subagent, a resumed subagent, and a plain pi pane (no badge)
+- [x] 4.2 Add the identity row directly under the status row (parent label or red `ORPHANED`, then the task); verify inline `insta` snapshots for parent and task, parent without task, `ORPHANED`, and a narrow width where the row is cut to one line, plus a color test that `ORPHANED` uses `status_error`
+- [x] 4.3 Verify a full-frame inline snapshot in `tests/ui_snapshot.rs` with a parent pi pane and a subagent pi pane whose parent row is hidden by the repository filter: the subagent still shows the parent label
 
 ## 5. Integration
 
-- [ ] 5.1 Run `cargo fmt`, `cargo clippy` and `cargo test`; verify all pass with no new warnings
+- [x] 5.1 Run `cargo fmt`, `cargo clippy` and `cargo test`; verify all pass with no new warnings
 - [ ] 5.2 Run `cargo build --release`, restart the sidebar, spawn a pmux scout from a pi pane whose title is set with `select-pane -T`; verify the scout row shows the `subagent` badge, the parent title and the fuzzy task, no `<file` text, and `ORPHANED` in red after the parent pi exits
 
 ## Workflow follow-up
