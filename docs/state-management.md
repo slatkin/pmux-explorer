@@ -36,7 +36,7 @@ Each pane's runtime data is split into two buckets:
 |--------|----------------|-------------|
 | tmux pane options | Event-driven + cleanup on agent exit | Agent type, status, cwd, permission mode, prompt, subagents, worktree, etc. |
 | `PaneRuntimeState` in `AppState` | Refresh cycle + cleanup on agent exit | `ports`, `command`, `task_progress`, `task_dismissed_total`, `inactive_since` |
-| `PaneInfo` (query result, `src/tmux/types.rs`) | Every 1s (refresh cycle) | Per-pane snapshot read from tmux in one `list-panes -a` call: agent type, status, cwd, prompt, pane PID, worktree, session id, and `pane_name` — the pane's own title (`pane_title`) when it is a real name: non-empty, different from the host name, and not an agent-set OSC title (`π - …` from pi, `✳ …` from Claude Code). `None` otherwise. Rendered after the badge slot (subagent ♟/↻ or permission badge) in the status row |
+| `PaneInfo` (query result, `src/tmux/types.rs`) | Every 1s (refresh cycle) | Per-pane snapshot read from tmux in one `list-panes -a` call: agent type, status, cwd, prompt, pane PID, worktree, session id, and `pane_name` — the pane's own title (`pane_title`) when it is a real name: non-empty, different from the host name, and not an agent-set OSC title (`π - …` from pi, `✳ …` from Claude Code); other agents' OSC titles are a known gap. A title carrying an em dash keeps only the text before it (a suffix like a branch or a cwd is decoration), and a title that trims to empty is not a name. `None` otherwise. Rendered after the badge slot (subagent ♟/↻ or permission badge) in the status row |
 
 Pane options written to tmux:
 
@@ -184,7 +184,7 @@ TUI main loop (app::run in app.rs; submodules app/{setup,workers,input,render,pa
     → global.apply_all()             ← applies the shared options under the last_saved_* guards
     → query_sessions() (tmux.rs)     ← reads @pane_* via `tmux list-panes -a`
     → pane_name resolved in the same query (the pane title when it is
-      a real name; no extra tmux call)
+      a real name — em dash suffixes trimmed; no extra tmux call)
     → group_panes_by_repo() (group.rs)
     → rebuild_row_targets()          ← applies GlobalState filters
     → refresh_activity_data()        ← reads /tmp activity logs
