@@ -65,11 +65,13 @@ fn handle_event(pane: &str, agent_name: &str, event: AgentEvent) -> i32 {
             prompt,
             worktree,
             session_id,
+            pmux_task,
             ..
         } => handlers::on_user_prompt_submit(
             pane,
             &context::make_ctx(&agent, &cwd, &permission_mode, &worktree, &session_id),
             &prompt,
+            pmux_task.as_ref(),
         ),
         AgentEvent::Notification {
             agent,

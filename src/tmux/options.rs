@@ -72,6 +72,14 @@ pub const PANE_STATUS: &str = "@pane_status";
 /// Non-empty ⇒ the pane is hosting subagent events and writes
 /// from their hooks must be filtered out of parent metadata.
 pub const PANE_SUBAGENTS: &str = "@pane_subagents";
+/// Subagent identity written when a recognised pmux task prompt arrives:
+/// `spawned` for a new pi session, `resumed` for a resumed one.
+pub const PANE_SUBAGENT_KIND: &str = "@pane_subagent_kind";
+/// Parent pmux session id carried by the recognised pmux task prompt.
+pub const PANE_SUBAGENT_PARENT: &str = "@pane_subagent_parent";
+/// Fuzzy task name from the recognised pmux task prompt; unset when the
+/// prompt carried no usable name.
+pub const PANE_SUBAGENT_TASK: &str = "@pane_subagent_task";
 /// Reason the pane is in `waiting` status (`permission`,
 /// `session_resumed`, etc.).
 pub const PANE_WAIT_REASON: &str = "@pane_wait_reason";
