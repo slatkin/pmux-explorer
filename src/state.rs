@@ -1163,8 +1163,8 @@ mod tests {
         state.rebuild_row_targets();
         assert_eq!(state.layout.pane_row_targets.len(), 3);
 
-        // Running filter: only 2 panes
-        state.global.status_filter = StatusFilter::Running;
+        // Busy filter: only 2 panes
+        state.global.status_filter = StatusFilter::Busy;
         state.rebuild_row_targets();
         assert_eq!(state.layout.pane_row_targets.len(), 2);
         assert_eq!(state.layout.pane_row_targets[0].pane_id, "%1");
@@ -1207,8 +1207,8 @@ mod tests {
         state.rebuild_row_targets();
         state.global.selected_pane_row = 2;
 
-        // Switch to Running filter (only 1 pane) — cursor should clamp
-        state.global.status_filter = StatusFilter::Running;
+        // Switch to Busy filter (only 1 pane) — cursor should clamp
+        state.global.status_filter = StatusFilter::Busy;
         state.rebuild_row_targets();
         assert_eq!(state.global.selected_pane_row, 0);
         assert_eq!(state.layout.pane_row_targets[0].pane_id, "%1");
@@ -1254,10 +1254,10 @@ mod tests {
         state.handle_mouse_click(0, 1);
         assert_eq!(state.global.status_filter, StatusFilter::All);
 
-        // Click on Running icon area (x=6..) should switch to Running
+        // Click on the busy icon area (x=4..) should switch to Busy
         reset_filter_debounce(&mut state);
-        state.handle_mouse_click(0, 6);
-        assert_eq!(state.global.status_filter, StatusFilter::Running);
+        state.handle_mouse_click(0, 4);
+        assert_eq!(state.global.status_filter, StatusFilter::Busy);
 
         // agent selection unchanged
         assert_eq!(state.global.selected_pane_row, 0);
@@ -1394,7 +1394,7 @@ mod tests {
     #[test]
     fn status_counts_empty() {
         let state = AppState::new("%99".into());
-        assert_eq!(state.status_counts(), (0, 0, 0, 0, 0, 0));
+        assert_eq!(state.status_counts(), (0, 0, 0, 0, 0));
     }
 
     #[test]
@@ -1422,8 +1422,8 @@ mod tests {
                 (p5, PaneGitInfo::default()),
             ],
         }];
-        // (all, running, background, waiting, idle, error)
-        assert_eq!(state.status_counts(), (5, 1, 1, 1, 1, 1));
+        // (all, busy, waiting, idle, error) — busy sums running + background
+        assert_eq!(state.status_counts(), (5, 2, 1, 1, 1));
     }
 
     // ─── handle_filter_click tests ───────────────────────────────────
@@ -1431,42 +1431,37 @@ mod tests {
     #[test]
     fn filter_click_all_positions() {
         let mut state = AppState::new("%99".into());
-        // With 0 agents, counts are all 0, so layout: " All  ●0  ◎0  ◐0  ○0  ✕0"
+        // With 0 agents, counts are all 0, so layout: " ≡0 ●0 ◐0 ○0 ✕0"
         //                                              0123456789...
 
-        // "All" at x=1..3
-        state.global.status_filter = StatusFilter::Running;
+        // "≡0" at x=1..2
+        state.global.status_filter = StatusFilter::Busy;
         reset_filter_debounce(&mut state);
         state.handle_filter_click(1);
         assert_eq!(state.global.status_filter, StatusFilter::All);
 
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(3);
+        state.handle_filter_click(2);
         assert_eq!(state.global.status_filter, StatusFilter::All);
 
-        // "●0" at x=6..7
+        // "●0" at x=4..5
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(6);
-        assert_eq!(state.global.status_filter, StatusFilter::Running);
+        state.handle_filter_click(4);
+        assert_eq!(state.global.status_filter, StatusFilter::Busy);
 
-        // "◎0" at x=10..11
+        // "◐0" at x=7..8
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(10);
-        assert_eq!(state.global.status_filter, StatusFilter::Background);
-
-        // "◐0" at x=14..15
-        reset_filter_debounce(&mut state);
-        state.handle_filter_click(14);
+        state.handle_filter_click(7);
         assert_eq!(state.global.status_filter, StatusFilter::Waiting);
 
-        // "○0" at x=18..19
+        // "○0" at x=10..11
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(18);
+        state.handle_filter_click(10);
         assert_eq!(state.global.status_filter, StatusFilter::Idle);
 
-        // "✕0" at x=22..23
+        // "✕0" at x=13..14
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(22);
+        state.handle_filter_click(13);
         assert_eq!(state.global.status_filter, StatusFilter::Error);
     }
 
@@ -1475,14 +1470,14 @@ mod tests {
         let mut state = AppState::new("%99".into());
         state.global.status_filter = StatusFilter::All;
 
-        // x=0 is leading space, x=4 and x=5 are separator
+        // x=0 is leading space, x=3/6/9/12 are separators
         state.handle_filter_click(0);
         assert_eq!(state.global.status_filter, StatusFilter::All);
 
-        state.handle_filter_click(4);
+        state.handle_filter_click(3);
         assert_eq!(state.global.status_filter, StatusFilter::All);
 
-        state.handle_filter_click(5);
+        state.handle_filter_click(6);
         assert_eq!(state.global.status_filter, StatusFilter::All);
     }
 
@@ -1493,17 +1488,17 @@ mod tests {
 
         // First click within debounce window should be ignored
         // (AppState::new sets last_filter_click to now)
-        state.handle_filter_click(6); // would be Running
+        state.handle_filter_click(4); // would be Busy
         assert_eq!(state.global.status_filter, StatusFilter::All); // unchanged due to debounce
 
         // After resetting debounce, click should work
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(6);
-        assert_eq!(state.global.status_filter, StatusFilter::Running);
+        state.handle_filter_click(4);
+        assert_eq!(state.global.status_filter, StatusFilter::Busy);
 
         // Immediate second click should be debounced
         state.handle_filter_click(1); // would be All
-        assert_eq!(state.global.status_filter, StatusFilter::Running); // unchanged
+        assert_eq!(state.global.status_filter, StatusFilter::Busy); // unchanged
     }
 
     #[test]
@@ -1522,24 +1517,19 @@ mod tests {
             has_focus: true,
             panes,
         }];
-        // Layout: " All  ●10  ◎0  ◐0  ○0  ✕0"
+        // Layout: " ≡10 ●10 ◐0 ○0 ✕0"
         //          0123456789...
-        // "●10" at x=6..8 (icon + "10")
+        // "●10" at x=5..7 (icon + "10")
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(6);
-        assert_eq!(state.global.status_filter, StatusFilter::Running);
+        state.handle_filter_click(5);
+        assert_eq!(state.global.status_filter, StatusFilter::Busy);
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(8);
-        assert_eq!(state.global.status_filter, StatusFilter::Running);
+        state.handle_filter_click(7);
+        assert_eq!(state.global.status_filter, StatusFilter::Busy);
 
-        // "◎0" shifts to x=11..12
+        // "◐0" shifts to x=9..10
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(11);
-        assert_eq!(state.global.status_filter, StatusFilter::Background);
-
-        // "◐0" shifts to x=15..16
-        reset_filter_debounce(&mut state);
-        state.handle_filter_click(15);
+        state.handle_filter_click(9);
         assert_eq!(state.global.status_filter, StatusFilter::Waiting);
     }
 
@@ -1565,19 +1555,19 @@ mod tests {
         state.rebuild_row_targets();
         assert_eq!(state.layout.pane_row_targets.len(), 3);
 
-        // Click Running filter — row_targets should update immediately
-        // Layout: " All  ●2  ◎0  ◐0  ○1  ✕0" → Running at x=6
+        // Click Busy filter — row_targets should update immediately
+        // Layout: " ≡3 ●2 ◐0 ○1 ✕0" → Busy at x=4
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(6);
-        assert_eq!(state.global.status_filter, StatusFilter::Running);
+        state.handle_filter_click(4);
+        assert_eq!(state.global.status_filter, StatusFilter::Busy);
         assert_eq!(state.layout.pane_row_targets.len(), 2);
         assert_eq!(state.layout.pane_row_targets[0].pane_id, "%1");
         assert_eq!(state.layout.pane_row_targets[1].pane_id, "%3");
 
         // Click Idle filter — row_targets should update again
-        // Layout: " All  ●2  ◎0  ◐0  ○1  ✕0" → Idle at x=18
+        // Layout: " ≡3 ●2 ◐0 ○1 ✕0" → Idle at x=10
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(18);
+        state.handle_filter_click(10);
         assert_eq!(state.global.status_filter, StatusFilter::Idle);
         assert_eq!(state.layout.pane_row_targets.len(), 1);
         assert_eq!(state.layout.pane_row_targets[0].pane_id, "%2");
@@ -1649,10 +1639,10 @@ mod tests {
             },
         ];
         state.global.repo_filter = RepoFilter::Repo("app".into());
-        state.global.status_filter = StatusFilter::Running;
+        state.global.status_filter = StatusFilter::Busy;
         state.rebuild_row_targets();
 
-        // Only Running panes in "app" group
+        // Only busy (running) panes in "app" group
         assert_eq!(state.layout.pane_row_targets.len(), 1);
         assert_eq!(state.layout.pane_row_targets[0].pane_id, "%1");
     }
@@ -1710,16 +1700,16 @@ mod tests {
 
         // All repos: 2 total
         state.global.repo_filter = RepoFilter::All;
-        let (all, running, _, _, idle, _) = state.status_counts();
+        let (all, busy, _, idle, _) = state.status_counts();
         assert_eq!(all, 2);
-        assert_eq!(running, 1);
+        assert_eq!(busy, 1);
         assert_eq!(idle, 1);
 
         // Filter to "app" only: 1 Running
         state.global.repo_filter = RepoFilter::Repo("app".into());
-        let (all, running, _, _, idle, _) = state.status_counts();
+        let (all, busy, _, idle, _) = state.status_counts();
         assert_eq!(all, 1);
-        assert_eq!(running, 1);
+        assert_eq!(busy, 1);
         assert_eq!(idle, 0);
     }
 }

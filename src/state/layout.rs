@@ -131,15 +131,15 @@ impl AppState {
         }
         self.timers.last_filter_click = now;
 
-        let (all, running, background, waiting, idle, error) = self.status_counts();
-        // Layout: " ∑N  ●N  ◎N  ◐N  ○N  ✕N"
+        let (all, busy, waiting, idle, error) = self.status_counts();
+        // Layout: " ≡N ●N ◐N ○N ✕N"
         // Each filter item renders as `icon(1) + count`, so the clickable
-        // width is `1 + digits(count)`.
+        // width is `1 + digits(count)`. Chips are separated by a single
+        // space.
         let mut x = 1usize; // leading space
         let items: Vec<(StatusFilter, usize)> = vec![
             (StatusFilter::All, 1 + format!("{all}").len()),
-            (StatusFilter::Running, 1 + format!("{running}").len()),
-            (StatusFilter::Background, 1 + format!("{background}").len()),
+            (StatusFilter::Busy, 1 + format!("{busy}").len()),
             (StatusFilter::Waiting, 1 + format!("{waiting}").len()),
             (StatusFilter::Idle, 1 + format!("{idle}").len()),
             (StatusFilter::Error, 1 + format!("{error}").len()),
@@ -147,7 +147,7 @@ impl AppState {
         let col = col as usize;
         for (i, (filter, width)) in items.iter().enumerate() {
             if i > 0 {
-                x += 2; // "  " separator
+                x += 1; // " " separator
             }
             if col >= x && col < x + width {
                 self.global.status_filter = *filter;

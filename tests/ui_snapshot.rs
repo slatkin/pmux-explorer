@@ -31,7 +31,7 @@ fn snapshot_single_agent_idle_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●0  ◎0  ◐0  ○1  ✕0
+     ≡1 ●0 ◐0 ○1 ✕0
     ⓘ                        — ▾
     ┃ ○ claude
         Waiting for prompt…
@@ -65,7 +65,7 @@ fn snapshot_secondary_header_without_notices() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●0  ◎0  ◐0  ○1  ✕0
+     ≡1 ●0 ◐0 ○1 ✕0
                              — ▾
     ┃ ○ claude
         Waiting for prompt…
@@ -95,7 +95,7 @@ fn snapshot_secondary_header_long_repo_filter_truncated() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●0  ◎0  ◐0  ○1  ✕0
+     ≡1 ●0 ◐0 ○1 ✕0
     ⓘ  very-long-repository-n… ▾
     ┃ ○ claude
         Waiting for prompt…
@@ -128,7 +128,7 @@ fn snapshot_version_banner_does_not_duplicate_in_scroll_area() {
 
     let output = render_to_string(&mut state, 28, 10);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●0  ◎0  ◐0  ○1  ✕0
+     ≡1 ●0 ◐0 ○1 ✕0
     ⓘ                        — ▾
     project
     ┃ ○ claude
@@ -156,7 +156,7 @@ fn snapshot_single_agent_running_with_elapsed() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●1  ◎0  ◐0  ○0  ✕0
+     ≡1 ●1 ◐0 ○0 ✕0
     ⓘ                        — ▾
     dotfiles
     ┃ ● claude              2m5s
@@ -187,7 +187,7 @@ fn snapshot_long_session_name_truncated_keeps_elapsed_visible() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●1  ◎0  ◐0  ○0  ✕0
+     ≡1 ●1 ◐0 ○0 ✕0
     ⓘ                        — ▾
     dotfiles
     ┃ ● this-is-a-ridiculo… 2m5s
@@ -216,7 +216,7 @@ fn running_spinner_different_frame() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●1  ◎0  ◐0  ○0  ✕0
+     ≡1 ●1 ◐0 ○0 ✕0
     ⓘ                        — ▾
     project
     ┃ ● claude
@@ -246,7 +246,7 @@ fn snapshot_agent_with_prompt_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●0  ◎0  ◐0  ○1  ✕0
+     ≡1 ●0 ◐0 ○1 ✕0
     ⓘ                        — ▾
     ┃ ○ claude
         fix the bug
@@ -276,7 +276,7 @@ fn snapshot_agent_with_japanese_prompt_ui() {
 
     let output = render_to_string(&mut state, 28, 27);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●1  ◎0  ◐0  ○0  ✕0
+     ≡1 ●1 ◐0 ○0 ✕0
     ⓘ                        — ▾
     ┃ ● claude
         こ れ っ て 今 1時 間 経 っ て い
@@ -350,7 +350,7 @@ fn snapshot_two_agents_same_window_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @r"
-     ≡2  ●1  ◎0  ◐0  ○1  ✕0
+     ≡2 ●1 ◐0 ○1 ✕0
     ⓘ                        — ▾
     ┃ ● claude
         fix the bug
@@ -396,7 +396,7 @@ fn snapshot_two_windows_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @r"
-     ≡2  ●1  ◎0  ◐0  ○1  ✕0
+     ≡2 ●1 ◐0 ○1 ✕0
     ⓘ                        — ▾
     project-a
     ┃ ● claude
@@ -445,7 +445,7 @@ fn snapshot_multi_session_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @r"
-     ≡2  ●1  ◎0  ◐0  ○1  ✕0
+     ≡2 ●1 ◐0 ○1 ✕0
     ⓘ                        — ▾
     dotfiles
     ┃ ● claude
@@ -475,7 +475,7 @@ fn snapshot_wait_reason_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●0  ◎0  ◐1  ○0  ✕0
+     ≡1 ●0 ◐1 ○0 ✕0
     ⓘ                        — ▾
     ┃ ◐ claude
         permission required
@@ -505,7 +505,7 @@ fn snapshot_auto_rename_window_title_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●0  ◎0  ◐0  ○1  ✕0
+     ≡1 ●0 ◐0 ○1 ✕0
     ⓘ                        — ▾
     ┃ ○ claude
         Waiting for prompt…
@@ -551,7 +551,7 @@ fn snapshot_activity_log_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●1  ◎0  ◐0  ○0  ✕0
+     ≡1 ●1 ◐0 ○0 ✕0
     ⓘ                        — ▾
     project
     ┃ ● claude
@@ -590,7 +590,7 @@ fn snapshot_activity_log_long_label_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●1  ◎0  ◐0  ○0  ✕0
+     ≡1 ●1 ◐0 ○0 ✕0
     ⓘ                        — ▾
     project
     ┃ ● claude
@@ -625,7 +625,7 @@ fn snapshot_prompt_wrapping_ui() {
 
     let output = render_to_string(&mut state, 28, 27);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●0  ◎0  ◐0  ○1  ✕0
+     ≡1 ●0 ◐0 ○1 ✕0
     ⓘ                        — ▾
     ┃ ○ claude
         Please fix the
@@ -656,7 +656,7 @@ fn snapshot_selected_unfocused_ui() {
 
     let output = render_to_string(&mut state, 28, 26);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●0  ◎0  ◐0  ○1  ✕0
+     ≡1 ●0 ◐0 ○1 ✕0
     ⓘ                        — ▾
     project
     ┃ ○ claude
@@ -687,7 +687,7 @@ fn snapshot_error_state_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●0  ◎0  ◐0  ○0  ✕1
+     ≡1 ●0 ◐0 ○0 ✕1
     ⓘ                        — ▾
     ┃ ✕ claude
         something broke
@@ -716,8 +716,8 @@ fn snapshot_narrow_width_ui() {
     state.rebuild_row_targets();
 
     let output = render_to_string(&mut state, 18, 25);
-    insta::assert_snapshot!(output, @r"
-     ≡1  ●0  ◎0  ◐0  ○
+    insta::assert_snapshot!(output, @"
+     ≡1 ●0 ◐0 ○1 ✕0
     ⓘ              — ▾
     ┃ ○ claude
         hello world
@@ -767,7 +767,7 @@ fn snapshot_worktree_branch_ui() {
 
     let output = render_to_string(&mut state, 28, 26);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●1  ◎0  ◐0  ○0  ✕0
+     ≡1 ●1 ◐0 ○0 ✕0
     ⓘ                        — ▾
     ┃ ● claude
     ┃   + feature/sidebar
@@ -795,7 +795,7 @@ fn snapshot_worktree_long_branch_truncated_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●0  ◎0  ◐0  ○1  ✕0
+     ≡1 ●0 ◐0 ○1 ✕0
     ⓘ                        — ▾
     ┃   + feature/very-long-bra…
         Waiting for prompt…
@@ -823,7 +823,7 @@ fn snapshot_long_branch_with_ports_ui() {
 
     let output = render_to_string(&mut state, 40, 24);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●1  ◎0  ◐0  ○0  ✕0
+     ≡1 ●1 ◐0 ○0 ✕0
     ⓘ                                    — ▾
     ┃   feature/sidebar/really…  :3000, 5173
     ╭ Activity │ Git ──────────────────────╮
@@ -852,7 +852,7 @@ fn snapshot_task_progress_partial_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●1  ◎0  ◐0  ○0  ✕0
+     ≡1 ●1 ◐0 ○0 ✕0
     ⓘ                        — ▾
         ✔◼◻ 1/3
         working
@@ -878,7 +878,7 @@ fn snapshot_task_progress_all_completed_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●1  ◎0  ◐0  ○0  ✕0
+     ≡1 ●1 ◐0 ○0 ✕0
     ⓘ                        — ▾
     ┃ ● claude
         ✔✔ 2/2
@@ -905,7 +905,7 @@ fn snapshot_task_progress_all_pending_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●1  ◎0  ◐0  ○0  ✕0
+     ≡1 ●1 ◐0 ○0 ✕0
     ⓘ                        — ▾
     ┃ ● claude
         ◻◻◻ 0/3
@@ -949,7 +949,7 @@ fn snapshot_all_elements_combined_ui() {
 
     let output = render_to_string(&mut state, 30, 32);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●0  ◎0  ◐1  ○0  ✕0
+     ≡1 ●0 ◐1 ○0 ✕0
     ⓘ                          — ▾
     project                      +
     ┃ ◐ claude auto
@@ -976,7 +976,7 @@ fn snapshot_response_japanese_ui() {
 
     let output = render_to_string(&mut state, 30, 27);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●0  ◎0  ◐0  ○1  ✕0
+     ≡1 ●0 ◐0 ○1 ✕0
     ⓘ                          — ▾
     project
     ┃ ○ claude
@@ -1011,7 +1011,7 @@ fn snapshot_three_groups_middle_focused_ui() {
 
     let output = render_to_string(&mut state, 28, 33);
     insta::assert_snapshot!(output, @r"
-     ≡3  ●1  ◎0  ◐0  ○2  ✕0
+     ≡3 ●1 ◐0 ○2 ✕0
     ⓘ                        — ▾
     repo-a
       ● claude
@@ -1038,7 +1038,7 @@ fn snapshot_bypass_all_badge_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●1  ◎0  ◐0  ○0  ✕0
+     ≡1 ●1 ◐0 ○0 ✕0
     ⓘ                        — ▾
     project
     ┃ ● claude !
@@ -1057,7 +1057,7 @@ fn snapshot_full_auto_badge_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●1  ◎0  ◐0  ○0  ✕0
+     ≡1 ●1 ◐0 ○0 ✕0
     ⓘ                        — ▾
     project
     ┃ ● claude auto
@@ -1076,7 +1076,7 @@ fn snapshot_plan_badge_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●1  ◎0  ◐0  ○0  ✕0
+     ≡1 ●1 ◐0 ○0 ✕0
     ⓘ                        — ▾
     project
     ┃ ● claude plan
@@ -1095,7 +1095,7 @@ fn snapshot_accept_edits_badge_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●1  ◎0  ◐0  ○0  ✕0
+     ≡1 ●1 ◐0 ○0 ✕0
     ⓘ                        — ▾
     project
     ┃ ● claude edit
@@ -1124,7 +1124,7 @@ fn snapshot_response_with_branch_ui() {
 
     let output = render_to_string(&mut state, 34, 27);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●0  ◎0  ◐0  ○1  ✕0
+     ≡1 ●0 ◐0 ○1 ✕0
     ⓘ                              — ▾
     project                          +
     ┃ ○ claude
@@ -1147,7 +1147,7 @@ fn snapshot_wait_reason_elicitation_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●0  ◎0  ◐1  ○0  ✕0
+     ≡1 ●0 ◐1 ○0 ✕0
     ⓘ                        — ▾
     ┃ ◐ claude
         waiting for selection
@@ -1166,7 +1166,7 @@ fn snapshot_wait_reason_unknown_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●0  ◎0  ◐1  ○0  ✕0
+     ≡1 ●0 ◐1 ○0 ✕0
     ⓘ                        — ▾
     ┃ ◐ claude
         some_future_reason
@@ -1187,7 +1187,7 @@ fn snapshot_wait_reason_permission_denied_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●0  ◎0  ◐1  ○0  ✕0
+     ≡1 ●0 ◐1 ○0 ✕0
     ⓘ                        — ▾
     ┃ ◐ claude
         permission denied
@@ -1216,7 +1216,7 @@ fn snapshot_worktree_with_name_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●1  ◎0  ◐0  ○0  ✕0
+     ≡1 ●1 ◐0 ○0 ✕0
     ⓘ                        — ▾
     ┃ ● claude
     ┃   + auth-wt: feat/auth
@@ -1243,7 +1243,7 @@ fn snapshot_worktree_name_same_as_branch_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●1  ◎0  ◐0  ○0  ✕0
+     ≡1 ●1 ◐0 ○0 ✕0
     ⓘ                        — ▾
     ┃ ● claude
     ┃   + feat/auth
@@ -1300,7 +1300,7 @@ fn snapshot_activity_all_tool_types_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●1  ◎0  ◐0  ○0  ✕0
+     ≡1 ●1 ◐0 ○0 ✕0
     ⓘ                        — ▾
     project
     ┃ ● claude
@@ -1339,7 +1339,7 @@ fn snapshot_focus_activity_log_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●1  ◎0  ◐0  ○0  ✕0
+     ≡1 ●1 ◐0 ○0 ✕0
     ⓘ                        — ▾
     project
     ┃ ● claude
@@ -1364,8 +1364,8 @@ fn right_border_narrow_width_with_badge() {
     // Snapshot locks in the `!` badge visibility at narrow width plus a
     // fully-drawn right border.
     let output = render_to_string(&mut state, 22, 25);
-    insta::assert_snapshot!(output, @r"
-     ≡1  ●1  ◎0  ◐0  ○0  ✕
+    insta::assert_snapshot!(output, @"
+     ≡1 ●1 ◐0 ○0 ✕0
     ⓘ                  — ▾
     ┃ ● claude !    2h0m0s
         fix the issue
@@ -1414,7 +1414,7 @@ fn right_border_all_permission_modes_and_agents() {
     }
     insta::assert_snapshot!(composite, @r"
     === Claude / Default ===
-     ≡1  ●1  ◎0  ◐0  ○0  ✕0
+     ≡1 ●1 ◐0 ○0 ✕0
     ⓘ                        — ▾
     project
     ┃ ● claude          1h30m32s
@@ -1423,7 +1423,7 @@ fn right_border_all_permission_modes_and_agents() {
     ╰──────────────────────────╯
 
     === Claude / Auto ===
-     ≡1  ●1  ◎0  ◐0  ○0  ✕0
+     ≡1 ●1 ◐0 ○0 ✕0
     ⓘ                        — ▾
     project
     ┃ ● claude auto     1h30m32s
@@ -1432,7 +1432,7 @@ fn right_border_all_permission_modes_and_agents() {
     ╰──────────────────────────╯
 
     === Claude / DontAsk ===
-     ≡1  ●1  ◎0  ◐0  ○0  ✕0
+     ≡1 ●1 ◐0 ○0 ✕0
     ⓘ                        — ▾
     project
     ┃ ● claude dontAsk  1h30m32s
@@ -1441,7 +1441,7 @@ fn right_border_all_permission_modes_and_agents() {
     ╰──────────────────────────╯
 
     === Claude / Plan ===
-     ≡1  ●1  ◎0  ◐0  ○0  ✕0
+     ≡1 ●1 ◐0 ○0 ✕0
     ⓘ                        — ▾
     project
     ┃ ● claude plan     1h30m32s
@@ -1450,7 +1450,7 @@ fn right_border_all_permission_modes_and_agents() {
     ╰──────────────────────────╯
 
     === Claude / AcceptEdits ===
-     ≡1  ●1  ◎0  ◐0  ○0  ✕0
+     ≡1 ●1 ◐0 ○0 ✕0
     ⓘ                        — ▾
     project
     ┃ ● claude edit     1h30m32s
@@ -1459,7 +1459,7 @@ fn right_border_all_permission_modes_and_agents() {
     ╰──────────────────────────╯
 
     === Claude / BypassPermissions ===
-     ≡1  ●1  ◎0  ◐0  ○0  ✕0
+     ≡1 ●1 ◐0 ○0 ✕0
     ⓘ                        — ▾
     project
     ┃ ● claude !        1h30m32s
@@ -1468,7 +1468,7 @@ fn right_border_all_permission_modes_and_agents() {
     ╰──────────────────────────╯
 
     === Codex / Default ===
-     ≡1  ●1  ◎0  ◐0  ○0  ✕0
+     ≡1 ●1 ◐0 ○0 ✕0
     ⓘ                        — ▾
     project
     ┃ ● codex           1h30m32s
@@ -1477,7 +1477,7 @@ fn right_border_all_permission_modes_and_agents() {
     ╰──────────────────────────╯
 
     === Codex / Auto ===
-     ≡1  ●1  ◎0  ◐0  ○0  ✕0
+     ≡1 ●1 ◐0 ○0 ✕0
     ⓘ                        — ▾
     project
     ┃ ● codex auto      1h30m32s
@@ -1486,7 +1486,7 @@ fn right_border_all_permission_modes_and_agents() {
     ╰──────────────────────────╯
 
     === Codex / DontAsk ===
-     ≡1  ●1  ◎0  ◐0  ○0  ✕0
+     ≡1 ●1 ◐0 ○0 ✕0
     ⓘ                        — ▾
     project
     ┃ ● codex dontAsk   1h30m32s
@@ -1495,7 +1495,7 @@ fn right_border_all_permission_modes_and_agents() {
     ╰──────────────────────────╯
 
     === Codex / Plan ===
-     ≡1  ●1  ◎0  ◐0  ○0  ✕0
+     ≡1 ●1 ◐0 ○0 ✕0
     ⓘ                        — ▾
     project
     ┃ ● codex plan      1h30m32s
@@ -1504,7 +1504,7 @@ fn right_border_all_permission_modes_and_agents() {
     ╰──────────────────────────╯
 
     === Codex / AcceptEdits ===
-     ≡1  ●1  ◎0  ◐0  ○0  ✕0
+     ≡1 ●1 ◐0 ○0 ✕0
     ⓘ                        — ▾
     project
     ┃ ● codex edit      1h30m32s
@@ -1513,7 +1513,7 @@ fn right_border_all_permission_modes_and_agents() {
     ╰──────────────────────────╯
 
     === Codex / BypassPermissions ===
-     ≡1  ●1  ◎0  ◐0  ○0  ✕0
+     ≡1 ●1 ◐0 ○0 ✕0
     ⓘ                        — ▾
     project
     ┃ ● codex !         1h30m32s
@@ -1539,7 +1539,7 @@ fn snapshot_filter_bar_shows_counts() {
     let mut state = make_state_with_groups(vec![make_repo_group("project", vec![pane1, pane2])]);
     let output = render_to_string(&mut state, 30, 25);
     insta::assert_snapshot!(output, @r"
-     ≡2  ●1  ◎0  ◐0  ○1  ✕0
+     ≡2 ●1 ◐0 ○1 ✕0
     ⓘ                          — ▾
     project
     ┃ ● claude
@@ -1561,10 +1561,10 @@ fn snapshot_filter_running_hides_idle() {
     };
 
     let mut state = make_state_with_groups(vec![make_repo_group("project", vec![pane1, pane2])]);
-    state.global.status_filter = StatusFilter::Running;
+    state.global.status_filter = StatusFilter::Busy;
     let output = render_to_string(&mut state, 30, 25);
     insta::assert_snapshot!(output, @r"
-     ≡2  ●1  ◎0  ◐0  ○1  ✕0
+     ≡2 ●1 ◐0 ○1 ✕0
     ⓘ                          — ▾
     project
     ┃ ● claude
@@ -1589,7 +1589,7 @@ fn snapshot_filter_idle_hides_running() {
     state.global.status_filter = StatusFilter::Idle;
     let output = render_to_string(&mut state, 30, 25);
     insta::assert_snapshot!(output, @r"
-     ≡2  ●1  ◎0  ◐0  ○1  ✕0
+     ≡2 ●1 ◐0 ○1 ✕0
     ⓘ                          — ▾
       ○ codex
         Waiting for prompt…
@@ -1614,10 +1614,10 @@ fn snapshot_filter_hides_empty_groups() {
         make_repo_group("repo-a", vec![pane1]),
         make_repo_group("repo-b", vec![pane2]),
     ]);
-    state.global.status_filter = StatusFilter::Running;
+    state.global.status_filter = StatusFilter::Busy;
     let output = render_to_string(&mut state, 30, 25);
     insta::assert_snapshot!(output, @r"
-     ≡2  ●1  ◎0  ◐0  ○1  ✕0
+     ≡2 ●1 ◐0 ○1 ✕0
     ⓘ                          — ▾
     repo-a
     ┃ ● claude
@@ -1642,7 +1642,7 @@ fn snapshot_filter_all_shows_everything() {
     state.global.status_filter = StatusFilter::All;
     let output = render_to_string(&mut state, 30, 30);
     insta::assert_snapshot!(output, @r"
-     ≡2  ●1  ◎0  ◐0  ○1  ✕0
+     ≡2 ●1 ◐0 ○1 ✕0
     ⓘ                          — ▾
     project
     ┃ ● claude
@@ -1668,7 +1668,7 @@ fn snapshot_filter_bar_icons_use_selected_and_inactive_colors() {
 
     let styled = render_to_styled_string(&mut state, 30, 25);
     let line = styled.lines().next().unwrap();
-    insta::assert_snapshot!(line, @" ≡[fg:111]2[fg:255]  ●[fg:245]1[fg:255]  ◎[fg:245]0[fg:245]  ◐[fg:245]0[fg:245]  ○[fg:245]1[fg:255]  ✕[fg:245]0[fg:245]");
+    insta::assert_snapshot!(line, @" ≡[fg:111]2[fg:153] ●[fg:114]1[fg:255] ◐[fg:245]0[fg:245] ○[fg:245]1[fg:255] ✕[fg:245]0[fg:245]");
 }
 
 #[test]
@@ -1687,7 +1687,7 @@ fn snapshot_filter_bar_stays_fixed_on_scroll() {
 
     let output = render_to_string(&mut state, 30, 15);
     insta::assert_snapshot!(output, @r"
-     ≡6  ●6  ◎0  ◐0  ○0  ✕0
+     ≡6 ●6 ◐0 ○0 ✕0
     ╭ Activity │ Git ────────────╮
     │       No activity yet      │
     ╰────────────────────────────╯
@@ -1705,13 +1705,13 @@ fn snapshot_filter_selected_icon_has_color_without_underline() {
         ..make_pane(AgentType::Codex, PaneStatus::Idle)
     };
     let mut state = make_state_with_groups(vec![make_repo_group("project", vec![pane1, pane2])]);
-    state.global.status_filter = StatusFilter::Running;
+    state.global.status_filter = StatusFilter::Busy;
 
     // The inline snapshot captures the styled filter bar; any underline
     // modifier on the selected filter would surface in the snapshot diff.
     let styled = render_to_styled_string(&mut state, 30, 25);
     let line = styled.lines().next().unwrap();
-    insta::assert_snapshot!(line, @" ≡[fg:245]2[fg:255]  ●[fg:114]1[fg:255]  ◎[fg:245]0[fg:245]  ◐[fg:245]0[fg:245]  ○[fg:245]1[fg:255]  ✕[fg:245]0[fg:245]");
+    insta::assert_snapshot!(line, @" ≡[fg:245]2[fg:255] ●[fg:114]1[fg:153] ◐[fg:245]0[fg:245] ○[fg:245]1[fg:255] ✕[fg:245]0[fg:245]");
 }
 
 #[test]
@@ -1730,7 +1730,7 @@ fn snapshot_filter_error_shows_agents() {
     state.global.status_filter = StatusFilter::Error;
     let output = render_to_string(&mut state, 30, 25);
     insta::assert_snapshot!(output, @r"
-     ≡2  ●1  ◎0  ◐0  ○0  ✕1
+     ≡2 ●1 ◐0 ○0 ✕1
     ⓘ                          — ▾
     ┃ ✕ claude
         something broke
@@ -1756,7 +1756,7 @@ fn snapshot_filter_waiting_shows_only_waiting() {
     state.global.status_filter = StatusFilter::Waiting;
     let output = render_to_string(&mut state, 30, 25);
     insta::assert_snapshot!(output, @r"
-     ≡2  ●0  ◎0  ◐1  ○1  ✕0
+     ≡2 ●0 ◐1 ○1 ✕0
     ⓘ                          — ▾
     ┃ ◐ claude
         permission required
@@ -1803,7 +1803,7 @@ fn snapshot_repo_header_shows_spawn_plus_button() {
     let mut state = make_state_for_popup_tests(vec![repo_group_with_root("proj", vec![pane])]);
     let output = render_to_string(&mut state, 30, 15);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●0  ◎0  ◐0  ○1  ✕0
+     ≡1 ●0 ◐0 ○1 ✕0
     ⓘ                          — ▾
     proj                         +
     ┃ ○ claude
@@ -1822,7 +1822,7 @@ fn snapshot_spawn_modal_default_state() {
     state.open_spawn_input_for_repo("proj".into(), "/home/u/proj".into(), None);
     let output = render_to_string(&mut state, 34, 18);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●0  ◎0  ◐0  ○1  ✕0
+     ≡1 ●0 ◐0 ○1 ✕0
     ⓘ╭ Spawn worktree ──────────────╮▾
     p│                              │+
     ┃│ NAME                         │
@@ -1851,7 +1851,7 @@ fn snapshot_spawn_modal_anchors_directly_below_repo_header() {
     state.open_spawn_input_from_selection();
     let output = render_to_string(&mut state, 34, 18);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●0  ◎0  ◐0  ○1  ✕0
+     ≡1 ●0 ◐0 ○1 ✕0
     ⓘ                              — ▾
     ╭ Spawn worktree ──────────────╮ +
     │ NAME                         │
@@ -1881,7 +1881,7 @@ fn snapshot_spawn_modal_advance_fields_cycles_agent_and_mode() {
     state.spawn_input_cycle(2); // default → bypassPermissions
     let output = render_to_string(&mut state, 34, 18);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●0  ◎0  ◐0  ○1  ✕0
+     ≡1 ●0 ◐0 ○1 ✕0
     ⓘ╭ Spawn worktree ──────────────╮▾
     p│                              │+
     ┃│ NAME                         │
@@ -1907,7 +1907,7 @@ fn snapshot_spawn_modal_tail_fits_long_task_name() {
     }
     let output = render_to_string(&mut state, 34, 18);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●0  ◎0  ◐0  ○1  ✕0
+     ≡1 ●0 ◐0 ○1 ✕0
     ⓘ╭ Spawn worktree ──────────────╮▾
     p│                              │+
     ┃│ NAME                         │
@@ -1932,8 +1932,8 @@ fn snapshot_spawn_modal_narrow_width_still_fits() {
         state.spawn_input_push_char(c);
     }
     let output = render_to_string(&mut state, 18, 18);
-    insta::assert_snapshot!(output, @r"
-     ≡1  ●0  ◎0  ◐0  ○
+    insta::assert_snapshot!(output, @"
+     ≡1 ●0 ◐0 ○1 ✕0
     ╭ Spawn worktree ╮
     │ NAME           │
     │ hi█            │
@@ -1962,7 +1962,7 @@ fn snapshot_spawn_modal_compact_layout_in_short_agent_area() {
     }
     let output = render_to_string(&mut state, 40, 14);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●0  ◎0  ◐0  ○1  ✕0
+     ≡1 ●0 ◐0 ○1 ✕0
     ⓘ                                    — ▾
     proj╭ Spawn worktree ──────────────╮   +
     ┃ ○ │ hi█                          │
@@ -1983,7 +1983,7 @@ fn snapshot_spawn_modal_compact_layout_shows_inline_error() {
     state.confirm_spawn_input();
     let output = render_to_string(&mut state, 40, 14);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●0  ◎0  ◐0  ○1  ✕0
+     ≡1 ●0 ◐0 ○1 ✕0
     ⓘ   ╭ Spawn worktree ──────────────╮ — ▾
     proj│ █                            │   +
     ┃ ○ │ claude                       │
@@ -2032,7 +2032,7 @@ fn snapshot_sidebar_spawned_pane_appends_trailing_remove_marker() {
     state.bottom_panel_height = 3;
     let output = render_to_string(&mut state, 30, 20);
     insta::assert_snapshot!(output, @r"
-     ≡2  ●0  ◎0  ◐0  ○2  ✕0
+     ≡2 ●0 ◐0 ○2 ✕0
     ⓘ                          — ▾
     proj                         +
     ┃ ○ claude
@@ -2172,7 +2172,7 @@ fn snapshot_sidebar_spawned_long_branch_truncates_and_keeps_x() {
     state.bottom_panel_height = 3;
     let output = render_to_string(&mut state, 24, 20);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●0  ◎0  ◐0  ○1  ✕0
+     ≡1 ●0 ◐0 ○1 ✕0
     ⓘ                    — ▾
     proj                   +
       ○ claude
@@ -2215,7 +2215,7 @@ fn snapshot_sidebar_spawned_coexists_with_port_display() {
     state.pane_state_mut("%9").ports = vec![3000];
     let output = render_to_string(&mut state, 30, 20);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●0  ◎0  ◐0  ○1  ✕0
+     ≡1 ●0 ◐0 ○1 ✕0
     ⓘ                          — ▾
     proj                         +
       ○ claude
@@ -2239,7 +2239,7 @@ fn snapshot_remove_confirm_modal_shows_three_options() {
     };
     let output = render_to_string(&mut state, 50, 18);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●0  ◎0  ◐0  ○1  ✕0
+     ≡1 ●0 ◐0 ○1 ✕0
     ⓘ                                              — ▾
     proj                                             +
     ┃ ○ claude
@@ -2311,7 +2311,7 @@ fn snapshot_remove_confirm_modal_shows_inline_error() {
     };
     let output = render_to_string(&mut state, 50, 18);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●0  ◎0  ◐0  ○1  ✕0
+     ≡1 ●0 ◐0 ○1 ✕0
     ⓘ                                              — ▾
     proj                                             +
     ┃ ○ claude ╭ add-login ───────────────╮
@@ -2346,7 +2346,7 @@ fn snapshot_background_status_shows_bg_command_row() {
 
     let output = render_to_string(&mut state, 32, 25);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●0  ◎1  ◐0  ○0  ✕0
+     ≡1 ●1 ◐0 ○0 ✕0
     ⓘ                            — ▾
     ┃ ◎ claude
         $ npm run dev
@@ -2377,7 +2377,7 @@ fn snapshot_running_pane_still_shows_live_bg_command() {
 
     let output = render_to_string(&mut state, 32, 25);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●1  ◎0  ◐0  ○0  ✕0
+     ≡1 ●1 ◐0 ○0 ✕0
     ⓘ                            — ▾
     ┃ ● claude                   10s
         $ cargo watch
@@ -2407,7 +2407,7 @@ fn snapshot_background_long_command_truncates_with_ellipsis() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●0  ◎1  ◐0  ○0  ✕0
+     ≡1 ●1 ◐0 ○0 ✕0
     ⓘ                        — ▾
     ┃ ◎ claude
         $ cargo run --bin very-…
@@ -2461,7 +2461,7 @@ fn snapshot_subagent_identity_survives_repo_filter_hiding_parent() {
 
     let output = render_to_string(&mut state, 60, 40);
     insta::assert_snapshot!(output, @r"
-     ≡1  ●1  ◎0  ◐0  ○0  ✕0
+     ≡1 ●1 ◐0 ○0 ✕0
     ⓘ                                              project-sub ▾
     project-sub
       ● pi subagent

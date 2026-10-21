@@ -527,7 +527,7 @@ fn test_filter_change_rebuilds_row_targets() {
     assert_eq!(state.layout.pane_row_targets.len(), 2);
 
     // Simulates sync_global_state setting filter to Running
-    state.global.status_filter = StatusFilter::Running;
+    state.global.status_filter = StatusFilter::Busy;
     state.rebuild_row_targets();
     assert_eq!(state.layout.pane_row_targets.len(), 1);
     assert_eq!(state.layout.pane_row_targets[0].pane_id, "%1");
@@ -573,14 +573,14 @@ fn make_global() -> GlobalState {
 #[test]
 fn full_sync_ignores_tmux_filter_matching_last_saved() {
     let mut g = make_global();
-    g.status_filter = StatusFilter::Running;
+    g.status_filter = StatusFilter::Busy;
 
     let opts = make_opts(&[(tmux::SIDEBAR_FILTER, "all")]);
     g.apply_all(&opts);
 
     assert_eq!(
         g.status_filter,
-        StatusFilter::Running,
+        StatusFilter::Busy,
         "local filter change should not be overwritten when tmux matches last_saved"
     );
 }
@@ -632,13 +632,13 @@ fn full_sync_applies_repo_filter_from_tmux() {
 #[test]
 fn full_sync_empty_opts_changes_nothing() {
     let mut g = make_global();
-    g.status_filter = StatusFilter::Running;
+    g.status_filter = StatusFilter::Busy;
     g.repo_filter = RepoFilter::Repo("app".into());
     g.selected_pane_row = 2;
 
     g.apply_all(&std::collections::HashMap::new());
 
-    assert_eq!(g.status_filter, StatusFilter::Running);
+    assert_eq!(g.status_filter, StatusFilter::Busy);
     assert_eq!(g.repo_filter, RepoFilter::Repo("app".into()));
     assert_eq!(g.selected_pane_row, 2);
 }
@@ -656,7 +656,7 @@ fn full_sync_applies_error_filter_from_tmux() {
 #[test]
 fn full_sync_invalid_filter_defaults_to_all() {
     let mut g = make_global();
-    g.status_filter = StatusFilter::Running;
+    g.status_filter = StatusFilter::Busy;
 
     // "garbage" parses as All, All == last_saved → no change
     let opts = make_opts(&[(tmux::SIDEBAR_FILTER, "garbage")]);
@@ -664,7 +664,7 @@ fn full_sync_invalid_filter_defaults_to_all() {
 
     assert_eq!(
         g.status_filter,
-        StatusFilter::Running,
+        StatusFilter::Busy,
         "invalid filter string parsed as All should match last_saved and not overwrite"
     );
 }
@@ -702,14 +702,14 @@ fn sync_does_not_revert_filter_after_save_failure() {
 
     // Step 2: user changes filter locally, save_filter fails
     // (last_saved_filter stays Error)
-    g.status_filter = StatusFilter::Running;
+    g.status_filter = StatusFilter::Busy;
 
     // Step 3: next sync reads tmux "error", but last_saved is also Error → equal → no change
     g.apply_all(&make_opts(&[(tmux::SIDEBAR_FILTER, "error")]));
 
     assert_eq!(
         g.status_filter,
-        StatusFilter::Running,
+        StatusFilter::Busy,
         "sync must not revert filter when save failed — the original bug scenario"
     );
 }
@@ -726,7 +726,7 @@ fn full_sync_does_not_revert_filter_after_save_failure() {
 
     // User changes filter locally, save_filter fails
     // (last_saved_filter stays Error)
-    g.status_filter = StatusFilter::Running;
+    g.status_filter = StatusFilter::Busy;
 
     // SIGUSR1 triggers apply_all: tmux still has "error",
     // but last_saved is also Error → equal → no overwrite
@@ -734,7 +734,7 @@ fn full_sync_does_not_revert_filter_after_save_failure() {
 
     assert_eq!(
         g.status_filter,
-        StatusFilter::Running,
+        StatusFilter::Busy,
         "full sync must not revert filter when save failed"
     );
 }
@@ -747,7 +747,7 @@ fn full_sync_picks_up_change_from_another_instance() {
 
     // Startup: this instance starts with default (All)
     g.apply_all(&make_opts(&[(tmux::SIDEBAR_FILTER, "running")]));
-    assert_eq!(g.status_filter, StatusFilter::Running);
+    assert_eq!(g.status_filter, StatusFilter::Busy);
     // last_saved_filter is now Running
 
     // Another instance changes filter to Waiting (writes to tmux)
@@ -808,7 +808,7 @@ fn window_switch_syncs_after_debounce() {
     let mut g = make_global();
 
     g.apply_all(&make_opts(&[(tmux::SIDEBAR_FILTER, "running")]));
-    assert_eq!(g.status_filter, StatusFilter::Running);
+    assert_eq!(g.status_filter, StatusFilter::Busy);
 
     // User returns to this window after being away.
     // Debounce passed (inactive_count >= 2) → apply_all called.

@@ -12,20 +12,22 @@ use crate::ui::text::{display_width, truncate_to_width};
 pub(super) fn render_filter_bar<'a>(state: &AppState) -> Line<'a> {
     let theme = &state.theme;
     let icons = &state.icons;
-    let (all, running, background, waiting, idle, error) = state.status_counts();
+    let (all, busy, waiting, idle, error) = state.status_counts();
 
+    // The busy chip always wears the running colour — running and
+    // background panes are both busy, so its icon carries no selection
+    // cue. The active chip is instead marked by its count, which is
+    // drawn in the accent colour.
     let icon_for = |s: PaneStatus| (icons.status_icon(&s), theme.status_color(&s, false));
     let items: Vec<(StatusFilter, (&str, ratatui::style::Color), usize)> = vec![
         (StatusFilter::All, (icons.all_icon(), theme.status_all), all),
         (
-            StatusFilter::Running,
-            icon_for(PaneStatus::Running),
-            running,
-        ),
-        (
-            StatusFilter::Background,
-            icon_for(PaneStatus::Background),
-            background,
+            StatusFilter::Busy,
+            (
+                icons.status_icon(&PaneStatus::Running),
+                theme.status_running,
+            ),
+            busy,
         ),
         (
             StatusFilter::Waiting,
@@ -41,11 +43,11 @@ pub(super) fn render_filter_bar<'a>(state: &AppState) -> Line<'a> {
 
     for (i, (filter, (icon, icon_color), count)) in items.into_iter().enumerate() {
         if i > 0 {
-            spans.push(Span::raw("  "));
+            spans.push(Span::raw(" "));
         }
 
         let is_selected = state.global.status_filter == filter;
-        let icon_style = if is_selected {
+        let icon_style = if is_selected || filter == StatusFilter::Busy {
             Style::default().fg(icon_color)
         } else {
             Style::default().fg(theme.filter_inactive)
@@ -53,7 +55,9 @@ pub(super) fn render_filter_bar<'a>(state: &AppState) -> Line<'a> {
         spans.push(Span::styled(icon.to_string(), icon_style));
 
         let count_str = format!("{count}");
-        let count_style = if count == 0 {
+        let count_style = if is_selected {
+            Style::default().fg(theme.accent)
+        } else if count == 0 {
             Style::default().fg(theme.filter_inactive)
         } else {
             Style::default().fg(theme.text_active)
@@ -281,7 +285,7 @@ mod tests {
                 (pane2, PaneGitInfo::default()),
             ],
         }]);
-        state.global.status_filter = StatusFilter::Running;
+        state.global.status_filter = StatusFilter::Busy;
         let theme = &state.theme;
 
         let line = render_filter_bar(&state);
@@ -291,7 +295,7 @@ mod tests {
             .filter(|span| !span.content.as_ref().trim().is_empty())
             .collect();
 
-        assert_eq!(cells.len(), 12);
+        assert_eq!(cells.len(), 10);
 
         assert_eq!(cells[0].content.as_ref(), "≡");
         assert_eq!(cells[0].style.fg, Some(theme.filter_inactive));
@@ -300,36 +304,112 @@ mod tests {
         assert_eq!(cells[1].content.as_ref(), "2");
         assert_eq!(cells[1].style.fg, Some(theme.text_active));
 
+        // The busy chip icon wears the running colour even while busy is
+        // the active category, and its count carries the accent colour.
         assert_eq!(cells[2].content.as_ref(), "●");
         assert_eq!(cells[2].style.fg, Some(theme.status_running));
         assert!(!cells[2].style.add_modifier.contains(Modifier::UNDERLINED));
 
         assert_eq!(cells[3].content.as_ref(), "1");
-        assert_eq!(cells[3].style.fg, Some(theme.text_active));
+        assert_eq!(cells[3].style.fg, Some(theme.accent));
 
-        assert_eq!(cells[4].content.as_ref(), "◎");
+        assert_eq!(cells[4].content.as_ref(), "◐");
         assert_eq!(cells[4].style.fg, Some(theme.filter_inactive));
 
         assert_eq!(cells[5].content.as_ref(), "0");
         assert_eq!(cells[5].style.fg, Some(theme.filter_inactive));
 
-        assert_eq!(cells[6].content.as_ref(), "◐");
+        assert_eq!(cells[6].content.as_ref(), "○");
         assert_eq!(cells[6].style.fg, Some(theme.filter_inactive));
 
-        assert_eq!(cells[7].content.as_ref(), "0");
-        assert_eq!(cells[7].style.fg, Some(theme.filter_inactive));
+        assert_eq!(cells[7].content.as_ref(), "1");
+        assert_eq!(cells[7].style.fg, Some(theme.text_active));
 
-        assert_eq!(cells[8].content.as_ref(), "○");
+        assert_eq!(cells[8].content.as_ref(), "✕");
         assert_eq!(cells[8].style.fg, Some(theme.filter_inactive));
 
-        assert_eq!(cells[9].content.as_ref(), "1");
-        assert_eq!(cells[9].style.fg, Some(theme.text_active));
+        assert_eq!(cells[9].content.as_ref(), "0");
+        assert_eq!(cells[9].style.fg, Some(theme.filter_inactive));
+    }
 
-        assert_eq!(cells[10].content.as_ref(), "✕");
-        assert_eq!(cells[10].style.fg, Some(theme.filter_inactive));
+    #[test]
+    fn render_filter_bar_busy_icon_keeps_running_colour_when_inactive() {
+        let mut pane = test_filter_pane("%2", PaneStatus::Idle);
+        pane.agent = crate::tmux::AgentType::Codex;
+        let mut state = make_state_with_groups(vec![crate::group::RepoGroup {
+            name: "project".into(),
+            has_focus: true,
+            panes: vec![(pane, PaneGitInfo::default())],
+        }]);
+        state.global.status_filter = StatusFilter::Idle;
+        let theme = &state.theme;
 
-        assert_eq!(cells[11].content.as_ref(), "0");
-        assert_eq!(cells[11].style.fg, Some(theme.filter_inactive));
+        let line = render_filter_bar(&state);
+        let cells: Vec<_> = line
+            .spans
+            .iter()
+            .filter(|span| !span.content.as_ref().trim().is_empty())
+            .collect();
+
+        // Busy is not active: its icon still wears the running colour,
+        // its count drops back to the ordinary text colour, and the
+        // active chip's count wears the accent colour.
+        assert_eq!(cells[2].content.as_ref(), "●");
+        assert_eq!(cells[2].style.fg, Some(theme.status_running));
+        assert_eq!(cells[3].content.as_ref(), "0");
+        assert_eq!(cells[3].style.fg, Some(theme.filter_inactive));
+
+        assert_eq!(cells[6].content.as_ref(), "○");
+        assert_eq!(cells[6].style.fg, Some(theme.status_idle));
+        assert_eq!(cells[7].content.as_ref(), "1");
+        assert_eq!(cells[7].style.fg, Some(theme.accent));
+    }
+
+    #[test]
+    fn render_filter_bar_busy_count_sums_running_and_background() {
+        let mut state = make_state_with_groups(vec![crate::group::RepoGroup {
+            name: "project".into(),
+            has_focus: true,
+            panes: vec![
+                (
+                    test_filter_pane("%1", PaneStatus::Running),
+                    PaneGitInfo::default(),
+                ),
+                (
+                    test_filter_pane("%2", PaneStatus::Background),
+                    PaneGitInfo::default(),
+                ),
+            ],
+        }]);
+        state.global.status_filter = StatusFilter::Busy;
+
+        let text = filter_bar_text(&state);
+        insta::assert_snapshot!(text, @" ≡2 ●2 ◐0 ○0 ✕0");
+    }
+
+    fn test_filter_pane(pane_id: &str, status: PaneStatus) -> crate::tmux::PaneInfo {
+        crate::tmux::PaneInfo {
+            pane_id: pane_id.into(),
+            pane_active: false,
+            status,
+            attention: false,
+            agent: crate::tmux::AgentType::Claude,
+            path: String::new(),
+            current_command: String::new(),
+            prompt: String::new(),
+            prompt_is_response: false,
+            started_at: None,
+            wait_reason: String::new(),
+            permission_mode: crate::tmux::PermissionMode::Default,
+            subagents: vec![],
+            pane_pid: None,
+            worktree: crate::tmux::WorktreeMetadata::default(),
+            session_id: None,
+            session_name: String::new(),
+            sidebar_spawned: false,
+            bg_shell_cmd: None,
+            subagent: None,
+        }
     }
 
     #[test]
