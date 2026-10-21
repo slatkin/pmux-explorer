@@ -440,12 +440,16 @@ mod tests {
     // ─── the pop-out control ─────────────────────────────────
 
     #[test]
-    fn render_filter_bar_returns_the_control_column_and_fills_the_row() {
-        // The control sits at the last column of the row and the row is
-        // as wide as the area — the same right-alignment the secondary
-        // header gives its repo button.
+    fn snapshot_filter_bar_docked_shows_the_pop_out_glyph() {
+        // The zero-count docked row at the 20 column minimum: the
+        // snapshot pins the whole row, the renderer returns the control
+        // column and a full-width row at every width, and the control
+        // glyph wears the running colour. Direct equality checks sit
+        // alongside the snapshot because layout columns and colours are
+        // not visible characters.
+        let state = make_state_with_groups(vec![]);
+        assert!(!state.sidebar_pane.floating);
         for width in [20u16, 30, 40] {
-            let state = make_state_with_groups(vec![]);
             let (line, col) = render_filter_bar(&state, width);
             let text = line_text(&line);
             assert_eq!(col, Some(width - 1), "control column at width {width}");
@@ -455,14 +459,11 @@ mod tests {
                 "the row must be as wide as the area at width {width}"
             );
         }
-    }
-
-    #[test]
-    fn snapshot_filter_bar_docked_shows_the_pop_out_glyph() {
-        let state = make_state_with_groups(vec![]);
-        assert!(!state.sidebar_pane.floating);
-        let text = filter_bar_text(&state);
-        insta::assert_snapshot!(text, @" ≡0 ●0 ◐0 ○0 ✕0    ⤢");
+        let (line, _) = render_filter_bar(&state, 20);
+        insta::assert_snapshot!(line_text(&line), @" ≡0 ●0 ◐0 ○0 ✕0    ⤢");
+        let glyph = line.spans.last().unwrap();
+        assert_eq!(glyph.content.as_ref(), "⤢");
+        assert_eq!(glyph.style.fg, Some(state.theme.status_running));
     }
 
     #[test]
@@ -473,15 +474,6 @@ mod tests {
         state.sidebar_pane.floating = true;
         let text = filter_bar_text(&state);
         insta::assert_snapshot!(text, @" ≡0 ●0 ◐0 ○0 ✕0    ⤡");
-    }
-
-    #[test]
-    fn render_filter_bar_control_wears_the_running_colour() {
-        let state = make_state_with_groups(vec![]);
-        let (line, _) = render_filter_bar(&state, 20);
-        let glyph = line.spans.last().unwrap();
-        assert_eq!(glyph.content.as_ref(), "⤢");
-        assert_eq!(glyph.style.fg, Some(state.theme.status_running));
     }
 
     // ─── the row with multi-digit counts (the 20 column minimum) ───
@@ -509,40 +501,6 @@ mod tests {
             has_focus: true,
             panes,
         }])
-    }
-
-    #[test]
-    fn render_filter_bar_keeps_the_control_drawn_when_the_chips_fill_the_row() {
-        // The regression case: at the 20 column minimum with every count
-        // at two digits the chip run alone is 20 columns. The error chip
-        // is dropped whole and the control stays drawn at the right edge
-        // — the row never overflows the area and the control column is
-        // always a column a click can land on.
-        let state = state_with_two_digit_counts();
-        let counts = state.status_counts();
-        assert_eq!(counts.all(), 40);
-        for filter in [
-            StatusFilter::Busy,
-            StatusFilter::Waiting,
-            StatusFilter::Idle,
-            StatusFilter::Error,
-        ] {
-            assert_eq!(counts.count(filter), 10, "{filter:?} count");
-        }
-
-        let (line, col) = render_filter_bar(&state, 20);
-        let text = line_text(&line);
-        assert_eq!(col, Some(19), "the control column must sit inside the row");
-        assert_eq!(
-            display_width(&text),
-            20,
-            "the row must not overflow the 20 column area: {text}"
-        );
-        insta::assert_snapshot!(text, @" ≡40 ●10 ◐10 ○10   ⤢");
-        assert!(
-            !text.contains('✕'),
-            "a chip that no longer fits must be dropped whole, not clipped: {text}"
-        );
     }
 
     #[test]

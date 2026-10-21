@@ -1141,15 +1141,15 @@ fn rendered_filter_row_and_hit_test_agree_at_the_20_column_minimum() {
     let output = render_to_string(&mut state, 20, 12);
     let row = output.lines().next().unwrap();
 
-    // The rendered row fills the 20 columns and the control sits on the
-    // last one, inside the area.
-    assert_eq!(row.chars().count(), 20, "row must not overflow: {row}");
-    assert_eq!(
-        row.chars().nth(19),
-        Some('⤢'),
-        "control at the right edge: {row}"
-    );
-    assert!(!row.contains('✕'), "the error chip is dropped whole: {row}");
+    // The frame snapshot pins the whole render: the two-digit chip run,
+    // the dropped error chip (no ✕ anywhere on the row), and the
+    // pop-out control on the last column of the 20-column row.
+    insta::assert_snapshot!(output, @"
+     ≡40 ●10 ◐10 ○10   ⤢
+    ╭ Activity │ Git ──╮
+    │  No activity yet │
+    ╰──────────────────╯
+    ");
 
     // The hit test runs on the width the frame actually rendered with.
     assert_eq!(state.layout.filter_bar_width, 20);
