@@ -409,13 +409,16 @@ fn parse_pane_fields_with_processes(
     // a name. `automatic-rename` only affects the window name, so it does
     // not enter the gate. Known gap: agent-set titles other than pi's and
     // Claude's (Codex, opencode) are not filtered and show as pane names.
+    // A title that carries an em dash keeps only the text before it: the
+    // suffix (a branch, a status, a cwd) is decoration, not the name.
     let pane_title = &parts[pane_line_field::PANE_TITLE];
     let pane_name = if !pane_title.is_empty()
         && pane_title != parts[pane_line_field::HOST].as_str()
         && !pane_title.starts_with("π - ")
         && !pane_title.starts_with("✳ ")
     {
-        Some(pane_title.clone())
+        let before_dash = pane_title.split('—').next().unwrap_or(pane_title);
+        Some(before_dash.trim_end().to_string())
     } else {
         None
     };
@@ -1030,6 +1033,9 @@ mod tests {
             ("π - send-report-channel", None), // pi's OSC title
             ("✳ Claude Code", None),           // Claude Code's OSC title
             ("", None),                        // empty title
+            ("edit — fix bug", Some("edit")),  // em dash: keep only the text before it
+            ("edit—fix bug", Some("edit")),    // em dash with no surrounding spaces
+            ("edit — ", Some("edit")),         // em dash with nothing after it
         ];
         for (title, expected) in cases {
             let mut fields = full_fields();
