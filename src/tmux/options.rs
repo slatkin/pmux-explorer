@@ -5,9 +5,11 @@ use super::commands::run_tmux;
 // Single source of truth for every `@pane_*` tmux option the sidebar
 // writes or reads. Hooks, the TUI refresh path, and the query layer
 // all go through these constants so a typo can't silently corrupt
-// pane state. Keep `clear_agent_pane_state` in `tmux/query.rs` and
-// `clear_all_meta` in `cli/hook/context/meta.rs` in sync with this
-// list — both sweep the full set on teardown.
+// pane state. The teardown sweeps (`clear_agent_pane_state` in
+// `tmux/query.rs`, `clear_all_meta` in `cli/hook/context/meta.rs`,
+// `clear_dead_agent_metadata` in `state/refresh.rs`) iterate
+// `AGENT_SESSION_PANE_OPTIONS` below instead of carrying their own
+// key lists.
 
 /// Agent name the hooks identified for the pane (`claude` / `codex`
 /// / `opencode`). Drives the sidebar's per-row icon.
@@ -87,6 +89,51 @@ pub const PANE_WAIT_REASON: &str = "@pane_wait_reason";
 pub const PANE_WORKTREE_BRANCH: &str = "@pane_worktree_branch";
 /// Worktree slug (directory basename) for the attached worktree.
 pub const PANE_WORKTREE_NAME: &str = "@pane_worktree_name";
+
+/// Every `@pane_*` option that belongs to an agent session's lifecycle —
+/// the set the teardown sweeps clear. This is the single enumeration of
+/// those keys: `clear_all_meta` (hook session-end), `clear_agent_pane_state`
+/// (shell-fallback sweep) and `clear_dead_agent_metadata` (dead-pane sweep)
+/// all iterate this list and skip only the keys they deliberately keep
+/// (the skip conditions live at each sweep). Add a new lifecycle option
+/// to this list once and every sweep picks it up; keys no sweep may
+/// clear stay out and are named in [`NEVER_SWEPT_PANE_OPTIONS`]. The test
+/// below keeps both lists in lock-step with the constants above.
+pub const AGENT_SESSION_PANE_OPTIONS: &[&str] = &[
+    PANE_AGENT,
+    PANE_ATTENTION,
+    PANE_BG_CMD,
+    PANE_CWD,
+    PANE_PERMISSION_MODE,
+    PANE_PENDING_SESSION_END,
+    PANE_PENDING_WORKTREE_REMOVE,
+    PANE_PROMPT,
+    PANE_PROMPT_SOURCE,
+    PANE_SESSION_ID,
+    PANE_STARTED_AT,
+    PANE_STATUS,
+    PANE_SUBAGENT_KIND,
+    PANE_SUBAGENT_PARENT,
+    PANE_SUBAGENT_TASK,
+    PANE_SUBAGENTS,
+    PANE_WAIT_REASON,
+    PANE_WORKTREE_BRANCH,
+    PANE_WORKTREE_NAME,
+];
+
+/// Pane-scoped options that no teardown sweep may clear: `@pane_name` is
+/// only queried to keep the `list-panes` field layout, `@pane_role` marks
+/// the sidebar pane for the setup flow's lifetime, and the notification
+/// keys are run-scoped dedup stamps that are overwritten, never cleared,
+/// on each new run.
+pub const NEVER_SWEPT_PANE_OPTIONS: &[&str] = &[
+    PANE_NAME,
+    PANE_NOTIFICATION_RUN_ID,
+    PANE_OS_NOTIFY_PERMISSION_REQUIRED,
+    PANE_OS_NOTIFY_TASK_COMPLETED,
+    PANE_OS_NOTIFY_TASK_FAILED,
+    PANE_ROLE,
+];
 
 // ─── Sidebar global option keys ─────────────────────────────────────
 
@@ -324,5 +371,58 @@ mod tests {
         }
         // No mock installed now — `contains` returns false.
         assert!(!test_mock::contains("%7", "@x"));
+    }
+
+    #[test]
+    fn every_pane_scoped_option_is_swept_or_marked_never_swept() {
+        // The checklist of pane-scoped constants declared above. A new
+        // `@pane_*` constant must be classified into exactly one of the
+        // two lists so a teardown sweep cannot silently forget it.
+        let all = [
+            PANE_AGENT,
+            PANE_ATTENTION,
+            PANE_BG_CMD,
+            PANE_CWD,
+            PANE_NAME,
+            PANE_NOTIFICATION_RUN_ID,
+            PANE_OS_NOTIFY_PERMISSION_REQUIRED,
+            PANE_OS_NOTIFY_TASK_COMPLETED,
+            PANE_OS_NOTIFY_TASK_FAILED,
+            PANE_PENDING_SESSION_END,
+            PANE_PENDING_WORKTREE_REMOVE,
+            PANE_PERMISSION_MODE,
+            PANE_PROMPT,
+            PANE_PROMPT_SOURCE,
+            PANE_ROLE,
+            PANE_SESSION_ID,
+            PANE_STARTED_AT,
+            PANE_STATUS,
+            PANE_SUBAGENTS,
+            PANE_SUBAGENT_KIND,
+            PANE_SUBAGENT_PARENT,
+            PANE_SUBAGENT_TASK,
+            PANE_WAIT_REASON,
+            PANE_WORKTREE_BRANCH,
+            PANE_WORKTREE_NAME,
+        ];
+        for key in AGENT_SESSION_PANE_OPTIONS {
+            assert!(all.contains(key), "{key} is not a declared pane option");
+            assert!(
+                !NEVER_SWEPT_PANE_OPTIONS.contains(key),
+                "{key} is classified as both swept and never swept"
+            );
+        }
+        for key in NEVER_SWEPT_PANE_OPTIONS {
+            assert!(all.contains(key), "{key} is not a declared pane option");
+        }
+        for key in all {
+            assert!(
+                AGENT_SESSION_PANE_OPTIONS.contains(&key)
+                    || NEVER_SWEPT_PANE_OPTIONS.contains(&key),
+                "{key} is missing from both AGENT_SESSION_PANE_OPTIONS and \
+                 NEVER_SWEPT_PANE_OPTIONS — classify it so the teardown \
+                 sweeps cannot forget it"
+            );
+        }
     }
 }

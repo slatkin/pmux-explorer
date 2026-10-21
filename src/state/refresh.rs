@@ -91,22 +91,16 @@ impl AppState {
     }
 
     fn clear_dead_agent_metadata(pane_id: &str) {
-        for key in &[
-            tmux::PANE_AGENT,
-            tmux::PANE_STATUS,
-            tmux::PANE_ATTENTION,
-            tmux::PANE_PROMPT,
-            tmux::PANE_PROMPT_SOURCE,
-            tmux::PANE_SUBAGENTS,
-            tmux::PANE_CWD,
-            tmux::PANE_PERMISSION_MODE,
-            tmux::PANE_WORKTREE_NAME,
-            tmux::PANE_WORKTREE_BRANCH,
-            tmux::PANE_STARTED_AT,
-            tmux::PANE_WAIT_REASON,
-            tmux::PANE_SESSION_ID,
-            tmux::PANE_BG_CMD,
-        ] {
+        // The lifecycle set from `tmux::AGENT_SESSION_PANE_OPTIONS`, minus
+        // the pending-teardown markers: the hook-side drain owns those,
+        // and a fresh SessionStart clears both on the next run.
+        for key in tmux::AGENT_SESSION_PANE_OPTIONS {
+            if matches!(
+                *key,
+                tmux::PANE_PENDING_SESSION_END | tmux::PANE_PENDING_WORKTREE_REMOVE
+            ) {
+                continue;
+            }
             tmux::unset_pane_option(pane_id, key);
         }
 
@@ -795,6 +789,34 @@ mod tests {
             "mysleep 30 /bin/sh sleep 30",
             "sleep 30"
         ));
+    }
+
+    #[test]
+    fn clear_dead_agent_metadata_clears_the_subagent_identity() {
+        // A killed pi subagent must not leave its identity options behind:
+        // `@pane_agent` is wiped by the same sweep, and a next agent in
+        // this pane would otherwise render as a pmux subagent with a
+        // foreign task and lose its permission badge.
+        let _guard = tmux::test_mock::install();
+        let pane = "%DEAD_SUBAGENT";
+        for key in tmux::AGENT_SESSION_PANE_OPTIONS {
+            tmux::test_mock::set(pane, key, "x");
+        }
+
+        AppState::clear_dead_agent_metadata(pane);
+
+        for key in tmux::AGENT_SESSION_PANE_OPTIONS {
+            let preserved = matches!(
+                *key,
+                tmux::PANE_PENDING_SESSION_END | tmux::PANE_PENDING_WORKTREE_REMOVE
+            );
+            assert_eq!(
+                tmux::test_mock::contains(pane, key),
+                preserved,
+                "expected {key} {}",
+                if preserved { "preserved" } else { "cleared" }
+            );
+        }
     }
 
     #[test]

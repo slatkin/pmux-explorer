@@ -7,11 +7,10 @@ use crate::process::{ProcessSnapshot, command_basename};
 
 use super::commands::run_tmux;
 use super::options::{
-    PANE_AGENT, PANE_ATTENTION, PANE_BG_CMD, PANE_CWD, PANE_NAME, PANE_PENDING_SESSION_END,
-    PANE_PENDING_WORKTREE_REMOVE, PANE_PERMISSION_MODE, PANE_PROMPT, PANE_PROMPT_SOURCE, PANE_ROLE,
-    PANE_SESSION_ID, PANE_STARTED_AT, PANE_STATUS, PANE_SUBAGENT_KIND, PANE_SUBAGENT_PARENT,
-    PANE_SUBAGENT_TASK, PANE_SUBAGENTS, PANE_WAIT_REASON, PANE_WORKTREE_BRANCH, PANE_WORKTREE_NAME,
-    unset_pane_option,
+    AGENT_SESSION_PANE_OPTIONS, PANE_AGENT, PANE_ATTENTION, PANE_BG_CMD, PANE_CWD, PANE_NAME,
+    PANE_PERMISSION_MODE, PANE_PROMPT, PANE_PROMPT_SOURCE, PANE_ROLE, PANE_SESSION_ID,
+    PANE_STARTED_AT, PANE_STATUS, PANE_SUBAGENT_KIND, PANE_SUBAGENT_PARENT, PANE_SUBAGENT_TASK,
+    PANE_SUBAGENTS, PANE_WAIT_REASON, PANE_WORKTREE_BRANCH, PANE_WORKTREE_NAME, unset_pane_option,
 };
 use super::types::{
     AgentType, CODEX_AGENT, PaneInfo, PaneStatus, PermissionMode, SessionInfo, SubagentInfo,
@@ -395,6 +394,12 @@ fn parse_pane_fields_with_processes(
         Some(parts[pane_line_field::SESSION_ID].to_string())
     };
 
+    let subagent = parse_subagent_identity(
+        &agent,
+        &parts[pane_line_field::SUBAGENT_KIND],
+        &parts[pane_line_field::SUBAGENT_TASK],
+    );
+
     Some(PaneInfo {
         pane_active: parts[pane_line_field::PANE_ACTIVE] == "1",
         status: PaneStatus::from_label(&parts[pane_line_field::PANE_STATUS]),
@@ -425,18 +430,27 @@ fn parse_pane_fields_with_processes(
                 Some(raw.to_string())
             }
         },
-        subagent: parse_subagent_identity(
-            &parts[pane_line_field::SUBAGENT_KIND],
-            &parts[pane_line_field::SUBAGENT_TASK],
-        ),
+        subagent,
     })
 }
 
-/// Parse the pmux subagent identity from the `@pane_subagent_*` fields. A
-/// pane is a subagent only when `@pane_subagent_kind` holds a known kind
+/// Parse the pmux subagent identity from the `@pane_subagent_*` fields.
+/// The three options are pi-only (`docs/agent-protocol.md`), so a pane
+/// whose agent is not pi is never a subagent, mirroring the agent-gated
+/// `permission_mode` read — a pi pane that flipped to another agent
+/// without an intervening shell keeps the stale options (no sweep runs
+/// and SessionStart preserves them). Within a pi pane, a subagent
+/// identity exists only when `@pane_subagent_kind` holds a known kind
 /// value; the parent starts `Orphaned` and is resolved by the post-pass
 /// [`resolve_subagent_parents`] once the whole `list-panes` output is seen.
-fn parse_subagent_identity(kind_raw: &str, task_raw: &str) -> Option<SubagentInfo> {
+fn parse_subagent_identity(
+    agent: &AgentType,
+    kind_raw: &str,
+    task_raw: &str,
+) -> Option<SubagentInfo> {
+    if *agent != AgentType::Pi {
+        return None;
+    }
     let task = if task_raw.is_empty() {
         None
     } else {
@@ -453,33 +467,12 @@ fn parse_subagent_identity(kind_raw: &str, task_raw: &str) -> Option<SubagentInf
 /// `pane_id`. Triggered by `parse_pane_fields` when it detects a Codex or
 /// OpenCode pane that has dropped back to the user's shell, since neither
 /// CLI fires a reliable process-exit hook. Claude panes are never routed
-/// here because Claude has its own SessionEnd hook. The set of keys
-/// mirrors `clear_all_meta` + `clear_run_state` + status/attention clears
-/// in `src/cli/hook/context.rs`; keep them in sync when a new `@pane_*`
-/// key is added.
+/// here because Claude has its own SessionEnd hook. The key set is the
+/// full [`AGENT_SESSION_PANE_OPTIONS`] lifecycle list from
+/// `tmux/options.rs` — the single enumeration shared by every teardown
+/// sweep, each of which skips only the keys it deliberately keeps.
 fn clear_agent_pane_state(pane_id: &str) {
-    const KEYS: &[&str] = &[
-        PANE_AGENT,
-        PANE_PROMPT,
-        PANE_PROMPT_SOURCE,
-        PANE_BG_CMD,
-        PANE_SUBAGENTS,
-        PANE_CWD,
-        PANE_PERMISSION_MODE,
-        PANE_WORKTREE_NAME,
-        PANE_WORKTREE_BRANCH,
-        PANE_SESSION_ID,
-        PANE_SUBAGENT_KIND,
-        PANE_SUBAGENT_PARENT,
-        PANE_SUBAGENT_TASK,
-        PANE_PENDING_SESSION_END,
-        PANE_PENDING_WORKTREE_REMOVE,
-        PANE_STARTED_AT,
-        PANE_WAIT_REASON,
-        PANE_ATTENTION,
-        PANE_STATUS,
-    ];
-    for key in KEYS {
+    for key in AGENT_SESSION_PANE_OPTIONS {
         unset_pane_option(pane_id, key);
     }
     let log_path = crate::activity::log_file_path(pane_id);
@@ -1051,6 +1044,43 @@ mod tests {
             pane.subagent.is_none(),
             "an unknown kind value must not mark the pane"
         );
+    }
+
+    #[test]
+    fn parse_pane_line_ignores_subagent_options_for_non_pi_agents() {
+        // The `@pane_subagent_*` options are pi-only. A pane that flipped
+        // from pi to another agent without an intervening shell keeps the
+        // stale options (no sweep runs and SessionStart preserves them),
+        // so the reader must gate on the pane's agent the way the
+        // neighbouring `permission_mode` read does.
+        let mut fields = full_fields();
+        fields[pane_line_field::SUBAGENT_KIND] = "spawned";
+        fields[pane_line_field::SUBAGENT_PARENT] = "P1";
+        fields[pane_line_field::SUBAGENT_TASK] = "unit one";
+        let pane = parse_pane_line(&make_pane_line(&fields)).unwrap();
+
+        assert!(
+            pane.subagent.is_none(),
+            "a non-pi pane must not be reported as a subagent even with the options set"
+        );
+    }
+
+    #[test]
+    fn clear_agent_pane_state_clears_every_agent_session_option() {
+        let _guard = test_mock::install();
+        let pane = "%SWEEP_ALL";
+        for key in AGENT_SESSION_PANE_OPTIONS {
+            test_mock::set(pane, key, "x");
+        }
+
+        clear_agent_pane_state(pane);
+
+        for key in AGENT_SESSION_PANE_OPTIONS {
+            assert!(
+                !test_mock::contains(pane, key),
+                "{key} must be cleared by the shell-fallback sweep"
+            );
+        }
     }
 
     #[test]
