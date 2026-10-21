@@ -52,6 +52,10 @@ pub struct FrameLayout {
     /// X column of the repo filter button in the secondary header. `None`
     /// when the button is hidden. Used for click hit-testing.
     pub repo_button_col: Option<u16>,
+    /// X column of the pop-out control at the right edge of the filter
+    /// bar (row 0). `None` when the row is not rendered. Used for click
+    /// hit-testing.
+    pub popout_button_col: Option<u16>,
     /// Click regions for the `[+]` spawn button rendered at the right
     /// edge of each repo-group header. One entry per visible repo group.
     pub repo_spawn_targets: Vec<RepoSpawnTarget>,
@@ -130,6 +134,17 @@ impl AppState {
             return;
         }
         self.timers.last_filter_click = now;
+
+        // The pop-out control at the right edge is hit-tested before the
+        // chip walk, so a click on it never changes the status filter.
+        if self
+            .layout
+            .popout_button_col
+            .is_some_and(|control_col| col == control_col)
+        {
+            self.toggle_popout();
+            return;
+        }
 
         let (all, busy, waiting, idle, error) = self.status_counts();
         // Layout: " ≡N ●N ◐N ○N ✕N"

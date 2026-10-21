@@ -410,8 +410,9 @@ pub(super) fn render_repo_popup(frame: &mut Frame, state: &mut AppState, area: R
     }
 }
 
-fn render_filter_bar_into(frame: &mut Frame, state: &AppState, area: Rect) {
-    let line = filter_bar::render_filter_bar(state);
+fn render_filter_bar_into(frame: &mut Frame, state: &mut AppState, area: Rect) {
+    let (line, control_col) = filter_bar::render_filter_bar(state, area.width);
+    state.layout.popout_button_col = control_col;
     frame.render_widget(Paragraph::new(vec![line]), area);
 }
 

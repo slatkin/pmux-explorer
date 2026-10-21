@@ -118,6 +118,7 @@ pub(super) fn handle_key_event(
         KeyCode::Char('n') if ctrl => pane_nav_down(state),
         KeyCode::Char('k') | KeyCode::Up => pane_nav_up(state),
         KeyCode::Char('p') if ctrl => pane_nav_up(state),
+        KeyCode::Char('p') => state.toggle_popout(),
         KeyCode::Char('h') | KeyCode::Left => {
             if state.focus_state.focus == Focus::Filter {
                 state.global.status_filter = state.global.status_filter.prev();
@@ -321,12 +322,45 @@ mod tests {
     }
 
     #[test]
-    fn bare_p_is_unbound_in_panes_focus() {
+    fn bare_p_toggles_the_popout() {
+        // The bare `p` runs the same action as the pop-out control. The
+        // pane id cannot exist in any tmux server, so the pop-out branch
+        // runs and is refused — the flash proves the action ran, and the
+        // selection is untouched (the old bare-`p` guarantee).
         let mut state = state_with_three_panes();
-        state.global.selected_pane_row = 1;
+        state.tmux_pane = "%4294967295".into();
         let flag = AtomicBool::new(false);
         handle_key_event(key(KeyCode::Char('p')), &mut state, &flag);
+        assert_eq!(state.global.selected_pane_row, 0);
+        assert!(
+            state
+                .flash
+                .as_ref()
+                .is_some_and(|(msg, _)| msg.starts_with("Pop-out refused:")),
+            "the bare `p` key must run the pop-out action"
+        );
+    }
+
+    #[test]
+    fn bare_p_does_not_toggle_while_a_popup_is_open() {
+        // Popups swallow every key: the bare `p` must not float the pane
+        // behind the repo popup's back.
+        let mut state = state_with_repo_popup_open();
+        state.tmux_pane = "%4294967295".into();
+        let flag = AtomicBool::new(false);
+        handle_key_event(key(KeyCode::Char('p')), &mut state, &flag);
+        assert!(state.flash.is_none(), "no pop-out while a popup is open");
+        assert!(state.is_repo_popup_open());
+    }
+
+    #[test]
+    fn ctrl_p_still_navigates_panes_after_p_is_bound() {
+        let mut state = state_with_three_panes();
+        state.global.selected_pane_row = 2;
+        let flag = AtomicBool::new(false);
+        handle_key_event(ctrl_key('p'), &mut state, &flag);
         assert_eq!(state.global.selected_pane_row, 1);
+        assert!(state.flash.is_none());
     }
 
     #[test]

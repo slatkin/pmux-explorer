@@ -1588,6 +1588,49 @@ mod tests {
         assert_eq!(state.layout.pane_row_targets[0].pane_id, "%2");
     }
 
+    #[test]
+    fn filter_click_on_the_popout_control_toggles_and_keeps_the_filter() {
+        // The control is hit-tested before the chip walk: a click on its
+        // column runs the pop-out action and never touches the status
+        // filter. The pane id cannot exist in any tmux server, so the
+        // pop-out branch runs and is refused — the flash proves the
+        // action ran.
+        let mut state = AppState::new("%4294967295".into());
+        state.layout.popout_button_col = Some(19);
+        state.global.status_filter = StatusFilter::All;
+        reset_filter_debounce(&mut state);
+        state.handle_filter_click(19);
+        assert_eq!(state.global.status_filter, StatusFilter::All);
+        assert!(
+            state
+                .flash
+                .as_ref()
+                .is_some_and(|(msg, _)| msg.starts_with("Pop-out refused:")),
+            "the control click must run the pop-out action"
+        );
+
+        // A click on a chip column still walks the chips and selects the
+        // matching category even with the control column registered.
+        state.flash = None;
+        reset_filter_debounce(&mut state);
+        state.handle_filter_click(4); // "●" busy chip
+        assert_eq!(state.global.status_filter, StatusFilter::Busy);
+        assert!(state.flash.is_none(), "a chip click must not pop out");
+    }
+
+    #[test]
+    fn filter_click_without_a_control_column_walks_the_chips() {
+        // Before the first frame there is no control column: the click
+        // must fall through to the chip walk, not panic or toggle.
+        let mut state = AppState::new("%4294967295".into());
+        assert_eq!(state.layout.popout_button_col, None);
+        state.global.status_filter = StatusFilter::All;
+        reset_filter_debounce(&mut state);
+        state.handle_filter_click(4);
+        assert_eq!(state.global.status_filter, StatusFilter::Busy);
+        assert!(state.flash.is_none());
+    }
+
     // ─── StatusFilter / RepoFilter pure tests live in state/filter.rs ─
 
     #[test]

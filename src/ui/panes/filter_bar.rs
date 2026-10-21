@@ -8,8 +8,16 @@ use crate::tmux::PaneStatus;
 
 use crate::ui::text::{display_width, truncate_to_width};
 
-/// Render the status filter bar.
-pub(super) fn render_filter_bar<'a>(state: &AppState) -> Line<'a> {
+/// Glyphs of the pop-out control on the right edge of the top row: the
+/// pop-out glyph while the sidebar is docked, the pop-in glyph while it
+/// floats. Which one shows follows the pane's `floating` flag, not a
+/// remembered mode.
+const POPOUT_GLYPH: &str = "⤢";
+const POPIN_GLYPH: &str = "⤡";
+
+/// Render the status filter bar, returning the line and the column of
+/// the pop-out control at the right edge (for click hit-testing).
+pub(super) fn render_filter_bar<'a>(state: &AppState, width: u16) -> (Line<'a>, Option<u16>) {
     let theme = &state.theme;
     let icons = &state.icons;
     let (all, busy, waiting, idle, error) = state.status_counts();
@@ -65,7 +73,29 @@ pub(super) fn render_filter_bar<'a>(state: &AppState) -> Line<'a> {
         spans.push(Span::styled(count_str, count_style));
     }
 
-    Line::from(spans)
+    // The control sits at the right edge of the row, one glyph column
+    // wide, with the gap between the chips and the control filling the
+    // rest — the row is as wide as the area, the way the secondary
+    // header right-aligns its repo button.
+    let control_glyph = if state.sidebar_pane.floating {
+        POPIN_GLYPH
+    } else {
+        POPOUT_GLYPH
+    };
+    let chip_width: usize = spans
+        .iter()
+        .map(|span| display_width(span.content.as_ref()))
+        .sum();
+    let control_width = display_width(control_glyph);
+    let gap = (width as usize).saturating_sub(chip_width + control_width);
+    let control_col = (chip_width + gap) as u16;
+    spans.push(Span::raw(" ".repeat(gap)));
+    spans.push(Span::styled(
+        control_glyph,
+        Style::default().fg(theme.status_running),
+    ));
+
+    (Line::from(spans), Some(control_col))
 }
 
 pub(super) fn render_secondary_header<'a>(
@@ -216,9 +246,14 @@ mod tests {
         state
     }
 
-    fn filter_bar_text(state: &AppState) -> String {
-        let line = render_filter_bar(state);
+    /// Render the filter bar at a fixed test width and collect its text.
+    fn filter_bar_text_at(state: &AppState, width: u16) -> String {
+        let (line, _) = render_filter_bar(state, width);
         line.spans.iter().map(|s| s.content.as_ref()).collect()
+    }
+
+    fn filter_bar_text(state: &AppState) -> String {
+        filter_bar_text_at(state, 20)
     }
 
     #[test]
@@ -288,14 +323,14 @@ mod tests {
         state.global.status_filter = StatusFilter::Busy;
         let theme = &state.theme;
 
-        let line = render_filter_bar(&state);
+        let (line, _) = render_filter_bar(&state, 20);
         let cells: Vec<_> = line
             .spans
             .iter()
             .filter(|span| !span.content.as_ref().trim().is_empty())
             .collect();
 
-        assert_eq!(cells.len(), 10);
+        assert_eq!(cells.len(), 11);
 
         assert_eq!(cells[0].content.as_ref(), "≡");
         assert_eq!(cells[0].style.fg, Some(theme.filter_inactive));
@@ -344,7 +379,7 @@ mod tests {
         state.global.status_filter = StatusFilter::Idle;
         let theme = &state.theme;
 
-        let line = render_filter_bar(&state);
+        let (line, _) = render_filter_bar(&state, 20);
         let cells: Vec<_> = line
             .spans
             .iter()
@@ -384,7 +419,54 @@ mod tests {
         state.global.status_filter = StatusFilter::Busy;
 
         let text = filter_bar_text(&state);
-        insta::assert_snapshot!(text, @" ≡2 ●2 ◐0 ○0 ✕0");
+        insta::assert_snapshot!(text, @" ≡2 ●2 ◐0 ○0 ✕0    ⤢");
+    }
+
+    // ─── the pop-out control ─────────────────────────────────
+
+    #[test]
+    fn render_filter_bar_returns_the_control_column_and_fills_the_row() {
+        // The control sits at the last column of the row and the row is
+        // as wide as the area — the same right-alignment the secondary
+        // header gives its repo button.
+        for width in [20u16, 30, 40] {
+            let state = make_state_with_groups(vec![]);
+            let (line, col) = render_filter_bar(&state, width);
+            let text = line_text(&line);
+            assert_eq!(col, Some(width - 1), "control column at width {width}");
+            assert_eq!(
+                display_width(&text),
+                width as usize,
+                "the row must be as wide as the area at width {width}"
+            );
+        }
+    }
+
+    #[test]
+    fn snapshot_filter_bar_docked_shows_the_pop_out_glyph() {
+        let state = make_state_with_groups(vec![]);
+        assert!(!state.sidebar_pane.floating);
+        let text = filter_bar_text(&state);
+        insta::assert_snapshot!(text, @" ≡0 ●0 ◐0 ○0 ✕0    ⤢");
+    }
+
+    #[test]
+    fn snapshot_filter_bar_floating_shows_the_pop_in_glyph() {
+        // The glyph follows the pane's floating flag, so a sidebar that
+        // was floated from the tmux command line shows the pop-in glyph.
+        let mut state = make_state_with_groups(vec![]);
+        state.sidebar_pane.floating = true;
+        let text = filter_bar_text(&state);
+        insta::assert_snapshot!(text, @" ≡0 ●0 ◐0 ○0 ✕0    ⤡");
+    }
+
+    #[test]
+    fn render_filter_bar_control_wears_the_running_colour() {
+        let state = make_state_with_groups(vec![]);
+        let (line, _) = render_filter_bar(&state, 20);
+        let glyph = line.spans.last().unwrap();
+        assert_eq!(glyph.content.as_ref(), "⤢");
+        assert_eq!(glyph.style.fg, Some(state.theme.status_running));
     }
 
     fn test_filter_pane(pane_id: &str, status: PaneStatus) -> crate::tmux::PaneInfo {
