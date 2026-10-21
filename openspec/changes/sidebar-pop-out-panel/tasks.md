@@ -10,10 +10,10 @@
 
 ## 2. The pop-out control on the top row
 
-- [ ] 2.1 Make `render_filter_bar` in `src/ui/panes/filter_bar.rs` take the width, build the chip run, compute the gap, and return the column of the control, the way `render_secondary_header` does; store that column in `FrameLayout`. Verify: a unit test asserts the returned column and that the row is as wide as the area.
-- [ ] 2.2 Draw the control at the right edge of the top row in the running colour, with the pop-out glyph when the sidebar is docked and the pop-in glyph when it is floating. Verify: a snapshot test shows the row with the control.
-- [ ] 2.3 Hit-test the control in the click handler before the chip walk, so a click on the control never changes the status filter. Verify: a unit test clicks the control column and asserts the filter is unchanged.
-- [ ] 2.4 Wire the `p` key to the same action as the control. Verify: a unit test in `src/app/input.rs` drives the `p` key and asserts the toggle happened.
+- [x] 2.1 Make `render_filter_bar` in `src/ui/panes/filter_bar.rs` take the width, build the chip run, compute the gap, and return the column of the control, the way `render_secondary_header` does; store that column in `FrameLayout`. Verify: a unit test asserts the returned column and that the row is as wide as the area.
+- [x] 2.2 Draw the control at the right edge of the top row in the running colour, with the pop-out glyph when the sidebar is docked and the pop-in glyph when it is floating. Verify: a snapshot test shows the row with the control.
+- [x] 2.3 Hit-test the control in the click handler before the chip walk, so a click on the control never changes the status filter. Verify: a unit test clicks the control column and asserts the filter is unchanged.
+- [x] 2.4 Wire the `p` key to the same action as the control. Verify: a unit test in `src/app/input.rs` drives the `p` key and asserts the toggle happened.
 - [ ] 2.5 Add the `p` shortcut to the keybindings table in `website/src/content/docs/reference/keybindings.md`. Verify: the table lists `p` for popping the sidebar out and in.
 
 ## 3. Floating and docking the pane
