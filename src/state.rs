@@ -1500,7 +1500,7 @@ mod tests {
     fn status_counts_empty() {
         let state = AppState::new("%99".into());
         let counts = state.status_counts();
-        assert_eq!(counts.all(), 0);
+        assert_eq!(counts.count(StatusFilter::All), 0);
         for filter in StatusFilter::VARIANTS {
             assert_eq!(
                 counts.count(filter),
@@ -1537,7 +1537,7 @@ mod tests {
         }];
         // busy sums running + background
         let counts = state.status_counts();
-        assert_eq!(counts.all(), 5);
+        assert_eq!(counts.count(StatusFilter::All), 5);
         assert_eq!(counts.count(StatusFilter::Busy), 2);
         assert_eq!(counts.count(StatusFilter::Waiting), 1);
         assert_eq!(counts.count(StatusFilter::Idle), 1);
@@ -1874,14 +1874,14 @@ mod tests {
         // All repos: 2 total
         state.global.repo_filter = RepoFilter::All;
         let counts = state.status_counts();
-        assert_eq!(counts.all(), 2);
+        assert_eq!(counts.count(StatusFilter::All), 2);
         assert_eq!(counts.count(StatusFilter::Busy), 1);
         assert_eq!(counts.count(StatusFilter::Idle), 1);
 
         // Filter to "app" only: 1 Running
         state.global.repo_filter = RepoFilter::Repo("app".into());
         let counts = state.status_counts();
-        assert_eq!(counts.all(), 1);
+        assert_eq!(counts.count(StatusFilter::All), 1);
         assert_eq!(counts.count(StatusFilter::Busy), 1);
         assert_eq!(counts.count(StatusFilter::Idle), 0);
     }

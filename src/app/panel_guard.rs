@@ -17,19 +17,6 @@
 use crate::state::{PanelGeometry, panel_geometry};
 use crate::tmux;
 
-/// Width and position to re-assert for the floating panel after a window
-/// width change, taken from [`popout::panel_geometry`] so the guard and
-/// the pop-out share one source for the panel's size and right-edge
-/// anchor.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct PanelPosition {
-    pub width: u16,
-    /// Column of the panel's upper-left corner.
-    pub x: u16,
-    /// Row of the panel's upper-left corner.
-    pub y: u16,
-}
-
 /// Width and position to re-assert for the floating panel, or `None` to
 /// leave the pane alone.
 ///
@@ -43,7 +30,7 @@ pub fn position_target(
     window_height: u16,
     last_window_width: Option<u16>,
     floating: bool,
-) -> Option<PanelPosition> {
+) -> Option<PanelGeometry> {
     if !floating || window_width == 0 {
         return None;
     }
@@ -51,8 +38,7 @@ pub fn position_target(
     if window_width == last {
         return None;
     }
-    let PanelGeometry { width, x, y, .. } = panel_geometry(window_width, window_height);
-    Some(PanelPosition { width, x, y })
+    Some(panel_geometry(window_width, window_height))
 }
 
 /// The guard acts only while the pane is floating, only once the previous
@@ -150,8 +136,9 @@ mod tests {
     fn position_target_reasserts_after_a_window_width_change() {
         assert_eq!(
             position_target(100, 40, Some(120), true),
-            Some(PanelPosition {
+            Some(PanelGeometry {
                 width: 40,
+                height: 40,
                 x: 60,
                 y: 0,
             })
@@ -184,8 +171,9 @@ mod tests {
     fn position_target_anchors_to_the_left_edge_in_a_narrow_window() {
         assert_eq!(
             position_target(30, 20, Some(80), true),
-            Some(PanelPosition {
+            Some(PanelGeometry {
                 width: 40,
+                height: 20,
                 x: 0,
                 y: 0,
             })

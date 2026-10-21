@@ -117,7 +117,11 @@ impl AppState {
             geometry.x,
             geometry.y,
         );
-        self.apply_pop_out(info.width, result);
+        // The probe is mirrored into the state before the capture reads
+        // the docked width back from it, so the state's copy is the one
+        // the pop-out acts on.
+        self.sidebar_pane = info;
+        self.apply_pop_out(self.sidebar_pane.width, result);
     }
 
     fn pop_in_with(&mut self, info: SidebarPaneInfo) {
@@ -301,7 +305,6 @@ mod tests {
             pane_active: false,
             window_active: false,
             width: 28,
-            height: 24,
             window_width: 100,
             window_height: 30,
             floating: false,

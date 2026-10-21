@@ -6,7 +6,6 @@ pub struct SidebarPaneInfo {
     pub pane_active: bool,
     pub window_active: bool,
     pub width: u16,
-    pub height: u16,
     /// Width of the pane's window (`#{window_width}`). `0` when the query
     /// failed or tmux is too old to report the floating flag.
     pub window_width: u16,
@@ -22,45 +21,43 @@ pub struct SidebarPaneInfo {
 
 impl SidebarPaneInfo {
     /// Values used when the pane is gone or the query failed: not focused,
-    /// not the active window, and the historical default pane size. The
+    /// not the active window, and the historical default pane width. The
     /// window size is unknown (`0`), so nothing sizes from it.
     pub(crate) const FALLBACK: Self = Self {
         pane_active: false,
         window_active: false,
         width: 28,
-        height: 24,
         window_width: 0,
         window_height: 0,
         floating: false,
     };
 }
 
-/// Parse the `#{pane_active} #{window_active} #{pane_width} #{pane_height}
-/// #{window_width} #{window_height} #{pane_floating_flag}` output. Fewer
-/// than the four core fields (the pane is gone, or the query failed) yields
+/// Parse the `#{pane_active} #{window_active} #{pane_width} #{window_width}
+/// #{window_height} #{pane_floating_flag}` output. Fewer than the three
+/// core fields (the pane is gone, or the query failed) yields
 /// [`SidebarPaneInfo::FALLBACK`]; missing window fields or a missing
 /// floating flag (tmux older than 3.8 has no `pane_floating_flag`) keep
 /// the parsed fields and report a zero window size / not-floating.
 pub(crate) fn parse_sidebar_pane_info(out: &str) -> SidebarPaneInfo {
     let parts: Vec<&str> = out.split_whitespace().collect();
-    if parts.len() < 4 {
+    if parts.len() < 3 {
         return SidebarPaneInfo::FALLBACK;
     }
     SidebarPaneInfo {
         pane_active: parts[0] == "1",
         window_active: parts[1] == "1",
         width: parts[2].parse().unwrap_or(SidebarPaneInfo::FALLBACK.width),
-        height: parts[3].parse().unwrap_or(SidebarPaneInfo::FALLBACK.height),
-        window_width: parts.get(4).and_then(|s| s.parse().ok()).unwrap_or(0),
-        window_height: parts.get(5).and_then(|s| s.parse().ok()).unwrap_or(0),
-        floating: parts.get(6).copied() == Some("1"),
+        window_width: parts.get(3).and_then(|s| s.parse().ok()).unwrap_or(0),
+        window_height: parts.get(4).and_then(|s| s.parse().ok()).unwrap_or(0),
+        floating: parts.get(5).copied() == Some("1"),
     }
 }
 
 pub fn get_sidebar_pane_info(tmux_pane: &str) -> SidebarPaneInfo {
     let out = display_message(
         tmux_pane,
-        "#{pane_active} #{window_active} #{pane_width} #{pane_height} \
+        "#{pane_active} #{window_active} #{pane_width} \
          #{window_width} #{window_height} #{pane_floating_flag}",
     );
     parse_sidebar_pane_info(&out)
@@ -178,20 +175,18 @@ mod tests {
 
     #[test]
     fn parse_sidebar_pane_info_parses_floating_flag() {
-        let info = parse_sidebar_pane_info("1 1 40 30 100 30 1");
+        let info = parse_sidebar_pane_info("1 1 40 100 30 1");
         assert!(info.floating);
         assert!(info.pane_active);
         assert!(info.window_active);
         assert_eq!(info.width, 40);
-        assert_eq!(info.height, 30);
         assert_eq!(info.window_width, 100);
         assert_eq!(info.window_height, 30);
 
-        let docked = parse_sidebar_pane_info("0 1 80 24 120 40 0");
+        let docked = parse_sidebar_pane_info("0 1 80 120 40 0");
         assert!(!docked.floating);
         assert!(!docked.pane_active);
         assert_eq!(docked.width, 80);
-        assert_eq!(docked.height, 24);
         assert_eq!(docked.window_width, 120);
         assert_eq!(docked.window_height, 40);
     }
@@ -201,12 +196,11 @@ mod tests {
         // tmux older than 3.8 has no `#{pane_floating_flag}`: the core
         // fields and the window size must survive and the pane must read
         // as docked.
-        let info = parse_sidebar_pane_info("0 1 80 24 120 40");
+        let info = parse_sidebar_pane_info("0 1 80 120 40");
         assert!(!info.floating);
         assert!(!info.pane_active);
         assert!(info.window_active);
         assert_eq!(info.width, 80);
-        assert_eq!(info.height, 24);
         assert_eq!(info.window_width, 120);
         assert_eq!(info.window_height, 40);
     }

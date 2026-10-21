@@ -99,11 +99,6 @@ impl StatusCounts {
             StatusFilter::Error => self.error,
         }
     }
-
-    /// Total panes counted, i.e. the `All` chip's count.
-    pub fn all(self) -> usize {
-        self.all
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -328,7 +323,7 @@ mod tests {
     fn status_counts_on_empty_state_is_all_zeroes() {
         let state = AppState::new("%99".into());
         let counts = state.status_counts();
-        assert_eq!(counts.all(), 0);
+        assert_eq!(counts.count(StatusFilter::All), 0);
         for filter in StatusFilter::VARIANTS {
             assert_eq!(
                 counts.count(filter),
@@ -363,7 +358,7 @@ mod tests {
 
         // All repos: 4 total, busy sums running + background
         let counts = state.status_counts();
-        assert_eq!(counts.all(), 4);
+        assert_eq!(counts.count(StatusFilter::All), 4);
         assert_eq!(counts.count(StatusFilter::Busy), 2);
         assert_eq!(counts.count(StatusFilter::Waiting), 1);
         assert_eq!(counts.count(StatusFilter::Idle), 1);
@@ -372,7 +367,7 @@ mod tests {
         // Restrict to "app"
         state.global.repo_filter = RepoFilter::Repo("app".into());
         let counts = state.status_counts();
-        assert_eq!(counts.all(), 3);
+        assert_eq!(counts.count(StatusFilter::All), 3);
         assert_eq!(counts.count(StatusFilter::Busy), 2);
         assert_eq!(counts.count(StatusFilter::Waiting), 0);
         assert_eq!(counts.count(StatusFilter::Idle), 1);
@@ -396,7 +391,7 @@ mod tests {
         // all chip must count the unknown pane too. The unknown pane
         // belongs to no category.
         let counts = state.status_counts();
-        assert_eq!(counts.all(), 3);
+        assert_eq!(counts.count(StatusFilter::All), 3);
         assert_eq!(counts.count(StatusFilter::Busy), 1);
         assert_eq!(counts.count(StatusFilter::Waiting), 0);
         assert_eq!(counts.count(StatusFilter::Idle), 1);
