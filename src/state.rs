@@ -211,10 +211,37 @@ mod tests {
     use crate::tmux::{AgentType, PaneInfo, PaneStatus, PermissionMode, WorktreeMetadata};
     use std::fs;
 
-    /// Reset filter click debounce so the next `handle_filter_click` is not ignored.
+    /// Reset filter click debounce so the next `handle_filter_click` is not
+    /// ignored, and mark the sidebar as the active pane: a filter click only
+    /// counts once the sidebar already has focus, so that the click which
+    /// focuses it cannot select a chip.
     fn reset_filter_debounce(state: &mut AppState) {
         state.timers.last_filter_click =
             std::time::Instant::now() - std::time::Duration::from_millis(200);
+        state.sidebar_pane.pane_active = true;
+    }
+
+    #[test]
+    fn filter_click_is_ignored_while_the_sidebar_is_not_active() {
+        // The click that focuses the sidebar is not a chip selection. tmux
+        // focuses the pane it delivers the click to, so the event arrives
+        // anyway; acting on it changes a server-wide setting from a click
+        // the user made only to reach the sidebar.
+        let mut state = AppState::new("%99".into());
+        state.layout.filter_bar_width = 30;
+        state.global.status_filter = StatusFilter::All;
+        state.timers.last_filter_click =
+            std::time::Instant::now() - std::time::Duration::from_millis(200);
+        assert!(!state.sidebar_pane.pane_active);
+
+        // A click on the busy chip, while the sidebar is not the active pane.
+        state.handle_filter_click(4);
+
+        assert_eq!(
+            state.global.status_filter,
+            StatusFilter::All,
+            "a focusing click must not change the status filter"
+        );
     }
 
     fn test_pane(id: &str) -> PaneInfo {
