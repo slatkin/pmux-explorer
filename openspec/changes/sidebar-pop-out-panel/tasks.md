@@ -20,15 +20,15 @@
 
 - [x] 3.1 Add the tmux calls in `src/tmux/commands.rs`: a `break-pane -W` that floats the pane with a given size and position, and a `join-pane` that puts it back, both reporting tmux's error. Build the argument lists in pure functions, the way `src/cli/toggle.rs` builds its split flags. Verify: unit tests assert the argument lists.
 - [x] 3.2 Read the floating flag of the sidebar's own pane in the existing pane query, so the sidebar knows its mode from the pane and not from a remembered flag. Verify: a unit test asserts the parsed flag.
-- [ ] 3.3 Implement the pop-out: capture the docked width, compute the panel geometry from the window size (40 columns wide, as tall as the window, anchored to the right edge), and float the pane. Verify: a unit test asserts the computed geometry for a given window size.
-- [ ] 3.4 Report a refused pop-out with `AppState::set_flash`, so a zoomed window leaves the sidebar docked and tells the user. Verify: a unit test asserts that a failed call sets the flash message and leaves the mode unchanged.
-- [ ] 3.5 Implement the pop-in: join the pane back into the layout and restore the captured docked width with `resize-pane -x`. Verify: a unit test asserts the restored width, and the live check in group 4 confirms it.
-- [ ] 3.6 Clamp the Activity/Git bottom panel to a third of the panel height while the sidebar floats. Verify: a unit test asserts the clamped height for a given panel height.
+- [x] 3.3 Implement the pop-out: capture the docked width, compute the panel geometry from the window size (40 columns wide, as tall as the window, anchored to the right edge), and float the pane. Verify: a unit test asserts the computed geometry for a given window size.
+- [x] 3.4 Report a refused pop-out with `AppState::set_flash`, so a zoomed window leaves the sidebar docked and tells the user. Verify: a unit test asserts that a failed call sets the flash message and leaves the mode unchanged.
+- [x] 3.5 Implement the pop-in: join the pane back into the layout and restore the captured docked width with `resize-pane -x`. Verify: a unit test asserts the restored width, and the live check in group 4 confirms it.
+- [x] 3.6 Clamp the Activity/Git bottom panel to a third of the panel height while the sidebar floats. Verify: a unit test asserts the clamped height for a given panel height.
 - [ ] 3.7 Document the floating panel in `website/src/content/docs/features/` and note in the README requirements that the floating panel needs tmux 3.8 while the rest of the sidebar works on tmux 3.0+. Verify: the feature page describes the control, the geometry and the tmux version, and the README states the version.
 
 ## 4. Keeping the floating panel sized
 
-- [ ] 4.1 Re-assert the panel height when the window height changed, next to the existing size guard in `src/app.rs`, so the panel keeps the height of the window and a hand-resized panel is not fought on every tick. Verify: a unit test asserts that the height is re-asserted on a window height change and left alone otherwise.
+- [x] 4.1 Re-assert the panel height when the window height changed, next to the existing size guard in `src/app.rs`, so the panel keeps the height of the window and a hand-resized panel is not fought on every tick. Verify: a unit test asserts that the height is re-asserted on a window height change and left alone otherwise.
 
 ## 5. Live verification
 
