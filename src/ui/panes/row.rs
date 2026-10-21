@@ -1205,7 +1205,7 @@ mod tests {
         let ctx = test_ctx(&theme, 40, false);
         let p = pi_subagent(PmuxTaskKind::Spawned, SubagentParent::Orphaned, None);
         let line = status_row(&p, &ctx, &StatusIcons::default(), 0, 0);
-        insta::assert_snapshot!(line_text(&line), @"  ● pi subagent");
+        insta::assert_snapshot!(line_text(&line), @"  ● pi ♟");
     }
 
     #[test]
@@ -1239,7 +1239,7 @@ mod tests {
         let text = line_text(&line);
         insta::assert_snapshot!(
             text,
-            @"  ● a-very-long-s… subagent 1m5s"
+            @"  ● a-very-long-session-… ♟ 1m5s"
         );
         assert!(
             display_width(text.trim_end()) <= ctx.inner_width + 2,
@@ -1341,11 +1341,11 @@ mod tests {
             .map(|l| line_text(l).trim_end().to_string())
             .collect::<Vec<_>>()
             .join("\n");
-        insta::assert_snapshot!(joined, @r#"
-● pi subagent
-▷ orchestrator  unit1 idle collapse
-  main
-        "#
+        insta::assert_snapshot!(joined, @"
+        ● pi ♟
+        ▷ orchestrator  unit1 idle collapse
+          main
+        "
         );
     }
 

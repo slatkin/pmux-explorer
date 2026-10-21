@@ -6,7 +6,8 @@ use crate::tmux;
 use super::filter::{RepoFilter, StatusFilter};
 
 /// State shared across all sidebar instances via tmux global variables.
-/// Synced from tmux at startup and on pane focus change (SIGUSR1).
+/// Read once at startup and re-applied from the shared options on every
+/// refresh tick.
 pub struct GlobalState {
     pub status_filter: StatusFilter,
     pub selected_pane_row: usize,
@@ -116,13 +117,14 @@ impl GlobalState {
     }
 
     /// Load all global state from tmux variables.
-    /// Called at startup and on SIGUSR1 (pane focus change).
+    /// Called at startup.
     pub fn load_from_tmux(&mut self) {
         let opts = tmux::get_all_global_options();
         self.apply_all(&opts);
     }
 
-    /// Apply all global options from tmux (filter, cursor, repo filter).
+    /// Apply the shared options read from tmux (filter, cursor, repo
+    /// filter). Runs once at startup and on every refresh tick.
     pub fn apply_all(&mut self, opts: &HashMap<String, String>) {
         if let Some(filter_str) = opts.get(tmux::SIDEBAR_FILTER) {
             let tmux_filter = StatusFilter::from_label(filter_str);
@@ -134,6 +136,11 @@ impl GlobalState {
         if let Some(cursor_str) = opts.get(tmux::SIDEBAR_CURSOR)
             && let Ok(n) = cursor_str.parse::<usize>()
             && n != self.last_saved_cursor
+            // A local move whose debounced write has not landed yet wins
+            // over anything another instance writes during that window;
+            // the flush persists the user's row and the ticks after it
+            // adopt from tmux again.
+            && self.pending_cursor_save_since.is_none()
         {
             self.selected_pane_row = n;
             self.last_saved_cursor = n;

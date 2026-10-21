@@ -140,7 +140,15 @@ impl AppState {
     /// Returns whether the sidebar's window is the active tmux window.
     pub fn refresh(&mut self) -> bool {
         self.refresh_now();
-        self.sidebar_pane = tmux::get_sidebar_pane_info(&self.tmux_pane);
+        let reading = tmux::get_sidebar_pane_reading(&self.tmux_pane);
+        self.sidebar_pane = reading.info;
+        // The shared settings ride along on the same per-tick
+        // `display-message` call: applying them here means the
+        // `rebuild_row_targets` inside `apply_session_snapshot` already
+        // sees the filters another instance wrote. `apply_all` guards
+        // every field with its matching `last_saved_*` value, so a local
+        // change that tmux already holds is not reverted.
+        self.global.apply_all(&reading.options);
         // The flags are read back from the state (not from a local probe
         // copy) so every field the state holds has a reader.
         let focused = self.sidebar_pane.pane_active;
