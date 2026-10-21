@@ -1155,7 +1155,7 @@ fn rendered_filter_row_and_hit_test_agree_at_the_20_column_minimum() {
     assert_eq!(state.layout.filter_bar_width, 20);
 
     let past = std::time::Instant::now() - std::time::Duration::from_millis(200);
-    let mut click = |state: &mut AppState, col: u16| {
+    let click = |state: &mut AppState, col: u16| {
         state.timers.last_filter_click = past;
         state.handle_mouse_click(0, col);
     };
