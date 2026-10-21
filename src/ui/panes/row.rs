@@ -73,11 +73,6 @@ pub(super) fn render_pane_lines_with_ports(
 
     let mut out: Vec<Line<'static>> = Vec::with_capacity(8);
     out.push(status_row(pane, &marker_ctx, icons, spinner_frame, now));
-    // The pmux identity row sits directly under the status row and uses the
-    // plain context, like the other detail rows.
-    if let Some(line) = subagent_identity_row(pane.subagent.as_ref(), &plain_ctx) {
-        out.push(line);
-    }
     if let Some(line) = branch_ports_row(git_info, ports, pane.sidebar_spawned, &marker_ctx) {
         out.push(line);
     }
@@ -92,7 +87,13 @@ pub(super) fn render_pane_lines_with_ports(
     if let Some(cmd) = pane.bg_shell_cmd.as_deref() {
         out.push(background_hint_row(ctx, cmd));
     }
-    if !pane.prompt.is_empty() {
+    // The pmux identity row takes the slot the wrapped prompt text occupies
+    // on a non-subagent pane, so a subagent never shows a prompt there.
+    if pane.subagent.is_some() {
+        if let Some(line) = subagent_identity_row(pane.subagent.as_ref(), ctx) {
+            out.push(line);
+        }
+    } else if !pane.prompt.is_empty() {
         out.extend(prompt_rows(pane, ctx));
     } else if matches!(pane.status, PaneStatus::Idle) {
         out.push(idle_hint_row(ctx));
@@ -1308,13 +1309,14 @@ mod tests {
     }
 
     #[test]
-    fn identity_row_sits_between_status_row_and_branch_row() {
+    fn identity_row_sits_below_branch_row_replacing_prompt() {
         let theme = ColorTheme::default();
-        let p = pi_subagent(
+        let mut p = pi_subagent(
             PmuxTaskKind::Spawned,
             SubagentParent::Pane("orchestrator".into()),
             Some("unit1 idle collapse"),
         );
+        p.prompt = "should never render".into();
         let lines = render_pane_lines_with_ports(
             &p,
             &PaneGitInfo {
@@ -1340,9 +1342,13 @@ mod tests {
             .join("\n");
         insta::assert_snapshot!(joined, @"
         ● pi ♟
-        ▷ orchestrator  unit1 idle collapse
           main
+        ▷ orchestrator  unit1 idle collapse
         "
+        );
+        assert!(
+            !joined.contains("should never render"),
+            "a subagent's prompt must be replaced by the identity row"
         );
     }
 
