@@ -49,7 +49,7 @@ Pane options written to tmux:
 | `@pane_session_id` | SessionStart, UserPromptSubmit, Notification, Stop, StopFailure, PermissionDenied, CwdChanged | Agent-reported session id (skipped when subagents are active) |
 | `@pane_subagent_kind` | UserPromptSubmit (recognised pmux task prompt, pi only) | "spawned" or "resumed" |
 | `@pane_subagent_parent` | UserPromptSubmit (recognised pmux task prompt, pi only) | The parent session id from the prompt path |
-| `@pane_subagent_task` | UserPromptSubmit (recognised pmux task prompt, pi only) | The fuzzy task from the prompt path, unset when there is none |
+| `@pane_subagent_task` | UserPromptSubmit (recognised pmux task prompt, pi only) | The `<name>` part of the prompt path's file name, that is the stem without its `-YYYY-MM-DDTHH-MM-SS` timestamp, with each hyphen shown as a space; the fallback stems `subagent` and `resume` give no task, so it is unset when there is none |
 
 The three `@pane_subagent_*` options mark a pi pane that pmux started as a
 subagent. A later recognised prompt replaces them; a prompt that does not
