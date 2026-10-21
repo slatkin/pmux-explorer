@@ -22,7 +22,7 @@
 - [x] 3.2 Read the floating flag of the sidebar's own pane in the existing pane query, so the sidebar knows its mode from the pane and not from a remembered flag. Verify: a unit test asserts the parsed flag.
 - [x] 3.3 Implement the pop-out: capture the docked width, compute the panel geometry from the window size (40 columns wide, as tall as the window, anchored to the right edge), and float the pane. Verify: a unit test asserts the computed geometry for a given window size.
 - [x] 3.4 Report a refused pop-out with `AppState::set_flash`, so a zoomed window leaves the sidebar docked and tells the user. Verify: a unit test asserts that a failed call sets the flash message and leaves the mode unchanged.
-- [x] 3.5 Implement the pop-in: join the pane back into the layout and restore the captured docked width with `resize-pane -x`. Verify: a unit test asserts the restored width, and the live check in group 4 confirms it.
+- [x] 3.5 Implement the pop-in: join the pane back into the layout and restore the captured docked width with `resize-pane -x`. Verify: a unit test asserts the restored width, and the live check in group 5 confirms it.
 - [x] 3.6 Clamp the Activity/Git bottom panel to a third of the panel height while the sidebar floats. Verify: a unit test asserts the clamped height for a given panel height.
 - [ ] 3.7 Document the floating panel in `website/src/content/docs/features/` and note in the README requirements that the floating panel needs tmux 3.8 while the rest of the sidebar works on tmux 3.0+. Verify: the feature page describes the control, the geometry and the tmux version, and the README states the version.
 
