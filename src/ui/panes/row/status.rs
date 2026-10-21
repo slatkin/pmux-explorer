@@ -23,8 +23,10 @@ pub(super) fn status_row(
     let icon_color =
         pulse_color.unwrap_or_else(|| theme.status_color(&pane.status, pane.attention));
     // The agent label is always shown; a real pane name (set via pmux's
-    // `select-pane -T`) is appended after it. Only the pane's own name
-    // is shown in the title slot — never the tmux session name.
+    // `select-pane -T`) is appended after the badge slot, so the subagent
+    // badge (♟ / ↻) and a permission badge sit between the agent label and
+    // the pane name. Only the pane's own name is shown in the title slot —
+    // never the tmux session name.
     let agent_label = pane.agent.label();
     // A subagent pane owns the badge slot: a pi pane always has the default
     // permission mode, whose badge is empty, so the pmux identity can use it.
@@ -80,12 +82,6 @@ pub(super) fn status_row(
         format!(" {agent_label}"),
         ctx.apply_bg(Style::default().fg(title_fg)),
     ));
-    if let Some(name) = &pane_name {
-        left_spans.push(Span::styled(
-            format!(" {name}"),
-            ctx.apply_bg(Style::default().fg(title_fg)),
-        ));
-    }
     if !badge.is_empty() {
         let badge_color = badge_override.unwrap_or(match pane.permission_mode {
             PermissionMode::BypassPermissions => theme.badge_danger,
@@ -99,6 +95,12 @@ pub(super) fn status_row(
         left_spans.push(Span::styled(
             format!(" {}", badge),
             ctx.apply_bg(Style::default().fg(badge_color)),
+        ));
+    }
+    if let Some(name) = &pane_name {
+        left_spans.push(Span::styled(
+            format!(" {name}"),
+            ctx.apply_bg(Style::default().fg(title_fg)),
         ));
     }
 

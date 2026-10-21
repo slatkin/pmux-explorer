@@ -1198,6 +1198,16 @@ mod tests {
     }
 
     #[test]
+    fn status_row_named_subagent_shows_badge_before_pane_name() {
+        let theme = ColorTheme::default();
+        let ctx = test_ctx(&theme, 40, false);
+        let mut p = pi_subagent(PmuxTaskKind::Spawned, SubagentParent::Orphaned, None);
+        p.pane_name = Some("my-task".into());
+        let line = status_row(&p, &ctx, &StatusIcons::default(), 0, 0);
+        insta::assert_snapshot!(line_text(&line), @"  ● pi ♟ my-task");
+    }
+
+    #[test]
     fn status_row_long_pane_name_truncates_keeps_label_and_elapsed() {
         // A pane name longer than the space left after the status icon,
         // the agent label, and the elapsed label is cut with an ellipsis;
@@ -1214,8 +1224,9 @@ mod tests {
 
     #[test]
     fn status_row_subagent_badge_counts_toward_width_budget() {
-        // The badge eats into the title budget the same way a permission
-        // badge does, so the elapsed label keeps its place on the row.
+        // The badge sits before the pane name and eats into the title budget
+        // the same way a permission badge does, so the elapsed label keeps
+        // its place on the row.
         let theme = ColorTheme::default();
         let ctx = test_ctx(&theme, 30, false);
         let mut p = pi_subagent(PmuxTaskKind::Spawned, SubagentParent::Orphaned, None);
@@ -1225,7 +1236,7 @@ mod tests {
         let text = line_text(&line);
         insta::assert_snapshot!(
             text,
-            @"  ● pi a-very-long-sessi… ♟ 1m5s"
+            @"  ● pi ♟ a-very-long-sessi… 1m5s"
         );
         assert!(
             display_width(text.trim_end()) <= ctx.inner_width + 2,

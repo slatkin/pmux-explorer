@@ -28,14 +28,22 @@ the pane has any other name.
 When the pane's tmux title is non-empty, differs from the host name, and is not
 an agent-set OSC title — it does not start with `π - ` (which pi writes) or
 `✳ ` (which Claude Code writes) — the status row SHALL show that title after
-the agent label. A title that is the host name (tmux's default) or an
-agent-set OSC title SHALL NOT be shown, because it is not a name given to
-the pane. The window's `automatic-rename` setting SHALL NOT affect the result.
+the badge slot, which follows the agent label and holds the subagent badge
+(♟ for spawned, ↻ for resumed) or the permission mode badge. A title that is
+the host name (tmux's default) or an agent-set OSC title SHALL NOT be shown,
+because it is not a name given to the pane. The window's `automatic-rename`
+setting SHALL NOT affect the result.
 
 #### Scenario: A pane pmux named
 
 - **WHEN** pmux named a pane with `select-pane -T my-task` and the pane runs pi
 - **THEN** the status row shows `pi my-task`
+
+#### Scenario: A named subagent pane shows its badge before its name
+
+- **WHEN** pmux named a spawned subagent pane with `select-pane -T my-task`
+  and the pane runs pi
+- **THEN** the status row shows `pi ♟ my-task`
 
 #### Scenario: A pane whose title is the host name
 
