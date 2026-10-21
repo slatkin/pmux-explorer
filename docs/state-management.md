@@ -109,7 +109,7 @@ Per-pane file-based state:
 | `spinner_frame` | Every 200ms (animation) | Spinner animation frame counter |
 | `icons` | Once at startup | `StatusIcons` theme (overridable via tmux options) |
 | `tmux_pane` | Once at startup | This sidebar's own tmux pane ID |
-| `sidebar_pane` | Every 1s (refresh cycle) | This sidebar's own pane info as tmux reported it on the last refresh (`SidebarPaneInfo`): pane/window active flags, the pane's size, the window's size, and the pane's floating flag. The floating flag is the truth for the docked-vs-floating mode — it is read from the pane, never remembered separately |
+| `sidebar_pane` | Every 1s (refresh cycle) | This sidebar's own pane info as tmux reported it on the last refresh (`SidebarPaneInfo`): the pane's active flags, the pane's width, the window's size, and the pane's floating flag. The floating flag is the truth for the docked-vs-floating mode — it is read from the pane, never remembered separately |
 | `docked_width` | On pop-out / pop-in (user input) | The pane width captured when the sidebar was popped out, restored by the pop-in with `resize-pane -x` (`src/state/popout.rs`). `None` while docked and when the pane was already floating when the sidebar started |
 | `pane_states.seen` | Every 1s | Set of pane IDs that have been seen as agents (bundled with `pane_states.map` under the `PaneRuntimeMap` wrapper) |
 | `version_notice` | Once at startup (bg fetch) | GitHub release update notice, `None` when up-to-date |

@@ -6,8 +6,8 @@ pub struct SidebarPaneInfo {
     pub pane_active: bool,
     pub window_active: bool,
     pub width: u16,
-    /// Width of the pane's window (`#{window_width}`). `0` when the query
-    /// failed or tmux is too old to report the floating flag.
+    /// Width of the pane's window (`#{window_width}`). `0` when the
+    /// query failed.
     pub window_width: u16,
     /// Height of the pane's window (`#{window_height}`). In a default
     /// session this counts the status-line row, so the pane area can be
