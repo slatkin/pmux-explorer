@@ -96,85 +96,104 @@ pub fn truncate_to_width(text: &str, max_width: usize) -> String {
     result
 }
 
-/// Wrap text by display width (not byte count)
-pub fn wrap_text_char(text: &str, max_width: usize, max_lines: usize) -> Vec<String> {
-    wrap_text_inner(text, max_width, max_lines, false)
-}
-
+/// Wrap text by display width, breaking at word boundaries.
+///
+/// Words stay whole unless a single word is wider than the line, in which
+/// case it is hard-split across lines. When the text does not fit within
+/// `max_lines` lines, the final line keeps the last whole words that fit
+/// and closes with an ellipsis; the agent label and elapsed label elsewhere
+/// rely on `truncate_to_width` for the same treatment on single lines.
+/// Returns at most `max_lines` lines; empty text returns no lines.
 pub fn wrap_text(text: &str, max_width: usize, max_lines: usize) -> Vec<String> {
-    wrap_text_inner(text, max_width, max_lines, true)
-}
-
-fn wrap_text_inner(text: &str, max_width: usize, max_lines: usize, word_wrap: bool) -> Vec<String> {
     if max_width == 0 || max_lines == 0 {
-        return vec![];
+        return Vec::new();
     }
 
-    let chars: Vec<char> = text.chars().collect();
-    let mut result: Vec<String> = Vec::new();
-    let mut pos = 0;
-
-    while pos < chars.len() && result.len() < max_lines {
-        // Collect chars that fit within max_width display columns
+    // Tokens keep words whole: a word wider than the line is pre-split
+    // into width-fitting chunks, and every chunk after the first continues
+    // the word with no space before it.
+    let mut tokens: Vec<(String, bool)> = Vec::new(); // (text, space before)
+    for word in text.split_whitespace() {
+        let mut first_chunk = true;
         let mut chunk = String::new();
-        let mut chunk_width = 0;
-        let mut end = pos;
+        let mut chunk_w = 0usize;
+        for ch in word.chars() {
+            let cw = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
+            if chunk_w + cw > max_width {
+                tokens.push((std::mem::take(&mut chunk), first_chunk));
+                first_chunk = false;
+                chunk_w = 0;
+            }
+            chunk.push(ch);
+            chunk_w += cw;
+        }
+        if !chunk.is_empty() {
+            tokens.push((chunk, first_chunk));
+        }
+    }
 
-        while end < chars.len() {
-            let ch_w = unicode_width::UnicodeWidthChar::width(chars[end]).unwrap_or(0);
-            if chunk_width + ch_w > max_width {
+    let join = |tokens: &[(String, bool)]| -> String {
+        let mut line = String::new();
+        for (i, (token, space_before)) in tokens.iter().enumerate() {
+            if i > 0 && *space_before {
+                line.push(' ');
+            }
+            line.push_str(token);
+        }
+        line
+    };
+
+    let mut lines: Vec<String> = Vec::new();
+    let mut next = 0usize;
+    while next < tokens.len() {
+        let last_allowed = lines.len() + 1 == max_lines;
+        let mut placed: Vec<(String, bool)> = Vec::new();
+        let mut line_w = 0usize;
+        while next < tokens.len() {
+            let (token, space_before) = &tokens[next];
+            let sep = if placed.is_empty() {
+                0
+            } else {
+                usize::from(*space_before)
+            };
+            let token_w = display_width(token);
+            if line_w + sep + token_w > max_width {
                 break;
             }
-            chunk.push(chars[end]);
-            chunk_width += ch_w;
-            end += 1;
+            placed.push((token.clone(), sep == 1));
+            line_w += sep + token_w;
+            next += 1;
         }
 
-        if end >= chars.len() {
-            // All remaining text fits
-            result.push(chunk);
-            break;
-        }
-
-        // Last allowed line -- truncate with ellipsis
-        if result.len() + 1 == max_lines {
-            // Re-collect leaving room for ...
-            let mut trunc = String::new();
-            let mut tw = 0;
-            let ellipsis_w = 1; // ... is 1 column wide in most terminals
-            for &ch in &chars[pos..] {
-                let ch_w = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
-                if tw + ch_w + ellipsis_w > max_width {
-                    break;
+        if next < tokens.len() && last_allowed {
+            // Text remains past the final line: close this line with an
+            // ellipsis at a word boundary.
+            if line_w < max_width {
+                lines.push(format!("{}\u{2026}", join(&placed)));
+            } else if placed.len() > 1 {
+                // The line filled exactly; give back the last whole word
+                // to make room for the ellipsis.
+                placed.pop();
+                lines.push(format!("{}\u{2026}", join(&placed)));
+            } else {
+                // One full-width word: hard-cut it with the ellipsis.
+                let mut cut = String::new();
+                let mut cut_w = 0usize;
+                for ch in placed[0].0.chars() {
+                    let cw = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
+                    if cut_w + cw > max_width - 1 {
+                        break;
+                    }
+                    cut.push(ch);
+                    cut_w += cw;
                 }
-                trunc.push(ch);
-                tw += ch_w;
+                lines.push(format!("{cut}\u{2026}"));
             }
-            trunc.push('\u{2026}');
-            result.push(trunc);
             break;
         }
-
-        // Try to find word boundary (space) for nicer wrapping
-        if word_wrap
-            && let Some(space_pos) = chunk.rfind(' ')
-            && space_pos > 0
-        {
-            let nice_chunk = chunk[..space_pos].to_string();
-            let char_count = nice_chunk.chars().count();
-            result.push(nice_chunk);
-            pos += char_count;
-            while pos < chars.len() && chars[pos] == ' ' {
-                pos += 1;
-            }
-            continue;
-        }
-
-        result.push(chunk);
-        pos = end;
+        lines.push(join(&placed));
     }
-
-    result
+    lines
 }
 
 #[cfg(test)]
@@ -269,6 +288,54 @@ mod tests {
     }
 
     #[test]
+    fn wrap_text_truncation_ends_at_word_boundary() {
+        // The truncated last line keeps whole words and appends the
+        // ellipsis instead of cutting mid-word.
+        let lines = wrap_text("aaa bbb ccc ddd eee fff ggg", 10, 2);
+        assert_eq!(lines, vec!["aaa bbb", "ccc ddd\u{2026}"]);
+    }
+
+    #[test]
+    fn wrap_text_truncation_gives_back_word_when_line_exactly_full() {
+        // "cccc dd" fills the 7-wide last line exactly, so the last word is
+        // given back to make room for the ellipsis rather than overflowing.
+        let lines = wrap_text("aaa bbb cccc dd ee", 7, 2);
+        assert_eq!(lines, vec!["aaa bbb", "cccc\u{2026}"]);
+    }
+
+    #[test]
+    fn wrap_text_full_line_no_ellipsis_when_text_fits() {
+        // A line that fills the width exactly with no text remaining gets
+        // no ellipsis.
+        let lines = wrap_text("aaa bbbb cccc", 10, 3);
+        assert_eq!(lines, vec!["aaa bbbb", "cccc"]);
+    }
+
+    #[test]
+    fn wrap_text_oversized_word_hard_splits() {
+        // A single word wider than the line is split across lines.
+        let lines = wrap_text("abcdefghij", 4, 3);
+        assert_eq!(lines, vec!["abcd", "efgh", "ij"]);
+    }
+
+    #[test]
+    fn wrap_text_oversized_word_truncates_with_ellipsis() {
+        let lines = wrap_text("abcdefghij", 4, 2);
+        assert_eq!(lines, vec!["abcd", "efg\u{2026}"]);
+    }
+
+    #[test]
+    fn wrap_text_whitespace_only_text_has_no_lines() {
+        assert!(wrap_text("   ", 10, 3).is_empty());
+    }
+
+    #[test]
+    fn wrap_text_collapses_consecutive_spaces() {
+        let lines = wrap_text("hello    world", 10, 3);
+        assert_eq!(lines, vec!["hello", "world"]);
+    }
+
+    #[test]
     fn wrap_text_cjk() {
         // Each CJK char is 2 columns wide; width=6 fits 3 CJK chars
         let lines = wrap_text("あいうえお", 6, 3);
@@ -287,22 +354,6 @@ mod tests {
     fn wrap_text_zero_lines() {
         let lines = wrap_text("hello", 10, 0);
         assert!(lines.is_empty());
-    }
-
-    // ─── wrap_text_char ───────────────────────────────────────────
-
-    #[test]
-    fn wrap_text_char_no_word_boundary() {
-        // word-wrap would break at "world", char-wrap fills to max_width
-        let lines = wrap_text_char("hello world foobar", 10, 3);
-        assert_eq!(lines[0], "hello worl");
-        assert_eq!(lines[1], "d foobar");
-    }
-
-    #[test]
-    fn wrap_text_char_short() {
-        let lines = wrap_text_char("hi", 10, 3);
-        assert_eq!(lines, vec!["hi"]);
     }
 
     // ─── elapsed_label ─────────────────────────────────────────────

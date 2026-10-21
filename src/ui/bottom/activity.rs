@@ -7,7 +7,7 @@ use ratatui::{
 };
 
 use crate::state::AppState;
-use crate::ui::text::{display_width, wrap_text_char};
+use crate::ui::text::{display_width, wrap_text};
 
 pub(super) fn draw_activity_content(frame: &mut Frame, state: &mut AppState, inner: Rect) {
     let theme = &state.theme;
@@ -45,7 +45,7 @@ pub(super) fn draw_activity_content(frame: &mut Frame, state: &mut AppState, inn
 
         if !entry.label.is_empty() {
             let label_max_w = inner_w.saturating_sub(2);
-            let wrapped = wrap_text_char(&entry.label, label_max_w, 3);
+            let wrapped = wrap_text(&entry.label, label_max_w, 3);
             for wl in wrapped {
                 lines.push(Line::from(Span::styled(
                     format!("  {wl}"),

@@ -5,9 +5,7 @@ use ratatui::{
 
 use super::ctx::RowCtx;
 use crate::tmux::{PaneStatus, SubagentInfo, SubagentParent};
-use crate::ui::text::{
-    display_width, truncate_to_width, wait_reason_label, wrap_text, wrap_text_char,
-};
+use crate::ui::text::{display_width, truncate_to_width, wait_reason_label, wrap_text};
 
 /// Renders the pmux identity row of a subagent pane: the response-row arrow,
 /// then the parent label (or `ORPHANED`), then two spaces and the fuzzy task.
@@ -190,11 +188,7 @@ pub(super) fn prompt_rows(pane: &crate::tmux::PaneInfo, ctx: &RowCtx) -> Vec<Lin
         theme.text_inactive
     };
     let wrap_width = ctx.inner_width.saturating_sub(2);
-    let wrapped = if is_response {
-        wrap_text_char(&pane.prompt, wrap_width, 3)
-    } else {
-        wrap_text(&pane.prompt, wrap_width, 3)
-    };
+    let wrapped = wrap_text(&pane.prompt, wrap_width, 3);
 
     let mut out = Vec::with_capacity(wrapped.len());
     for (li, wl) in wrapped.iter().enumerate() {

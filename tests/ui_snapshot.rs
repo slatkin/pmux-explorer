@@ -630,7 +630,7 @@ fn snapshot_prompt_wrapping_ui() {
     ┃ ○ claude
         Please fix the
         authentication bug in
-        the login flow that cau…
+        the login flow that…
     ╭ Activity │ Git ──────────╮
     │      No activity yet     │
     ╰──────────────────────────╯
