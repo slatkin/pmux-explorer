@@ -53,9 +53,9 @@ Pane options written to tmux:
 
 The three `@pane_subagent_*` options mark a pi pane that pmux started as a
 subagent. A later recognised prompt replaces them; a prompt that does not
-match leaves them alone. `SessionEnd` and the dead-pi-pane sweep
-(`scan_session_process_snapshot()`) clear all three with the rest of the
-pane's metadata.
+match leaves them alone. `clear_all_meta()` (session end) and
+`clear_agent_pane_state()` (the sweep that clears a pi pane whose agent
+process is gone) remove all three with the rest of the pane's metadata.
 
 In-memory per-pane runtime state. Every field lives inside
 `PaneRuntimeState` so the whole record is dropped together when its
