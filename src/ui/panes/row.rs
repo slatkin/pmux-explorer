@@ -1366,6 +1366,14 @@ mod tests {
             0,
             0,
         );
-        assert_eq!(lines.len(), 1);
+        let joined = lines
+            .iter()
+            .map(|l| line_text(l).trim_end().to_string())
+            .collect::<Vec<_>>()
+            .join("\n");
+        insta::assert_snapshot!(joined, @r#"
+  ● pi
+        "#
+        );
     }
 }

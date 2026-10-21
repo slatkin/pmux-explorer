@@ -171,7 +171,7 @@ mod tests {
     }
 
     #[test]
-    fn spawn_path_with_hyphenated_name() {
+    fn spawn_path_shows_hyphens_as_spaces() {
         let task = parse_pmux_task(&spawn_prompt(
             "unit1-idle-collapse-2026-09-07T15-18-30",
             "P1",
@@ -189,13 +189,6 @@ mod tests {
         assert_eq!(task.kind, PmuxTaskKind::Resumed);
         assert_eq!(task.parent_session_id, "P1");
         assert_eq!(task.task.as_deref(), Some("u1 placement"));
-    }
-
-    #[test]
-    fn hyphenated_name_becomes_spaced_task() {
-        let task =
-            parse_pmux_task(&spawn_prompt("review-unit1-2026-09-07T15-26-50", "P1")).unwrap();
-        assert_eq!(task.task.as_deref(), Some("review unit1"));
     }
 
     #[test]

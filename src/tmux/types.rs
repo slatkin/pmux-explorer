@@ -40,7 +40,7 @@ pub struct PaneInfo {
 
 /// The pmux subagent identity of a pane, parsed from the `@pane_subagent_*`
 /// options the hook writes on a recognised pmux task prompt.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SubagentInfo {
     pub kind: PmuxTaskKind,
     /// The fuzzy task name, or `None` when pmux used its fallback stem.
@@ -52,7 +52,7 @@ pub struct SubagentInfo {
 /// The parent of a subagent: the label (tmux title, or pane id when the
 /// title is empty) of the live agent pane with the recorded session id, or
 /// `Orphaned` when no pane reports that session id.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SubagentParent {
     Pane(String),
     Orphaned,
