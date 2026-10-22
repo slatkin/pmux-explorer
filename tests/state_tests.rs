@@ -1108,7 +1108,7 @@ fn rendered_filter_row_and_hit_test_agree_at_the_20_column_minimum() {
     // pop-out control on the last column of the 20-column row.
     insta::assert_snapshot!(output, @"
      ≡40 ●10 ◐10 ○10   ⤢
-    ╭ Activity│Tasks│Git
+    ╭ Activity│Tasks│… ╮
     │  No activity yet │
     ╰──────────────────╯
     ");

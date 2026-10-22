@@ -61,12 +61,14 @@ struct StoreFile {
     tasks: Vec<TaskItem>,
 }
 
-/// Path of a pane's task store. The pane id is encoded the same way
-/// [`crate::activity::log_file_path`] encodes it (`%` → `_`) because
-/// tmux pane ids contain a `%` that is awkward in file names.
+/// Path of a pane's task store. Shares [`crate::activity::encode_pane_id_for_file_name`]
+/// with the activity log's path (`%` → `_`) because tmux pane ids
+/// contain a `%` that is awkward in file names.
 pub fn store_file_path(pane_id: &str) -> PathBuf {
-    let encoded = pane_id.replace('%', "_");
-    PathBuf::from(format!("/tmp/tmux-agent-tasks{encoded}.json"))
+    PathBuf::from(format!(
+        "/tmp/tmux-agent-tasks{}.json",
+        crate::activity::encode_pane_id_for_file_name(pane_id)
+    ))
 }
 
 /// Last-modified time of a pane's task store, or `None` when the file
@@ -74,9 +76,7 @@ pub fn store_file_path(pane_id: &str) -> PathBuf {
 /// this as the cheap "anything to re-read?" check, exactly like the
 /// activity log's mtime polling.
 pub fn store_mtime(pane_id: &str) -> Option<SystemTime> {
-    fs::metadata(store_file_path(pane_id))
-        .ok()
-        .and_then(|m| m.modified().ok())
+    crate::activity::file_mtime(&store_file_path(pane_id))
 }
 
 /// Read a pane's stored items in recorded order. A missing or corrupt

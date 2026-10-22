@@ -313,7 +313,7 @@ fn snapshot_tab_bar_renders_both_labels() {
 }
 
 #[test]
-fn snapshot_tasks_tab_ui() {
+fn snapshot_tasks_empty_tab_ui() {
     let pane = make_pane(AgentType::Claude, PaneStatus::Running);
     let mut state = make_state(vec![SessionInfo {
         session_name: "main".into(),
@@ -363,7 +363,7 @@ fn snapshot_tasks_tab_ui() {
 }
 
 #[test]
-fn snapshot_tasks_empty_tab_ui() {
+fn snapshot_tasks_tab_ui() {
     let pane = make_pane(AgentType::Claude, PaneStatus::Running);
     let mut state = make_state(vec![SessionInfo {
         session_name: "main".into(),
@@ -390,6 +390,184 @@ fn snapshot_tasks_empty_tab_ui() {
     project
     ╭ Activity│Tasks│Git ──────╮
     │     No tasks recorded    │
+    ╰──────────────────────────╯
+    ");
+}
+
+// ─── Tasks tab: per-status colors (the styled snapshot pins the
+// icon/subject cells that the plain snapshots above only show as text)
+// and the scroll clamp used after a store trim shrinks the list.
+
+#[test]
+fn snapshot_tasks_status_colors_styled() {
+    let pane = make_pane(AgentType::Claude, PaneStatus::Running);
+    let mut state = make_state(vec![SessionInfo {
+        session_name: "main".into(),
+        windows: vec![WindowInfo {
+            window_id: "@1".into(),
+            window_name: "project".into(),
+            window_active: true,
+            auto_rename: false,
+            panes: vec![pane.clone()],
+        }],
+    }]);
+    state.repo_groups = vec![make_repo_group("project", vec![pane])];
+    state.rebuild_row_targets();
+
+    state.bottom_tab = BottomTab::Tasks;
+    state.tasks.items = vec![
+        task_store::TaskItem {
+            id: "1".into(),
+            subject: "done".into(),
+            status: task_store::TaskItemStatus::Completed,
+        },
+        task_store::TaskItem {
+            id: "2".into(),
+            subject: "wip".into(),
+            status: task_store::TaskItemStatus::InProgress,
+        },
+        task_store::TaskItem {
+            id: "3".into(),
+            subject: "queued".into(),
+            status: task_store::TaskItemStatus::Pending,
+        },
+    ];
+
+    // Completed dims to text_muted (252), in-progress takes the
+    // task-progress color (223), queued stays bright text_active (255):
+    // the same glyph/color contract the agent list's task progress uses.
+    insta::assert_snapshot!(render_to_styled_string(&mut state, 28, 24), @"
+     ≡[fg:111]1[fg:153] ●[fg:114]1[fg:255] ◐[fg:245]0[fg:245] ○[fg:245]0[fg:245] ✕[fg:245]0[fg:245]            ⤢[fg:114]
+    ⓘ[fg:221]                        —[fg:252] ▾[fg:252]
+    ┃[fg:153,bg:239] [bg:239]●[fg:82,bg:239] [fg:174,bg:239]c[fg:174,bg:239]l[fg:174,bg:239]a[fg:174,bg:239]u[fg:174,bg:239]d[fg:174,bg:239]e[fg:174,bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239]
+
+    ╭[fg:240] [fg:240]A[fg:252]c[fg:252]t[fg:252]i[fg:252]v[fg:252]i[fg:252]t[fg:252]y[fg:252]│[fg:240]T[fg:153]a[fg:153]s[fg:153]k[fg:153]s[fg:153]│[fg:240]G[fg:252]i[fg:252]t[fg:252] [fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]╮[fg:240]
+    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
+    │[fg:240]✔[fg:252] [fg:252]d[fg:252]o[fg:252]n[fg:252]e[fg:252] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
+    │[fg:240]◼[fg:223] [fg:223]w[fg:223]i[fg:223]p[fg:223] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
+    │[fg:240]◻[fg:255] [fg:255]q[fg:255]u[fg:255]e[fg:255]u[fg:255]e[fg:255]d[fg:255] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
+    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
+    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
+    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
+    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
+    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
+    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
+    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
+    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
+    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
+    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
+    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
+    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
+    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
+    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
+    ╰[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]╯[fg:240]
+    ");
+}
+
+#[test]
+fn tasks_scroll_clamps_when_the_list_shrinks() {
+    let pane = make_pane(AgentType::Claude, PaneStatus::Running);
+    let mut state = make_state(vec![SessionInfo {
+        session_name: "main".into(),
+        windows: vec![WindowInfo {
+            window_id: "@1".into(),
+            window_name: "project".into(),
+            window_active: true,
+            auto_rename: false,
+            panes: vec![pane.clone()],
+        }],
+    }]);
+    state.repo_groups = vec![make_repo_group("project", vec![pane])];
+    state.rebuild_row_targets();
+    state.bottom_tab = BottomTab::Tasks;
+
+    state.tasks.items = (0..10)
+        .map(|i| task_store::TaskItem {
+            id: i.to_string(),
+            subject: format!("task {i}"),
+            status: task_store::TaskItemStatus::Pending,
+        })
+        .collect();
+
+    let _ = render_to_string(&mut state, 28, 24);
+    // 10 items + spacer = 11 lines in a 18-row content area
+    // (`BOTTOM_PANEL_HEIGHT` − borders): no clamping needed.
+    assert_eq!(state.tasks.scroll.total_lines, 11);
+    state.tasks.scroll.offset = 5;
+
+    // The list drops to one item (a store trim): re-rendering pulls the
+    // offset all the way back instead of showing a blank paragraph.
+    state.tasks.items = vec![task_store::TaskItem {
+        id: "1".into(),
+        subject: "only".into(),
+        status: task_store::TaskItemStatus::Pending,
+    }];
+    let _ = render_to_string(&mut state, 28, 24);
+    assert_eq!(state.tasks.scroll.offset, 0);
+}
+
+#[test]
+fn snapshot_tasks_subject_truncates_at_narrow_width() {
+    let pane = make_pane(AgentType::Claude, PaneStatus::Running);
+    let mut state = make_state(vec![SessionInfo {
+        session_name: "main".into(),
+        windows: vec![WindowInfo {
+            window_id: "@1".into(),
+            window_name: "project".into(),
+            window_active: true,
+            auto_rename: false,
+            panes: vec![pane.clone()],
+        }],
+    }]);
+    state.repo_groups = vec![make_repo_group("project", vec![pane])];
+    state.rebuild_row_targets();
+    state.bottom_tab = BottomTab::Tasks;
+    state.tasks.items = vec![task_store::TaskItem {
+        id: "1".into(),
+        subject: "a-very-long-task-subject-that-runs-out-of-columns".into(),
+        status: task_store::TaskItemStatus::Pending,
+    }];
+
+    insta::assert_snapshot!(render_to_string(&mut state, 24, 24), @"
+     ≡1 ●1 ◐0 ○0 ✕0        ⤢
+    ⓘ                    — ▾
+    ┃ ● claude
+    ╭ Activity│Tasks│Git ──╮
+    │◻ a-very-long-task-su…│
+    ╰──────────────────────╯
+    ");
+}
+
+#[test]
+fn snapshot_tasks_multiline_subject_shows_first_line_only() {
+    // The store round-trips free text with newlines (pinned by the
+    // task-store test); the one-row-per-item list shows its first line.
+    let pane = make_pane(AgentType::Claude, PaneStatus::Running);
+    let mut state = make_state(vec![SessionInfo {
+        session_name: "main".into(),
+        windows: vec![WindowInfo {
+            window_id: "@1".into(),
+            window_name: "project".into(),
+            window_active: true,
+            auto_rename: false,
+            panes: vec![pane.clone()],
+        }],
+    }]);
+    state.repo_groups = vec![make_repo_group("project", vec![pane])];
+    state.rebuild_row_targets();
+    state.bottom_tab = BottomTab::Tasks;
+    state.tasks.items = vec![task_store::TaskItem {
+        id: "1".into(),
+        subject: "first line\nsecond line".into(),
+        status: task_store::TaskItemStatus::Pending,
+    }];
+
+    insta::assert_snapshot!(render_to_string(&mut state, 28, 24), @"
+     ≡1 ●1 ◐0 ○0 ✕0            ⤢
+    ⓘ                        — ▾
+    ┃ ● claude
+    ╭ Activity│Tasks│Git ──────╮
+    │◻ first line              │
     ╰──────────────────────────╯
     ");
 }

@@ -47,6 +47,25 @@ pub(crate) fn classify_task_progress(
     }
 }
 
+/// Fresh when the cache still describes a file's latest state: the
+/// recorded pane id matches the focused pane and the recorded mtime
+/// matches the file's current one. `activity::log_mtime` and the task
+/// store's `store_mtime` feed the same `(pane, mtime)` shape, so both
+/// refresh paths share this predicate — false positives (refreshing
+/// when unchanged) are the safe failure direction, which is why a
+/// missing file's `None` mtime is never "fresh" against a real cache.
+pub(crate) fn file_cache_fresh(
+    cache: Option<&(String, std::time::SystemTime)>,
+    pane_id: &str,
+    current_mtime: Option<std::time::SystemTime>,
+) -> bool {
+    matches!(
+        (current_mtime, cache),
+        (Some(mtime), Some((cached_pane, cached_mtime)))
+            if *cached_pane == pane_id && *cached_mtime == mtime
+    )
+}
+
 impl AppState {
     pub(crate) fn refresh_now(&mut self) {
         self.now = crate::time::now_epoch_secs();
@@ -318,11 +337,7 @@ impl AppState {
             return;
         };
         let current_mtime = task_store::store_mtime(pane_id);
-        if let (Some(mtime), Some((cached_id, cached_mtime))) =
-            (current_mtime, self.tasks.store_cache.as_ref())
-            && cached_id == pane_id
-            && *cached_mtime == mtime
-        {
+        if file_cache_fresh(self.tasks.store_cache.as_ref(), pane_id, current_mtime) {
             return;
         }
         self.tasks.items = task_store::read_tasks(pane_id);
@@ -336,11 +351,7 @@ impl AppState {
             return;
         };
         let current_mtime = activity::log_mtime(pane_id);
-        if let (Some(mtime), Some((cached_id, cached_mtime))) =
-            (current_mtime, self.activity.log_cache.as_ref())
-            && cached_id == pane_id
-            && *cached_mtime == mtime
-        {
+        if file_cache_fresh(self.activity.log_cache.as_ref(), pane_id, current_mtime) {
             return;
         }
         // Task-reset markers are internal bookkeeping for parse_task_progress;

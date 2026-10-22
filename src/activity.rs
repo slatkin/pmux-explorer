@@ -36,9 +36,18 @@ impl ActivityEntry {
     }
 }
 
+/// File-name form of a tmux pane id: `%` becomes `_` (pane ids contain a
+/// `%` that is awkward inside a file name). The task store mirrors the
+/// activity log's per-pane file layout, so both path builders share this.
+pub(crate) fn encode_pane_id_for_file_name(pane_id: &str) -> String {
+    pane_id.replace('%', "_")
+}
+
 pub fn log_file_path(pane_id: &str) -> PathBuf {
-    let encoded = pane_id.replace('%', "_");
-    PathBuf::from(format!("/tmp/tmux-agent-activity{encoded}.log"))
+    PathBuf::from(format!(
+        "/tmp/tmux-agent-activity{}.log",
+        encode_pane_id_for_file_name(pane_id)
+    ))
 }
 
 /// Last-modified time of a pane's activity log, or `None` when the file
@@ -49,9 +58,14 @@ pub fn log_file_path(pane_id: &str) -> PathBuf {
 /// which bump the mtime, so refresh paths can use this as a cheap
 /// "anything to re-parse?" check before reading the file.
 pub fn log_mtime(pane_id: &str) -> Option<std::time::SystemTime> {
-    fs::metadata(log_file_path(pane_id))
-        .ok()
-        .and_then(|m| m.modified().ok())
+    file_mtime(&log_file_path(pane_id))
+}
+
+/// Last-modified time of an existing file, `None` when it is missing or
+/// its metadata cannot be queried — the shared body of [`log_mtime`] and
+/// the task store's `store_mtime`.
+pub(crate) fn file_mtime(path: &std::path::Path) -> Option<std::time::SystemTime> {
+    fs::metadata(path).ok().and_then(|m| m.modified().ok())
 }
 
 fn parse_entry(line: &str) -> Option<ActivityEntry> {

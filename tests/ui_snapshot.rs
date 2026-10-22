@@ -721,7 +721,7 @@ fn snapshot_narrow_width_ui() {
     ⓘ              — ▾
     ┃ ○ claude
         hello world
-    ╭ Activity│Tasks│G
+    ╭ Activity│Tasks ╮
     │ No activity yet│
     ╰────────────────╯
     ");
@@ -1942,7 +1942,7 @@ fn snapshot_spawn_modal_narrow_width_still_fits() {
     │ MODE           │
     │ default        │
     ╰────────────────╯
-    ╭ Activity│Tasks│G
+    ╭ Activity│Tasks ╮
     │ No activity yet│
     ╰────────────────╯
     ");
