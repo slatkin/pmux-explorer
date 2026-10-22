@@ -241,7 +241,8 @@ The list is one JSON file per pane,
 `/tmp/tmux-agent-tasks<PANE>.json`, written beside the activity log. Each
 item holds an `id`, a `subject` and a `status`, and the pane id is encoded
 in the file name the way the activity log encodes it. The store keeps at
-most 50 items and trims completed ones oldest first. A `session-start`
+most 50 items and trims completed ones oldest first; when no completed
+item remains, the oldest item is dropped instead. A `session-start`
 event clears the pane's store, so a pane reused for new work starts empty.
 
 ### The task reminders
