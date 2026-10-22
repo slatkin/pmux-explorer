@@ -102,12 +102,14 @@ fn count_digits(n: usize) -> u16 {
 /// Compute the layout of the status filter row for a row `width` columns
 /// wide with the per-filter status counts (see [`StatusCounts`]).
 ///
-/// The pop-out control owns the last column of the row, and the chips
-/// fill from the left with a single-space separator after one gutter
-/// column. A chip that would no longer fit before the control is
-/// dropped whole — never partially drawn — together with every chip
-/// after it. Returns the chips that fit and the control's column
-/// (`None` for a zero-width row, where nothing is drawn).
+/// The pop-out control owns the row's two rightmost columns — the glyph,
+/// then the one-column spacer that keeps it a space away from the right
+/// border — and the chips fill from the left with a single-space
+/// separator after one gutter column. A chip that would no longer fit
+/// before the control is dropped whole — never partially drawn —
+/// together with every chip after it. Returns the chips that fit and the
+/// control's column (`None` for a zero-width row, where nothing is
+/// drawn).
 ///
 /// Both the renderer and the click hit test run through this function,
 /// so a click can only ever select a chip that is actually drawn.
@@ -118,7 +120,9 @@ pub(crate) fn filter_bar_layout(
     if width == 0 {
         return (Vec::new(), None);
     }
-    let control_col = width - 1;
+    // A one-column row cannot hold glyph plus spacer, so the glyph alone
+    // owns the only column there.
+    let control_col = width.saturating_sub(2);
     let mut chips = Vec::new();
     let mut start: u16 = 1; // leading gutter column
     for filter in StatusFilter::VARIANTS {

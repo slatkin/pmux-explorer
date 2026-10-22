@@ -1772,7 +1772,7 @@ mod tests {
         state.layout.filter_bar_width = 20;
         state.global.status_filter = StatusFilter::All;
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(19);
+        state.handle_filter_click(18);
         assert_eq!(state.global.status_filter, StatusFilter::All);
         assert!(
             state

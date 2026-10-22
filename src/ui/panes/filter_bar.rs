@@ -54,8 +54,8 @@ pub(super) fn render_filter_bar<'a>(state: &AppState, width: u16) -> (Line<'a>, 
     };
 
     let mut spans: Vec<Span<'a>> = Vec::new();
-    // The leading gutter column, skipped on a one-column row so the
-    // control still fits.
+    // The leading gutter column, skipped when the control's two columns
+    // own the whole row (a one- or two-column row).
     if control_col > 0 {
         spans.push(Span::raw(" "));
     }
@@ -91,9 +91,10 @@ pub(super) fn render_filter_bar<'a>(state: &AppState, width: u16) -> (Line<'a>, 
         spans.push(Span::styled(count_str, count_style));
     }
 
-    // The control sits at the right edge of the row, one glyph column
-    // wide, in the running colour — the row is as wide as the area, the
-    // way the secondary header right-aligns its repo button.
+    // The control sits one column in from the right border — the glyph,
+    // then a trailing spacer where the border column would otherwise
+    // sit, so the row stays as wide as the area — the way the secondary
+    // header right-aligns its repo button.
     let control_glyph = if state.sidebar_pane.floating {
         POPIN_GLYPH
     } else {
@@ -109,6 +110,11 @@ pub(super) fn render_filter_bar<'a>(state: &AppState, width: u16) -> (Line<'a>, 
         control_glyph,
         Style::default().fg(theme.status_running),
     ));
+    // The spacer after the glyph only fits on a row two columns wide or
+    // more; a one-column row draws the glyph alone.
+    if control_col + 1 < width {
+        spans.push(Span::raw(" "));
+    }
 
     (Line::from(spans), Some(control_col))
 }
@@ -434,7 +440,7 @@ mod tests {
         state.global.status_filter = StatusFilter::Busy;
 
         let text = filter_bar_text(&state);
-        insta::assert_snapshot!(text, @" ≡2 ●2 ◐0 ○0 ✕0    ⤢");
+        insta::assert_snapshot!(text, @" ≡2 ●2 ◐0 ○0 ✕0   ⤢ ");
     }
 
     // ─── the pop-out control ─────────────────────────────────
@@ -452,7 +458,11 @@ mod tests {
         for width in [20u16, 30, 40] {
             let (line, col) = render_filter_bar(&state, width);
             let text = line_text(&line);
-            assert_eq!(col, Some(width - 1), "control column at width {width}");
+            assert_eq!(
+                col,
+                Some(width - 2),
+                "control column one space off the right edge at width {width}"
+            );
             assert_eq!(
                 display_width(&text),
                 width as usize,
@@ -460,8 +470,10 @@ mod tests {
             );
         }
         let (line, _) = render_filter_bar(&state, 20);
-        insta::assert_snapshot!(line_text(&line), @" ≡0 ●0 ◐0 ○0 ✕0    ⤢");
-        let glyph = line.spans.last().unwrap();
+        insta::assert_snapshot!(line_text(&line), @" ≡0 ●0 ◐0 ○0 ✕0   ⤢ ");
+        // The trailing spacer spans the row's last column, so the glyph
+        // is the second-to-last span.
+        let glyph = &line.spans[line.spans.len() - 2];
         assert_eq!(glyph.content.as_ref(), "⤢");
         assert_eq!(glyph.style.fg, Some(state.theme.status_running));
     }
@@ -473,7 +485,7 @@ mod tests {
         let mut state = make_state_with_groups(vec![]);
         state.sidebar_pane.floating = true;
         let text = filter_bar_text(&state);
-        insta::assert_snapshot!(text, @" ≡0 ●0 ◐0 ○0 ✕0    ⤡");
+        insta::assert_snapshot!(text, @" ≡0 ●0 ◐0 ○0 ✕0   ⤡ ");
     }
 
     // ─── the row with multi-digit counts (the 20 column minimum) ───
@@ -547,7 +559,7 @@ mod tests {
     }
 
     fn control_col(width: u16) -> u16 {
-        width - 1
+        width - 2
     }
 
     fn test_filter_pane(pane_id: &str, status: PaneStatus) -> crate::tmux::PaneInfo {
