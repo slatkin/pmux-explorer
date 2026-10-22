@@ -37,6 +37,15 @@ pub(in crate::cli::hook) fn on_session_start(
     // for the previous run's subagents to drain.
     tmux::unset_pane_option(pane, PENDING_SESSION_END);
     tmux::unset_pane_option(pane, PENDING_WORKTREE_REMOVE);
+    // A fresh session starts with an empty task store, matching the
+    // activity log's session semantics so a pane reused for new work
+    // does not show the previous run's list. Skipped while subagents
+    // are active: they share the parent's `$TMUX_PANE`, and a child's
+    // SessionStart must not wipe the parent's list — same rule as
+    // `mark_task_reset`.
+    if pane_writes_allowed(pane) {
+        crate::task_store::clear_tasks(pane);
+    }
     match source {
         "resume" => tmux::set_pane_option(pane, tmux::PANE_WAIT_REASON, "session_resumed"),
         "compact" => tmux::set_pane_option(pane, tmux::PANE_WAIT_REASON, "session_resumed_compact"),
@@ -246,6 +255,38 @@ mod tests {
             "fresh SessionStart must drop a stale pending marker"
         );
         assert!(!tmux::test_mock::contains(pane, PENDING_WORKTREE_REMOVE));
+    }
+
+    #[test]
+    fn on_session_start_clears_the_task_store() {
+        let _guard = tmux::test_mock::install();
+        let pane = "%TASK_FRESH_SESSION";
+        crate::task_store::record_task(pane, "stale task").unwrap();
+        assert!(crate::task_store::store_file_path(pane).exists());
+
+        on_session_start(pane, &basic_ctx(), "");
+
+        assert!(
+            !crate::task_store::store_file_path(pane).exists(),
+            "SessionStart must clear the pane's task store"
+        );
+    }
+
+    #[test]
+    fn on_session_start_preserves_task_store_while_subagents_active() {
+        let _guard = tmux::test_mock::install();
+        let pane = "%TASK_SUBAGENT_SESSION";
+        tmux::test_mock::set(pane, tmux::PANE_SUBAGENTS, "Explore:sub-1");
+        crate::task_store::record_task(pane, "parent task").unwrap();
+
+        on_session_start(pane, &basic_ctx(), "");
+
+        assert!(
+            crate::task_store::store_file_path(pane).exists(),
+            "a subagent's SessionStart must not wipe the parent's task store"
+        );
+
+        let _ = std::fs::remove_file(crate::task_store::store_file_path(pane));
     }
 
     #[test]

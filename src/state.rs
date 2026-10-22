@@ -17,6 +17,7 @@ mod popup;
 mod refresh;
 mod scroll;
 mod tab;
+mod tasks;
 mod timers;
 
 pub use activity::ActivityState;
@@ -33,11 +34,16 @@ pub use popup::{PopupState, SpawnField};
 #[cfg(test)]
 pub(crate) use refresh::{TaskProgressDecision, classify_task_progress};
 pub use scroll::{ScrollState, ScrollStates};
+pub use tasks::TasksState;
 pub use timers::RefreshTimers;
 
+/// Bottom-panel tabs in cycle order. Tasks never auto-shows: only the
+/// manual cycle, a tab-title click, or a per-pane tab restore selects
+/// it — auto-switch keeps setting Activity (agent pane) and Git (default).
 #[derive(Debug, Clone, PartialEq)]
 pub enum BottomTab {
     Activity,
+    Tasks,
     GitStatus,
 }
 
@@ -57,6 +63,9 @@ pub struct AppState {
     /// next render.
     pub layout: FrameLayout,
     pub activity: ActivityState,
+    /// Focused pane's task store for the Tasks tab (refreshed by
+    /// `refresh_pane_tasks` with the activity log's mtime check).
+    pub tasks: TasksState,
     pub tmux_pane: String,
     /// The sidebar's own pane state as tmux reported it on the last
     /// refresh: focus, size, window size and the floating flag. The
@@ -68,8 +77,9 @@ pub struct AppState {
     /// the pane was already floating when the sidebar started (nothing
     /// to restore).
     pub docked_width: Option<u16>,
-    /// Scroll offsets for the agents list and git tab. Activity tab
-    /// scroll lives in [`ActivityState::scroll`].
+    /// Scroll offsets for the agents list and git tab. The Activity
+    /// tab's scroll lives in [`ActivityState::scroll`], the Tasks tab's
+    /// in [`TasksState::scroll`].
     pub scrolls: ScrollStates,
     pub theme: ColorTheme,
     pub icons: StatusIcons,
@@ -149,6 +159,7 @@ impl AppState {
             spinner_frame: 0,
             layout: FrameLayout::default(),
             activity: ActivityState::new(),
+            tasks: TasksState::new(),
             tmux_pane,
             scrolls: ScrollStates::default(),
             theme: ColorTheme::default(),
@@ -985,9 +996,11 @@ mod tests {
     // ─── next_bottom_tab / scroll_bottom tests ──────────────────────
 
     #[test]
-    fn next_bottom_tab_toggles() {
+    fn next_bottom_tab_visits_all_three_tabs() {
         let mut state = AppState::new("%99".into());
         assert_eq!(state.bottom_tab, BottomTab::Activity);
+        state.next_bottom_tab();
+        assert_eq!(state.bottom_tab, BottomTab::Tasks);
         state.next_bottom_tab();
         assert_eq!(state.bottom_tab, BottomTab::GitStatus);
         state.next_bottom_tab();
@@ -1022,6 +1035,24 @@ mod tests {
         state.scroll_bottom(2);
         assert_eq!(state.scrolls.git.offset, 2);
         assert_eq!(state.activity.scroll.offset, 0);
+    }
+
+    #[test]
+    fn scroll_bottom_dispatches_to_tasks() {
+        // The Tasks tab owns a third scroll offset: scrolling there moves
+        // nothing in the other two tabs.
+        let mut state = AppState::new("%99".into());
+        state.bottom_tab = BottomTab::Tasks;
+        state.tasks.scroll = ScrollState {
+            offset: 0,
+            total_lines: 10,
+            visible_height: 3,
+        };
+
+        state.scroll_bottom(2);
+        assert_eq!(state.tasks.scroll.offset, 2);
+        assert_eq!(state.activity.scroll.offset, 0);
+        assert_eq!(state.scrolls.git.offset, 0);
     }
 
     // ─── handle_mouse_scroll tests ────────────────────────────────────
@@ -1097,6 +1128,23 @@ mod tests {
         state.handle_mouse_scroll(29, 50, 20, 3);
         assert_eq!(state.scrolls.panes.offset, 3);
         assert_eq!(state.activity.scroll.offset, 0);
+    }
+
+    #[test]
+    fn mouse_scroll_in_bottom_panel_scrolls_tasks() {
+        // Same band routing as the other two tabs — the wheel over the
+        // panel moves the visible tab's own offset.
+        let mut state = AppState::new("%99".into());
+        state.bottom_tab = BottomTab::Tasks;
+        state.tasks.scroll = ScrollState {
+            offset: 0,
+            total_lines: 30,
+            visible_height: 10,
+        };
+
+        state.handle_mouse_scroll(35, 50, 20, 3);
+        assert_eq!(state.tasks.scroll.offset, 3);
+        assert_eq!(state.scrolls.panes.offset, 0);
     }
 
     // ─── handle_terminal_click tests ──────────────────────────────────

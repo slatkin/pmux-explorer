@@ -9,6 +9,7 @@ pub(crate) mod toggle;
 
 use std::io::Read;
 
+use crate::task_reminders;
 use crate::tmux;
 
 /// Run a CLI subcommand. Returns Some(exit_code) if a subcommand was matched,
@@ -23,6 +24,8 @@ pub fn run(args: &[String]) -> Option<i32> {
         "toggle-all" => toggle::cmd_toggle_all(rest),
         "auto-close" => toggle::cmd_auto_close(rest),
         "set-status" => cmd_set_status(rest),
+        "task-set" => cmd_task_set(rest),
+        "task-update" => cmd_task_update(rest),
         "spawn" => spawn::cmd_spawn(rest),
         "capture" => capture::cmd_capture(rest),
         "--version" | "version" => {
@@ -104,6 +107,92 @@ fn cmd_set_status(args: &[String]) -> i32 {
         return 0;
     }
     set_status(&pane, status);
+    0
+}
+
+// ─── task-set / task-update subcommands ─────────────────────────────────────
+
+/// Decide whether a task command invocation should print help instead
+/// of acting: too few args for the command to do anything (`task-set`
+/// needs a subject, `task-update` needs an id and a status), or a help
+/// token as the ONLY argument — an invocation with no payload to act
+/// on. Once anything follows the token, the words belong to the
+/// subject: a subject starting with `help` or `-h` still stores its
+/// whole text instead of being silently swallowed by help. Help
+/// remains reachable as the bare token (`task-set --help`).
+fn task_wants_help(args: &[String], min_args: usize) -> bool {
+    args.len() < min_args
+        || (args.len() == 1 && matches!(args[0].as_str(), "--help" | "-h" | "help"))
+}
+
+/// Help text for the task subcommands. The reminder lines embed the
+/// constants from `src/task_reminders.rs` verbatim — that module is the
+/// single wording source the help, the protocol doc, and the pmux
+/// companion change all reference, so this builder must not paraphrase.
+fn task_help_text() -> String {
+    format!(
+        "task-set <subject>             record a pending task item for the calling pane\n\
+         task-update <id> <status>      update one item's status (pending|in_progress|completed)\n\
+         \n\
+         reminders:\n\
+         a turn starting with an empty todo list gets: {}\n\
+         a turn ending with open items gets: {}",
+        task_reminders::RECORD_FIRST_REMINDER,
+        task_reminders::UPDATE_BEFORE_FINISH_REMINDER,
+    )
+}
+
+/// Record a pending task item for the calling pane. Exits 0 on every
+/// path — including a missing `$TMUX_PANE` — so a task command can
+/// never break the agent's turn, same contract as the hook command.
+/// On success the assigned item id is printed so the agent can name it
+/// in a later `task-update`.
+fn cmd_task_set(args: &[String]) -> i32 {
+    if task_wants_help(args, 1) {
+        println!("{}", task_help_text());
+        return 0;
+    }
+    // Agents quote subjects unreliably, so every argument after
+    // `task-set` joins into the subject: `task-set Fix the login
+    // crash` records the whole words instead of storing "Fix" and
+    // exiting 0 with the rest lost.
+    let subject = args.join(" ");
+    let pane = tmux_pane();
+    if pane.is_empty() {
+        return 0;
+    }
+    task_set_for_pane(&pane, &subject)
+}
+
+fn task_set_for_pane(pane: &str, subject: &str) -> i32 {
+    if let Some(id) = crate::task_store::record_task(pane, subject) {
+        println!("{id}");
+    }
+    0
+}
+
+/// Update one task item's status for the calling pane. Exits 0 on
+/// every path; an unknown id or status name changes nothing.
+fn cmd_task_update(args: &[String]) -> i32 {
+    if task_wants_help(args, 2) {
+        println!("{}", task_help_text());
+        return 0;
+    }
+    let id = args[0].as_str();
+    let status = args[1].as_str();
+    let pane = tmux_pane();
+    if pane.is_empty() {
+        return 0;
+    }
+    task_update_for_pane(&pane, id, status)
+}
+
+fn task_update_for_pane(pane: &str, id: &str, status: &str) -> i32 {
+    if let Some(status) = crate::task_store::parse_task_status(status)
+        && crate::task_store::update_task_status(pane, id, status)
+    {
+        println!("{} {}", id, status.as_str());
+    }
     0
 }
 
@@ -209,5 +298,112 @@ mod tests {
         let m: u32 = t[3..].parse().unwrap();
         assert!(h < 24);
         assert!(m < 60);
+    }
+
+    // ─── task-set / task-update tests ───────────────────────────────
+
+    #[test]
+    fn task_commands_exit_zero_without_a_pane() {
+        // A missing $TMUX_PANE reads as an empty pane id: both task
+        // commands no-op without touching any store file, and still
+        // exit 0 so the agent's turn cannot be broken.
+        let before = crate::task_store::store_mtime("");
+
+        assert_eq!(task_set_for_pane("", "orphan subject"), 0);
+        assert_eq!(task_update_for_pane("", "1", "completed"), 0);
+
+        assert_eq!(
+            crate::task_store::store_mtime(""),
+            before,
+            "no pane env must not touch any store file"
+        );
+    }
+
+    #[test]
+    fn task_set_dispatch_maps_to_run() {
+        // No subject → exits before any env read or store write, so the
+        // dispatch mapping can be asserted without touching $TMUX_PANE.
+        assert_eq!(run(&["task-set".into()]), Some(0));
+        assert_eq!(run(&["task-update".into()]), Some(0));
+    }
+
+    #[test]
+    fn task_update_unknown_status_or_id_is_a_noop_exit_zero() {
+        let pane = "%CLI_TASK_UPDATE_NOOP";
+        let path = crate::task_store::store_file_path(pane);
+        let _ = std::fs::remove_file(&path);
+        crate::task_store::record_task(pane, "real item").unwrap();
+        let before = crate::task_store::store_mtime(pane);
+
+        assert_eq!(task_update_for_pane(pane, "1", "archived"), 0);
+        assert_eq!(task_update_for_pane(pane, "999", "completed"), 0);
+        assert_eq!(
+            crate::task_store::store_mtime(pane),
+            before,
+            "unknown status or id must not rewrite the store"
+        );
+        assert_eq!(
+            crate::task_store::read_tasks(pane)[0].status,
+            crate::task_store::TaskItemStatus::Pending
+        );
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn task_update_without_pane_env_exits_zero_and_writes_nothing() {
+        let before = crate::task_store::store_mtime("");
+
+        let code = task_update_for_pane("", "1", "completed");
+
+        assert_eq!(code, 0);
+        assert_eq!(crate::task_store::store_mtime(""), before);
+    }
+
+    #[test]
+    fn task_help_carries_both_reminder_strings_verbatim() {
+        // The task-command help is the first surface that references the
+        // single-source reminder wording (src/task_reminders.rs); the
+        // protocol doc and the pi proof prompt reuse the same strings.
+        // If help ever paraphrases, the strings a downstream surface
+        // copies from this file stop matching what an agent reads here.
+        let help = task_help_text();
+        assert!(
+            help.contains(crate::task_reminders::RECORD_FIRST_REMINDER),
+            "help must embed the record-first wording verbatim"
+        );
+        assert!(
+            help.contains(crate::task_reminders::UPDATE_BEFORE_FINISH_REMINDER),
+            "help must embed the update-before-finish wording verbatim"
+        );
+    }
+
+    #[test]
+    fn task_commands_print_help_for_flag_or_missing_args() {
+        // Help wins only when the arity cannot act or when the help
+        // token is the ONLY argument: an invocation with a payload
+        // always acts, so no subject is silently swallowed behind help.
+        assert!(task_wants_help(&["--help".to_string()], 1));
+        assert!(task_wants_help(&["-h".to_string()], 2));
+        assert!(task_wants_help(&["help".to_string()], 2));
+        assert!(task_wants_help(&[], 1));
+        assert!(task_wants_help(&["3".to_string()], 2));
+
+        // A real subject, or a full id/status pair, still acts instead.
+        assert!(!task_wants_help(&["Record the login bug".to_string()], 1));
+        assert!(!task_wants_help(
+            &["2".to_string(), "completed".to_string()],
+            2
+        ));
+        // A payload behind a help token belongs to the subject — this is
+        // the swallow the previous leading-token check lost silently.
+        assert!(!task_wants_help(
+            &["help".to_string(), "words".to_string()],
+            1
+        ));
+        assert!(!task_wants_help(
+            &["--help".to_string(), "me".to_string()],
+            1
+        ));
     }
 }
