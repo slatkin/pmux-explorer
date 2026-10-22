@@ -263,7 +263,7 @@ none.
 - A turn that ends while items are still open receives, verbatim from
   `UPDATE_BEFORE_FINISH_REMINDER`:
 
-  `Open tasks remain: before finishing your turn, update their statuses with task-update <id> <status>.`
+  `Reminder: make sure the task board is up to date.`
 
 ## The pane state the sidebar keeps
 
