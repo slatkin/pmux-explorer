@@ -1,5 +1,6 @@
 mod activity;
 mod git;
+mod tasks;
 
 use ratatui::{
     Frame,
@@ -72,30 +73,30 @@ pub fn draw_bottom(frame: &mut Frame, state: &mut AppState, area: Rect) {
 
     match state.bottom_tab {
         BottomTab::Activity => activity::draw_activity_content(frame, state, inner),
+        BottomTab::Tasks => tasks::draw_tasks_content(frame, state, inner),
         BottomTab::GitStatus => git::draw_git_content(frame, state, inner),
     }
 }
 
 fn build_tab_title(state: &AppState) -> Line<'static> {
     let theme = &state.theme;
-    let activity_style = if state.bottom_tab == BottomTab::Activity {
-        Style::default().fg(theme.accent)
-    } else {
-        Style::default().fg(theme.text_muted)
+    let active = Style::default().fg(theme.accent);
+    let inactive = Style::default().fg(theme.text_muted);
+    let is = |tab: &BottomTab| {
+        if state.bottom_tab == *tab {
+            active
+        } else {
+            inactive
+        }
     };
-
-    let git_style = if state.bottom_tab == BottomTab::GitStatus {
-        Style::default().fg(theme.accent)
-    } else {
-        Style::default().fg(theme.text_muted)
-    };
-
     let sep_style = Style::default().fg(theme.border_inactive);
 
     Line::from(vec![
-        Span::styled("Activity", activity_style),
-        Span::styled(" \u{2502} ", sep_style),
-        Span::styled("Git", git_style),
+        Span::styled("Activity", is(&BottomTab::Activity)),
+        Span::styled("\u{2502}", sep_style),
+        Span::styled("Tasks", is(&BottomTab::Tasks)),
+        Span::styled("\u{2502}", sep_style),
+        Span::styled("Git", is(&BottomTab::GitStatus)),
     ])
 }
 

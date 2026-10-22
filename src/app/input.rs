@@ -202,6 +202,7 @@ fn pane_nav_up(state: &mut AppState) {
         Focus::ActivityLog => {
             let at_top = match state.bottom_tab {
                 BottomTab::Activity => state.activity.scroll.offset == 0,
+                BottomTab::Tasks => state.tasks.scroll.offset == 0,
                 BottomTab::GitStatus => state.scrolls.git.offset == 0,
             };
             if at_top {
@@ -398,6 +399,58 @@ mod tests {
         // Below 0 the popup nav helper is a no-op.
         handle_key_event(ctrl_key('p'), &mut state, &flag);
         assert_eq!(state.repo_popup_selected(), 0);
+    }
+
+    #[test]
+    fn backtab_cycles_the_three_bottom_tabs() {
+        // BackTab walks Activity, Tasks, Git and stays on Git's flag only
+        // while Git is showing — the background git poller keys on it.
+        let mut state = state_with_three_panes();
+        let flag = AtomicBool::new(false);
+
+        handle_key_event(key(KeyCode::BackTab), &mut state, &flag);
+        assert_eq!(state.bottom_tab, BottomTab::Tasks);
+        assert!(!flag.load(Ordering::Relaxed));
+
+        handle_key_event(key(KeyCode::BackTab), &mut state, &flag);
+        assert_eq!(state.bottom_tab, BottomTab::GitStatus);
+        assert!(flag.load(Ordering::Relaxed));
+
+        handle_key_event(key(KeyCode::BackTab), &mut state, &flag);
+        assert_eq!(state.bottom_tab, BottomTab::Activity);
+        assert!(!flag.load(Ordering::Relaxed));
+    }
+
+    #[test]
+    fn k_from_the_tasks_tab_scrolls_until_it_reaches_the_top() {
+        // The Tasks tab joins the bottom-panel focus chain: k walks its
+        // scroll like Activity/Git and hands focus back only at the top.
+        let mut state = state_with_three_panes();
+        state.focus_state.focus = Focus::ActivityLog;
+        state.bottom_tab = BottomTab::Tasks;
+        state.tasks.scroll = crate::state::ScrollState {
+            offset: 2,
+            total_lines: 10,
+            visible_height: 3,
+        };
+        let flag = AtomicBool::new(false);
+
+        handle_key_event(key(KeyCode::Up), &mut state, &flag);
+        assert_eq!(state.focus_state.focus, Focus::ActivityLog);
+        assert_eq!(state.tasks.scroll.offset, 1);
+
+        handle_key_event(key(KeyCode::Up), &mut state, &flag);
+        assert_eq!(state.tasks.scroll.offset, 0);
+        assert_eq!(state.focus_state.focus, Focus::ActivityLog);
+
+        // One more press at the top hands focus back to the pane list.
+        handle_key_event(key(KeyCode::Up), &mut state, &flag);
+        assert_eq!(state.tasks.scroll.offset, 0);
+        assert_eq!(
+            state.focus_state.focus,
+            Focus::Panes,
+            "k at the top of the Tasks list must leave the bottom panel"
+        );
     }
 
     #[test]

@@ -471,6 +471,8 @@ fn test_next_bottom_tab_full_cycle() {
     let mut state = make_state(vec![]);
     assert_eq!(state.bottom_tab, BottomTab::Activity);
     state.next_bottom_tab();
+    assert_eq!(state.bottom_tab, BottomTab::Tasks);
+    state.next_bottom_tab();
     assert_eq!(state.bottom_tab, BottomTab::GitStatus);
     state.next_bottom_tab();
     assert_eq!(state.bottom_tab, BottomTab::Activity);
@@ -495,6 +497,9 @@ fn test_scroll_activity_empty_is_noop() {
 fn test_git_tab_active_after_tab_switch() {
     let mut state = make_state(vec![]);
     assert_eq!(state.bottom_tab, BottomTab::Activity);
+
+    state.next_bottom_tab();
+    assert_eq!(state.bottom_tab, BottomTab::Tasks);
 
     state.next_bottom_tab();
     assert_eq!(state.bottom_tab, BottomTab::GitStatus);
@@ -1103,7 +1108,7 @@ fn rendered_filter_row_and_hit_test_agree_at_the_20_column_minimum() {
     // pop-out control on the last column of the 20-column row.
     insta::assert_snapshot!(output, @"
      ≡40 ●10 ◐10 ○10   ⤢
-    ╭ Activity │ Git ──╮
+    ╭ Activity│Tasks│Git
     │  No activity yet │
     ╰──────────────────╯
     ");
@@ -1216,7 +1221,7 @@ fn floating_panel_clicks_hit_the_clamped_bottom_panel_geometry() {
         Waiting for prompt…
       ○ claude
         Waiting for prompt…
-    ╭ Activity │ Git ──────────────────────╮
+    ╭ Activity│Tasks│Git ──────────────────╮
     │            No activity yet           │
     ╰──────────────────────────────────────╯
     ");

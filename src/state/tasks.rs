@@ -1,5 +1,6 @@
 use std::time::SystemTime;
 
+use super::ScrollState;
 use crate::task_store::TaskItem;
 
 /// The focused pane's task store, refreshed with the same mtime check
@@ -13,6 +14,11 @@ pub struct TasksState {
     /// into `items`. `refresh_pane_tasks` skips re-reading the store
     /// when neither field has changed.
     pub store_cache: Option<(String, SystemTime)>,
+    /// The Tasks tab's own scroll offset. Content is laid out fresh
+    /// every frame; `total_lines`/`visible_height` are written by the
+    /// renderer and shifts are clamped here, exactly like the
+    /// Activity tab's [`super::ActivityState::scroll`].
+    pub scroll: ScrollState,
 }
 
 impl TasksState {
@@ -20,6 +26,7 @@ impl TasksState {
         Self {
             items: Vec::new(),
             store_cache: None,
+            scroll: ScrollState::default(),
         }
     }
 }
@@ -47,5 +54,6 @@ mod tests {
         let new_state = TasksState::new();
         assert_eq!(default_state.items.len(), new_state.items.len());
         assert!(default_state.store_cache.is_none());
+        assert_eq!(default_state.scroll.offset, new_state.scroll.offset);
     }
 }
