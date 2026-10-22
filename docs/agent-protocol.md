@@ -198,6 +198,10 @@ pane.
 | `task_id` | The task's identifier. |
 | `task_subject` | The task's subject. |
 
+These events report an agent's task tool. An agent without a task tool
+sends neither, and its task progress comes to the sidebar through the task
+command below instead.
+
 ### `teammate-idle`
 
 A teammate of an agent team went idle.
@@ -207,6 +211,58 @@ A teammate of an agent team went idle.
 | `teammate_name` | The teammate's name. |
 | `team_name` | The team's name. |
 | `idle_reason` | Why it went idle. |
+
+## The task command
+
+The bottom panel carries a Tasks tab beside Activity and Git that shows the
+todo list of the focused pane. The pane's agent writes that list through a
+shell subcommand rather than an event. This is the one write path every
+agent can use, because every agent can run a shell command, and it needs no
+hook registration.
+
+```sh
+tmux-agent-sidebar task-set <subject>
+tmux-agent-sidebar task-update <id> <status>
+```
+
+`task-set` records one item as `pending` and prints the id the sidebar
+assigns it, so the agent can name the item in a later `task-update`.
+`task-update` moves one item to `pending`, `in_progress` or `completed`;
+an unknown id or an unknown status changes nothing.
+
+**The pane is taken from the environment.** The task command reads
+`TMUX_PANE` the way the hook command does, so it must run in the
+environment of the pane it describes.
+
+**The command never breaks the turn.** It exits 0 on every path, including
+a missing `TMUX_PANE`, where it records nothing.
+
+The list is one JSON file per pane,
+`/tmp/tmux-agent-tasks<PANE>.json`, written beside the activity log. Each
+item holds an `id`, a `subject` and a `status`, and the pane id is encoded
+in the file name the way the activity log encodes it. The store keeps at
+most 50 items and trims completed ones oldest first. A `session-start`
+event clears the pane's store, so a pane reused for new work starts empty.
+
+### The task reminders
+
+The task write path carries two short reminders, one per empty-list
+condition. The wording of both is defined exactly once in the module
+`src/task_reminders.rs`, and every surface that tells an agent about the
+reminders quotes it from there verbatim: the command's help output, this
+document and the pmux extension's delivery. A reminder fires only in its
+own condition; a turn whose list already holds items at its start receives
+none.
+
+- A turn that starts while the pane's todo list is empty receives, verbatim
+  from `RECORD_FIRST_REMINDER`:
+
+  `No tasks recorded yet: before starting work, record your todo list with task-set <subject>.`
+
+- A turn that ends while items are still open receives, verbatim from
+  `UPDATE_BEFORE_FINISH_REMINDER`:
+
+  `Open tasks remain: before finishing your turn, update their statuses with task-update <id> <status>.`
 
 ## The pane state the sidebar keeps
 
@@ -232,7 +288,8 @@ writes a tmux option itself.
 | `@pane_subagent_task` | A recognised pmux task prompt. The fuzzy task, unset when there is none. |
 
 The activity log is a file next to those options, one per pane, written by
-the same command.
+the same command. The task store of the task command is another file next
+to those options, one per pane, and it feeds the Tasks tab.
 
 ## What a producer cannot report
 
@@ -243,7 +300,10 @@ something leaves it out, and the sidebar shows less rather than guessing.
 - The permission mode badge is a Claude feature. pi has no permission mode
   the sidebar can read. A pmux subagent pane is still marked with a
   `subagent`/`resumed` badge in that slot, which is not a permission mode.
-- The task progress needs a task tool. Claude has one, pi does not.
+- The task progress events need a task tool. Claude has one; pi does not,
+  so the pi producer reports no tasks and sends neither event. pi still
+  keeps a todo list through the task command of the section above, and the
+  Tasks tab shows it like any other pane's.
 - The subagent tree needs subagents inside the agent's process. pmux runs
   child agents in their own panes, and the sidebar shows each of those panes
   on its own. A pmux subagent pane is marked as a subagent instead, with its
