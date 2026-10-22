@@ -9,6 +9,7 @@ pub(crate) mod toggle;
 
 use std::io::Read;
 
+use crate::task_reminders;
 use crate::tmux;
 
 /// Run a CLI subcommand. Returns Some(exit_code) if a subcommand was matched,
@@ -111,15 +112,46 @@ fn cmd_set_status(args: &[String]) -> i32 {
 
 // ─── task-set / task-update subcommands ─────────────────────────────────────
 
+/// Decide whether a task command invocation should print help instead of
+/// acting: an explicit help flag, or too few args for the command to do
+/// anything (`task-set` needs a subject, `task-update` needs an id and
+/// a status). The arity case previously exited 0 silently; printing the
+/// usage plus the shared reminder wording is the discoverable path.
+fn task_wants_help(args: &[String], min_args: usize) -> bool {
+    matches!(
+        args.first().map(String::as_str),
+        Some("--help") | Some("-h") | Some("help")
+    ) || args.len() < min_args
+}
+
+/// Help text for the task subcommands. The reminder lines embed the
+/// constants from `src/task_reminders.rs` verbatim — that module is the
+/// single wording source the help, the protocol doc, and the pmux
+/// companion change all reference, so this builder must not paraphrase.
+fn task_help_text() -> String {
+    format!(
+        "task-set <subject>             record a pending task item for the calling pane\n\
+         task-update <id> <status>      update one item's status (pending|in_progress|completed)\n\
+         \n\
+         reminders:\n\
+         a turn starting with an empty todo list gets: {}\n\
+         a turn ending with open items gets: {}",
+        task_reminders::RECORD_FIRST_REMINDER,
+        task_reminders::UPDATE_BEFORE_FINISH_REMINDER,
+    )
+}
+
 /// Record a pending task item for the calling pane. Exits 0 on every
 /// path — including a missing `$TMUX_PANE` — so a task command can
 /// never break the agent's turn, same contract as the hook command.
 /// On success the assigned item id is printed so the agent can name it
 /// in a later `task-update`.
 fn cmd_task_set(args: &[String]) -> i32 {
-    let Some(subject) = args.first() else {
+    if task_wants_help(args, 1) {
+        println!("{}", task_help_text());
         return 0;
-    };
+    }
+    let subject = args[0].as_str();
     let pane = tmux_pane();
     if pane.is_empty() {
         return 0;
@@ -137,9 +169,12 @@ fn task_set_for_pane(pane: &str, subject: &str) -> i32 {
 /// Update one task item's status for the calling pane. Exits 0 on
 /// every path; an unknown id or status name changes nothing.
 fn cmd_task_update(args: &[String]) -> i32 {
-    let (Some(id), Some(status)) = (args.first(), args.get(1)) else {
+    if task_wants_help(args, 2) {
+        println!("{}", task_help_text());
         return 0;
-    };
+    }
+    let id = args[0].as_str();
+    let status = args[1].as_str();
     let pane = tmux_pane();
     if pane.is_empty() {
         return 0;
@@ -353,5 +388,41 @@ mod tests {
 
         assert_eq!(code, 0);
         assert_eq!(crate::task_store::store_mtime(""), before);
+    }
+
+    #[test]
+    fn task_help_carries_both_reminder_strings_verbatim() {
+        // The task-command help is the first surface that references the
+        // single-source reminder wording (src/task_reminders.rs); the
+        // protocol doc and the pi proof prompt reuse the same strings.
+        // If help ever paraphrases, the strings a downstream surface
+        // copies from this file stop matching what an agent reads here.
+        let help = task_help_text();
+        assert!(
+            help.contains(crate::task_reminders::RECORD_FIRST_REMINDER),
+            "help must embed the record-first wording verbatim"
+        );
+        assert!(
+            help.contains(crate::task_reminders::UPDATE_BEFORE_FINISH_REMINDER),
+            "help must embed the update-before-finish wording verbatim"
+        );
+    }
+
+    #[test]
+    fn task_commands_print_help_for_flag_or_missing_args() {
+        // A help flag beats any arity, and an arity that cannot act
+        // (no subject, or an id without a status) prints help too.
+        assert!(task_wants_help(&["--help".to_string()], 1));
+        assert!(task_wants_help(&["-h".to_string()], 2));
+        assert!(task_wants_help(&["help".to_string()], 2));
+        assert!(task_wants_help(&[], 1));
+        assert!(task_wants_help(&["3".to_string()], 2));
+
+        // A real subject, or a full id/status pair, still acts instead.
+        assert!(!task_wants_help(&["Record the login bug".to_string()], 1));
+        assert!(!task_wants_help(
+            &["2".to_string(), "completed".to_string()],
+            2
+        ));
     }
 }
