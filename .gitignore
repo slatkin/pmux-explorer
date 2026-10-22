@@ -8,6 +8,7 @@ dist
 node_modules
 .pi
 .claude
+.agents
 
 # zvec-grep local index
 .zvec-grep/
