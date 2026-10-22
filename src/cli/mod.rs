@@ -23,6 +23,8 @@ pub fn run(args: &[String]) -> Option<i32> {
         "toggle-all" => toggle::cmd_toggle_all(rest),
         "auto-close" => toggle::cmd_auto_close(rest),
         "set-status" => cmd_set_status(rest),
+        "task-set" => cmd_task_set(rest),
+        "task-update" => cmd_task_update(rest),
         "spawn" => spawn::cmd_spawn(rest),
         "capture" => capture::cmd_capture(rest),
         "--version" | "version" => {
@@ -104,6 +106,53 @@ fn cmd_set_status(args: &[String]) -> i32 {
         return 0;
     }
     set_status(&pane, status);
+    0
+}
+
+// ─── task-set / task-update subcommands ─────────────────────────────────────
+
+/// Record a pending task item for the calling pane. Exits 0 on every
+/// path — including a missing `$TMUX_PANE` — so a task command can
+/// never break the agent's turn, same contract as the hook command.
+/// On success the assigned item id is printed so the agent can name it
+/// in a later `task-update`.
+fn cmd_task_set(args: &[String]) -> i32 {
+    let Some(subject) = args.first() else {
+        return 0;
+    };
+    let pane = tmux_pane();
+    if pane.is_empty() {
+        return 0;
+    }
+    task_set_for_pane(&pane, subject)
+}
+
+fn task_set_for_pane(pane: &str, subject: &str) -> i32 {
+    if let Some(id) = crate::task_store::record_task(pane, subject) {
+        println!("{id}");
+    }
+    0
+}
+
+/// Update one task item's status for the calling pane. Exits 0 on
+/// every path; an unknown id or status name changes nothing.
+fn cmd_task_update(args: &[String]) -> i32 {
+    let (Some(id), Some(status)) = (args.first(), args.get(1)) else {
+        return 0;
+    };
+    let pane = tmux_pane();
+    if pane.is_empty() {
+        return 0;
+    }
+    task_update_for_pane(&pane, id, status)
+}
+
+fn task_update_for_pane(pane: &str, id: &str, status: &str) -> i32 {
+    if let Some(status) = crate::task_store::parse_task_status(status)
+        && crate::task_store::update_task_status(pane, id, status)
+    {
+        println!("{} {}", id, status.as_str());
+    }
     0
 }
 
@@ -209,5 +258,100 @@ mod tests {
         let m: u32 = t[3..].parse().unwrap();
         assert!(h < 24);
         assert!(m < 60);
+    }
+
+    // ─── task-set / task-update tests ───────────────────────────────
+
+    #[test]
+    fn task_set_records_pending_item_for_calling_pane() {
+        let pane = "%CLI_TASK_SET";
+        let path = crate::task_store::store_file_path(pane);
+        let _ = std::fs::remove_file(&path);
+
+        let code = task_set_for_pane(pane, "Fix the login bug");
+
+        assert_eq!(code, 0);
+        let items = crate::task_store::read_tasks(pane);
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].subject, "Fix the login bug");
+        assert_eq!(items[0].status, crate::task_store::TaskItemStatus::Pending);
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn task_set_without_pane_env_exits_zero_and_writes_nothing() {
+        // A missing $TMUX_PANE reads as an empty pane id; the store
+        // guards make it a no-op while still exiting successfully.
+        let before = crate::task_store::store_mtime("");
+
+        let code = task_set_for_pane("", "orphan subject");
+
+        assert_eq!(code, 0);
+        assert_eq!(
+            crate::task_store::store_mtime(""),
+            before,
+            "no pane env must not touch any store file"
+        );
+    }
+
+    #[test]
+    fn task_set_dispatch_maps_to_run() {
+        // No subject → exits before any env read or store write, so the
+        // dispatch mapping can be asserted without touching $TMUX_PANE.
+        assert_eq!(run(&["task-set".into()]), Some(0));
+        assert_eq!(run(&["task-update".into()]), Some(0));
+    }
+
+    #[test]
+    fn task_update_changes_status_for_calling_pane() {
+        let pane = "%CLI_TASK_UPDATE";
+        let path = crate::task_store::store_file_path(pane);
+        let _ = std::fs::remove_file(&path);
+        crate::task_store::record_task(pane, "Ship it").unwrap();
+
+        let code = task_update_for_pane(pane, "1", "completed");
+
+        assert_eq!(code, 0);
+        let items = crate::task_store::read_tasks(pane);
+        assert_eq!(
+            items[0].status,
+            crate::task_store::TaskItemStatus::Completed
+        );
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn task_update_unknown_status_or_id_is_a_noop_exit_zero() {
+        let pane = "%CLI_TASK_UPDATE_NOOP";
+        let path = crate::task_store::store_file_path(pane);
+        let _ = std::fs::remove_file(&path);
+        crate::task_store::record_task(pane, "real item").unwrap();
+        let before = crate::task_store::store_mtime(pane);
+
+        assert_eq!(task_update_for_pane(pane, "1", "archived"), 0);
+        assert_eq!(task_update_for_pane(pane, "999", "completed"), 0);
+        assert_eq!(
+            crate::task_store::store_mtime(pane),
+            before,
+            "unknown status or id must not rewrite the store"
+        );
+        assert_eq!(
+            crate::task_store::read_tasks(pane)[0].status,
+            crate::task_store::TaskItemStatus::Pending
+        );
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn task_update_without_pane_env_exits_zero_and_writes_nothing() {
+        let before = crate::task_store::store_mtime("");
+
+        let code = task_update_for_pane("", "1", "completed");
+
+        assert_eq!(code, 0);
+        assert_eq!(crate::task_store::store_mtime(""), before);
     }
 }

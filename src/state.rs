@@ -17,6 +17,7 @@ mod popup;
 mod refresh;
 mod scroll;
 mod tab;
+mod tasks;
 mod timers;
 
 pub use activity::ActivityState;
@@ -33,6 +34,7 @@ pub use popup::{PopupState, SpawnField};
 #[cfg(test)]
 pub(crate) use refresh::{TaskProgressDecision, classify_task_progress};
 pub use scroll::{ScrollState, ScrollStates};
+pub use tasks::TasksState;
 pub use timers::RefreshTimers;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -57,6 +59,9 @@ pub struct AppState {
     /// next render.
     pub layout: FrameLayout,
     pub activity: ActivityState,
+    /// Focused pane's task store for the Tasks tab (refreshed by
+    /// `refresh_pane_tasks` with the activity log's mtime check).
+    pub tasks: TasksState,
     pub tmux_pane: String,
     /// The sidebar's own pane state as tmux reported it on the last
     /// refresh: focus, size, window size and the floating flag. The
@@ -149,6 +154,7 @@ impl AppState {
             spinner_frame: 0,
             layout: FrameLayout::default(),
             activity: ActivityState::new(),
+            tasks: TasksState::new(),
             tmux_pane,
             scrolls: ScrollStates::default(),
             theme: ColorTheme::default(),

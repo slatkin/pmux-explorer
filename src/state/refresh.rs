@@ -4,6 +4,7 @@ use std::time::Duration;
 use crate::activity::{self, TaskProgress};
 use crate::cli::sanitize_tmux_value;
 use crate::process::ProcessSnapshot;
+use crate::task_store;
 use crate::tmux::{self, PaneStatus, SessionInfo};
 
 use super::AppState;
@@ -105,6 +106,7 @@ impl AppState {
 
     fn refresh_activity_data(&mut self) {
         self.refresh_activity_log();
+        self.refresh_pane_tasks();
         self.refresh_task_progress();
         self.auto_switch_tab();
     }
@@ -304,6 +306,27 @@ impl AppState {
         }
         sweep_dead_bg_shells(sessions, process_snapshot);
         self.timers.last_bg_shell_sweep = Some(std::time::Instant::now());
+    }
+
+    /// Refresh the focused pane's task store with the same mtime check
+    /// as `refresh_activity_log`: skip the re-read when neither the
+    /// focused pane nor the store file's mtime has changed.
+    pub(crate) fn refresh_pane_tasks(&mut self) {
+        let Some(ref pane_id) = self.focus_state.focused_pane_id else {
+            self.tasks.items.clear();
+            self.tasks.store_cache = None;
+            return;
+        };
+        let current_mtime = task_store::store_mtime(pane_id);
+        if let (Some(mtime), Some((cached_id, cached_mtime))) =
+            (current_mtime, self.tasks.store_cache.as_ref())
+            && cached_id == pane_id
+            && *cached_mtime == mtime
+        {
+            return;
+        }
+        self.tasks.items = task_store::read_tasks(pane_id);
+        self.tasks.store_cache = current_mtime.map(|m| (pane_id.clone(), m));
     }
 
     pub(crate) fn refresh_activity_log(&mut self) {
@@ -807,5 +830,124 @@ mod tests {
         let filtered = AppState::filter_sessions_to_live_agent_panes(sessions, &live);
 
         assert!(filtered.is_empty());
+    }
+
+    // ─── refresh_pane_tasks ──────────────────────────────────────
+
+    fn cleanup_task_store(pane_id: &str) {
+        let _ = std::fs::remove_file(crate::task_store::store_file_path(pane_id));
+    }
+
+    #[test]
+    fn refresh_pane_tasks_reads_the_focused_pane_store() {
+        let mut state = AppState::new("%99".into());
+        let pane_id = "%TASK_FRESH";
+        state.focus_state.focused_pane_id = Some(pane_id.into());
+        crate::task_store::record_task(pane_id, "first").unwrap();
+        crate::task_store::record_task(pane_id, "second").unwrap();
+
+        state.refresh_pane_tasks();
+
+        assert_eq!(state.tasks.items.len(), 2);
+        assert_eq!(state.tasks.items[0].subject, "first");
+        assert_eq!(state.tasks.items[1].subject, "second");
+        assert_eq!(
+            state.tasks.store_cache.as_ref().map(|(id, _)| id.as_str()),
+            Some(pane_id),
+        );
+
+        cleanup_task_store(pane_id);
+    }
+
+    #[test]
+    fn refresh_pane_tasks_skips_reparse_when_mtime_unchanged() {
+        let mut state = AppState::new("%99".into());
+        let pane_id = "%TASK_STALE";
+        state.focus_state.focused_pane_id = Some(pane_id.into());
+        crate::task_store::record_task(pane_id, "v1 item").unwrap();
+        state.refresh_pane_tasks();
+        assert_eq!(state.tasks.items.len(), 1);
+
+        // Rewrite the store behind the sidebar's back but pin its mtime
+        // to the cached value, so the only observable difference is the
+        // content — a skipped re-parse must keep the cached items.
+        let cached_mtime = state.tasks.store_cache.as_ref().unwrap().1;
+        crate::task_store::record_task(pane_id, "v2 item").unwrap();
+        let file = std::fs::File::options()
+            .write(true)
+            .open(crate::task_store::store_file_path(pane_id))
+            .unwrap();
+        file.set_times(std::fs::FileTimes::new().set_modified(cached_mtime))
+            .unwrap();
+
+        state.refresh_pane_tasks();
+
+        assert_eq!(
+            state.tasks.items.len(),
+            1,
+            "unchanged mtime must keep the cached items"
+        );
+        assert_eq!(state.tasks.items[0].subject, "v1 item");
+
+        // A real mtime bump reloads the store.
+        crate::task_store::record_task(pane_id, "v3 item").unwrap();
+        state.refresh_pane_tasks();
+        assert_eq!(state.tasks.items.len(), 3);
+
+        cleanup_task_store(pane_id);
+    }
+
+    #[test]
+    fn refresh_pane_tasks_clears_when_store_is_removed() {
+        let mut state = AppState::new("%99".into());
+        let pane_id = "%TASK_CLEARED";
+        state.focus_state.focused_pane_id = Some(pane_id.into());
+        crate::task_store::record_task(pane_id, "doomed").unwrap();
+        state.refresh_pane_tasks();
+        assert_eq!(state.tasks.items.len(), 1);
+
+        // SessionStart clear (or /tmp cleanup): the file is gone, so the
+        // mtime is None and the next tick must drop the cached list.
+        crate::task_store::clear_tasks(pane_id);
+        state.refresh_pane_tasks();
+
+        assert!(state.tasks.items.is_empty());
+        assert!(state.tasks.store_cache.is_none());
+    }
+
+    #[test]
+    fn refresh_pane_tasks_clears_without_focus() {
+        let mut state = AppState::new("%99".into());
+        state.tasks.items = vec![crate::task_store::TaskItem {
+            id: "1".into(),
+            subject: "keep?".into(),
+            status: crate::task_store::TaskItemStatus::Pending,
+        }];
+
+        state.focus_state.focused_pane_id = None;
+        state.refresh_pane_tasks();
+
+        assert!(state.tasks.items.is_empty());
+        assert!(state.tasks.store_cache.is_none());
+    }
+
+    #[test]
+    fn refresh_pane_tasks_follows_focus_to_another_pane() {
+        let mut state = AppState::new("%99".into());
+        let pane_a = "%TASK_FOCUS_A";
+        let pane_b = "%TASK_FOCUS_B";
+        crate::task_store::record_task(pane_a, "a's item").unwrap();
+        crate::task_store::record_task(pane_b, "b's item").unwrap();
+
+        state.focus_state.focused_pane_id = Some(pane_a.into());
+        state.refresh_pane_tasks();
+        assert_eq!(state.tasks.items[0].subject, "a's item");
+
+        state.focus_state.focused_pane_id = Some(pane_b.into());
+        state.refresh_pane_tasks();
+        assert_eq!(state.tasks.items[0].subject, "b's item");
+
+        cleanup_task_store(pane_a);
+        cleanup_task_store(pane_b);
     }
 }
