@@ -136,10 +136,12 @@ pub(crate) fn filter_bar_layout(
     }
     // A one- or two-column row cannot hold both glyphs and the spacer,
     // so the pop-out glyph alone owns the row there and the lock is
-    // dropped first.
+    // dropped first. `then` (not `then_some`) keeps `popout - 1` from
+    // being evaluated — at those widths `popout` is 0 and the eager
+    // subtraction would panic under overflow checks.
     let popout = width.saturating_sub(2);
     let control = FilterBarControl {
-        lock: (width > 2).then_some(popout - 1),
+        lock: (width > 2).then(|| popout - 1),
         popout,
     };
     // A chip may end on the column before the leftmost control glyph.
@@ -400,6 +402,50 @@ impl AppState {
             self.global.selected_pane_row = *agent_row;
             self.global.queue_cursor_save();
             self.activate_selected_pane();
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn narrow_rows_degrade_to_the_pop_out_glyph_alone() {
+        // At widths 1-2 the pop-out field saturates to 0, and an eager
+        // `popout - 1` would panic under overflow checks; the lock is
+        // dropped instead, and a zero-width row makes nothing clickable.
+        let zero_counts = crate::state::AppState::new("%99".into()).status_counts();
+        for (width, expected) in [
+            (0u16, None),
+            (
+                1,
+                Some(FilterBarControl {
+                    lock: None,
+                    popout: 0,
+                }),
+            ),
+            (
+                2,
+                Some(FilterBarControl {
+                    lock: None,
+                    popout: 0,
+                }),
+            ),
+            (
+                3,
+                Some(FilterBarControl {
+                    lock: Some(0),
+                    popout: 1,
+                }),
+            ),
+        ] {
+            let (chips, control) = filter_bar_layout(zero_counts, width);
+            assert!(
+                chips.is_empty(),
+                "no chip fits before the control at width {width}"
+            );
+            assert_eq!(control, expected, "control columns at width {width}");
         }
     }
 }
