@@ -2,11 +2,11 @@
 
 ## 1. Shared option plumbing
 
-- [ ] 1.1 Add the `SIDEBAR_WIDTH_LOCK` (`@sidebar_width_lock`) and
+- [x] 1.1 Add the `SIDEBAR_WIDTH_LOCK` (`@sidebar_width_lock`) and
   `SIDEBAR_DOCKED_WIDTH` (`@sidebar_docked_width`) global option constants
   in `src/tmux/options.rs` beside `SIDEBAR_BOTTOM_TAB`, and verify with
   `cargo build` that it compiles.
-- [ ] 1.2 Insert `SIDEBAR_DOCKED_WIDTH`, `SIDEBAR_WIDTH_LOCK` and the
+- [x] 1.2 Insert `SIDEBAR_DOCKED_WIDTH`, `SIDEBAR_WIDTH_LOCK` and the
   existing `SIDEBAR_MIN_WIDTH` into `SHARED_OPTION_FIELDS` in
   `src/tmux/panes.rs` before `SIDEBAR_REPO_FILTER` (the repo filter must
   stay last for its `/eot/` terminator parse) and extend the
