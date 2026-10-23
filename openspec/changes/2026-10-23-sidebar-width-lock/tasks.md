@@ -59,7 +59,7 @@
 
 ## 3. The publish/adopt tick step
 
-- [ ] 3.1 Add `src/app/width_guard.rs` with a pure decision function plus
+- [x] 3.1 Add `src/app/width_guard.rs` with a pure decision function plus
   a thin `enforce` wrapper, implementing design D4: `last_observed_width:
   Option<u16>` PRIMED on the first docked reading (a `None` tracker
   records `W` and never publishes — a fixed init would publish a
@@ -89,7 +89,7 @@
   adopt step, a narrower shared width shrinks the pane, a pending
   publish blocks the adopt side, floating panes are skipped, and
   `window_width == 0` is a no-op.
-- [ ] 3.2 Wire the step into `app::run` after `state.refresh()`, running
+- [x] 3.2 Wire the step into `app::run` after `state.refresh()`, running
   for every docked pane every tick regardless of `is_window_active`
   (hidden windows must converge before the user switches). `size_guard`
   keeps running UNCHANGED inside its `is_window_active` gate, locked or
