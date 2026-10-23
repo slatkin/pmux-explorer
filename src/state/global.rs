@@ -16,20 +16,25 @@ pub struct GlobalState {
     /// The bottom panel tab, shared like the filters: written with
     /// `set -g @sidebar_bottom_tab` and adopted from that option.
     pub bottom_tab: BottomTab,
-    /// Last filter value successfully written to tmux.
+    // Two pending-write latches share this struct: the filter latch
+    // (last_saved_filter / filter_save_pending) and the bottom-tab
+    // latch (last_saved_bottom_tab / tab_save_pending). The tab latch
+    // is a deliberate verbatim copy of the filter's — same save/retry
+    // calls, same rejection branch, same tick placement — recorded as
+    // duplicated code instead of a generic helper; the full latch
+    // rationale lives once on `filter_save_pending` and the tab copies
+    // point at it.
     last_saved_filter: StatusFilter,
     /// A filter write that tmux rejected and that is retried on every
     /// refresh tick. While it is set, the value tmux holds is the stale
     /// one this instance is trying to replace, so the shared value must
     /// not be adopted over the user's choice.
     filter_save_pending: bool,
-    /// Last bottom-tab value successfully written to tmux.
+    /// Last bottom-tab value successfully written to tmux; the tab
+    /// latch's copy of `last_saved_filter`.
     last_saved_bottom_tab: BottomTab,
-    /// A bottom-tab write that tmux rejected and that is retried on every
-    /// refresh tick, mirroring `filter_save_pending`. While it is set, the
-    /// value tmux holds is the stale one this instance is trying to
-    /// replace, so the shared value must not be adopted over the user's
-    /// choice.
+    /// The tab latch's copy of `filter_save_pending`; see that field
+    /// and the shared latch comment above for the full rationale.
     tab_save_pending: bool,
     /// Last cursor value successfully written to tmux.
     last_saved_cursor: usize,
@@ -84,11 +89,10 @@ impl GlobalState {
         }
     }
 
-    /// Save the selected bottom tab to tmux global variable. Mirrors
-    /// `save_filter`: only a write tmux accepted advances
-    /// `last_saved_bottom_tab`, and a rejected write sets
-    /// `tab_save_pending` so the next refresh tick retries it instead
-    /// of letting the instance drift from the shared value.
+    /// Save the selected bottom tab to tmux global variable — the
+    /// tab latch's deliberate copy of the filter's `save_filter`; see
+    /// the shared latch comment on the fields for what the copy
+    /// keeps identical and why.
     pub fn save_bottom_tab(&mut self) {
         if tmux::run_tmux(&[
             "set",
@@ -98,7 +102,7 @@ impl GlobalState {
         ])
         .is_some()
         {
-            self.last_saved_bottom_tab = self.bottom_tab.clone();
+            self.last_saved_bottom_tab = self.bottom_tab;
             self.tab_save_pending = false;
         } else {
             self.tab_save_pending = true;
@@ -182,9 +186,10 @@ impl GlobalState {
         }
     }
 
-    /// Retry a bottom-tab write tmux rejected. Mirrors
-    /// `retry_pending_filter_save` and runs next to it at the top of
-    /// each refresh tick, before the tick reads the shared options.
+    /// Retry a bottom-tab write tmux rejected. Runs next to
+    /// `retry_pending_filter_save` at the top of each refresh tick,
+    /// before the tick reads the shared options, under the same latch
+    /// rationale as the filter.
     pub fn retry_pending_tab_save(&mut self) {
         if self.tab_save_pending {
             self.save_bottom_tab();
@@ -219,17 +224,16 @@ impl GlobalState {
             self.selected_pane_row = n;
             self.last_saved_cursor = n;
         }
-        // While a tab write is pending, tmux holds the stale tab this
-        // instance is trying to replace; adopting it would revert the
-        // user's choice. Once the write lands, the field differs from
-        // `last_saved_bottom_tab` and the shared value is adopted like
-        // the filters'.
+        // The tab adoption below is the filter branch above's
+        // deliberate copy: while a tab write is pending the shared
+        // value stays unadopted, and a landed write's new value is
+        // taken in like any other shared field.
         if !self.tab_save_pending
             && let Some(tab_str) = opts.get(tmux::SIDEBAR_BOTTOM_TAB)
         {
             let tmux_tab = BottomTab::from_label(tab_str);
             if tmux_tab != self.last_saved_bottom_tab {
-                self.bottom_tab = tmux_tab.clone();
+                self.bottom_tab = tmux_tab;
                 self.last_saved_bottom_tab = tmux_tab;
             }
         }

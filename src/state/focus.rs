@@ -14,7 +14,6 @@ pub struct FocusState {
     pub sidebar_focused: bool,
     pub focus: Focus,
     pub focused_pane_id: Option<String>,
-    pub prev_focused_pane_id: Option<String>,
 }
 
 impl FocusState {
@@ -23,7 +22,6 @@ impl FocusState {
             sidebar_focused: false,
             focus: Focus::Panes,
             focused_pane_id: None,
-            prev_focused_pane_id: None,
         }
     }
 }
@@ -130,7 +128,6 @@ mod tests {
         assert!(!state.sidebar_focused);
         assert_eq!(state.focus, Focus::Panes);
         assert!(state.focused_pane_id.is_none());
-        assert!(state.prev_focused_pane_id.is_none());
     }
 
     #[test]
@@ -139,7 +136,6 @@ mod tests {
         assert!(!state.sidebar_focused);
         assert_eq!(state.focus, Focus::Panes);
         assert!(state.focused_pane_id.is_none());
-        assert!(state.prev_focused_pane_id.is_none());
     }
 
     // ─── AppState focus accessors ────────────────────────────────────

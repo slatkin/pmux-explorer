@@ -821,22 +821,32 @@ fn apply_all_unchanged_tmux_value_leaves_local_change_alone() {
 
 // ─── Shared bottom tab tests ────────────────────────────────────────
 
+/// Choice made for the review finding: the adoption side kept here as
+/// a reshaped test, its redundant sibling dropped in favour of the
+/// `no_shared_tab_key_leaves_the_activity_default` unit test in
+/// `src/state/global.rs` (spec scenario "a first instance on a fresh
+/// server").
 #[test]
-fn a_bottom_tab_switch_in_one_instance_reaches_another_within_one_tick() {
-    // Instance A cycles its bottom panel to Tasks; the write lands in
-    // @sidebar_bottom_tab, and instance B's next tick adopts the tab
-    // through apply_all (spec: "a bottom tab change applies to another
-    // window").
+fn a_bottom_tab_selected_in_one_instance_is_adopted_by_another_within_one_tick() {
+    // The adoption side of the shared tab (spec: "a bottom tab change
+    // applies to another window"): instance A selects Tasks, and once
+    // A's selection is in B's shared reading, one apply_all tick puts
+    // B on the same tab.
+    //
+    // Under test every tmux write fails, so A never actually lands its
+    // @sidebar_bottom_tab write and B's reading is provided directly —
+    // this harness does NOT cover the write path; the save/adopt guard
+    // contract is pinned by the unit tests in src/state/global.rs.
     let mut a = make_state(vec![]);
     a.next_bottom_tab();
     assert_eq!(
         a.global.bottom_tab,
         BottomTab::Tasks,
-        "precondition: A shows Tasks"
+        "precondition: A selected Tasks"
     );
 
-    // Instance B has not selected anything yet — on its first ticks the
-    // reading carries the tab A wrote.
+    // Instance B has not selected anything yet — it starts on the
+    // constructed default.
     let mut b = make_state(vec![]);
     assert_eq!(b.global.bottom_tab, BottomTab::Activity);
 
@@ -847,27 +857,6 @@ fn a_bottom_tab_switch_in_one_instance_reaches_another_within_one_tick() {
         b.global.bottom_tab,
         BottomTab::Tasks,
         "one tick with the shared reading must put B on A's tab"
-    );
-}
-
-#[test]
-fn an_instance_without_a_shared_tab_keeps_the_activity_default() {
-    // A first instance on a fresh server: the reading has no
-    // @sidebar_bottom_tab key at all, so the constructed Activity tab
-    // stays (spec: "an instance without a shared tab shows Activity").
-    let mut state = make_state(vec![]);
-    assert_eq!(state.global.bottom_tab, BottomTab::Activity);
-
-    // Other shared options change in the same tick; the absence of the
-    // tab key must leave the default alone.
-    state
-        .global
-        .apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "3")]));
-
-    assert_eq!(
-        state.global.bottom_tab,
-        BottomTab::Activity,
-        "no shared tab value must keep the Activity default"
     );
 }
 

@@ -42,7 +42,7 @@ pub use timers::RefreshTimers;
 /// @sidebar_bottom_tab`, and changes only through an explicit selection
 /// (the manual cycle, a tab-title click) or through the shared value a
 /// peer instance selected.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BottomTab {
     Activity,
     Tasks,
@@ -77,7 +77,7 @@ pub struct AppState {
     pub now: u64,
     pub repo_groups: Vec<crate::group::RepoGroup>,
     /// Sidebar focus + pane focus tracking (sidebar_focused, focus,
-    /// focused_pane_id, prev_focused_pane_id).
+    /// focused_pane_id).
     pub focus_state: FocusState,
     /// Transient one-line status banner (message + expiry) for spawn /
     /// remove feedback. Cleared by `take_flash` once the deadline passes.
