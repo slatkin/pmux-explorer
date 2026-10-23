@@ -87,7 +87,7 @@
 
 ## 6. Documentation
 
-- [ ] 6.1 Update `docs/state-management.md`: move `bottom_tab` into the
+- [x] 6.1 Update `docs/state-management.md`: move `bottom_tab` into the
   Global State table with its `@sidebar_bottom_tab` variable and update
   trigger, document the `tab_save_pending` latch beside the filter's,
   remove the `tab_pref` rows from the Per-pane table and the Local table's
