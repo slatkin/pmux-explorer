@@ -98,9 +98,9 @@
 
 ## 7. Integration verification
 
-- [ ] 7.1 Run `cargo fmt`, then `cargo test` and `cargo clippy` and
+- [x] 7.1 Run `cargo fmt`, then `cargo test` and `cargo clippy` and
   verify all pass with no warnings.
-- [ ] 7.2 Run `cargo build --release` and verify the release binary builds
+- [x] 7.2 Run `cargo build --release` and verify the release binary builds
   (the plugin symlink picks it up automatically for a manual two-window
   smoke test: select Tasks in one window, confirm the other window shows
   Tasks within 1 second, then click a different agent and confirm the tab
