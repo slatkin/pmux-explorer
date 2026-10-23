@@ -105,11 +105,11 @@
 
 ## 4. The lock control
 
-- [ ] 4.1 Bind the `w` key in `src/app/input.rs` to
+- [x] 4.1 Bind the `w` key in `src/app/input.rs` to
   `state.toggle_width_lock()`; verify with a handle_key_event test that
   `w` flips `state.global.width_lock` intent (field set, save latch armed
   on tmux rejection — the testable contract of the other shared writes).
-- [ ] 4.2 Render a lock glyph beside the pop-out control in
+- [x] 4.2 Render a lock glyph beside the pop-out control in
   `src/ui/panes/filter_bar.rs`'s `render_filter_bar` (distinct glyphs
   for locked/unlocked) and extend the control column in
   `filter_bar_layout` / `handle_filter_click` (`src/state/layout.rs`)
