@@ -1015,8 +1015,6 @@ mod tests {
         // directly, so we don't assert it here (tmux not available in tests).
     }
 
-    // ─── auto_switch_tab tests are in state/tab.rs ────────────────
-
     // ─── next_bottom_tab / scroll_bottom tests ──────────────────────
 
     #[test]

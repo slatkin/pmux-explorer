@@ -127,7 +127,6 @@ impl AppState {
         self.refresh_activity_log();
         self.refresh_pane_tasks();
         self.refresh_task_progress();
-        self.auto_switch_tab();
     }
 
     /// Fast refresh: tmux state + activity log (called every 1s).
