@@ -109,6 +109,15 @@ impl GlobalState {
         }
     }
 
+    /// Assign the selected bottom tab and persist it to the shared
+    /// tmux option. The only writers of the shared tab (the manual
+    /// cycle key, the tab-title click) funnel through here so the
+    /// whole server converges within one refresh tick.
+    pub fn set_bottom_tab(&mut self, tab: BottomTab) {
+        self.bottom_tab = tab;
+        self.save_bottom_tab();
+    }
+
     /// Save cursor position to tmux global variable. Returns `true` when
     /// tmux accepted the write so callers can decide whether to clear a
     /// queued save or keep retrying.
@@ -194,6 +203,17 @@ impl GlobalState {
         if self.tab_save_pending {
             self.save_bottom_tab();
         }
+    }
+
+    /// Retry every shared write tmux rejected (filter, bottom tab),
+    /// so an instance cannot drift from the shared values. Runs once
+    /// per refresh tick, before the tick reads the shared options, so
+    /// a successful retry is what that tick reads back. The two writes
+    /// must stay paired: retrying only one would let the other drift
+    /// and be adopted back by every other sidebar.
+    pub fn retry_pending_saves(&mut self) {
+        self.retry_pending_filter_save();
+        self.retry_pending_tab_save();
     }
 
     /// Apply the shared options read from tmux (filter, cursor, bottom

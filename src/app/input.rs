@@ -35,10 +35,8 @@ pub(super) fn handle_event(
                         // keyboard `BackTab` path does the same update. Without this,
                         // clicking into Git Status leaves polling disabled until the
                         // next refresh tick and the tab renders stale data.
-                        git_tab_active.store(
-                            state.global.bottom_tab == BottomTab::GitStatus,
-                            Ordering::Relaxed,
-                        );
+                        git_tab_active
+                            .store(state.global.bottom_tab.is_git_status(), Ordering::Relaxed);
                     }
                 }
                 MouseEventKind::ScrollDown => {
@@ -168,10 +166,7 @@ pub(super) fn handle_key_event(
         }
         KeyCode::BackTab => {
             state.next_bottom_tab();
-            git_tab_active.store(
-                state.global.bottom_tab == BottomTab::GitStatus,
-                Ordering::Relaxed,
-            );
+            git_tab_active.store(state.global.bottom_tab.is_git_status(), Ordering::Relaxed);
         }
         _ => {}
     }

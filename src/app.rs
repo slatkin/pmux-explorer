@@ -11,7 +11,6 @@ use crossterm::event::{self};
 use ratatui::{Terminal, backend::CrosstermBackend};
 
 use crate::SPINNER_PULSE;
-use crate::state::BottomTab;
 
 mod input;
 mod panel_guard;
@@ -110,10 +109,7 @@ pub fn run(
                     state.sidebar_pane.floating,
                 );
             }
-            git_tab_active.store(
-                state.global.bottom_tab == BottomTab::GitStatus,
-                Ordering::Relaxed,
-            );
+            git_tab_active.store(state.global.bottom_tab.is_git_status(), Ordering::Relaxed);
             last_refresh = std::time::Instant::now();
         }
 

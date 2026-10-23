@@ -106,7 +106,7 @@ impl SidebarPaneInfo {
 /// spaces included; the single separator space before the terminator is
 /// dropped so a repo name with trailing spaces round-trips intact.
 pub(crate) fn parse_sidebar_pane_reading(out: &str) -> SidebarPaneReading {
-    if out.split_whitespace().count() < 3 {
+    if out.split_whitespace().nth(2).is_none() {
         return SidebarPaneReading {
             info: SidebarPaneInfo::FALLBACK,
             options: HashMap::new(),
@@ -138,12 +138,10 @@ pub(crate) fn parse_sidebar_pane_reading(out: &str) -> SidebarPaneReading {
     };
 
     let mut options = HashMap::new();
-    for (key, value) in [
-        (SIDEBAR_FILTER, filter),
-        (SIDEBAR_CURSOR, cursor),
-        (SIDEBAR_BOTTOM_TAB, bottom_tab),
-        (SIDEBAR_REPO_FILTER, repo_filter),
-    ] {
+    for (key, value) in SHARED_OPTION_FIELDS
+        .iter()
+        .zip([filter, cursor, bottom_tab, repo_filter])
+    {
         if !value.is_empty() {
             options.insert(key.to_string(), value.to_string());
         }

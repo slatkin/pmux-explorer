@@ -2,15 +2,8 @@ use super::{AppState, BottomTab};
 
 impl AppState {
     pub fn next_bottom_tab(&mut self) {
-        self.global.bottom_tab = match self.global.bottom_tab {
-            BottomTab::Activity => BottomTab::Tasks,
-            BottomTab::Tasks => BottomTab::GitStatus,
-            BottomTab::GitStatus => BottomTab::Activity,
-        };
-        // The only writers of the shared tab are this cycle key and the
-        // tab-title click below; both funnel through `save_bottom_tab`
-        // so the whole server converges within one refresh tick.
-        self.global.save_bottom_tab();
+        let next = self.global.bottom_tab.next();
+        self.global.set_bottom_tab(next);
     }
 
     /// Handle mouse click on the bottom panel tab header.
@@ -23,18 +16,19 @@ impl AppState {
         let x = col.saturating_sub(1) as usize;
         // "Activity" = 8 chars (1..8), "│" = 1 char (9), "Tasks" = 5
         // chars (10..14), "│" = 1 char (15), "Git" = 3 chars (16..18)
-        if x < 9 {
-            self.global.bottom_tab = BottomTab::Activity;
+        let selected = if x < 9 {
+            Some(BottomTab::Activity)
         } else if (10..15).contains(&x) {
-            self.global.bottom_tab = BottomTab::Tasks;
+            Some(BottomTab::Tasks)
         } else if (16..19).contains(&x) {
-            self.global.bottom_tab = BottomTab::GitStatus;
+            Some(BottomTab::GitStatus)
         } else {
             // Outside every title hitbox the click must not write the
             // shared value at all — there is no tab change to save.
-            return;
-        }
-        self.global.save_bottom_tab();
+            None
+        };
+        let Some(tab) = selected else { return };
+        self.global.set_bottom_tab(tab);
     }
 
     pub fn scroll_bottom(&mut self, delta: isize) {

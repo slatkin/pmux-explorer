@@ -50,6 +50,20 @@ pub enum BottomTab {
 }
 
 impl BottomTab {
+    /// The next tab in cycle order.
+    pub fn next(self) -> Self {
+        match self {
+            Self::Activity => Self::Tasks,
+            Self::Tasks => Self::GitStatus,
+            Self::GitStatus => Self::Activity,
+        }
+    }
+
+    /// Whether this tab drives the background git poller.
+    pub fn is_git_status(self) -> bool {
+        matches!(self, Self::GitStatus)
+    }
+
     /// The label persisted in the `@sidebar_bottom_tab` tmux option.
     /// The values contain no space, so they ride the space-split parse
     /// of the shared reading safely.
