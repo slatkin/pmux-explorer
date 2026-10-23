@@ -181,6 +181,12 @@ pub struct AppState {
     pub version_notice: Option<crate::version::UpdateNotice>,
     /// Shared state across sidebar instances, persisted to tmux global variables.
     pub global: GlobalState,
+    /// Cross-tick state of the width-lock step (design D4): the last
+    /// observed docked width and the echo suppressor for this instance's
+    /// own resizes. The step itself lives in `app/width_guard.rs`;
+    /// `apply_pop_in` (`state/popout.rs`) arms the suppressor so a pop-in
+    /// restore does not echo back as a publish.
+    pub width_guard: crate::app::width_guard::WidthGuardState,
     /// Height of the bottom panel in lines. Loaded once at startup from
     /// the `@sidebar_bottom_height` tmux option. A value of 0 hides the panel.
     pub bottom_panel_height: u16,
@@ -233,6 +239,7 @@ impl AppState {
             pet_working_paper_seed: 1,
             version_notice: None,
             global: GlobalState::new(),
+            width_guard: crate::app::width_guard::WidthGuardState::default(),
             bottom_panel_height: crate::ui::BOTTOM_PANEL_HEIGHT,
             pet_enabled: false,
         };

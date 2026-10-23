@@ -17,9 +17,10 @@ mod panel_guard;
 mod render;
 mod setup;
 // Exposed to crate-internal state: the width lock's seed floor
-// (`DEFAULT_MIN_WIDTH`) and the option parse ([`size_guard::parse_min_width`])
-// are shared with `state/global.rs`.
+// (`DEFAULT_MIN_WIDTH`) is shared with `state/width.rs`, and the width
+// guard's echo suppressor is armed from `state/popout.rs` on a pop-in.
 pub(crate) mod size_guard;
+pub(crate) mod width_guard;
 mod workers;
 
 /// Run the TUI event loop. Returns when the loop exits (currently only on
@@ -100,7 +101,7 @@ pub fn run(
                 // Grow the sidebar back when an orchestrator's new panes
                 // squeezed it below `@sidebar_min_width`.
                 let pane_width = terminal.size().map(|s| s.width).unwrap_or(0);
-                size_guard::enforce(&state.tmux_pane, pane_width);
+                size_guard::enforce(&state.tmux_pane, pane_width, state.global.min_width);
                 // Keep a floating panel as tall and as wide as its window,
                 // anchored to the right edge, after the window resized.
                 panel_guard::enforce(
@@ -112,6 +113,15 @@ pub fn run(
                     state.sidebar_pane.floating,
                 );
             }
+            // Converge the docked width on the shared value for every docked
+            // pane, every tick, locked or not: hidden windows must be right
+            // before the user switches to them. Runs after the active-window
+            // block so an adopt resize lands after `size_guard`'s grow — the
+            // adopt target never goes below the floor, so the floor wins
+            // when both fire. Floating panes and unknown window sizes are
+            // no-ops inside the guard, so floating panes still reach
+            // `panel_guard` here exactly as before.
+            width_guard::enforce(&mut state);
             git_tab_active.store(state.global.bottom_tab.is_git_status(), Ordering::Relaxed);
             last_refresh = std::time::Instant::now();
         }
