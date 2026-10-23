@@ -127,17 +127,16 @@ impl AppState {
         self.refresh_activity_log();
         self.refresh_pane_tasks();
         self.refresh_task_progress();
-        self.auto_switch_tab();
     }
 
     /// Fast refresh: tmux state + activity log (called every 1s).
     /// Returns whether the sidebar's window is the active tmux window.
     pub fn refresh(&mut self) -> bool {
         self.refresh_now();
-        // Retry a filter write tmux rejected before reading the shared
-        // options, so the read below sees the value this instance just
-        // tried to write instead of the stale one it replaces.
-        self.global.retry_pending_filter_save();
+        // Retry writes tmux rejected before reading the shared
+        // options, so the read below sees the value this instance
+        // just tried to write instead of the stale one it replaces.
+        self.global.retry_pending_saves();
         let reading = tmux::get_sidebar_pane_reading(&self.tmux_pane);
         self.sidebar_pane = reading.info;
         // The shared settings ride along on the same per-tick

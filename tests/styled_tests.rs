@@ -141,7 +141,7 @@ fn bottom_tab_activity_uses_accent_when_selected() {
     state.rebuild_row_targets();
     state.focus_state.focus = Focus::ActivityLog;
     state.focus_state.sidebar_focused = true;
-    state.bottom_tab = BottomTab::Activity;
+    state.global.bottom_tab = BottomTab::Activity;
 
     // Styled snapshot locks in `A` using accent (fg:153) and `G` remaining
     // muted (fg:252) on the bottom-panel tab title row.
@@ -180,7 +180,7 @@ fn bottom_tab_git_uses_accent_when_selected() {
     state.rebuild_row_targets();
     state.focus_state.focus = Focus::ActivityLog;
     state.focus_state.sidebar_focused = true;
-    state.bottom_tab = BottomTab::GitStatus;
+    state.global.bottom_tab = BottomTab::GitStatus;
 
     // Styled snapshot locks in `G` using accent (fg:153) and `A` remaining
     // muted (fg:252) on the bottom-panel tab title row.

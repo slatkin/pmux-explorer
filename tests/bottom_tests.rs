@@ -12,13 +12,13 @@ use tmux_agent_sidebar::tmux::{AgentType, PaneStatus, SessionInfo, WindowInfo};
 #[test]
 fn test_next_bottom_tab() {
     let mut state = make_state(vec![]);
-    assert_eq!(state.bottom_tab, BottomTab::Activity);
+    assert_eq!(state.global.bottom_tab, BottomTab::Activity);
     state.next_bottom_tab();
-    assert_eq!(state.bottom_tab, BottomTab::Tasks);
+    assert_eq!(state.global.bottom_tab, BottomTab::Tasks);
     state.next_bottom_tab();
-    assert_eq!(state.bottom_tab, BottomTab::GitStatus);
+    assert_eq!(state.global.bottom_tab, BottomTab::GitStatus);
     state.next_bottom_tab();
-    assert_eq!(state.bottom_tab, BottomTab::Activity);
+    assert_eq!(state.global.bottom_tab, BottomTab::Activity);
 }
 
 #[test]
@@ -63,13 +63,13 @@ fn test_scroll_bottom_dispatches() {
     state.scrolls.git.visible_height = 1;
 
     // Activity tab: scroll should affect activity
-    state.bottom_tab = BottomTab::Activity;
+    state.global.bottom_tab = BottomTab::Activity;
     state.scroll_bottom(1);
     assert_eq!(state.activity.scroll.offset, 1);
     assert_eq!(state.scrolls.git.offset, 0);
 
     // Git tab: scroll should affect git
-    state.bottom_tab = BottomTab::GitStatus;
+    state.global.bottom_tab = BottomTab::GitStatus;
     state.scroll_bottom(1);
     assert_eq!(state.scrolls.git.offset, 1);
     assert_eq!(state.activity.scroll.offset, 1); // unchanged
@@ -91,7 +91,7 @@ fn snapshot_git_status_tab_ui() {
     state.repo_groups = vec![make_repo_group("project", vec![pane])];
     state.rebuild_row_targets();
 
-    state.bottom_tab = BottomTab::GitStatus;
+    state.global.bottom_tab = BottomTab::GitStatus;
     state.focus_state.focus = Focus::ActivityLog;
     state.focus_state.sidebar_focused = true;
     state.git.branch = "feature/sidebar".into();
@@ -149,7 +149,7 @@ fn snapshot_git_clean_ui() {
     state.repo_groups = vec![make_repo_group("project", vec![pane])];
     state.rebuild_row_targets();
 
-    state.bottom_tab = BottomTab::GitStatus;
+    state.global.bottom_tab = BottomTab::GitStatus;
     state.focus_state.focus = Focus::ActivityLog;
     state.focus_state.sidebar_focused = true;
     // No git changes
@@ -181,7 +181,7 @@ fn snapshot_activity_tab_active_ui() {
     state.repo_groups = vec![make_repo_group("project", vec![pane])];
     state.rebuild_row_targets();
 
-    state.bottom_tab = BottomTab::Activity;
+    state.global.bottom_tab = BottomTab::Activity;
     state.focus_state.focus = Focus::ActivityLog;
     state.focus_state.sidebar_focused = true;
     state.activity.entries = vec![ActivityEntry {
@@ -218,7 +218,7 @@ fn activity_tab_leaves_one_blank_row_above_entries() {
     state.repo_groups = vec![make_repo_group("project", vec![pane])];
     state.rebuild_row_targets();
 
-    state.bottom_tab = BottomTab::Activity;
+    state.global.bottom_tab = BottomTab::Activity;
     state.focus_state.focus = Focus::ActivityLog;
     state.focus_state.sidebar_focused = true;
     state.activity.entries = vec![ActivityEntry {
@@ -261,7 +261,7 @@ fn snapshot_activity_long_tool_keeps_one_space_gap() {
     state.repo_groups = vec![make_repo_group("project", vec![pane])];
     state.rebuild_row_targets();
 
-    state.bottom_tab = BottomTab::Activity;
+    state.global.bottom_tab = BottomTab::Activity;
     state.focus_state.focus = Focus::ActivityLog;
     state.focus_state.sidebar_focused = true;
     state.activity.entries = vec![ActivityEntry {
@@ -328,7 +328,7 @@ fn snapshot_tasks_empty_tab_ui() {
     state.repo_groups = vec![make_repo_group("project", vec![pane])];
     state.rebuild_row_targets();
 
-    state.bottom_tab = BottomTab::Tasks;
+    state.global.bottom_tab = BottomTab::Tasks;
     state.focus_state.focus = Focus::ActivityLog;
     state.focus_state.sidebar_focused = true;
     state.tasks.items = vec![
@@ -378,7 +378,7 @@ fn snapshot_tasks_tab_ui() {
     state.repo_groups = vec![make_repo_group("project", vec![pane])];
     state.rebuild_row_targets();
 
-    state.bottom_tab = BottomTab::Tasks;
+    state.global.bottom_tab = BottomTab::Tasks;
     state.focus_state.focus = Focus::ActivityLog;
     state.focus_state.sidebar_focused = true;
     // No tasks recorded on the focused pane — centered empty state.
@@ -414,7 +414,7 @@ fn snapshot_tasks_status_colors_styled() {
     state.repo_groups = vec![make_repo_group("project", vec![pane])];
     state.rebuild_row_targets();
 
-    state.bottom_tab = BottomTab::Tasks;
+    state.global.bottom_tab = BottomTab::Tasks;
     state.tasks.items = vec![
         task_store::TaskItem {
             id: "1".into(),
@@ -479,7 +479,7 @@ fn tasks_scroll_clamps_when_the_list_shrinks() {
     }]);
     state.repo_groups = vec![make_repo_group("project", vec![pane])];
     state.rebuild_row_targets();
-    state.bottom_tab = BottomTab::Tasks;
+    state.global.bottom_tab = BottomTab::Tasks;
 
     state.tasks.items = (0..10)
         .map(|i| task_store::TaskItem {
@@ -521,7 +521,7 @@ fn snapshot_tasks_subject_truncates_at_narrow_width() {
     }]);
     state.repo_groups = vec![make_repo_group("project", vec![pane])];
     state.rebuild_row_targets();
-    state.bottom_tab = BottomTab::Tasks;
+    state.global.bottom_tab = BottomTab::Tasks;
     state.tasks.items = vec![task_store::TaskItem {
         id: "1".into(),
         subject: "a-very-long-task-subject-that-runs-out-of-columns".into(),
@@ -555,7 +555,7 @@ fn snapshot_tasks_multiline_subject_shows_first_line_only() {
     }]);
     state.repo_groups = vec![make_repo_group("project", vec![pane])];
     state.rebuild_row_targets();
-    state.bottom_tab = BottomTab::Tasks;
+    state.global.bottom_tab = BottomTab::Tasks;
     state.tasks.items = vec![task_store::TaskItem {
         id: "1".into(),
         subject: "first line\nsecond line".into(),
@@ -590,7 +590,7 @@ fn snapshot_git_full_info_ui() {
     state.repo_groups = vec![make_repo_group("project", vec![pane])];
     state.rebuild_row_targets();
 
-    state.bottom_tab = BottomTab::GitStatus;
+    state.global.bottom_tab = BottomTab::GitStatus;
     state.focus_state.focus = Focus::ActivityLog;
     state.focus_state.sidebar_focused = true;
     state.git.branch = "main".into();
@@ -649,7 +649,7 @@ fn snapshot_git_diff_summary_tight_ui() {
     state.repo_groups = vec![make_repo_group("project", vec![pane])];
     state.rebuild_row_targets();
 
-    state.bottom_tab = BottomTab::GitStatus;
+    state.global.bottom_tab = BottomTab::GitStatus;
     state.focus_state.focus = Focus::ActivityLog;
     state.focus_state.sidebar_focused = true;
     state.git.branch = "main".into();
@@ -683,7 +683,7 @@ fn snapshot_git_staged_file_diff_right_ui() {
     state.repo_groups = vec![make_repo_group("project", vec![pane])];
     state.rebuild_row_targets();
 
-    state.bottom_tab = BottomTab::GitStatus;
+    state.global.bottom_tab = BottomTab::GitStatus;
     state.focus_state.focus = Focus::ActivityLog;
     state.focus_state.sidebar_focused = true;
     state.git.branch = "main".into();
@@ -725,7 +725,7 @@ fn snapshot_git_unstaged_long_name_diff_right_ui() {
     state.repo_groups = vec![make_repo_group("project", vec![pane])];
     state.rebuild_row_targets();
 
-    state.bottom_tab = BottomTab::GitStatus;
+    state.global.bottom_tab = BottomTab::GitStatus;
     state.focus_state.focus = Focus::ActivityLog;
     state.focus_state.sidebar_focused = true;
     state.git.branch = "main".into();
@@ -767,7 +767,7 @@ fn snapshot_git_long_filename_truncated_ui() {
     state.repo_groups = vec![make_repo_group("project", vec![pane])];
     state.rebuild_row_targets();
 
-    state.bottom_tab = BottomTab::GitStatus;
+    state.global.bottom_tab = BottomTab::GitStatus;
     state.focus_state.focus = Focus::ActivityLog;
     state.focus_state.sidebar_focused = true;
     state.git.branch = "main".into();
@@ -821,7 +821,7 @@ fn snapshot_git_more_than_5_files() {
     state.repo_groups = vec![make_repo_group("project", vec![pane])];
     state.rebuild_row_targets();
 
-    state.bottom_tab = BottomTab::GitStatus;
+    state.global.bottom_tab = BottomTab::GitStatus;
     state.focus_state.focus = Focus::ActivityLog;
     state.focus_state.sidebar_focused = true;
     state.git.branch = "main".into();
@@ -943,7 +943,7 @@ fn snapshot_git_branch_only_no_changes() {
     state.repo_groups = vec![make_repo_group("project", vec![pane])];
     state.rebuild_row_targets();
 
-    state.bottom_tab = BottomTab::GitStatus;
+    state.global.bottom_tab = BottomTab::GitStatus;
     state.focus_state.focus = Focus::ActivityLog;
     state.focus_state.sidebar_focused = true;
     state.git.branch = "feature/long-branch-name".into();
@@ -976,7 +976,7 @@ fn snapshot_git_pr_number_ui() {
     state.repo_groups = vec![make_repo_group("project", vec![pane])];
     state.rebuild_row_targets();
 
-    state.bottom_tab = BottomTab::GitStatus;
+    state.global.bottom_tab = BottomTab::GitStatus;
     state.focus_state.focus = Focus::ActivityLog;
     state.focus_state.sidebar_focused = true;
     state.git.branch = "feature/fix".into();
@@ -1038,7 +1038,7 @@ fn snapshot_git_pr_with_diff_ui() {
     state.repo_groups = vec![make_repo_group("project", vec![pane])];
     state.rebuild_row_targets();
 
-    state.bottom_tab = BottomTab::GitStatus;
+    state.global.bottom_tab = BottomTab::GitStatus;
     state.focus_state.focus = Focus::ActivityLog;
     state.focus_state.sidebar_focused = true;
     state.git.branch = "main".into();
@@ -1146,7 +1146,7 @@ fn snapshot_activity_empty_centered_ui() {
     }]);
     state.repo_groups = vec![make_repo_group("project", vec![pane])];
     state.rebuild_row_targets();
-    state.bottom_tab = BottomTab::Activity;
+    state.global.bottom_tab = BottomTab::Activity;
     // No activity entries — should show centered "No activity yet"
 
     let output = render_to_string(&mut state, 28, 26);
@@ -1177,7 +1177,7 @@ fn snapshot_git_clean_centered_ui() {
     }]);
     state.repo_groups = vec![make_repo_group("project", vec![pane])];
     state.rebuild_row_targets();
-    state.bottom_tab = BottomTab::GitStatus;
+    state.global.bottom_tab = BottomTab::GitStatus;
     // No git info — should show centered "Working tree clean"
 
     let output = render_to_string(&mut state, 28, 26);
@@ -1214,7 +1214,7 @@ fn snapshot_git_branch_loaded_no_changes_shows_inline_clean() {
     state.repo_groups = vec![make_repo_group("project", vec![pane])];
     state.rebuild_row_targets();
 
-    state.bottom_tab = BottomTab::GitStatus;
+    state.global.bottom_tab = BottomTab::GitStatus;
     state.focus_state.focus = Focus::ActivityLog;
     state.focus_state.sidebar_focused = true;
     // Branch loaded, but no changes/commits — should still show "Working tree clean"
@@ -1250,7 +1250,7 @@ fn snapshot_git_no_data_shows_centered_clean() {
     state.repo_groups = vec![make_repo_group("project", vec![pane])];
     state.rebuild_row_targets();
 
-    state.bottom_tab = BottomTab::GitStatus;
+    state.global.bottom_tab = BottomTab::GitStatus;
     state.focus_state.focus = Focus::ActivityLog;
     state.focus_state.sidebar_focused = true;
     // No git data at all
@@ -1284,7 +1284,7 @@ fn test_git_behind_only() {
     state.repo_groups = vec![make_repo_group("project", vec![pane])];
     state.rebuild_row_targets();
 
-    state.bottom_tab = BottomTab::GitStatus;
+    state.global.bottom_tab = BottomTab::GitStatus;
     state.focus_state.focus = Focus::ActivityLog;
     state.focus_state.sidebar_focused = true;
     state.git.branch = "main".into();
@@ -1317,7 +1317,7 @@ fn test_git_ahead_and_behind() {
     state.repo_groups = vec![make_repo_group("project", vec![pane])];
     state.rebuild_row_targets();
 
-    state.bottom_tab = BottomTab::GitStatus;
+    state.global.bottom_tab = BottomTab::GitStatus;
     state.focus_state.focus = Focus::ActivityLog;
     state.focus_state.sidebar_focused = true;
     state.git.branch = "main".into();
@@ -1352,7 +1352,7 @@ fn test_git_diff_insertions_only() {
     state.repo_groups = vec![make_repo_group("project", vec![pane])];
     state.rebuild_row_targets();
 
-    state.bottom_tab = BottomTab::GitStatus;
+    state.global.bottom_tab = BottomTab::GitStatus;
     state.focus_state.focus = Focus::ActivityLog;
     state.focus_state.sidebar_focused = true;
     state.git.branch = "main".into();
@@ -1386,7 +1386,7 @@ fn test_git_diff_deletions_only() {
     state.repo_groups = vec![make_repo_group("project", vec![pane])];
     state.rebuild_row_targets();
 
-    state.bottom_tab = BottomTab::GitStatus;
+    state.global.bottom_tab = BottomTab::GitStatus;
     state.focus_state.focus = Focus::ActivityLog;
     state.focus_state.sidebar_focused = true;
     state.git.branch = "main".into();
@@ -1462,7 +1462,7 @@ fn snapshot_git_staged_unstaged_untracked_ui() {
     state.repo_groups = vec![make_repo_group("project", vec![pane])];
     state.rebuild_row_targets();
 
-    state.bottom_tab = BottomTab::GitStatus;
+    state.global.bottom_tab = BottomTab::GitStatus;
     state.focus_state.focus = Focus::ActivityLog;
     state.focus_state.sidebar_focused = true;
     state.git.branch = "main".into();
@@ -1530,7 +1530,7 @@ fn snapshot_git_long_branch_with_pr_ui() {
     state.repo_groups = vec![make_repo_group("project", vec![pane])];
     state.rebuild_row_targets();
 
-    state.bottom_tab = BottomTab::GitStatus;
+    state.global.bottom_tab = BottomTab::GitStatus;
     state.focus_state.focus = Focus::ActivityLog;
     state.focus_state.sidebar_focused = true;
     state.git.branch = "feature/very-long-branch-name".into();
@@ -1576,7 +1576,7 @@ fn snapshot_git_staged_only_ui() {
     state.repo_groups = vec![make_repo_group("project", vec![pane])];
     state.rebuild_row_targets();
 
-    state.bottom_tab = BottomTab::GitStatus;
+    state.global.bottom_tab = BottomTab::GitStatus;
     state.focus_state.focus = Focus::ActivityLog;
     state.focus_state.sidebar_focused = true;
     state.git.branch = "main".into();
@@ -1620,7 +1620,7 @@ fn snapshot_git_many_files_more_indicator_ui() {
     state.repo_groups = vec![make_repo_group("project", vec![pane])];
     state.rebuild_row_targets();
 
-    state.bottom_tab = BottomTab::GitStatus;
+    state.global.bottom_tab = BottomTab::GitStatus;
     state.focus_state.focus = Focus::ActivityLog;
     state.focus_state.sidebar_focused = true;
     state.git.branch = "dev".into();
@@ -1673,7 +1673,7 @@ fn snapshot_git_more_than_10_files_ui() {
     state.repo_groups = vec![make_repo_group("project", vec![pane])];
     state.rebuild_row_targets();
 
-    state.bottom_tab = BottomTab::GitStatus;
+    state.global.bottom_tab = BottomTab::GitStatus;
     state.focus_state.focus = Focus::ActivityLog;
     state.focus_state.sidebar_focused = true;
     state.git.branch = "dev".into();

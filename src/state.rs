@@ -37,21 +37,61 @@ pub use scroll::{ScrollState, ScrollStates};
 pub use tasks::TasksState;
 pub use timers::RefreshTimers;
 
-/// Bottom-panel tabs in cycle order. Tasks never auto-shows: only the
-/// manual cycle, a tab-title click, or a per-pane tab restore selects
-/// it — auto-switch keeps setting Activity (agent pane) and Git (default).
-#[derive(Debug, Clone, PartialEq)]
+/// Bottom-panel tabs in cycle order. The selected tab is shared state:
+/// it lives in [`GlobalState`], is written with `set -g
+/// @sidebar_bottom_tab`, and changes only through an explicit selection
+/// (the manual cycle, a tab-title click) or through the shared value a
+/// peer instance selected.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BottomTab {
     Activity,
     Tasks,
     GitStatus,
 }
 
+impl BottomTab {
+    /// The next tab in cycle order.
+    pub fn next(self) -> Self {
+        match self {
+            Self::Activity => Self::Tasks,
+            Self::Tasks => Self::GitStatus,
+            Self::GitStatus => Self::Activity,
+        }
+    }
+
+    /// Whether this tab drives the background git poller.
+    pub fn is_git_status(self) -> bool {
+        matches!(self, Self::GitStatus)
+    }
+
+    /// The label persisted in the `@sidebar_bottom_tab` tmux option.
+    /// The values contain no space, so they ride the space-split parse
+    /// of the shared reading safely.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Activity => "activity",
+            Self::Tasks => "tasks",
+            Self::GitStatus => "git",
+        }
+    }
+
+    /// Parse a tmux-option label into a `BottomTab`. The shared option
+    /// carries only what a sidebar wrote, so anything unknown falls
+    /// back to the `Activity` default instead of inventing a tab.
+    pub fn from_label(s: &str) -> Self {
+        match s {
+            "tasks" => Self::Tasks,
+            "git" => Self::GitStatus,
+            _ => Self::Activity,
+        }
+    }
+}
+
 pub struct AppState {
     pub now: u64,
     pub repo_groups: Vec<crate::group::RepoGroup>,
     /// Sidebar focus + pane focus tracking (sidebar_focused, focus,
-    /// focused_pane_id, prev_focused_pane_id).
+    /// focused_pane_id).
     pub focus_state: FocusState,
     /// Transient one-line status banner (message + expiry) for spawn /
     /// remove feedback. Cleared by `take_flash` once the deadline passes.
@@ -83,7 +123,6 @@ pub struct AppState {
     pub scrolls: ScrollStates,
     pub theme: ColorTheme,
     pub icons: StatusIcons,
-    pub bottom_tab: BottomTab,
     pub git: crate::git::GitData,
     pub pane_states: PaneRuntimeMap,
     /// Periodic-refresh clocks (port scan, filter
@@ -164,7 +203,6 @@ impl AppState {
             scrolls: ScrollStates::default(),
             theme: ColorTheme::default(),
             icons: StatusIcons::default(),
-            bottom_tab: BottomTab::Activity,
             git: crate::git::GitData::default(),
             sidebar_pane: SidebarPaneInfo::FALLBACK,
             docked_width: None,
@@ -991,26 +1029,24 @@ mod tests {
         // directly, so we don't assert it here (tmux not available in tests).
     }
 
-    // ─── auto_switch_tab tests are in state/tab.rs ────────────────
-
     // ─── next_bottom_tab / scroll_bottom tests ──────────────────────
 
     #[test]
     fn next_bottom_tab_visits_all_three_tabs() {
         let mut state = AppState::new("%99".into());
-        assert_eq!(state.bottom_tab, BottomTab::Activity);
+        assert_eq!(state.global.bottom_tab, BottomTab::Activity);
         state.next_bottom_tab();
-        assert_eq!(state.bottom_tab, BottomTab::Tasks);
+        assert_eq!(state.global.bottom_tab, BottomTab::Tasks);
         state.next_bottom_tab();
-        assert_eq!(state.bottom_tab, BottomTab::GitStatus);
+        assert_eq!(state.global.bottom_tab, BottomTab::GitStatus);
         state.next_bottom_tab();
-        assert_eq!(state.bottom_tab, BottomTab::Activity);
+        assert_eq!(state.global.bottom_tab, BottomTab::Activity);
     }
 
     #[test]
     fn scroll_bottom_dispatches_to_activity() {
         let mut state = AppState::new("%99".into());
-        state.bottom_tab = BottomTab::Activity;
+        state.global.bottom_tab = BottomTab::Activity;
         state.activity.scroll = ScrollState {
             offset: 0,
             total_lines: 10,
@@ -1025,7 +1061,7 @@ mod tests {
     #[test]
     fn scroll_bottom_dispatches_to_git() {
         let mut state = AppState::new("%99".into());
-        state.bottom_tab = BottomTab::GitStatus;
+        state.global.bottom_tab = BottomTab::GitStatus;
         state.scrolls.git = ScrollState {
             offset: 0,
             total_lines: 10,
@@ -1042,7 +1078,7 @@ mod tests {
         // The Tasks tab owns a third scroll offset: scrolling there moves
         // nothing in the other two tabs.
         let mut state = AppState::new("%99".into());
-        state.bottom_tab = BottomTab::Tasks;
+        state.global.bottom_tab = BottomTab::Tasks;
         state.tasks.scroll = ScrollState {
             offset: 0,
             total_lines: 10,
@@ -1060,7 +1096,7 @@ mod tests {
     #[test]
     fn mouse_scroll_in_bottom_panel_scrolls_activity() {
         let mut state = AppState::new("%99".into());
-        state.bottom_tab = BottomTab::Activity;
+        state.global.bottom_tab = BottomTab::Activity;
         state.activity.scroll = ScrollState {
             offset: 0,
             total_lines: 30,
@@ -1103,7 +1139,7 @@ mod tests {
     #[test]
     fn mouse_scroll_at_boundary_row_goes_to_bottom() {
         let mut state = AppState::new("%99".into());
-        state.bottom_tab = BottomTab::GitStatus;
+        state.global.bottom_tab = BottomTab::GitStatus;
         state.scrolls.git = ScrollState {
             offset: 0,
             total_lines: 20,
@@ -1135,7 +1171,7 @@ mod tests {
         // Same band routing as the other two tabs — the wheel over the
         // panel moves the visible tab's own offset.
         let mut state = AppState::new("%99".into());
-        state.bottom_tab = BottomTab::Tasks;
+        state.global.bottom_tab = BottomTab::Tasks;
         state.tasks.scroll = ScrollState {
             offset: 0,
             total_lines: 30,
@@ -1153,10 +1189,10 @@ mod tests {
     fn terminal_click_on_the_tab_row_switches_the_tab() {
         let mut state = AppState::new("%99".into());
         state.layout.bottom_panel_height = 20;
-        state.bottom_tab = BottomTab::GitStatus;
+        state.global.bottom_tab = BottomTab::GitStatus;
         // term_height=50, bottom panel 20 → tab row at row 30
         assert!(state.handle_terminal_click(30, 3, 50));
-        assert_eq!(state.bottom_tab, BottomTab::Activity);
+        assert_eq!(state.global.bottom_tab, BottomTab::Activity);
     }
 
     #[test]
@@ -1205,12 +1241,12 @@ mod tests {
         // clamped panel (rows 18..25) is clickable agent list.
         state.layout.line_to_row = vec![Some(1); 24];
         state.global.selected_pane_row = 0;
-        state.bottom_tab = BottomTab::GitStatus;
+        state.global.bottom_tab = BottomTab::GitStatus;
 
         // Row 26 is the drawn tab row (38 - 12); the unclamped height
         // would have put the boundary at row 18 and swallowed this click.
         assert!(state.handle_terminal_click(26, 3, 38));
-        assert_eq!(state.bottom_tab, BottomTab::Activity);
+        assert_eq!(state.global.bottom_tab, BottomTab::Activity);
 
         // Row 25 is a drawn agent-list row above the clamped panel.
         assert!(!state.handle_terminal_click(25, 5, 38));

@@ -89,7 +89,7 @@ pub fn draw_bottom(frame: &mut Frame, state: &mut AppState, area: Rect) {
     );
     frame.render_widget(Paragraph::new(bottom_line), bottom_rect);
 
-    match state.bottom_tab {
+    match state.global.bottom_tab {
         BottomTab::Activity => activity::draw_activity_content(frame, state, inner),
         BottomTab::Tasks => tasks::draw_tasks_content(frame, state, inner),
         BottomTab::GitStatus => git::draw_git_content(frame, state, inner),
@@ -101,7 +101,7 @@ fn build_tab_title(state: &AppState) -> Line<'static> {
     let active = Style::default().fg(theme.accent);
     let inactive = Style::default().fg(theme.text_muted);
     let is = |tab: &BottomTab| {
-        if state.bottom_tab == *tab {
+        if state.global.bottom_tab == *tab {
             active
         } else {
             inactive

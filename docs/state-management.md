@@ -15,6 +15,7 @@ read from tmux on every refresh tick.
 | `status_filter` | `@sidebar_filter` | User input (left/right key) | Active status filter (All/Busy/Waiting/Idle/Error) |
 | `selected_pane_row` | `@sidebar_cursor` | User input (j/k key); tmux write flushed after a short debounce | Cursor position in agent list |
 | `repo_filter` | `@sidebar_repo_filter` | User input (repo popup) | Repository filter (All or specific repo) |
+| `bottom_tab` | `@sidebar_bottom_tab` | On user tab switch (cycle key / tab-title click); tmux write retried when rejected | Selected bottom tab (Activity/Tasks/Git), shared server-wide; each instance adopts a peer's selection on its next refresh tick |
 
 Each field has a corresponding `last_saved_*` to prevent sync conflicts — only overwrites tmux if the local write succeeded.
 
@@ -25,6 +26,15 @@ holds the stale value the write was meant to replace and adopting it
 would revert the user's choice. `retry_pending_filter_save` retries
 the write once per refresh tick, before the tick reads the shared
 options, so a successful retry is what that tick reads back.
+
+The bottom tab has the matching `tab_save_pending` latch: when tmux
+rejects a `set -g @sidebar_bottom_tab` write, the latch is set and
+`apply_all` skips adopting the shared tab, because tmux still holds
+the value the rejected write was meant to replace and adopting it
+would revert the user's selection. `retry_pending_tab_save` retries
+the write once per refresh tick, before the tick reads the shared
+options, so a successful retry is what that tick reads back. The two
+latches are independent.
 
 ### Per-pane State (keyed by pane ID)
 
@@ -77,7 +87,6 @@ pane disappears (`prune_pane_states_to_current_panes`).
 | `pane_states.map[...].task_progress` | Every 1s (refresh cycle) | Parsed from activity log — task list per pane |
 | `pane_states.map[...].task_dismissed_total` | On task completion | Tracks dismissed completed-task counts |
 | `pane_states.map[...].inactive_since` | On status change | Debounce timestamp (3s grace before hiding tasks) |
-| `pane_states.map[...].tab_pref` | On user tab switch | Remembered bottom tab choice per pane (cleared on relaunch) |
 | `pane_states.map[...].task_progress_log_mtime` | Every 1s (refresh cycle) | mtime of the task-progress log last parsed; skips re-parsing when unchanged |
 
 Per-pane file-based state:
@@ -94,7 +103,6 @@ Per-pane file-based state:
 | `focus_state.focused_pane_id` | Every 1s, plus immediately on user-initiated pane jumps | Currently focused agent pane |
 | `focus_state.sidebar_focused` | Every 1s | Whether sidebar pane itself has focus |
 | `focus_state.focus` | On user input | UI focus: `Filter` / `Panes` / `ActivityLog`; input also triggers an immediate redraw so focus changes appear without waiting for the next poll tick |
-| `focus_state.prev_focused_pane_id` | Every 1s | Previous focused pane ID (for detecting focus changes) |
 | `now` | Every 1s | Current Unix epoch |
 | `scrolls.panes` | On user input / render | Agent list scroll position |
 | `scrolls.git` | On user input / render | Git status scroll position |
@@ -103,7 +111,6 @@ Per-pane file-based state:
 | `activity.max_entries` | Once at startup | Max activity log entries to display |
 | `activity.log_cache` | Every 1s | `(focused_pane_id, mtime)` of the last-rendered activity log; skips re-reads when unchanged |
 | `git` | Every 2s (bg thread) | Branch, diff stats, ahead/behind, PR number |
-| `bottom_tab` | On user input / auto-switch | Current bottom panel tab |
 | `theme` | Once at startup | Color theme from tmux `@sidebar_color_*` variables |
 | `popup` | On user input / render | `PopupState` enum: `None` / `Repo { selected, area }` / `Notices { area }`. Enforces "at most one popup open" via the type system |
 | `layout` | Every frame (render) | `FrameLayout` sub-struct bundling the ephemeral fields the UI rewrites every frame for click hit-testing: `pane_row_targets`, `line_to_row`, `repo_button_col`, `repo_spawn_targets`, `spawn_remove_targets`, `hyperlink_overlays`, `filter_bar_width` (the width the filter row was rendered with, which the click hit test uses) |
@@ -120,7 +127,6 @@ Per-pane file-based state:
 | `tmux_pane` | Once at startup | This sidebar's own tmux pane ID |
 | `sidebar_pane` | Every 1s (refresh cycle) | This sidebar's own pane info as tmux reported it on the last refresh (`SidebarPaneInfo`): the pane's active flags, the pane's width, the window's size, and the pane's floating flag. The floating flag is the truth for the docked-vs-floating mode — it is read from the pane, never remembered separately |
 | `docked_width` | On pop-out / pop-in (user input) | The pane width captured when the sidebar was popped out, restored by the pop-in with `resize-pane -x` (`src/state/popout.rs`). `None` while docked and when the pane was already floating when the sidebar started |
-| `pane_states.seen` | Every 1s | Set of pane IDs that have been seen as agents (bundled with `pane_states.map` under the `PaneRuntimeMap` wrapper) |
 | `version_notice` | Once at startup (bg fetch) | GitHub release update notice, `None` when up-to-date |
 
 ---
@@ -137,6 +143,7 @@ Per-pane file-based state:
 │  sidebar_pane, layout.pane_row_targets, activity.entries,   │
 │  pane_states.map[..].task_progress,                         │
 │  GlobalState shared options re-read every tick              │
+│  (bottom tab adoption included)                             │
 ├─────────────────────────────────────────────────────────────┤
 │  pane_states.map[..].ports, agent liveness cleanup          │
 ├─────────────────────────────────────────────────────────────┤
@@ -152,7 +159,7 @@ Per-pane file-based state:
 │  @pane_* tmux options, activity log files                   │
 ├─────────────────────────────────────────────────────────────┤
 │  On user input                                              │
-│  focus_state.focus, scrolls.*, activity.scroll, bottom_tab, │
+│  focus_state.focus, scrolls.*, activity.scroll,             │
 │  GlobalState fields, popup (PopupState enum),               │
 │  timers.last_filter_click, pop-out / pop-in (docked_width), │
 │  immediate selection / active-pane redraw                   │
@@ -180,8 +187,10 @@ TUI main loop (app::run in app.rs; submodules app/{setup,workers,input,render,pa
     → initializes Claude notices state once
                         ↓
   → refresh() every 1s
+    → retry_pending_filter_save / retry_pending_tab_save
+                                     ← a write tmux rejected is retried before the shared read
     → get_sidebar_pane_reading()     ← reads pane state + @sidebar_* in one display-message
-    → global.apply_all()             ← applies the shared options under the last_saved_* guards
+    → global.apply_all()             ← applies the shared options (filter, cursor, bottom tab, repo filter) under the last_saved_* guards
     → query_sessions() (tmux.rs)     ← reads @pane_* via `tmux list-panes -a`
     → pane_name resolved in the same query (the pane title when it is
       a real name — em dash suffixes trimmed; no extra tmux call)
@@ -207,7 +216,7 @@ TUI main loop (app::run in app.rs; submodules app/{setup,workers,input,render,pa
 enum Focus { Filter, Panes, ActivityLog }
 enum StatusFilter { All, Busy, Waiting, Idle, Error }
 enum RepoFilter { All, Repo(String) }
-enum BottomTab { Activity, GitStatus }
+enum BottomTab { Activity, Tasks, GitStatus }
 enum PaneStatus { Running, Background, Waiting, Idle, Error, Unknown }
 enum AgentType { Claude, Codex, OpenCode, Unknown }
 enum PermissionMode { Default, Plan, AcceptEdits, Auto, DontAsk, BypassPermissions, Defer }
@@ -258,25 +267,23 @@ struct PaneRuntimeState {
     task_progress: Option<TaskProgress>,
     task_dismissed_total: Option<usize>,
     inactive_since: Option<u64>,
-    tab_pref: Option<BottomTab>,
     task_progress_log_mtime: Option<SystemTime>,
 }
 
-/// Wraps `PaneRuntimeState` per pane plus the set of pane IDs that
-/// have been seen as agents. Methods delegate to the underlying
-/// `HashMap`; `seen` is read/written alongside `map` during refresh.
+/// Per-pane runtime entries keyed by pane id. The selected bottom tab
+/// is not stored here: it is shared server-wide through
+/// `@sidebar_bottom_tab` and lives in `GlobalState`, so nothing
+/// pane-scoped has to remember it.
 struct PaneRuntimeMap {
     map: HashMap<String, PaneRuntimeState>,
-    seen: HashSet<String>,
 }
 
 /// Focus-related fields grouped so UI code can pass them as a single
-/// sub-struct rather than juggling four flat fields.
+/// sub-struct rather than juggling three flat fields.
 struct FocusState {
     sidebar_focused: bool,
     focus: Focus,
     focused_pane_id: Option<String>,
-    prev_focused_pane_id: Option<String>,
 }
 
 /// Non-activity scrolls (the agent list and the git bottom panel).
@@ -334,12 +341,12 @@ struct NoticesState {
 
 1. `selected_pane_row` is always < `layout.pane_row_targets.len()` — clamped in `rebuild_row_targets()`
 2. `activity.entries` contains only the focused pane's entries — cleared on focus change
-3. Tab preferences persist per pane in `PaneRuntimeState.tab_pref` and are restored on focus change. They vanish together with the rest of `PaneRuntimeState` when the pane is pruned, so a relaunched agent starts on the default tab
+3. The bottom tab is shared server-wide through `@sidebar_bottom_tab` and changes only on an explicit user selection (cycle key / tab-title click) or the per-tick adoption of a peer's selection — never on focus change, and relaunching an agent does not change it
 4. Git fetching respects the `git_tab_active` flag — stops when tab is hidden
 5. Task progress has a 3-second debounce — prevents flicker when agent briefly pauses
 6. Global state syncs via tmux variables — enables coordination across sidebar instances
 7. Scroll positions are independent per panel — agents, activity, git each have their own `ScrollState`
 8. `layout.line_to_row` is rebuilt every frame — ensures accurate click routing
-9. Pane runtime state is pruned when the pane disappears — prevents stale per-pane ports, task progress, and tab preferences from surviving after the agent is gone
+9. Pane runtime state is pruned when the pane disappears — prevents stale per-pane ports and task progress from surviving after the agent is gone
 10. At most one popup is open at a time — enforced structurally by the `PopupState` enum, not by parallel boolean flags
 10. Hook-based cleanup wins when available; pid-based cleanup is a slower fallback that removes panes when the agent process is gone but the hook did not fire

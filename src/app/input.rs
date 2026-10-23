@@ -36,7 +36,7 @@ pub(super) fn handle_event(
                         // clicking into Git Status leaves polling disabled until the
                         // next refresh tick and the tab renders stale data.
                         git_tab_active
-                            .store(state.bottom_tab == BottomTab::GitStatus, Ordering::Relaxed);
+                            .store(state.global.bottom_tab.is_git_status(), Ordering::Relaxed);
                     }
                 }
                 MouseEventKind::ScrollDown => {
@@ -166,7 +166,7 @@ pub(super) fn handle_key_event(
         }
         KeyCode::BackTab => {
             state.next_bottom_tab();
-            git_tab_active.store(state.bottom_tab == BottomTab::GitStatus, Ordering::Relaxed);
+            git_tab_active.store(state.global.bottom_tab.is_git_status(), Ordering::Relaxed);
         }
         _ => {}
     }
@@ -200,7 +200,7 @@ fn pane_nav_up(state: &mut AppState) {
             }
         }
         Focus::ActivityLog => {
-            let at_top = match state.bottom_tab {
+            let at_top = match state.global.bottom_tab {
                 BottomTab::Activity => state.activity.scroll.offset == 0,
                 BottomTab::Tasks => state.tasks.scroll.offset == 0,
                 BottomTab::GitStatus => state.scrolls.git.offset == 0,
@@ -409,15 +409,15 @@ mod tests {
         let flag = AtomicBool::new(false);
 
         handle_key_event(key(KeyCode::BackTab), &mut state, &flag);
-        assert_eq!(state.bottom_tab, BottomTab::Tasks);
+        assert_eq!(state.global.bottom_tab, BottomTab::Tasks);
         assert!(!flag.load(Ordering::Relaxed));
 
         handle_key_event(key(KeyCode::BackTab), &mut state, &flag);
-        assert_eq!(state.bottom_tab, BottomTab::GitStatus);
+        assert_eq!(state.global.bottom_tab, BottomTab::GitStatus);
         assert!(flag.load(Ordering::Relaxed));
 
         handle_key_event(key(KeyCode::BackTab), &mut state, &flag);
-        assert_eq!(state.bottom_tab, BottomTab::Activity);
+        assert_eq!(state.global.bottom_tab, BottomTab::Activity);
         assert!(!flag.load(Ordering::Relaxed));
     }
 
@@ -427,7 +427,7 @@ mod tests {
         // scroll like Activity/Git and hands focus back only at the top.
         let mut state = state_with_three_panes();
         state.focus_state.focus = Focus::ActivityLog;
-        state.bottom_tab = BottomTab::Tasks;
+        state.global.bottom_tab = BottomTab::Tasks;
         state.tasks.scroll = crate::state::ScrollState {
             offset: 2,
             total_lines: 10,
