@@ -94,6 +94,20 @@ pub struct FilterChip {
     pub width: u16,
 }
 
+/// Columns of the two right-edge controls on the filter bar row. The
+/// width-lock glyph sits one cell left of the pop-out glyph, which keeps
+/// its one-column spacer against the right border (design D8). On a one-
+/// or two-column row only the pop-out glyph fits; the lock is the first
+/// control dropped and `lock` is `None` there.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct FilterBarControl {
+    /// Column of the width-lock glyph, or `None` when the row is too
+    /// narrow to hold it.
+    pub lock: Option<u16>,
+    /// Column of the pop-out glyph.
+    pub popout: u16,
+}
+
 /// Number of decimal digits `n` renders as; `0` renders as one digit.
 fn count_digits(n: usize) -> u16 {
     n.checked_ilog10().map_or(1, |d| d + 1) as u16
@@ -102,32 +116,39 @@ fn count_digits(n: usize) -> u16 {
 /// Compute the layout of the status filter row for a row `width` columns
 /// wide with the per-filter status counts (see [`StatusCounts`]).
 ///
-/// The pop-out control owns the row's two rightmost columns — the glyph,
-/// then the one-column spacer that keeps it a space away from the right
-/// border — and the chips fill from the left with a single-space
-/// separator after one gutter column. A chip that would no longer fit
-/// before the control is dropped whole — never partially drawn —
-/// together with every chip after it. Returns the chips that fit and the
-/// control's column (`None` for a zero-width row, where nothing is
-/// drawn).
+/// The control region owns the row's three rightmost columns — the lock
+/// glyph, then the pop-out glyph, then the one-column spacer that keeps
+/// the pop-out glyph a space away from the right border — and the chips
+/// fill from the left with a single-space separator after one gutter
+/// column. A chip that would no longer fit before the control region is
+/// dropped whole — never partially drawn — together with every chip
+/// after it. Returns the chips that fit and the control columns (`None`
+/// for a zero-width row, where nothing is drawn).
 ///
 /// Both the renderer and the click hit test run through this function,
 /// so a click can only ever select a chip that is actually drawn.
 pub(crate) fn filter_bar_layout(
     counts: StatusCounts,
     width: u16,
-) -> (Vec<FilterChip>, Option<u16>) {
+) -> (Vec<FilterChip>, Option<FilterBarControl>) {
     if width == 0 {
         return (Vec::new(), None);
     }
-    // A one-column row cannot hold glyph plus spacer, so the glyph alone
-    // owns the only column there.
-    let control_col = width.saturating_sub(2);
+    // A one- or two-column row cannot hold both glyphs and the spacer,
+    // so the pop-out glyph alone owns the row there and the lock is
+    // dropped first.
+    let popout = width.saturating_sub(2);
+    let control = FilterBarControl {
+        lock: (width > 2).then_some(popout - 1),
+        popout,
+    };
+    // A chip may end on the column before the leftmost control glyph.
+    let control_start = control.lock.unwrap_or(control.popout);
     let mut chips = Vec::new();
     let mut start: u16 = 1; // leading gutter column
     for filter in StatusFilter::VARIANTS {
         let chip_width = 1 + count_digits(counts.count(filter));
-        if start + chip_width > control_col {
+        if start + chip_width > control_start {
             break;
         }
         chips.push(FilterChip {
@@ -137,7 +158,7 @@ pub(crate) fn filter_bar_layout(
         });
         start += chip_width + 1; // single-space separator
     }
-    (chips, Some(control_col))
+    (chips, Some(control))
 }
 
 impl AppState {
@@ -239,16 +260,20 @@ impl AppState {
 
         // The row's chip layout comes from the same pure function the
         // renderer used for the current frame, keyed on the width that
-        // frame rendered with. The pop-out control is hit-tested before
-        // the chip walk, so a click on it never changes the status
-        // filter.
-        let (chips, control_col) =
+        // frame rendered with. The two right-edge controls are
+        // hit-tested before the chip walk, so a click on them never
+        // changes the status filter.
+        let (chips, control) =
             filter_bar_layout(self.status_counts(), self.layout.filter_bar_width);
-        if let Some(control_col) = control_col
-            && col == control_col
-        {
-            self.toggle_popout();
-            return;
+        if let Some(control) = control {
+            if control.lock.is_some_and(|lock| col == lock) {
+                self.toggle_width_lock();
+                return;
+            }
+            if col == control.popout {
+                self.toggle_popout();
+                return;
+            }
         }
         for chip in &chips {
             if col >= chip.start && col < chip.start + chip.width {
