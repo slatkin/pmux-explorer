@@ -19,6 +19,7 @@ mod scroll;
 mod tab;
 mod tasks;
 mod timers;
+mod width;
 
 pub use activity::ActivityState;
 pub use filter::{RepoFilter, StatusCounts, StatusFilter};

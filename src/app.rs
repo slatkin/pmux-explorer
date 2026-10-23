@@ -16,7 +16,10 @@ mod input;
 mod panel_guard;
 mod render;
 mod setup;
-mod size_guard;
+// Exposed to crate-internal state: the width lock's seed floor
+// (`DEFAULT_MIN_WIDTH`) and the option parse ([`size_guard::parse_min_width`])
+// are shared with `state/global.rs`.
+pub(crate) mod size_guard;
 mod workers;
 
 /// Run the TUI event loop. Returns when the loop exits (currently only on

@@ -16,14 +16,16 @@ pub struct GlobalState {
     /// The bottom panel tab, shared like the filters: written with
     /// `set -g @sidebar_bottom_tab` and adopted from that option.
     pub bottom_tab: BottomTab,
-    // Two pending-write latches share this struct: the filter latch
-    // (last_saved_filter / filter_save_pending) and the bottom-tab
-    // latch (last_saved_bottom_tab / tab_save_pending). The tab latch
-    // is a deliberate verbatim copy of the filter's — same save/retry
-    // calls, same rejection branch, same tick placement — recorded as
-    // duplicated code instead of a generic helper; the full latch
-    // rationale lives once on `filter_save_pending` and the tab copies
-    // point at it.
+    // Four pending-write latches share this struct: the filter latch
+    // (last_saved_filter / filter_save_pending), the bottom-tab latch
+    // (last_saved_bottom_tab / tab_save_pending), the shared-width
+    // latch (last_saved_shared_docked_width / width_save_pending) and
+    // the lock latch (last_saved_width_lock / lock_save_pending). The
+    // later three are deliberate verbatim copies of the filter's —
+    // same save/retry calls, same rejection branch, same tick
+    // placement — recorded as duplicated code instead of a generic
+    // helper; the full latch rationale lives once on
+    // `filter_save_pending` and the later latches point at it.
     last_saved_filter: StatusFilter,
     /// A filter write that tmux rejected and that is retried on every
     /// refresh tick. While it is set, the value tmux holds is the stale
@@ -36,6 +38,38 @@ pub struct GlobalState {
     /// The tab latch's copy of `filter_save_pending`; see that field
     /// and the shared latch comment above for the full rationale.
     tab_save_pending: bool,
+    /// On/off switch for the shared docked width; mirrored to and
+    /// adopted from the `@sidebar_width_lock` tmux option.
+    pub width_lock: bool,
+    /// The docked width every sidebar converges on while the lock is
+    /// on (`None` until one exists); mirrored to and adopted from the
+    /// `@sidebar_docked_width` tmux option. `shared_` because
+    /// `AppState.docked_width` already names the pop-out capture.
+    pub shared_docked_width: Option<u16>,
+    /// Last width-lock value successfully written to tmux; the lock
+    /// latch's copy of `last_saved_filter`. `pub(crate)` so sibling
+    /// state/app modules can drive the latch test contract (input
+    /// tests assert the latch arms on a rejected write).
+    pub(crate) last_saved_width_lock: bool,
+    /// The lock latch's copy of `filter_save_pending`; see that field
+    /// and the shared latch comment above for the full rationale.
+    pub(crate) lock_save_pending: bool,
+    /// Last shared width successfully written to tmux; the width
+    /// latch's copy of `last_saved_filter`.
+    pub(crate) last_saved_shared_docked_width: Option<u16>,
+    /// The width latch's copy of `filter_save_pending`; see that field
+    /// for the full rationale. While it is set the width guard must
+    /// also skip its adopt side: the value tmux still holds is the
+    /// stale shared width this instance is replacing (design D4), and
+    /// adopting it back would resize the pane over the user's hand.
+    pub(crate) width_save_pending: bool,
+    /// Parsed `@sidebar_min_width` as carried on the per-tick reading,
+    /// `None` when the option is unset or not numeric. Adopted as-is
+    /// every tick with no guard or latch: no sidebar instance ever
+    /// writes the option, so there is no local value to protect, and
+    /// the width-lock floor falls back to `DEFAULT_MIN_WIDTH` when
+    /// unset.
+    pub min_width: Option<u32>,
     /// Last cursor value successfully written to tmux.
     last_saved_cursor: usize,
     /// Last repo filter value successfully written to tmux.
@@ -61,6 +95,13 @@ impl GlobalState {
             filter_save_pending: false,
             last_saved_bottom_tab: BottomTab::Activity,
             tab_save_pending: false,
+            width_lock: false,
+            shared_docked_width: None,
+            last_saved_width_lock: false,
+            lock_save_pending: false,
+            last_saved_shared_docked_width: None,
+            width_save_pending: false,
+            min_width: None,
             last_saved_cursor: 0,
             last_saved_repo_filter: RepoFilter::All,
             pending_cursor_save_since: None,
@@ -116,6 +157,45 @@ impl GlobalState {
     pub fn set_bottom_tab(&mut self, tab: BottomTab) {
         self.bottom_tab = tab;
         self.save_bottom_tab();
+    }
+
+    /// Save the shared docked width to tmux global variable — the
+    /// width latch's deliberate copy of the filter's `save_filter`;
+    /// see the shared latch comment on the fields for what the copy
+    /// keeps identical and why. Callers (the lock's enabling seed, the
+    /// width guard's publish side) assign the desired width to
+    /// `shared_docked_width` first, then call this.
+    pub fn save_shared_docked_width(&mut self) {
+        let Some(width) = self.shared_docked_width else {
+            // Production always assigns Some first, so this branch is
+            // only reachable from tests: with nothing to publish there
+            // is nothing on the wire to reconcile, and a pending flag
+            // would block adoption forever — clear it instead.
+            self.width_save_pending = false;
+            return;
+        };
+        if tmux::run_tmux(&["set", "-g", tmux::SIDEBAR_DOCKED_WIDTH, &width.to_string()]).is_some()
+        {
+            self.last_saved_shared_docked_width = Some(width);
+            self.width_save_pending = false;
+        } else {
+            self.width_save_pending = true;
+        }
+    }
+
+    /// Save the width lock to tmux global variable — the lock latch's
+    /// deliberate copy of the filter's `save_filter`; see the shared
+    /// latch comment on the fields for what the copy keeps identical
+    /// and why. Toggling code assigns the intent to `width_lock`
+    /// first, then calls this.
+    pub fn save_width_lock(&mut self) {
+        let label = if self.width_lock { "on" } else { "off" };
+        if tmux::run_tmux(&["set", "-g", tmux::SIDEBAR_WIDTH_LOCK, label]).is_some() {
+            self.last_saved_width_lock = self.width_lock;
+            self.lock_save_pending = false;
+        } else {
+            self.lock_save_pending = true;
+        }
     }
 
     /// Save cursor position to tmux global variable. Returns `true` when
@@ -205,19 +285,41 @@ impl GlobalState {
         }
     }
 
-    /// Retry every shared write tmux rejected (filter, bottom tab),
-    /// so an instance cannot drift from the shared values. Runs once
+    /// Retry a shared-width write tmux rejected — the width latch's
+    /// copy of `retry_pending_tab_save`; same tick placement and
+    /// rationale. On the tick a retried width lands, `apply_all` reads
+    /// the same value back and advances `last_saved_shared_docked_width`.
+    pub fn retry_pending_width_save(&mut self) {
+        if self.width_save_pending {
+            self.save_shared_docked_width();
+        }
+    }
+
+    /// Retry a width-lock write tmux rejected — the lock latch's copy
+    /// of `retry_pending_tab_save`; same tick placement and rationale.
+    pub fn retry_pending_lock_save(&mut self) {
+        if self.lock_save_pending {
+            self.save_width_lock();
+        }
+    }
+
+    /// Retry every shared write tmux rejected (filter, bottom tab,
+    /// shared docked width, width lock), so an instance cannot drift
+    /// from the shared values. Runs once
     /// per refresh tick, before the tick reads the shared options, so
-    /// a successful retry is what that tick reads back. The two writes
+    /// a successful retry is what that tick reads back. The writes
     /// must stay paired: retrying only one would let the other drift
     /// and be adopted back by every other sidebar.
     pub fn retry_pending_saves(&mut self) {
         self.retry_pending_filter_save();
         self.retry_pending_tab_save();
+        self.retry_pending_width_save();
+        self.retry_pending_lock_save();
     }
 
     /// Apply the shared options read from tmux (filter, cursor, bottom
-    /// tab, repo filter). Runs once at startup and on every refresh tick.
+    /// tab, repo filter, width lock, shared docked width, min width).
+    /// Runs once at startup and on every refresh tick.
     pub fn apply_all(&mut self, opts: &HashMap<String, String>) {
         // While a filter write is pending, tmux holds the value this
         // instance is trying to replace. Adopting it would revert the
@@ -264,6 +366,36 @@ impl GlobalState {
                 self.last_saved_repo_filter = tmux_repo;
             }
         }
+        // The lock and width branches below are the filter branch's
+        // deliberate copies: while the matching write is pending the
+        // shared value stays unadopted, and a landed write's new value
+        // is taken in like any other shared field.
+        let tmux_lock = matches!(
+            opts.get(tmux::SIDEBAR_WIDTH_LOCK).map(String::as_str),
+            Some("on")
+        );
+        if !self.lock_save_pending && tmux_lock != self.last_saved_width_lock {
+            self.width_lock = tmux_lock;
+            self.last_saved_width_lock = tmux_lock;
+        }
+        if !self.width_save_pending
+            && let Some(width_str) = opts.get(tmux::SIDEBAR_DOCKED_WIDTH)
+            && let Ok(width) = width_str.parse::<u16>()
+            && Some(width) != self.last_saved_shared_docked_width
+        {
+            self.shared_docked_width = Some(width);
+            self.last_saved_shared_docked_width = Some(width);
+        }
+        // The parsed floor needs no guard or latch: nothing in the
+        // sidebar ever writes `@sidebar_min_width`, so a peer's value
+        // can never race a local one — each tick takes tmux's word
+        // verbatim. An absent or non-numeric key resets the field to
+        // `None`, so clearing the option falls back to
+        // `DEFAULT_MIN_WIDTH` at the readers exactly like the
+        // per-tick `get_option` this parse replaced.
+        self.min_width = opts
+            .get(tmux::SIDEBAR_MIN_WIDTH)
+            .and_then(|s| s.trim().parse::<u32>().ok());
     }
 }
 
@@ -426,5 +558,136 @@ mod tests {
             BottomTab::GitStatus,
             "a shared value matching last_saved must not overwrite a local change"
         );
+    }
+
+    // ─── width lock / shared docked width adoption ─────────────
+    //
+    // The two fields ride the same shared-reading plumbing as filter
+    // and tab: adopted under a `last_saved_*` guard, skipped while the
+    // matching write is pending. Verified in the same shape above.
+
+    #[test]
+    fn a_peers_width_and_lock_are_adopted_and_the_floor_parses() {
+        // A peer enabled the lock with a seeded width; this instance's
+        // tick reads both options and takes them in, advancing both
+        // guards. The parsed floor rides the same map.
+        let mut g = GlobalState::new();
+
+        g.apply_all(&opts(&[
+            (tmux::SIDEBAR_DOCKED_WIDTH, "45"),
+            (tmux::SIDEBAR_WIDTH_LOCK, "on"),
+            (tmux::SIDEBAR_MIN_WIDTH, "24"),
+        ]));
+
+        assert!(g.width_lock, "a peer's lock=on must be adopted");
+        assert!(
+            g.last_saved_width_lock,
+            "adoption advances the guard like the other fields"
+        );
+        assert_eq!(g.shared_docked_width, Some(45));
+        assert_eq!(g.last_saved_shared_docked_width, Some(45));
+        assert_eq!(g.min_width, Some(24));
+    }
+
+    #[test]
+    fn a_local_width_whose_write_failed_is_not_reverted() {
+        // The seed write was rejected, so tmux still holds the stale
+        // width this instance is replacing. The pending latch must
+        // keep it from being adopted back over the local intent.
+        let mut g = GlobalState::new();
+        g.apply_all(&opts(&[(tmux::SIDEBAR_DOCKED_WIDTH, "45")]));
+        assert_eq!(g.shared_docked_width, Some(45));
+
+        g.shared_docked_width = Some(35);
+        g.width_save_pending = true;
+
+        g.apply_all(&opts(&[
+            (tmux::SIDEBAR_DOCKED_WIDTH, "45"),
+            (tmux::SIDEBAR_WIDTH_LOCK, "on"),
+        ]));
+
+        assert_eq!(
+            g.shared_docked_width,
+            Some(35),
+            "a pending width write must not be reverted by adoption"
+        );
+        // The lock branch was NOT latched, so it adopts normally.
+        assert!(g.width_lock);
+    }
+
+    #[test]
+    fn a_local_lock_whose_write_failed_is_not_reverted() {
+        let mut g = GlobalState::new();
+        g.width_lock = true;
+        g.last_saved_width_lock = false; // only an accepted write advances it
+        g.lock_save_pending = true;
+
+        g.apply_all(&opts(&[(tmux::SIDEBAR_WIDTH_LOCK, "off")]));
+
+        assert!(
+            g.width_lock,
+            "a pending lock write must not be reverted by adoption"
+        );
+    }
+
+    #[test]
+    fn missing_width_keys_leave_the_fresh_server_defaults() {
+        // Spec scenario "a first instance on a fresh server": no lock,
+        // no shared width — unlocked and unseeded just like the
+        // pre-lock behavior.
+        let mut g = GlobalState::new();
+        assert!(!g.width_lock);
+        assert_eq!(g.shared_docked_width, None);
+
+        g.apply_all(&opts(&[
+            (tmux::SIDEBAR_FILTER, "busy"),
+            (tmux::SIDEBAR_REPO_FILTER, "app"),
+        ]));
+
+        assert!(!g.width_lock, "no lock key means unlocked");
+        assert_eq!(g.shared_docked_width, None, "no width key means unseeded");
+    }
+
+    #[test]
+    fn a_tick_without_the_floor_option_resets_min_width_to_unset() {
+        // `min_width` is adopted unconditionally and RESET when the key
+        // is absent, so `tmux set -gu @sidebar_min_width` must drop the
+        // instance back to the DEFAULT_MIN_WIDTH fallback at the
+        // readers (and a value of 0 stays "disabled", not default).
+        let mut g = GlobalState::new();
+        g.min_width = Some(24);
+
+        g.apply_all(&opts(&[(tmux::SIDEBAR_REPO_FILTER, "app")]));
+
+        assert_eq!(
+            g.min_width, None,
+            "an absent floor option must reset min_width to unset"
+        );
+    }
+
+    #[test]
+    fn an_off_lock_is_not_adopted_as_a_change() {
+        // `on` → locked is the only value the adoption reads as true;
+        // "off" (the other thing sidebars write) parses as unlocked and
+        // equals the fresh default, so nothing moves.
+        let mut g = GlobalState::new();
+
+        g.apply_all(&opts(&[(tmux::SIDEBAR_WIDTH_LOCK, "off")]));
+
+        assert!(!g.width_lock);
+        assert!(!g.lock_save_pending);
+    }
+
+    #[test]
+    fn a_non_numeric_docked_width_is_ignored() {
+        // `@sidebar_width` may legitimately hold percentages; a
+        // hand-set `@sidebar_docked_width` with junk must not corrupt
+        // the field (the same defensive parse the cursor adoption
+        // uses).
+        let mut g = GlobalState::new();
+
+        g.apply_all(&opts(&[(tmux::SIDEBAR_DOCKED_WIDTH, "15%")]));
+
+        assert_eq!(g.shared_docked_width, None);
     }
 }
