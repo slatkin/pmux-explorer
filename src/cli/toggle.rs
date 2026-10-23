@@ -20,32 +20,36 @@ pub(crate) fn cmd_toggle(args: &[String]) -> i32 {
     };
     let pane_path = positional.get(1).copied().unwrap_or("~");
 
-    // Check sidebar width setting
-    let sidebar_width_setting = {
-        let s = tmux::display_message(window_id, &format!("#{{{}}}", tmux::SIDEBAR_WIDTH));
-        if s.is_empty() { "30".to_string() } else { s }
-    };
-
-    let sidebar_width = if sidebar_width_setting.ends_with('%') {
-        let window_width: u32 = tmux::display_message(window_id, "#{window_width}")
-            .parse()
-            .unwrap_or(0);
-        let pct: u32 = sidebar_width_setting
-            .trim_end_matches('%')
-            .parse()
-            .unwrap_or(15);
-        if window_width > 0 && pct > 0 {
-            let w = window_width * pct / 100;
-            if w < 1 {
-                "1".to_string()
-            } else {
-                w.to_string()
+    // The shared docked width wins while the width lock is on
+    // (design D7): a sidebar created under the lock starts at the
+    // server's shared width instead of the configured default, so it
+    // never opens at the wrong width just to jump on the first adopt
+    // tick. Like every read here, the two options are read once at
+    // creation, never per tick — and while locked nothing else is read.
+    // Percentage support otherwise stays exactly as it was, absolute
+    // columns only for the shared width (design D1).
+    let sidebar_width = {
+        let lock = tmux::display_message(window_id, &format!("#{{{}}}", tmux::SIDEBAR_WIDTH_LOCK));
+        let docked =
+            tmux::display_message(window_id, &format!("#{{{}}}", tmux::SIDEBAR_DOCKED_WIDTH));
+        match shared_creation_width(&lock, &docked) {
+            Some(shared) => shared,
+            None => {
+                // Check sidebar width setting — the unlocked fallback
+                // path, unchanged by the lock.
+                let width_setting =
+                    tmux::display_message(window_id, &format!("#{{{}}}", tmux::SIDEBAR_WIDTH));
+                // The window's columns feed the percentage expansion
+                // only; the read is skipped when the setting cannot be
+                // a percentage.
+                let window_width_raw = if width_setting.ends_with('%') {
+                    tmux::display_message(window_id, "#{window_width}")
+                } else {
+                    String::new()
+                };
+                configured_creation_width(&width_setting, &window_width_raw)
             }
-        } else {
-            sidebar_width_setting
         }
-    } else {
-        sidebar_width_setting
     };
 
     let sidebar_position = SidebarPosition::from_setting(&tmux::display_message(
@@ -253,6 +257,58 @@ fn split_window_flags(position: SidebarPosition) -> &'static str {
     }
 }
 
+/// The shared docked width as the `split-window -l` creation width, or
+/// `None` to fall through to the configured `@sidebar_width`. Extracted
+/// as a pure function so the locked/unlocked resolution is unit-testable
+/// without a running tmux server.
+///
+/// `lock` and `docked` are the raw `display-message` outputs of reading
+/// `@sidebar_width_lock` / `@sidebar_docked_width`. Only the exact `on`
+/// the writers send counts as locked, and the width must parse as
+/// columns — `@sidebar_width` may legitimately hold a percentage, none
+/// of which is a splittable column count (design D1), and a 0-column
+/// width is unusable — so every other value falls back to the setting
+/// path (design D7).
+fn shared_creation_width(lock: &str, docked: &str) -> Option<String> {
+    if lock.trim() == "on"
+        && let Some(width) = docked.trim().parse::<u16>().ok().filter(|w| *w > 0)
+    {
+        return Some(width.to_string());
+    }
+    None
+}
+
+/// The historical `@sidebar_width` resolution, extracted as a pure
+/// function so the unlocked fallback is unit-testable without a running
+/// tmux server (the same shape as `should_kill_window`).
+///
+/// `width_setting` is the raw `display-message` output of reading
+/// `@sidebar_width`; an empty read defaults to 30 columns. A `N%`
+/// setting expands to the percentage of `window_width_raw` (floors at
+/// 1; a failed probe or a `0%` passes the setting through unchanged);
+/// anything else is used as absolute columns as-is.
+fn configured_creation_width(width_setting: &str, window_width_raw: &str) -> String {
+    let setting = if width_setting.is_empty() {
+        "30".to_string()
+    } else {
+        width_setting.to_string()
+    };
+    if !setting.ends_with('%') {
+        return setting;
+    }
+    let window_width: u32 = window_width_raw.parse().unwrap_or(0);
+    let pct: u32 = setting.trim_end_matches('%').parse().unwrap_or(15);
+    if window_width == 0 || pct == 0 {
+        return setting;
+    }
+    let width = window_width * pct / 100;
+    if width < 1 {
+        "1".to_string()
+    } else {
+        width.to_string()
+    }
+}
+
 /// Decide whether `cmd_auto_close` should kill the window, given the raw
 /// outputs of the tmux queries it performs. Extracted as a pure function
 /// so the guard logic is directly unit-testable without a running tmux
@@ -438,6 +494,83 @@ mod tests {
     fn split_window_flags_match_tmux_side_semantics() {
         assert_eq!(split_window_flags(SidebarPosition::Left), "-hfb");
         assert_eq!(split_window_flags(SidebarPosition::Right), "-hf");
+    }
+
+    // ─── shared_creation_width ────────────────────────────────
+
+    #[test]
+    fn shared_creation_width_uses_the_shared_width_while_locked() {
+        // Spec: a sidebar opened under the lock starts at the shared
+        // docked width, not at the configured default.
+        assert_eq!(shared_creation_width("on", "45"), Some("45".to_string()));
+    }
+
+    #[test]
+    fn shared_creation_width_falls_through_when_unlocked() {
+        // While the lock is off the whole `@sidebar_width` path must run,
+        // whatever a stale shared value from an earlier lock says.
+        assert_eq!(shared_creation_width("off", "45"), None);
+        assert_eq!(shared_creation_width("", "45"), None);
+        assert_eq!(
+            shared_creation_width("on ", "45"),
+            Some("45".to_string()),
+            "display-message output is trimmed before the match"
+        );
+        assert_eq!(
+            shared_creation_width("ON", "45"),
+            None,
+            "only the exact value the writers send counts as on"
+        );
+    }
+
+    #[test]
+    fn shared_creation_width_falls_through_when_the_width_is_unset_or_useless() {
+        // A locked lock without a usable width (unset, unseeded, a
+        // percentage, or any non-column value) cannot size a
+        // split-window: the configured setting decides instead.
+        assert_eq!(shared_creation_width("on", ""), None);
+        assert_eq!(shared_creation_width("on", "15%"), None);
+        assert_eq!(shared_creation_width("on", "wide"), None);
+    }
+
+    #[test]
+    fn shared_creation_width_falls_through_on_a_zero_width() {
+        // No split-window can honor 0 columns; treat a hand-edited 0
+        // like any other unusable shared value.
+        assert_eq!(shared_creation_width("on", "0"), None);
+    }
+
+    // ─── configured_creation_width ──────────────────────────
+
+    #[test]
+    fn configured_creation_width_defaults_an_empty_setting_to_30_columns() {
+        assert_eq!(configured_creation_width("", ""), "30");
+    }
+
+    #[test]
+    fn configured_creation_width_expands_the_percentage_against_the_window() {
+        assert_eq!(configured_creation_width("15%", "100"), "15");
+        assert_eq!(configured_creation_width("15%", "200"), "30");
+    }
+
+    #[test]
+    fn configured_creation_width_floors_the_expansion_at_one_column() {
+        // A tiny window must not produce a 0-column split request.
+        assert_eq!(configured_creation_width("15%", "5"), "1");
+    }
+
+    #[test]
+    fn configured_creation_width_passes_the_setting_through_on_a_failed_probe() {
+        // window_width 0 (raw read failed or unparseable): the raw
+        // percentage is used as-is, because there is no width to expand
+        // against — the fallback that keeps a broken probe from
+        // degenerating the split.
+        assert_eq!(configured_creation_width("15%", ""), "15%");
+    }
+
+    #[test]
+    fn configured_creation_width_uses_absolute_columns_verbatim() {
+        assert_eq!(configured_creation_width("45", ""), "45");
     }
 
     // ─── should_kill_window ───────────────────────────────────────────

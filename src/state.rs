@@ -19,12 +19,13 @@ mod scroll;
 mod tab;
 mod tasks;
 mod timers;
+mod width;
 
 pub use activity::ActivityState;
 pub use filter::{RepoFilter, StatusCounts, StatusFilter};
 pub use focus::{Focus, FocusState};
 pub use global::GlobalState;
-pub(crate) use layout::filter_bar_layout;
+pub(crate) use layout::{FilterBarControl, filter_bar_layout};
 pub use layout::{FrameLayout, HyperlinkOverlay, RepoSpawnTarget, RowTarget, SpawnRemoveTarget};
 pub(crate) use notices::debug_forced_display;
 pub use notices::{ClaudePluginNotice, NoticesCopyTarget, NoticesMissingHookGroup, NoticesState};
@@ -180,6 +181,12 @@ pub struct AppState {
     pub version_notice: Option<crate::version::UpdateNotice>,
     /// Shared state across sidebar instances, persisted to tmux global variables.
     pub global: GlobalState,
+    /// Cross-tick state of the width-lock step (design D4): the last
+    /// observed docked width and the echo suppressor for this instance's
+    /// own resizes. The step itself lives in `app/width_guard.rs`;
+    /// `apply_pop_in` (`state/popout.rs`) arms the suppressor so a pop-in
+    /// restore does not echo back as a publish.
+    pub width_guard: crate::app::width_guard::WidthGuardState,
     /// Height of the bottom panel in lines. Loaded once at startup from
     /// the `@sidebar_bottom_height` tmux option. A value of 0 hides the panel.
     pub bottom_panel_height: u16,
@@ -232,6 +239,7 @@ impl AppState {
             pet_working_paper_seed: 1,
             version_notice: None,
             global: GlobalState::new(),
+            width_guard: crate::app::width_guard::WidthGuardState::default(),
             bottom_panel_height: crate::ui::BOTTOM_PANEL_HEIGHT,
             pet_enabled: false,
         };
@@ -1826,6 +1834,41 @@ mod tests {
         state.handle_filter_click(4); // "●" busy chip
         assert_eq!(state.global.status_filter, StatusFilter::Busy);
         assert!(state.flash.is_none(), "a chip click must not pop out");
+    }
+
+    #[test]
+    fn filter_click_on_the_lock_control_toggles_the_width_lock() {
+        // The lock glyph sits one cell left of the pop-out glyph; its
+        // column runs the same toggle the `w` key does. In tests tmux
+        // rejects the shared write, so the flip arms the retry latch.
+        let mut state = AppState::new("%99".into());
+        state.layout.filter_bar_width = 20;
+        state.global.status_filter = StatusFilter::All;
+
+        reset_filter_debounce(&mut state);
+        state.handle_filter_click(17); // the lock glyph column
+        assert!(state.global.width_lock, "the lock toggles on click");
+        assert!(
+            state.global.lock_save_pending,
+            "the rejected shared write arms the retry latch"
+        );
+        assert!(state.flash.is_none(), "the lock click must not pop out");
+
+        reset_filter_debounce(&mut state);
+        state.handle_filter_click(17);
+        assert!(!state.global.width_lock, "a second click unlocks again");
+
+        // The neighbouring pop-out column is untouched by the lock hit
+        // test: clicking it still reaches the pop-out action.
+        reset_filter_debounce(&mut state);
+        state.handle_filter_click(18);
+        assert!(
+            state
+                .flash
+                .as_ref()
+                .is_some_and(|(msg, _)| msg.starts_with("Pop-out unavailable:")),
+            "the pop-out column still pops out"
+        );
     }
 
     #[test]

@@ -18,7 +18,10 @@ description: Every shortcut in the sidebar, the worktree spawn modal, and the cl
 | `Tab`          | Cycle status filter                                           |
 | `Shift+Tab`    | Switch bottom panel tab (Activity ⇄ Git)                      |
 | `p`            | Pop the sidebar out of the window / back in                   |
+| `w`            | Toggle the width lock — one shared docked width server-wide   |
 | `Esc`          | Return focus or close the popup                               |
+
+The `w` key has a click twin: the lock control (`☐` unlocked, `☑` locked) one cell left of the pop-out control in the sidebar's top row toggles the same width lock.
 
 ## Repo filter popup
 

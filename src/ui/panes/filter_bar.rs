@@ -3,7 +3,7 @@ use ratatui::{
     text::{Line, Span},
 };
 
-use crate::state::{AppState, RepoFilter, StatusFilter, filter_bar_layout};
+use crate::state::{AppState, FilterBarControl, RepoFilter, StatusFilter, filter_bar_layout};
 use crate::tmux::PaneStatus;
 
 use crate::ui::text::{display_width, truncate_to_width};
@@ -15,9 +15,20 @@ use crate::ui::text::{display_width, truncate_to_width};
 const POPOUT_GLYPH: &str = "⤢";
 const POPIN_GLYPH: &str = "⤡";
 
-/// Render the status filter bar, returning the line and the column of
-/// the pop-out control at the right edge (for click hit-testing).
-pub(super) fn render_filter_bar<'a>(state: &AppState, width: u16) -> (Line<'a>, Option<u16>) {
+/// Glyphs of the width-lock control, one cell left of the pop-out
+/// glyph: the ballot box carries its check while the lock is on, and is
+/// empty while docked widths are free to drift. Plain single-width text
+/// glyphs — the padlock family's emoji render double-width, which the
+/// one-cell control region cannot hold (design D8).
+const LOCK_GLYPH: &str = "☑";
+const UNLOCK_GLYPH: &str = "☐";
+
+/// Render the status filter bar, returning the line and the columns of
+/// the two right-edge controls (lock, pop-out) for click hit-testing.
+pub(super) fn render_filter_bar<'a>(
+    state: &AppState,
+    width: u16,
+) -> (Line<'a>, Option<FilterBarControl>) {
     let theme = &state.theme;
     let icons = &state.icons;
     let counts = state.status_counts();
@@ -48,15 +59,16 @@ pub(super) fn render_filter_bar<'a>(state: &AppState, width: u16) -> (Line<'a>, 
     // each starts) comes from the same pure function the click hit test
     // runs, so a drawn chip and a clickable chip are always the same
     // chip, whatever the counts are.
-    let (chips, control_col) = filter_bar_layout(counts, width);
-    let Some(control_col) = control_col else {
+    let (chips, control) = filter_bar_layout(counts, width);
+    let Some(control) = control else {
         return (Line::from(Vec::new()), None);
     };
 
     let mut spans: Vec<Span<'a>> = Vec::new();
-    // The leading gutter column, skipped when the control's two columns
-    // own the whole row (a one- or two-column row).
-    if control_col > 0 {
+    // The leading gutter column, skipped when the control region owns
+    // the whole row (a one- or two-column row).
+    let region_start = control.lock.unwrap_or(control.popout);
+    if region_start > 0 {
         spans.push(Span::raw(" "));
     }
 
@@ -91,32 +103,47 @@ pub(super) fn render_filter_bar<'a>(state: &AppState, width: u16) -> (Line<'a>, 
         spans.push(Span::styled(count_str, count_style));
     }
 
-    // The control sits one column in from the right border — the glyph,
-    // then a trailing spacer where the border column would otherwise
-    // sit, so the row stays as wide as the area — the way the secondary
-    // header right-aligns its repo button.
+    // The two controls sit one column in from the right border — the
+    // lock glyph (its latest state visible at a glance: checked and
+    // accent-coloured while locked, empty and muted while free), then
+    // the pop-out glyph, then a trailing spacer where the border column
+    // would otherwise sit — the way the secondary header right-aligns
+    // its repo button.
+    let lock_glyph = if state.global.width_lock {
+        LOCK_GLYPH
+    } else {
+        UNLOCK_GLYPH
+    };
+    let lock_style = if state.global.width_lock {
+        Style::default().fg(theme.accent)
+    } else {
+        Style::default().fg(theme.filter_inactive)
+    };
     let control_glyph = if state.sidebar_pane.floating {
         POPIN_GLYPH
     } else {
         POPOUT_GLYPH
     };
-    // Everything drawn ends at or before the control column: the last
+    // Everything drawn ends at or before the control region: the last
     // drawn chip, or the leading gutter when every chip was dropped.
     let drawn_end = chips
         .last()
-        .map_or(control_col.min(1), |chip| chip.start + chip.width);
-    spans.push(Span::raw(" ".repeat((control_col - drawn_end) as usize)));
+        .map_or(region_start.min(1), |chip| chip.start + chip.width);
+    spans.push(Span::raw(" ".repeat((region_start - drawn_end) as usize)));
+    if control.lock.is_some() {
+        spans.push(Span::styled(lock_glyph, lock_style));
+    }
     spans.push(Span::styled(
         control_glyph,
         Style::default().fg(theme.status_running),
     ));
-    // The spacer after the glyph only fits on a row two columns wide or
-    // more; a one-column row draws the glyph alone.
-    if control_col + 1 < width {
+    // The spacer after the pop-out glyph only fits on a row three
+    // columns wide or more; a narrower row draws the glyphs alone.
+    if control.popout + 1 < width {
         spans.push(Span::raw(" "));
     }
 
-    (Line::from(spans), Some(control_col))
+    (Line::from(spans), Some(control))
 }
 
 pub(super) fn render_secondary_header<'a>(
@@ -351,7 +378,7 @@ mod tests {
             .filter(|span| !span.content.as_ref().trim().is_empty())
             .collect();
 
-        assert_eq!(cells.len(), 11);
+        assert_eq!(cells.len(), 12);
 
         assert_eq!(cells[0].content.as_ref(), "≡");
         assert_eq!(cells[0].style.fg, Some(theme.filter_inactive));
@@ -440,7 +467,7 @@ mod tests {
         state.global.status_filter = StatusFilter::Busy;
 
         let text = filter_bar_text(&state);
-        insta::assert_snapshot!(text, @" ≡2 ●2 ◐0 ○0 ✕0   ⤢ ");
+        insta::assert_snapshot!(text, @" ≡2 ●2 ◐0 ○0 ✕0  ☐⤢ ");
     }
 
     // ─── the pop-out control ─────────────────────────────────
@@ -449,19 +476,28 @@ mod tests {
     fn snapshot_filter_bar_docked_shows_the_pop_out_glyph() {
         // The zero-count docked row at the 20 column minimum: the
         // snapshot pins the whole row, the renderer returns the control
-        // column and a full-width row at every width, and the control
-        // glyph wears the running colour. Direct equality checks sit
-        // alongside the snapshot because layout columns and colours are
-        // not visible characters.
+        // columns and a full-width row at every width, the pop-out
+        // glyph wears the running colour, and the unlocked lock glyph
+        // stays muted. Direct equality checks sit alongside the
+        // snapshot because layout columns and colours are not visible
+        // characters.
         let state = make_state_with_groups(vec![]);
         assert!(!state.sidebar_pane.floating);
         for width in [20u16, 30, 40] {
-            let (line, col) = render_filter_bar(&state, width);
+            let (line, control) = render_filter_bar(&state, width);
             let text = line_text(&line);
+            let Some(control) = control else {
+                panic!("the renderer must return the control columns at width {width}")
+            };
             assert_eq!(
-                col,
-                Some(width - 2),
-                "control column one space off the right edge at width {width}"
+                control.popout,
+                width - 2,
+                "pop-out column one space off the right edge at width {width}"
+            );
+            assert_eq!(
+                control.lock,
+                Some(width - 3),
+                "lock column one cell left of the pop-out glyph at width {width}"
             );
             assert_eq!(
                 display_width(&text),
@@ -470,12 +506,30 @@ mod tests {
             );
         }
         let (line, _) = render_filter_bar(&state, 20);
-        insta::assert_snapshot!(line_text(&line), @" ≡0 ●0 ◐0 ○0 ✕0   ⤢ ");
-        // The trailing spacer spans the row's last column, so the glyph
-        // is the second-to-last span.
+        insta::assert_snapshot!(line_text(&line), @" ≡0 ●0 ◐0 ○0 ✕0  ☐⤢ ");
+        // The trailing spacer spans the row's last column, so the
+        // pop-out glyph is the second-to-last span and the lock glyph
+        // the one before it.
         let glyph = &line.spans[line.spans.len() - 2];
         assert_eq!(glyph.content.as_ref(), "⤢");
         assert_eq!(glyph.style.fg, Some(state.theme.status_running));
+        let lock = &line.spans[line.spans.len() - 3];
+        assert_eq!(lock.content.as_ref(), "☐");
+        assert_eq!(lock.style.fg, Some(state.theme.filter_inactive));
+    }
+
+    #[test]
+    fn snapshot_filter_bar_locked_shows_the_checked_lock_glyph() {
+        // Locked: the glyph switches to the checked box and borrows the
+        // accent colour the active chip count wears, so the state reads
+        // at a glance against the muted unlocked glyph.
+        let mut state = make_state_with_groups(vec![]);
+        state.global.width_lock = true;
+        insta::assert_snapshot!(filter_bar_text(&state), @" ≡0 ●0 ◐0 ○0 ✕0  ☑⤢ ");
+        let (line, _) = render_filter_bar(&state, 20);
+        let lock = &line.spans[line.spans.len() - 3];
+        assert_eq!(lock.content.as_ref(), "☑");
+        assert_eq!(lock.style.fg, Some(state.theme.accent));
     }
 
     #[test]
@@ -485,7 +539,7 @@ mod tests {
         let mut state = make_state_with_groups(vec![]);
         state.sidebar_pane.floating = true;
         let text = filter_bar_text(&state);
-        insta::assert_snapshot!(text, @" ≡0 ●0 ◐0 ○0 ✕0   ⤡ ");
+        insta::assert_snapshot!(text, @" ≡0 ●0 ◐0 ○0 ✕0  ☐⤡ ");
     }
 
     // ─── the row with multi-digit counts (the 20 column minimum) ───
@@ -538,9 +592,14 @@ mod tests {
             // A dropped chip must leave no drawn trace either.
             if chips.len() < 5 {
                 assert_eq!(
-                    chars[control_col(width) as usize],
+                    chars[popout_col(width) as usize],
                     '⤢',
-                    "the control stays at the right edge at width {width}"
+                    "the pop-out control stays one space off the right edge at width {width}"
+                );
+                assert_eq!(
+                    chars[popout_col(width) as usize - 1],
+                    '☐',
+                    "the lock glyph sits one cell left of the pop-out glyph at width {width}"
                 );
             }
         }
@@ -558,7 +617,7 @@ mod tests {
         }
     }
 
-    fn control_col(width: u16) -> u16 {
+    fn popout_col(width: u16) -> u16 {
         width - 2
     }
 

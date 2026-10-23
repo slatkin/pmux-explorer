@@ -149,6 +149,18 @@ pub const SIDEBAR_CURSOR: &str = "@sidebar_cursor";
 /// Selected bottom-panel tab (`activity` / `tasks` / `git`), shared by
 /// every sidebar instance on the tmux server.
 pub const SIDEBAR_BOTTOM_TAB: &str = "@sidebar_bottom_tab";
+/// The docked width in absolute columns shared by every sidebar instance
+/// while the width lock ([`SIDEBAR_WIDTH_LOCK`]) is on. The instance whose
+/// pane width changed publishes it with `set -g`; its peers adopt it with
+/// `resize-pane -x`. Written only while the lock is on: a value left
+/// behind by a disabled lock stays stale but harmless and is reused when
+/// the lock returns.
+pub const SIDEBAR_DOCKED_WIDTH: &str = "@sidebar_docked_width";
+/// On/off switch for the shared docked width. While `on`, every sidebar
+/// instance on the tmux server converges on [`SIDEBAR_DOCKED_WIDTH`]
+/// within one refresh tick; while off, each sidebar keeps whatever width
+/// it already has and resizes stay local.
+pub const SIDEBAR_WIDTH_LOCK: &str = "@sidebar_width_lock";
 pub const SIDEBAR_REPO_FILTER: &str = "@sidebar_repo_filter";
 pub const SIDEBAR_BOTTOM_HEIGHT: &str = "@sidebar_bottom_height";
 pub const SIDEBAR_PET: &str = "@sidebar_pet";

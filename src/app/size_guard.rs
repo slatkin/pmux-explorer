@@ -12,15 +12,6 @@ use crate::tmux;
 /// Minimum width applied when `@sidebar_min_width` is unset.
 pub const DEFAULT_MIN_WIDTH: u32 = 20;
 
-/// Parse `@sidebar_min_width`. Unset, empty, or non-numeric values return
-/// `None` (the caller then applies [`DEFAULT_MIN_WIDTH`]); `0` is valid and
-/// disables enforcement.
-pub fn parse_min_width(raw: Option<&str>) -> Option<u32> {
-    raw.map(str::trim)
-        .filter(|s| !s.is_empty())
-        .and_then(|s| s.parse::<u32>().ok())
-}
-
 /// Width to request for the sidebar pane, or `None` to leave it alone.
 ///
 /// `min` is the parsed `@sidebar_min_width`: `None` (unset/invalid) means
@@ -38,13 +29,15 @@ pub fn resize_target(pane_width: u16, min: Option<u32>) -> Option<u32> {
 /// Grow the sidebar pane back to `@sidebar_min_width` when it is below the
 /// minimum. Runs once per refresh tick while the sidebar's window is active;
 /// a width of 0 (terminal size unknown) is ignored so a bad probe can never
-/// trigger a resize.
-pub fn enforce(pane_id: &str, pane_width: u16) {
+/// trigger a resize. `min_width` is the parsed floor from the tick's shared
+/// options map (`GlobalState::min_width`, `None` falling back to
+/// [`DEFAULT_MIN_WIDTH`]) — the same value the width guard reads, so this
+/// guard's own tmux option read is gone.
+pub fn enforce(pane_id: &str, pane_width: u16, min_width: Option<u32>) {
     if pane_width == 0 {
         return;
     }
-    let min = parse_min_width(tmux::get_option(tmux::SIDEBAR_MIN_WIDTH).as_deref());
-    if let Some(width) = resize_target(pane_width, min) {
+    if let Some(width) = resize_target(pane_width, min_width) {
         let _ = tmux::run_tmux(&["resize-pane", "-t", pane_id, "-x", &width.to_string()]);
     }
 }
@@ -71,16 +64,5 @@ mod tests {
         assert_eq!(resize_target(8, Some(12)), Some(12));
         assert_eq!(resize_target(12, Some(12)), None);
         assert_eq!(resize_target(30, Some(12)), None);
-    }
-
-    #[test]
-    fn parse_min_width_falls_back_on_unset_or_invalid() {
-        assert_eq!(parse_min_width(None), None);
-        assert_eq!(parse_min_width(Some("")), None);
-        assert_eq!(parse_min_width(Some("  ")), None);
-        assert_eq!(parse_min_width(Some("abc")), None);
-        // Whitespace and explicit values parse cleanly; 0 stays valid.
-        assert_eq!(parse_min_width(Some(" 12 ")), Some(12));
-        assert_eq!(parse_min_width(Some("0")), Some(0));
     }
 }
