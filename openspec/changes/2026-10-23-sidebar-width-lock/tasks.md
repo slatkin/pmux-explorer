@@ -126,7 +126,7 @@
 
 ## 5. Pop-in restore and sidebar creation
 
-- [ ] 5.1 Update `apply_pop_in` in `src/state/popout.rs` to restore
+- [x] 5.1 Update `apply_pop_in` in `src/state/popout.rs` to restore
   `min(max(S, floor), cap)` when the lock is on and
   `global.shared_docked_width` is set — clamped, so a narrow window does
   not dock oversized for a tick — falling back to the captured
@@ -134,7 +134,7 @@
   restore's landing does not echo as a publish; verify with unit tests
   beside the existing pop-out tests: locked restores 45 from the shared
   value (and clamps), unlocked keeps the captured-25 scenario.
-- [ ] 5.2 Update `cmd_toggle` in `src/cli/toggle.rs` to read
+- [x] 5.2 Update `cmd_toggle` in `src/cli/toggle.rs` to read
   `#{@sidebar_width_lock}` and `#{@sidebar_docked_width}` first and use
   the shared width for `split-window -l` when locked, else the existing
   `@sidebar_width` path; verify by extracting the width-resolution into a
