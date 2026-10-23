@@ -299,7 +299,7 @@ fn test_git_summary_modified_uses_badge_auto_color() {
     state.repo_groups = vec![make_repo_group("project", vec![pane])];
     state.rebuild_row_targets();
 
-    state.bottom_tab = BottomTab::GitStatus;
+    state.global.bottom_tab = BottomTab::GitStatus;
     state.focus_state.focus = Focus::ActivityLog;
     state.focus_state.sidebar_focused = true;
     state.git.branch = "main".into();
@@ -545,7 +545,7 @@ fn test_pr_link_uses_pr_link_color() {
     state.repo_groups = vec![make_repo_group("project", vec![pane])];
     state.rebuild_row_targets();
 
-    state.bottom_tab = BottomTab::GitStatus;
+    state.global.bottom_tab = BottomTab::GitStatus;
     state.focus_state.focus = Focus::ActivityLog;
     state.focus_state.sidebar_focused = true;
     state.git.branch = "feature/test".into();
@@ -614,7 +614,7 @@ fn test_diff_stat_added_uses_diff_added_color() {
     state.repo_groups = vec![make_repo_group("project", vec![pane])];
     state.rebuild_row_targets();
 
-    state.bottom_tab = BottomTab::GitStatus;
+    state.global.bottom_tab = BottomTab::GitStatus;
     state.focus_state.focus = Focus::ActivityLog;
     state.focus_state.sidebar_focused = true;
     state.git.branch = "main".into();
@@ -682,7 +682,7 @@ fn test_diff_stat_deleted_uses_diff_deleted_color() {
     state.repo_groups = vec![make_repo_group("project", vec![pane])];
     state.rebuild_row_targets();
 
-    state.bottom_tab = BottomTab::GitStatus;
+    state.global.bottom_tab = BottomTab::GitStatus;
     state.focus_state.focus = Focus::ActivityLog;
     state.focus_state.sidebar_focused = true;
     state.git.branch = "main".into();
@@ -735,7 +735,7 @@ fn test_file_change_stat_uses_file_change_color() {
     state.repo_groups = vec![make_repo_group("project", vec![pane])];
     state.rebuild_row_targets();
 
-    state.bottom_tab = BottomTab::GitStatus;
+    state.global.bottom_tab = BottomTab::GitStatus;
     state.focus_state.focus = Focus::ActivityLog;
     state.focus_state.sidebar_focused = true;
     state.git.branch = "main".into();

@@ -110,7 +110,10 @@ pub fn run(
                     state.sidebar_pane.floating,
                 );
             }
-            git_tab_active.store(state.bottom_tab == BottomTab::GitStatus, Ordering::Relaxed);
+            git_tab_active.store(
+                state.global.bottom_tab == BottomTab::GitStatus,
+                Ordering::Relaxed,
+            );
             last_refresh = std::time::Instant::now();
         }
 

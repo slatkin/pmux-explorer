@@ -20,7 +20,7 @@ impl AppState {
         match self.resolve_bottom_tab(focus_changed, &new_agent_ids) {
             TabDecision::Keep => {}
             TabDecision::Set(tab) => {
-                self.bottom_tab = tab;
+                self.global.bottom_tab = tab;
             }
         }
 
@@ -91,7 +91,7 @@ impl AppState {
     /// Save the current tab preference for the pane we're leaving.
     fn save_current_tab(&mut self) {
         if let Some(prev_id) = self.focus_state.prev_focused_pane_id.clone() {
-            let tab = self.bottom_tab.clone();
+            let tab = self.global.bottom_tab.clone();
             self.pane_state_mut(&prev_id).tab_pref = Some(tab);
         }
     }
@@ -126,11 +126,15 @@ impl AppState {
     }
 
     pub fn next_bottom_tab(&mut self) {
-        self.bottom_tab = match self.bottom_tab {
+        self.global.bottom_tab = match self.global.bottom_tab {
             BottomTab::Activity => BottomTab::Tasks,
             BottomTab::Tasks => BottomTab::GitStatus,
             BottomTab::GitStatus => BottomTab::Activity,
         };
+        // The only writers of the shared tab are this cycle key and the
+        // tab-title click below; both funnel through `save_bottom_tab`
+        // so the whole server converges within one refresh tick.
+        self.global.save_bottom_tab();
     }
 
     /// Handle mouse click on the bottom panel tab header.
@@ -144,16 +148,21 @@ impl AppState {
         // "Activity" = 8 chars (1..8), "│" = 1 char (9), "Tasks" = 5
         // chars (10..14), "│" = 1 char (15), "Git" = 3 chars (16..18)
         if x < 9 {
-            self.bottom_tab = BottomTab::Activity;
+            self.global.bottom_tab = BottomTab::Activity;
         } else if (10..15).contains(&x) {
-            self.bottom_tab = BottomTab::Tasks;
+            self.global.bottom_tab = BottomTab::Tasks;
         } else if (16..19).contains(&x) {
-            self.bottom_tab = BottomTab::GitStatus;
+            self.global.bottom_tab = BottomTab::GitStatus;
+        } else {
+            // Outside every title hitbox the click must not write the
+            // shared value at all — there is no tab change to save.
+            return;
         }
+        self.global.save_bottom_tab();
     }
 
     pub fn scroll_bottom(&mut self, delta: isize) {
-        match self.bottom_tab {
+        match self.global.bottom_tab {
             BottomTab::Activity => self.activity.scroll.scroll(delta),
             BottomTab::Tasks => self.tasks.scroll.scroll(delta),
             BottomTab::GitStatus => self.scrolls.git.scroll(delta),
@@ -283,7 +292,7 @@ mod tests {
         // Step 1: Sidebar starts, focus on non-agent pane %5
         state.auto_switch_tab();
         assert_eq!(
-            state.bottom_tab,
+            state.global.bottom_tab,
             BottomTab::GitStatus,
             "step 1: non-agent → Git"
         );
@@ -293,7 +302,7 @@ mod tests {
         state.focus_state.focused_pane_id = Some("%1".into());
         state.auto_switch_tab();
         assert_eq!(
-            state.bottom_tab,
+            state.global.bottom_tab,
             BottomTab::Activity,
             "step 2: new agent → Activity"
         );
@@ -301,7 +310,7 @@ mod tests {
         // Step 3: Subsequent refresh (no focus change) → no change
         state.auto_switch_tab();
         assert_eq!(
-            state.bottom_tab,
+            state.global.bottom_tab,
             BottomTab::Activity,
             "step 3: same focus → no change"
         );
@@ -310,7 +319,7 @@ mod tests {
         state.next_bottom_tab();
         state.auto_switch_tab();
         assert_eq!(
-            state.bottom_tab,
+            state.global.bottom_tab,
             BottomTab::Tasks,
             "step 4: manual Tasks → respected"
         );
@@ -319,7 +328,7 @@ mod tests {
         state.focus_state.focused_pane_id = Some("%5".into());
         state.auto_switch_tab();
         assert_eq!(
-            state.bottom_tab,
+            state.global.bottom_tab,
             BottomTab::GitStatus,
             "step 5: non-agent → Git"
         );
@@ -328,7 +337,7 @@ mod tests {
         state.focus_state.focused_pane_id = Some("%1".into());
         state.auto_switch_tab();
         assert_eq!(
-            state.bottom_tab,
+            state.global.bottom_tab,
             BottomTab::Tasks,
             "step 6: restore %1's Tasks pref"
         );
@@ -342,7 +351,7 @@ mod tests {
 
         // Agent %1 → Activity
         state.auto_switch_tab();
-        assert_eq!(state.bottom_tab, BottomTab::Activity);
+        assert_eq!(state.global.bottom_tab, BottomTab::Activity);
 
         // User switches %1 to Tasks
         state.next_bottom_tab();
@@ -354,7 +363,7 @@ mod tests {
         state.focus_state.focused_pane_id = Some("%2".into());
         state.auto_switch_tab();
         assert_eq!(
-            state.bottom_tab,
+            state.global.bottom_tab,
             BottomTab::Activity,
             "%2: new agent → Activity"
         );
@@ -362,13 +371,17 @@ mod tests {
         // Focus back to %1 → Tasks (saved)
         state.focus_state.focused_pane_id = Some("%1".into());
         state.auto_switch_tab();
-        assert_eq!(state.bottom_tab, BottomTab::Tasks, "%1: restored Tasks");
+        assert_eq!(
+            state.global.bottom_tab,
+            BottomTab::Tasks,
+            "%1: restored Tasks"
+        );
 
         // Focus back to %2 → Activity (saved)
         state.focus_state.focused_pane_id = Some("%2".into());
         state.auto_switch_tab();
         assert_eq!(
-            state.bottom_tab,
+            state.global.bottom_tab,
             BottomTab::Activity,
             "%2: restored Activity"
         );
@@ -390,7 +403,7 @@ mod tests {
             state.auto_switch_tab();
         }
         assert_eq!(
-            state.bottom_tab,
+            state.global.bottom_tab,
             BottomTab::Tasks,
             "manual Tasks survives refreshes"
         );
@@ -404,13 +417,13 @@ mod tests {
 
         // Focus on %1, no agent
         state.auto_switch_tab();
-        assert_eq!(state.bottom_tab, BottomTab::GitStatus);
+        assert_eq!(state.global.bottom_tab, BottomTab::GitStatus);
 
         // Agent starts in %1 (no focus change)
         state.repo_groups = vec![agent_group("%1")];
         state.auto_switch_tab();
         assert_eq!(
-            state.bottom_tab,
+            state.global.bottom_tab,
             BottomTab::Activity,
             "new agent without focus change"
         );
@@ -420,10 +433,10 @@ mod tests {
     fn scenario_new_agent_elsewhere_does_not_override_existing_tab() {
         let mut state = state_with_groups(vec![agent_group("%1")], Some("%5"));
         state.auto_switch_tab();
-        assert_eq!(state.bottom_tab, BottomTab::GitStatus);
+        assert_eq!(state.global.bottom_tab, BottomTab::GitStatus);
 
         state.next_bottom_tab();
-        assert_eq!(state.bottom_tab, BottomTab::Activity);
+        assert_eq!(state.global.bottom_tab, BottomTab::Activity);
 
         // New agent appears in a different pane, but focus stays on the shell.
         let mut group = agent_group("%1");
@@ -432,7 +445,7 @@ mod tests {
         state.auto_switch_tab();
 
         assert_eq!(
-            state.bottom_tab,
+            state.global.bottom_tab,
             BottomTab::Activity,
             "new agent elsewhere should not force a tab change"
         );
@@ -447,13 +460,13 @@ mod tests {
         // %1 agent already seen, currently on non-agent %5
         state.pane_states.seen.insert("%1".into());
         state.focus_state.prev_focused_pane_id = Some("%5".into());
-        state.bottom_tab = BottomTab::GitStatus;
+        state.global.bottom_tab = BottomTab::GitStatus;
 
         // Focus to %1 (no saved pref for %1)
         state.focus_state.focused_pane_id = Some("%1".into());
         state.auto_switch_tab();
         assert_eq!(
-            state.bottom_tab,
+            state.global.bottom_tab,
             BottomTab::Activity,
             "existing agent with no saved pref → Activity"
         );
@@ -466,14 +479,14 @@ mod tests {
         let mut state = state_with_groups(vec![agent_group("%1")], Some("%1"));
 
         state.auto_switch_tab();
-        assert_eq!(state.bottom_tab, BottomTab::Activity);
+        assert_eq!(state.global.bottom_tab, BottomTab::Activity);
 
         // Focus becomes None (all panes closed?)
         state.focus_state.focused_pane_id = None;
         state.auto_switch_tab();
         // restore_or_default_tab returns early for None, so tab stays
         assert_eq!(
-            state.bottom_tab,
+            state.global.bottom_tab,
             BottomTab::Activity,
             "None focus → tab unchanged"
         );
@@ -484,19 +497,19 @@ mod tests {
         let mut state = state_with_groups(vec![agent_group("%1")], Some("%1"));
 
         state.auto_switch_tab();
-        assert_eq!(state.bottom_tab, BottomTab::Activity);
+        assert_eq!(state.global.bottom_tab, BottomTab::Activity);
 
         state.next_bottom_tab();
-        assert_eq!(state.bottom_tab, BottomTab::Tasks);
+        assert_eq!(state.global.bottom_tab, BottomTab::Tasks);
 
         state.focus_state.focused_pane_id = None;
         state.auto_switch_tab();
-        assert_eq!(state.bottom_tab, BottomTab::Tasks);
+        assert_eq!(state.global.bottom_tab, BottomTab::Tasks);
 
         state.focus_state.focused_pane_id = Some("%1".into());
         state.auto_switch_tab();
         assert_eq!(
-            state.bottom_tab,
+            state.global.bottom_tab,
             BottomTab::Tasks,
             "returning to the same pane after None should preserve the tab"
         );
@@ -507,21 +520,21 @@ mod tests {
         let mut state = state_with_groups(vec![agent_group("%1")], Some("%1"));
 
         state.auto_switch_tab();
-        assert_eq!(state.bottom_tab, BottomTab::Activity);
+        assert_eq!(state.global.bottom_tab, BottomTab::Activity);
 
         state.next_bottom_tab();
-        assert_eq!(state.bottom_tab, BottomTab::Tasks);
+        assert_eq!(state.global.bottom_tab, BottomTab::Tasks);
 
         state.focus_state.focused_pane_id = Some("%5".into());
         state.repo_groups = vec![agent_group("%1")];
         state.auto_switch_tab();
-        assert_eq!(state.bottom_tab, BottomTab::GitStatus);
+        assert_eq!(state.global.bottom_tab, BottomTab::GitStatus);
 
         state.focus_state.focused_pane_id = Some("%1".into());
         state.repo_groups = vec![agent_group("%1")];
         state.auto_switch_tab();
         assert_eq!(
-            state.bottom_tab,
+            state.global.bottom_tab,
             BottomTab::Tasks,
             "saved tab should be restored when focus returns"
         );
@@ -536,7 +549,7 @@ mod tests {
         let mut state = state_with_groups(vec![agent_group("%1")], Some("%5"));
         state.auto_switch_tab();
         assert_eq!(
-            state.bottom_tab,
+            state.global.bottom_tab,
             BottomTab::GitStatus,
             "non-agent pane should get Git even when other agents exist"
         );
@@ -548,14 +561,14 @@ mod tests {
 
         // Start on %5 (shell)
         state.auto_switch_tab();
-        assert_eq!(state.bottom_tab, BottomTab::GitStatus);
+        assert_eq!(state.global.bottom_tab, BottomTab::GitStatus);
 
         // Agent %1 starts in another pane, but focus stays on %5
         state.repo_groups = vec![agent_group("%1")];
         // no focus change
         state.auto_switch_tab();
         assert_eq!(
-            state.bottom_tab,
+            state.global.bottom_tab,
             BottomTab::GitStatus,
             "should stay on Git when new agent is in a different pane"
         );
@@ -569,11 +582,11 @@ mod tests {
 
         // Agent %1 starts
         state.auto_switch_tab();
-        assert_eq!(state.bottom_tab, BottomTab::Activity);
+        assert_eq!(state.global.bottom_tab, BottomTab::Activity);
 
         // User switches to Tasks
         state.next_bottom_tab();
-        assert_eq!(state.bottom_tab, BottomTab::Tasks);
+        assert_eq!(state.global.bottom_tab, BottomTab::Tasks);
 
         // Agent %1 closes (disappears from repo_groups)
         state.repo_groups = vec![];
@@ -590,7 +603,7 @@ mod tests {
         state.focus_state.focused_pane_id = Some("%1".into());
         state.auto_switch_tab();
         assert_eq!(
-            state.bottom_tab,
+            state.global.bottom_tab,
             BottomTab::Activity,
             "relaunched agent should trigger Activity"
         );
@@ -605,13 +618,13 @@ mod tests {
         let mut state = AppState::new("%99".into());
 
         state.handle_bottom_tab_click(3); // "Activity"
-        assert_eq!(state.bottom_tab, BottomTab::Activity);
+        assert_eq!(state.global.bottom_tab, BottomTab::Activity);
 
         state.handle_bottom_tab_click(13); // "Tasks"
-        assert_eq!(state.bottom_tab, BottomTab::Tasks);
+        assert_eq!(state.global.bottom_tab, BottomTab::Tasks);
 
         state.handle_bottom_tab_click(18); // "Git"
-        assert_eq!(state.bottom_tab, BottomTab::GitStatus);
+        assert_eq!(state.global.bottom_tab, BottomTab::GitStatus);
     }
 
     #[test]
@@ -620,10 +633,10 @@ mod tests {
         // not switch tabs — only the drawn titles are clickable.
         for col in [10u16, 16, 20, 26] {
             let mut state = AppState::new("%99".into());
-            state.bottom_tab = BottomTab::Tasks;
+            state.global.bottom_tab = BottomTab::Tasks;
             state.handle_bottom_tab_click(col);
             assert_eq!(
-                state.bottom_tab,
+                state.global.bottom_tab,
                 BottomTab::Tasks,
                 "col {col} sits outside a title hitbox"
             );
@@ -633,7 +646,7 @@ mod tests {
     #[test]
     fn scroll_bottom_tasks_arm_keeps_the_other_offsets() {
         let mut state = AppState::new("%99".into());
-        state.bottom_tab = BottomTab::Tasks;
+        state.global.bottom_tab = BottomTab::Tasks;
         state.tasks.scroll = ScrollState {
             offset: 0,
             total_lines: 10,
@@ -657,11 +670,11 @@ mod tests {
     fn scenario_tasks_is_remembered_per_pane() {
         let mut state = state_with_groups(vec![agent_group("%1")], Some("%1"));
         state.auto_switch_tab();
-        assert_eq!(state.bottom_tab, BottomTab::Activity);
+        assert_eq!(state.global.bottom_tab, BottomTab::Activity);
 
         // The user manually brings %1 to Tasks.
         state.next_bottom_tab();
-        assert_eq!(state.bottom_tab, BottomTab::Tasks);
+        assert_eq!(state.global.bottom_tab, BottomTab::Tasks);
 
         // Focus a second agent pane; its default is Activity, not Tasks.
         let mut group = agent_group("%1");
@@ -670,7 +683,7 @@ mod tests {
         state.focus_state.focused_pane_id = Some("%2".into());
         state.auto_switch_tab();
         assert_eq!(
-            state.bottom_tab,
+            state.global.bottom_tab,
             BottomTab::Activity,
             "%2: new agent → Activity"
         );
@@ -679,7 +692,7 @@ mod tests {
         state.focus_state.focused_pane_id = Some("%1".into());
         state.auto_switch_tab();
         assert_eq!(
-            state.bottom_tab,
+            state.global.bottom_tab,
             BottomTab::Tasks,
             "%1: restored its manual Tasks preference"
         );
@@ -693,19 +706,19 @@ mod tests {
         let mut state = state_with_groups(vec![agent_group("%1")], Some("%1"));
         state.auto_switch_tab();
         state.next_bottom_tab();
-        assert_eq!(state.bottom_tab, BottomTab::Tasks, "precondition");
+        assert_eq!(state.global.bottom_tab, BottomTab::Tasks, "precondition");
 
         // A new agent starts in the currently focused pane → Activity.
         state.pane_states.seen.remove("%1");
         state.auto_switch_tab();
-        assert_eq!(state.bottom_tab, BottomTab::Activity);
+        assert_eq!(state.global.bottom_tab, BottomTab::Activity);
 
         // Focus moves to a non-agent pane → Git.
         state.focus_state.focused_pane_id = Some("%5".into());
         state.next_bottom_tab(); // manual Tasks on %5 first
         state.auto_switch_tab();
         assert_eq!(
-            state.bottom_tab,
+            state.global.bottom_tab,
             BottomTab::GitStatus,
             "non-agent pane → Git, never Tasks"
         );

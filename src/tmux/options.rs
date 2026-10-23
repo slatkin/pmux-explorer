@@ -146,6 +146,9 @@ pub const SIDEBAR_MIN_WIDTH: &str = "@sidebar_min_width";
 pub const SIDEBAR_POSITION: &str = "@sidebar_position";
 pub const SIDEBAR_FILTER: &str = "@sidebar_filter";
 pub const SIDEBAR_CURSOR: &str = "@sidebar_cursor";
+/// Selected bottom-panel tab (`activity` / `tasks` / `git`), shared by
+/// every sidebar instance on the tmux server.
+pub const SIDEBAR_BOTTOM_TAB: &str = "@sidebar_bottom_tab";
 pub const SIDEBAR_REPO_FILTER: &str = "@sidebar_repo_filter";
 pub const SIDEBAR_BOTTOM_HEIGHT: &str = "@sidebar_bottom_height";
 pub const SIDEBAR_PET: &str = "@sidebar_pet";

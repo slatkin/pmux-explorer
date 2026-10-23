@@ -290,7 +290,7 @@ fn test_rebuild_row_targets_clamps_selection() {
 fn test_scroll_git_empty_is_noop() {
     let mut state = make_state(vec![]);
     state.scrolls.git.offset = 0;
-    state.bottom_tab = BottomTab::GitStatus;
+    state.global.bottom_tab = BottomTab::GitStatus;
     state.scroll_bottom(5);
     assert_eq!(
         state.scrolls.git.offset, 0,
@@ -384,7 +384,7 @@ fn test_state_new_defaults() {
     assert_eq!(state.scrolls.panes.offset, 0);
     assert_eq!(state.scrolls.panes.total_lines, 0);
     assert_eq!(state.scrolls.panes.visible_height, 0);
-    assert_eq!(state.bottom_tab, BottomTab::Activity);
+    assert_eq!(state.global.bottom_tab, BottomTab::Activity);
     assert!(state.git.branch.is_empty());
     assert_eq!(state.scrolls.git.offset, 0);
     assert!(state.git.pr_number.is_none());
@@ -431,7 +431,7 @@ fn test_move_pane_selection_return_value() {
 #[test]
 fn test_scroll_bottom_dispatches_to_git() {
     let mut state = make_state(vec![]);
-    state.bottom_tab = BottomTab::GitStatus;
+    state.global.bottom_tab = BottomTab::GitStatus;
     state.git.unstaged_files = vec![tmux_agent_sidebar::git::GitFileEntry {
         status: 'M',
         name: "file.rs".into(),
@@ -450,7 +450,7 @@ fn test_scroll_bottom_dispatches_to_git() {
 #[test]
 fn test_scroll_bottom_dispatches_to_activity() {
     let mut state = make_state(vec![]);
-    state.bottom_tab = BottomTab::Activity;
+    state.global.bottom_tab = BottomTab::Activity;
     state.activity.entries = vec![ActivityEntry {
         timestamp: "10:00".into(),
         tool: "Read".into(),
@@ -469,13 +469,13 @@ fn test_scroll_bottom_dispatches_to_activity() {
 #[test]
 fn test_next_bottom_tab_full_cycle() {
     let mut state = make_state(vec![]);
-    assert_eq!(state.bottom_tab, BottomTab::Activity);
+    assert_eq!(state.global.bottom_tab, BottomTab::Activity);
     state.next_bottom_tab();
-    assert_eq!(state.bottom_tab, BottomTab::Tasks);
+    assert_eq!(state.global.bottom_tab, BottomTab::Tasks);
     state.next_bottom_tab();
-    assert_eq!(state.bottom_tab, BottomTab::GitStatus);
+    assert_eq!(state.global.bottom_tab, BottomTab::GitStatus);
     state.next_bottom_tab();
-    assert_eq!(state.bottom_tab, BottomTab::Activity);
+    assert_eq!(state.global.bottom_tab, BottomTab::Activity);
 }
 
 // ─── State: scroll_activity empty Tests ─────────────────────────────
@@ -496,16 +496,16 @@ fn test_scroll_activity_empty_is_noop() {
 #[test]
 fn test_git_tab_active_after_tab_switch() {
     let mut state = make_state(vec![]);
-    assert_eq!(state.bottom_tab, BottomTab::Activity);
+    assert_eq!(state.global.bottom_tab, BottomTab::Activity);
 
     state.next_bottom_tab();
-    assert_eq!(state.bottom_tab, BottomTab::Tasks);
+    assert_eq!(state.global.bottom_tab, BottomTab::Tasks);
 
     state.next_bottom_tab();
-    assert_eq!(state.bottom_tab, BottomTab::GitStatus);
+    assert_eq!(state.global.bottom_tab, BottomTab::GitStatus);
 
     state.next_bottom_tab();
-    assert_eq!(state.bottom_tab, BottomTab::Activity);
+    assert_eq!(state.global.bottom_tab, BottomTab::Activity);
 }
 
 // ─── State: global sync → rebuild consistency Tests ─────────────
@@ -816,6 +816,58 @@ fn apply_all_unchanged_tmux_value_leaves_local_change_alone() {
         g.repo_filter,
         RepoFilter::Repo("mine".into()),
         "an unchanged tmux value must not overwrite a local change"
+    );
+}
+
+// ─── Shared bottom tab tests ────────────────────────────────────────
+
+#[test]
+fn a_bottom_tab_switch_in_one_instance_reaches_another_within_one_tick() {
+    // Instance A cycles its bottom panel to Tasks; the write lands in
+    // @sidebar_bottom_tab, and instance B's next tick adopts the tab
+    // through apply_all (spec: "a bottom tab change applies to another
+    // window").
+    let mut a = make_state(vec![]);
+    a.next_bottom_tab();
+    assert_eq!(
+        a.global.bottom_tab,
+        BottomTab::Tasks,
+        "precondition: A shows Tasks"
+    );
+
+    // Instance B has not selected anything yet — on its first ticks the
+    // reading carries the tab A wrote.
+    let mut b = make_state(vec![]);
+    assert_eq!(b.global.bottom_tab, BottomTab::Activity);
+
+    b.global
+        .apply_all(&make_opts(&[(tmux::SIDEBAR_BOTTOM_TAB, "tasks")]));
+
+    assert_eq!(
+        b.global.bottom_tab,
+        BottomTab::Tasks,
+        "one tick with the shared reading must put B on A's tab"
+    );
+}
+
+#[test]
+fn an_instance_without_a_shared_tab_keeps_the_activity_default() {
+    // A first instance on a fresh server: the reading has no
+    // @sidebar_bottom_tab key at all, so the constructed Activity tab
+    // stays (spec: "an instance without a shared tab shows Activity").
+    let mut state = make_state(vec![]);
+    assert_eq!(state.global.bottom_tab, BottomTab::Activity);
+
+    // Other shared options change in the same tick; the absence of the
+    // tab key must leave the default alone.
+    state
+        .global
+        .apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "3")]));
+
+    assert_eq!(
+        state.global.bottom_tab,
+        BottomTab::Activity,
+        "no shared tab value must keep the Activity default"
     );
 }
 
@@ -1240,12 +1292,12 @@ fn floating_panel_clicks_hit_the_clamped_bottom_panel_geometry() {
     // A click on the drawn tab row (row 26) switches the tab. With the
     // unclamped height the boundary sat at row 18 and this click was
     // swallowed.
-    state.bottom_tab = BottomTab::GitStatus;
+    state.global.bottom_tab = BottomTab::GitStatus;
     assert!(
         state.handle_terminal_click(bottom_start, 3, TERM_HEIGHT),
         "the drawn tab row must be clickable"
     );
-    assert_eq!(state.bottom_tab, BottomTab::Activity);
+    assert_eq!(state.global.bottom_tab, BottomTab::Activity);
 
     // A click on a drawn agent row inside the band 18..26 — above the
     // clamped panel, below where the unclamped height put the boundary —
