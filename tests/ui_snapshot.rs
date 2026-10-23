@@ -2464,7 +2464,7 @@ fn snapshot_subagent_identity_survives_repo_filter_hiding_parent() {
     ⓘ                                              project-sub ▾
     project-sub
       ● pi ♟
-      ▷ orchestrator  unit1 idle collapse
+      ▷ orchestrator
     ╭ Activity│Tasks│Git ──────────────────────────────────────╮
     │                      No activity yet                     │
     ╰──────────────────────────────────────────────────────────╯

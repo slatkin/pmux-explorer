@@ -1246,7 +1246,10 @@ mod tests {
     }
 
     #[test]
-    fn identity_row_parent_and_task() {
+    fn identity_row_shows_parent_only_even_with_task() {
+        // The fuzzy task names the pmux launch, and the status row already
+        // shows that name in its title slot (the pane title), so the row
+        // must not draw the task even when the input carries one.
         let theme = ColorTheme::default();
         let ctx = test_ctx(&theme, 40, false);
         let p = pi_subagent(
@@ -1255,20 +1258,11 @@ mod tests {
             Some("unit1 idle collapse"),
         );
         let line = subagent_identity_row(p.subagent.as_ref(), &ctx).unwrap();
-        insta::assert_snapshot!(line_text(&line), @"  ▷ orchestrator  unit1 idle collapse");
-    }
-
-    #[test]
-    fn identity_row_parent_without_task() {
-        let theme = ColorTheme::default();
-        let ctx = test_ctx(&theme, 40, false);
-        let p = pi_subagent(
-            PmuxTaskKind::Spawned,
-            SubagentParent::Pane("orchestrator".into()),
-            None,
-        );
-        let line = subagent_identity_row(p.subagent.as_ref(), &ctx).unwrap();
         insta::assert_snapshot!(line_text(&line), @"  ▷ orchestrator");
+        assert!(
+            !line_text(&line).contains("unit1"),
+            "the task text must not render on the identity row"
+        );
     }
 
     #[test]
@@ -1281,7 +1275,7 @@ mod tests {
             Some("review unit2"),
         );
         let line = subagent_identity_row(p.subagent.as_ref(), &ctx).unwrap();
-        insta::assert_snapshot!(line_text(&line), @"  ▷ ORPHANED  review unit2");
+        insta::assert_snapshot!(line_text(&line), @"  ▷ ORPHANED");
         // ORPHANED must be painted in the error colour.
         let orphan_span = line
             .spans
@@ -1344,7 +1338,7 @@ mod tests {
         insta::assert_snapshot!(joined, @"
         ● pi ♟
           main
-        ▷ orchestrator  unit1 idle collapse
+        ▷ orchestrator
         ▷ Task completed
         "
         );

@@ -96,8 +96,11 @@ keeps what it showed before. Instead the sidebar writes three options:
 `@pane_subagent_kind` (`spawned` or `resumed`), `@pane_subagent_parent` (the
 parent session id) and `@pane_subagent_task` (the fuzzy task, unset when
 there is none). The task is the `<name>` part of the file name, that is the
-stem without its `-YYYY-MM-DDTHH-MM-SS` timestamp, and each hyphen in it is
-shown as a space, so `unit1-idle-collapse` shows as `unit1 idle collapse`.
+stem without its `-YYYY-MM-DDTHH-MM-SS` timestamp, with each hyphen turned
+into a space, so `unit1-idle-collapse` gives `unit1 idle collapse`. The task
+is stored, not drawn: the pane name the status row shows already carries the
+same launch name, so the identity row below the status row names only the
+parent (or `ORPHANED`).
 pmux writes the fallback stems `subagent` (a spawned subagent) and `resume`
 (a resumed subagent) when it has no usable name, and those give no task at
 all. A later recognised prompt replaces them. The identity stays

@@ -8,9 +8,11 @@ use crate::tmux::{PaneStatus, SubagentInfo, SubagentParent};
 use crate::ui::text::{display_width, truncate_to_width, wait_reason_label, wrap_text};
 
 /// Renders the pmux identity row of a subagent pane: the response-row arrow,
-/// then the parent label (or `ORPHANED`), then two spaces and the fuzzy task.
-/// The whole line is cut to the inner width in one pass, so it is always a
-/// single row no matter how long the parent label and task are.
+/// then the parent label (or `ORPHANED`). The pane's own name is shown in the
+/// status row's title slot — pmux writes its launch name into the pane title
+/// as `<name> — <task>` — so carrying the fuzzy task here would repeat that
+/// name. The whole line is cut to the inner width in one pass, so it is
+/// always a single row no matter how long the parent label is.
 pub(super) fn subagent_identity_row(
     subagent: Option<&SubagentInfo>,
     ctx: &RowCtx,
@@ -21,9 +23,8 @@ pub(super) fn subagent_identity_row(
         SubagentParent::Pane(label) => (label.as_str(), theme.text_inactive),
         SubagentParent::Orphaned => ("ORPHANED", theme.status_error),
     };
-    let task = info.task.as_deref().map(|task| format!("  {task}"));
 
-    let full = format!("▷ {parent_label}{}", task.as_deref().unwrap_or(""));
+    let full = format!("▷ {parent_label}");
     let shown = truncate_to_width(&full, ctx.inner_width);
 
     // The surviving text is a char prefix of `full`, possibly closed by the
@@ -37,10 +38,10 @@ pub(super) fn subagent_identity_row(
 
     // Exclusive char-index boundaries where each coloured piece ends; each
     // piece keeps its own colour when the cut lands inside it.
-    let boundaries = [2, 2 + parent_label.chars().count(), full.chars().count()];
-    let colors = [theme.response_arrow, parent_color, theme.text_muted];
+    let boundaries = [2, 2 + parent_label.chars().count()];
+    let colors = [theme.response_arrow, parent_color];
 
-    let mut spans: Vec<Span<'static>> = Vec::with_capacity(4);
+    let mut spans: Vec<Span<'static>> = Vec::with_capacity(3);
     let mut start = 0usize;
     for (index, end) in boundaries.into_iter().enumerate() {
         let end = end.min(kept);
@@ -58,7 +59,7 @@ pub(super) fn subagent_identity_row(
     if ellipsis {
         // The ellipsis continues the piece whose first dropped character
         // sits at the cut point.
-        let cut_color = colors[boundaries.iter().position(|end| kept < *end).unwrap_or(2)];
+        let cut_color = colors[boundaries.iter().position(|end| kept < *end).unwrap_or(1)];
         spans.push(Span::styled(
             "\u{2026}".to_string(),
             ctx.apply_bg(Style::default().fg(cut_color)),
