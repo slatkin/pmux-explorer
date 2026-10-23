@@ -154,9 +154,9 @@
 
 ## 7. Integration verification
 
-- [ ] 7.1 Run `cargo fmt`, then `cargo test` and `cargo clippy`, and
+- [x] 7.1 Run `cargo fmt`, then `cargo test` and `cargo clippy`, and
   verify all pass with no warnings.
-- [ ] 7.2 Run `cargo build --release` and verify the release binary builds,
+- [x] 7.2 Run `cargo build --release` and verify the release binary builds,
   then smoke test with two windows: enable the lock with `w` in one,
   resize its sidebar, and confirm the other window's sidebar matches
   within ~1 second while hidden; then pop one out and confirm the panel
