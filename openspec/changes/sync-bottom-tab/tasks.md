@@ -54,24 +54,24 @@
 
 ## 4. Remove the focus-driven auto-switch
 
-- [ ] 4.1 Delete `auto_switch_tab`, `TabDecision`, `resolve_bottom_tab`,
+- [x] 4.1 Delete `auto_switch_tab`, `TabDecision`, `resolve_bottom_tab`,
   `resolve_tab_for_focused_pane`, `save_current_tab` and
   `detect_new_agents` from `src/state/tab.rs`, and drop the
   `auto_switch_tab()` call from `refresh_activity_data`
   (`src/state/refresh.rs`); verify with `cargo test` that only
   auto-switch-specific tests fail and fix them in 4.3.
-- [ ] 4.2 Remove `PaneRuntimeState.tab_pref` (`src/state/pane_runtime.rs`)
+- [x] 4.2 Remove `PaneRuntimeState.tab_pref` (`src/state/pane_runtime.rs`)
   and `PaneRuntimeMap.seen` plus its inserts/removals; verify with
   `cargo build` that no remaining reference to `tab_pref` or `seen`
   compiles (`rg 'tab_pref|\.seen' src` returns no code hits).
-- [ ] 4.3 Replace the auto-switch and per-pane memory tests in
+- [x] 4.3 Replace the auto-switch and per-pane memory tests in
   `tests/state_tests.rs`, `tests/bottom_tests.rs` and
   `src/state/tab.rs`'s test module with shared-tab behavior tests: focusing
   a shell pane keeps the tab, focusing an agent keeps the tab, a new agent
   in the focused pane keeps the tab (spec scenarios under "focusing a
   different agent does not change the bottom tab"); verify with
   `cargo test state_tests bottom_tests` passing.
-- [ ] 4.4 Update the `BottomTab` doc comment in `src/state.rs` and the
+- [x] 4.4 Update the `BottomTab` doc comment in `src/state.rs` and the
   `PaneRuntimeState` doc so neither mentions auto-switch or per-pane
   preferences; verify with `rg 'auto.switch|tab_pref' src docs` returning
   only intentional history mentions.
