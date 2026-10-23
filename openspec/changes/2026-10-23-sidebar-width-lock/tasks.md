@@ -23,7 +23,7 @@
 
 ## 2. Shared width state in GlobalState
 
-- [ ] 2.1 Add `width_lock: bool` and `shared_docked_width: Option<u16>`
+- [x] 2.1 Add `width_lock: bool` and `shared_docked_width: Option<u16>`
   to `GlobalState` (`src/state/global.rs`) — `shared_` because
   `AppState.docked_width` already names the pop-out capture — with
   `last_saved_width_lock`, `last_saved_shared_docked_width` and
@@ -37,7 +37,7 @@
   alone rather than seeding the fallback's 28 columns); verify with unit
   tests in the filter-latch shape that a rejected write leaves
   `last_saved_*` at the old value and sets the latch.
-- [ ] 2.2 Extend `apply_all` to adopt `SIDEBAR_WIDTH_LOCK` (`on` → locked),
+- [x] 2.2 Extend `apply_all` to adopt `SIDEBAR_WIDTH_LOCK` (`on` → locked),
   `SIDEBAR_DOCKED_WIDTH` (parsed `u16`) under the `last_saved_*` guards
   (skipping adoption while the matching latch is set) plus
   `SIDEBAR_MIN_WIDTH` (parsed `u32`, same parse as `size_guard`'s) into a
@@ -52,7 +52,7 @@
   (unlocked, no shared width — spec scenario "a first instance on a
   fresh server"), and (d) a tick without `SIDEBAR_MIN_WIDTH` resets
   `min_width` to unset.
-- [ ] 2.3 Confirm `AppState::refresh` (`src/state/refresh.rs`) calls the
+- [x] 2.3 Confirm `AppState::refresh` (`src/state/refresh.rs`) calls the
   extended `retry_pending_saves` and `apply_all` in the existing
   retry-then-read order; verify with `cargo test state_tests` that refresh
   tests still pass.
