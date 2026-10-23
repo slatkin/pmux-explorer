@@ -119,7 +119,7 @@
   plus a click-hitbox test asserting the glyph toggles on click. The
   existing `control_col = width - 2` layout/click fixtures shift by one
   cell for the second control — update them in this task.
-- [ ] 4.3 Add the `w` key and the lock control to
+- [x] 4.3 Add the `w` key and the lock control to
   `website/src/content/docs/reference/keybindings.md` and
   `website/src/content/docs/features/floating-panel.mdx`; verify the
   listed keys match `src/app/input.rs`.
@@ -142,12 +142,12 @@
 
 ## 6. Documentation
 
-- [ ] 6.1 Update `docs/state-management.md`: `width_lock` and
+- [x] 6.1 Update `docs/state-management.md`: `width_lock` and
   `docked_width` join the Global scope table with their tmux variables
   and update triggers, and the width latches are documented beside the
   filter/tab ones; verify `rg 'docked_width|width_lock' docs` shows the
   rows.
-- [ ] 6.2 Document `@sidebar_width_lock` and `@sidebar_docked_width` in
+- [x] 6.2 Document `@sidebar_width_lock` and `@sidebar_docked_width` in
   the `agent-sidebar.conf` comment block and in
   `website/src/content/docs/reference/tmux-options.md`; verify the option
   names match `src/tmux/options.rs` exactly.
