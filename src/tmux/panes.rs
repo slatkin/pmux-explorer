@@ -388,9 +388,11 @@ mod tests {
         // `tasks` and `git` must each land on the bottom-tab key without
         // shifting the repo filter.
         for tab in ["activity", "tasks", "git"] {
-            // Faithful wire shape for `{tab}` set with an unset repo:
-            // the tab keeps its slot and the empty repo slot collapses
-            // to the two spaces before the terminator.
+            // `{tab}` set with the width fields and the repo filter
+            // unset: each empty field contributes only its separator
+            // space, so the fixture's gap before `/eot/` is one space
+            // short of the real wire shape — the positional parse
+            // reads both the same.
             let reading =
                 parse_sidebar_pane_reading(&format!("0 1 80 120 40 0 all 3 {tab}    /eot/"));
             assert_eq!(

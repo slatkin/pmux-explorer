@@ -16,8 +16,11 @@ read from tmux on every refresh tick.
 | `selected_pane_row` | `@sidebar_cursor` | User input (j/k key); tmux write flushed after a short debounce | Cursor position in agent list |
 | `repo_filter` | `@sidebar_repo_filter` | User input (repo popup) | Repository filter (All or specific repo) |
 | `bottom_tab` | `@sidebar_bottom_tab` | On user tab switch (cycle key / tab-title click); tmux write retried when rejected | Selected bottom tab (Activity/Tasks/Git), shared server-wide; each instance adopts a peer's selection on its next refresh tick |
+| `width_lock` | `@sidebar_width_lock` | User input (`w` key / lock-glyph click) or a peer's toggle adopted on refresh; tmux write retried when rejected | Shared on/off switch for the width lock, server-wide; while `on` every docked sidebar converges on `shared_docked_width` within one refresh tick |
+| `shared_docked_width` | `@sidebar_docked_width` | Seeded by the enabling instance, then published on an observed docked-width change while locked; tmux write retried when rejected | Shared docked width in columns (`None` until seeded); adopting peers clamp it to half the window and never below the `@sidebar_min_width` floor |
+| `min_width` | `@sidebar_min_width` | Adopted verbatim every refresh tick — the sidebar never writes it | Parsed width floor (`None` when unset or non-numeric); readers fall back to the default floor |
 
-Each field has a corresponding `last_saved_*` to prevent sync conflicts — only overwrites tmux if the local write succeeded.
+Each field has a corresponding `last_saved_*` to prevent sync conflicts — only overwrites tmux if the local write succeeded. (`min_width` is read-only, so it needs no guard.)
 
 The status filter additionally has a `filter_save_pending` latch:
 when tmux rejects a `set -g @sidebar_filter` write, the latch is set
@@ -35,6 +38,19 @@ would revert the user's selection. `retry_pending_tab_save` retries
 the write once per refresh tick, before the tick reads the shared
 options, so a successful retry is what that tick reads back. The two
 latches are independent.
+
+The width lock has the matching `width_save_pending` and
+`lock_save_pending` latches — one each for `@sidebar_docked_width` and
+`@sidebar_width_lock`, following the same latch shape: a rejected
+`set -g` write sets the latch and `apply_all` skips adopting the
+matching shared value, so the stale value tmux still holds cannot
+revert the user's intent. `retry_pending_saves` retries all four
+pending writes once per refresh tick, before the tick reads the shared
+options. The width latch additionally gates the width guard's adopt
+side (`src/app/width_guard.rs`): while it is set the pane must not be
+resized back toward the stale shared width tmux still holds. The two
+width latches are independent of each other and of the filter/tab
+latches.
 
 ### Per-pane State (keyed by pane ID)
 
@@ -187,10 +203,9 @@ TUI main loop (app::run in app.rs; submodules app/{setup,workers,input,render,pa
     → initializes Claude notices state once
                         ↓
   → refresh() every 1s
-    → retry_pending_filter_save / retry_pending_tab_save
-                                     ← a write tmux rejected is retried before the shared read
+    → retry_pending_saves            ← a write tmux rejected is retried before the shared read
     → get_sidebar_pane_reading()     ← reads pane state + @sidebar_* in one display-message
-    → global.apply_all()             ← applies the shared options (filter, cursor, bottom tab, repo filter) under the last_saved_* guards
+    → global.apply_all()             ← applies the shared options (filter, cursor, bottom tab, repo filter, width lock, shared docked width, min width) under the last_saved_* guards
     → query_sessions() (tmux.rs)     ← reads @pane_* via `tmux list-panes -a`
     → pane_name resolved in the same query (the pane title when it is
       a real name — em dash suffixes trimmed; no extra tmux call)

@@ -13,6 +13,8 @@ Most options must be set **before** loading the plugin in your `tmux.conf`. Colo
 | `@sidebar_key_all`               | `E`     | Prefix-triggered keybinding to toggle the sidebar in all windows                        |
 | `@sidebar_width`                 | `15%`   | Width in columns or as a percentage                                                     |
 | `@sidebar_min_width`             | `20`    | Minimum sidebar width in columns; the sidebar grows itself back when squeezed below it  |
+| `@sidebar_width_lock`            | `off`   | Shared width lock — `on` makes every sidebar on the server use one docked width; usually toggled with the `w` key or the lock control |
+| `@sidebar_docked_width`          | unset   | The shared docked width in columns while the lock is on; seeded by the enabling instance and rewritten as sidebars resize — not meant to be set by hand |
 | `@sidebar_position`              | `left`  | Sidebar placement (`left` or `right`)                                                   |
 | `@sidebar_bottom_height`         | `20`    | Bottom panel height in lines (set `0` to hide)                                          |
 | `@sidebar_auto_create`           | `on`    | Auto-create the sidebar on new windows (set `off` to disable)                           |
@@ -22,6 +24,8 @@ Most options must be set **before** loading the plugin in your `tmux.conf`. Colo
 | `@sidebar_pet`                  | `off`   | Show the animated pet in a 5-row band above the bottom panel                           |
 
 Setting `@sidebar_min_width` to `0` disables the width floor entirely.
+
+While `@sidebar_width_lock` is `on`, the docked width becomes a shared setting: a sidebar whose pane width changes publishes the new width to `@sidebar_docked_width`, and every other docked sidebar adopts it within one refresh tick — clamped to at most half the window and never below `@sidebar_min_width`. Unlocking leaves every sidebar at the width it already has; the floating panel is excluded and keeps its fixed 40 columns. A sidebar created while the lock is on opens directly at the shared width.
 
 ## Worktree spawn defaults
 
