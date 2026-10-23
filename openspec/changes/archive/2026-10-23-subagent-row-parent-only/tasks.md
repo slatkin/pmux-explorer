@@ -11,4 +11,4 @@
 - [x] 2.1 Fix the wording that says the hyphens are "shown" as spaces in `docs/agent-protocol.md` and `docs/state-management.md` — the task is stored, nothing shows it now.
 - [x] 2.2 Run and pass the gates: `openspec validate --strict`, `cargo fmt`, `cargo clippy` with no new warnings, `cargo test`, and `cargo build --release`.
 - [x] 2.3 Commit with `cargo fmt` run first.
-- [ ] 2.4 Archive the change after the row is confirmed against a live pmux subagent pane (the archive commit merges the delta into `openspec/specs/pi-agent-support/spec.md` and lands as its own chore commit).
+- [x] 2.4 Archive the change after the row is confirmed against a live pmux subagent pane (the archive commit merges the delta into `openspec/specs/pi-agent-support/spec.md` and lands as its own chore commit).
