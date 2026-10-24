@@ -2,9 +2,9 @@
 
 ## 1. The percent as a shared setting
 
-- [ ] 1.1 Add the percent parse (0 to 100 is the percent; unset, empty or any other value gives `DEFAULT_BOTTOM_PERCENT` = 30) and verify unit tests for `30`, `0`, `100`, `abc`, `150`, and an empty value
-- [ ] 1.2 Add `GlobalState::bottom_percent` with `last_saved_bottom_percent`, `percent_save_pending`, `save_bottom_percent`, adoption in `apply_all`, and the retry in `retry_pending_saves`, as a copy of the bottom-tab latch (design decision 1); verify `global.rs` tests copied from the tab latch tests pass
-- [ ] 1.3 Add `SIDEBAR_BOTTOM_HEIGHT` to `SHARED_OPTION_FIELDS` before `SIDEBAR_REPO_FILTER` and verify the `panes.rs` reading tests, updated for five options, pass
+- [x] 1.1 Add the percent parse (0 to 100 is the percent; unset, empty or any other value gives `DEFAULT_BOTTOM_PERCENT` = 30) and verify unit tests for `30`, `0`, `100`, `abc`, `150`, and an empty value
+- [x] 1.2 Add `GlobalState::bottom_percent` with `last_saved_bottom_percent`, `percent_save_pending`, `save_bottom_percent`, adoption in `apply_all`, and the retry in `retry_pending_saves`, as a copy of the bottom-tab latch (design decision 1); verify `global.rs` tests copied from the tab latch tests pass
+- [x] 1.3 Add `SIDEBAR_BOTTOM_HEIGHT` to `SHARED_OPTION_FIELDS` before `SIDEBAR_REPO_FILTER` and verify the `panes.rs` reading tests, updated for five options, pass
 
 ## 2. The split layout and the rule
 
