@@ -35,10 +35,10 @@
 
 ## 5. Verify
 
-- [ ] 5.1 `cargo clean`, `cargo fmt`, `cargo clippy`, `cargo test`; review and accept each `cargo insta` diff that is only a rename
-- [ ] 5.2 Re-run the task 1.2 `git grep` forms: zero matches except `LICENSE` and the README credit line
-- [ ] 5.3 `cargo build --release`; run `target/release/pmux-explorer version` and `setup pi`; confirm the pi command line reads `pmux-explorer hook pi <event>`
-- [ ] 5.4 `openspec validate rebrand-pmux-explorer` passes
+- [x] 5.1 `cargo clean`, `cargo fmt`, `cargo clippy`, `cargo test`; review and accept each `cargo insta` diff that is only a rename
+- [x] 5.2 Re-run the task 1.2 `git grep` forms: zero matches except `LICENSE` and the README credit line
+- [x] 5.3 `cargo build --release`; run `target/release/pmux-explorer version` and `setup pi`; confirm the pi command line reads `pmux-explorer hook pi <event>`
+- [x] 5.4 `openspec validate rebrand-pmux-explorer` passes
 
 ## 6. Cut-over (after merge)
 
