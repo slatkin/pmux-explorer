@@ -1,10 +1,10 @@
 # Orchestrator handoff — rebrand-pmux-explorer
 
-Date: 2026-10-24 · Change: rebrand-pmux-explorer · Worktree: ~/Dev/worktrees/rebrand-pmux-explorer · Branch: feat/rebrand-pmux-explorer · Accepted HEAD: aee48bb
+Date: 2026-10-24 · Change: rebrand-pmux-explorer · Worktree: ~/Dev/worktrees/rebrand-pmux-explorer · Branch: feat/rebrand-pmux-explorer · Accepted HEAD: ed7cde3
 
 ## Start here
 
-Rename tmux-agent-sidebar → pmux-explorer repo-wide. Change artifacts committed on the feature branch (186ac49). Baseline + U-rust done. Next: U-shell.
+Rename tmux-agent-sidebar → pmux-explorer repo-wide. Change artifacts committed on the feature branch (186ac49). Baseline + U-rust + U-shell done. Next: U-docs.
 
 ## Accepted units
 
@@ -15,21 +15,23 @@ Rename tmux-agent-sidebar → pmux-explorer repo-wide. Change artifacts committe
 
 - U-rust (rows 2.1–2.9) ACCEPTED: impl `95797bc` (33 files, src/+Cargo.*+tests/), task-state `aee48bb`. rust-reviewer PASS no findings. Deviations recorded: `plugin_manifest_omits_redundant_hooks_field` fails until row 3.5 lands plugin.json (self-resolving); popup label `migrate`→`install`; fn rename `build_claude_install_prompt`. Known-fail set is now 4 until row 3.5.
 
+- U-shell (rows 3.1–3.6) ACCEPTED: impl `b18f90f`+`393f34e`+`aedbd3d` (.tmux/conf/opencode git-mv'd; hook.sh, install-wizard, Makefile, release.yml, manifests renamed), task-state `ed7cde3`. reviewer PASS no findings — resumed once after the session ended mid-ruling on a `uses:` continuation-line scalar (release.yml:101-102); ruled spec-valid YAML folding. `plugin_manifest_omits_redundant_hooks_field` green again as predicted. Deviations recorded: 8-line release.yml rewrap (gratuitous — no real 80-col gate; kept), opencode export `TmuxAgentSidebar`→`PmuxExplorer`, conf comment `@pmux_explorer_dir`.
+
 ## Active state
 
-- U-shell (rows 3.1–3.6) ISSUED to worker `rebrand-ushell` from clean HEAD aee48bb. Waiting on worker report. Note for worker: it un-breaks `plugin_manifest_omits_redundant_hooks_field` via row 3.5.
+- U-docs (rows 4.1–4.5) ISSUED to worker `rebrand-udocs` from clean HEAD ed7cde3. Scope extended to `openspec/specs/pi-agent-support/spec.md:94` (live spec must match the delta before 5.2's zero-match gate). Waiting on worker report.
 
 ## First action
 
-Await `rebrand-ushell` report → mechanical verify → reviewer on the unit range → accept → dispatch U-docs.
+Await `rebrand-udocs` report → mechanical verify → reviewer on the unit range → accept → run verify gates (rows 5.1–5.4).
 
 ## Next unit
 
-- U-docs (rows 4.1–4.5): README/docs/AGENTS.md/CLAUDE.md/.claude/skills/website/fixtures/renovate.json + capture-PNG check. Role: `worker` (doc lane). SCOUT: none — inventory gives the file list; 4.5 is a conditional check.
+- Verify (rows 5.1–5.4): orchestrator gates — cargo clean/fmt/clippy/test, insta diff review, zero-match git grep re-run, release build + `version`/`setup pi` smoke, `openspec validate`. Expected test result: 3 known group::tests failures only.
 
 ## Following queue
 
-- Verify (rows 5.1–5.4): orchestrator gates — cargo clean/fmt/clippy/test, insta diff review, zero-match git grep re-run, release build + `version`/`setup pi` smoke, `openspec validate`.
+- Completion: merge main into feat branch, push, open PR. Post-merge rows 6.x stay open; 6.6 is the pmux companion change (separate repo scope).
 
 ## Environment truths (differ from design doc)
 
