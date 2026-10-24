@@ -30,8 +30,8 @@
 
 ## 5. Integration
 
-- [ ] 5.1 Run `cargo fmt --check`, `cargo clippy`, `cargo test` and `cargo build --release`, and verify that all pass
-- [ ] 5.2 In tmux with two windows, drag the rule in one sidebar, release, and verify that the other sidebar shows the same percent within 1 second, that a click on a tab label still selects the tab, and that `tmux show -g @sidebar_bottom_height` shows the new percent
+- [x] 5.1 Run `cargo fmt --check`, `cargo clippy`, `cargo test` and `cargo build --release`, and verify that all pass
+- [x] 5.2 In tmux with two windows, drag the rule in one sidebar, release, and verify that the other sidebar shows the same percent within 1 second, that a click on a tab label still selects the tab, and that `tmux show -g @sidebar_bottom_height` shows the new percent
 
 ## Workflow follow-up
 
