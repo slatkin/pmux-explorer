@@ -237,15 +237,23 @@ impl AppState {
     /// first drawn row) start a split drag — any press column can drag,
     /// and only an unmoved release selects a tab (decision 4). Presses
     /// above the rule go to the agents panel. Returns `true` when the
-    /// press landed on the rule row, so the caller can keep the
-    /// background git poller in sync (the release path re-stores the
-    /// current tab; a press alone never switches it).
+    /// press landed on the rule row.
+    ///
+    /// A press first ends a live drag whose release never reached this
+    /// pane (a Down on another pane consumed it): the stale drag ends
+    /// as if released at its last rows so the instance is not left
+    /// blocked from percent adoption, and only the moved branch of that
+    /// stale end runs — the new press, not the lost release, is the
+    /// click that may resolve on a label (decision 4).
     ///
     /// The bottom-panel height comes from [`FrameLayout`], the height
     /// the last frame actually drew — while floating that is the
     /// clamped height — so a press can only ever land on a row that was
     /// drawn.
     pub fn handle_terminal_click(&mut self, row: u16, col: u16, term_height: u16) -> bool {
+        if let Some(drag) = self.split_drag.take() {
+            self.save_split_drag_rows(drag, term_height);
+        }
         let bottom_start = term_height.saturating_sub(self.layout.bottom_panel_height);
         if row < bottom_start {
             self.handle_mouse_click(row, col);
@@ -300,11 +308,19 @@ impl AppState {
             return;
         };
         if drag.moved {
-            self.global.bottom_percent = percent_for_rows(drag.rows, term_height);
-            self.global.save_bottom_percent();
+            self.save_split_drag_rows(drag, term_height);
         } else {
             self.handle_bottom_tab_click(drag.press_col);
         }
+    }
+
+    /// The moved branch of a split-drag ending: adopt the drag's rows
+    /// as the shared bottom-panel percent and hand it to the tmux
+    /// write. Shared verbatim by the real release (`end_split_drag`)
+    /// and the stale-drag end on a new press.
+    fn save_split_drag_rows(&mut self, drag: SplitDrag, term_height: u16) {
+        self.global.bottom_percent = percent_for_rows(drag.rows, term_height);
+        self.global.save_bottom_percent();
     }
 
     /// Handle mouse scroll event, routing to agents or bottom panel based on Y position.

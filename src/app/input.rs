@@ -30,14 +30,30 @@ pub(super) fn handle_event(
             let bottom_h = state.layout.bottom_panel_height;
             match mouse.kind {
                 MouseEventKind::Down(MouseButton::Left) => {
-                    if state.handle_terminal_click(mouse.row, mouse.column, term_height) {
-                        // Keep the background git poller in sync immediately — the
-                        // keyboard `BackTab` path does the same update. Without this,
-                        // clicking into Git Status leaves polling disabled until the
-                        // next refresh tick and the tab renders stale data.
-                        git_tab_active
-                            .store(state.global.bottom_tab.is_git_status(), Ordering::Relaxed);
-                    }
+                    // A press on the rule starts a split drag and
+                    // selects no tab; presses above the rule go to the
+                    // agents panel. The background git poller syncs at
+                    // the release, which is the event that may change
+                    // the tab now.
+                    state.handle_terminal_click(mouse.row, mouse.column, term_height);
+                }
+                MouseEventKind::Drag(MouseButton::Left) => {
+                    // Held-button motion: while a split drag is live,
+                    // resize the drawn split to the mouse row; without
+                    // a drag this is a no-op.
+                    state.handle_split_drag_move(mouse.row, term_height);
+                }
+                MouseEventKind::Up(MouseButton::Left) => {
+                    // The release resolves a split drag — a moved drag
+                    // saves its rows as the shared percent, an unmoved
+                    // press selects the tab the press column names.
+                    state.end_split_drag(term_height);
+                    // Keep the background git poller in sync immediately — the
+                    // keyboard `BackTab` path does the same update. Without this,
+                    // clicking into Git Status leaves polling disabled until the
+                    // next refresh tick and the tab renders stale data.
+                    git_tab_active
+                        .store(state.global.bottom_tab.is_git_status(), Ordering::Relaxed);
                 }
                 MouseEventKind::ScrollDown => {
                     state.handle_mouse_scroll(mouse.row, term_height, bottom_h, 3);

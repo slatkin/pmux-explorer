@@ -229,7 +229,8 @@ impl GlobalState {
     /// Called at startup.
     pub fn load_from_tmux(&mut self) {
         let opts = tmux::get_all_global_options();
-        self.apply_all(&opts);
+        // Startup has no live drag: every shared value is applied.
+        self.apply_all(&opts, false);
     }
 
     /// Retry a filter write tmux rejected, so an instance cannot drift
@@ -279,7 +280,15 @@ impl GlobalState {
     /// Apply the shared options read from tmux (filter, cursor, bottom
     /// tab, bottom percent, repo filter). Runs once at startup and on
     /// every refresh tick.
-    pub fn apply_all(&mut self, opts: &HashMap<String, String>) {
+    ///
+    /// `split_drag_active` says whether the calling instance is mid
+    /// split drag (`AppState::split_drag` is `Some`): while it is, the
+    /// percent the server holds must not be adopted, or the next tick
+    /// would move the rule out from under the mouse (the "a drag in
+    /// progress is not reverted" requirement). The caller passes the
+    /// gate because the drag lives on `AppState` and this method is a
+    /// `GlobalState` method.
+    pub fn apply_all(&mut self, opts: &HashMap<String, String>, split_drag_active: bool) {
         // While a filter write is pending, tmux holds the value this
         // instance is trying to replace. Adopting it would revert the
         // user's choice, so the filter is left alone until the write
@@ -326,7 +335,11 @@ impl GlobalState {
         // it runs on the whole option map: an unset, empty or invalid
         // option resolves to `DEFAULT_BOTTOM_PERCENT` instead of
         // being skipped.
-        if !self.percent_save_pending {
+        // While a split drag is live the rule shows the drag's rows and
+        // the mouse owns the height, so the shared percent stays
+        // unadopted this tick exactly as for a pending write; after the
+        // release the following ticks adopt the server value again.
+        if !self.percent_save_pending && !split_drag_active {
             let tmux_percent = ui::bottom_percent_from_options(opts);
             if tmux_percent != self.last_saved_bottom_percent {
                 self.bottom_percent = tmux_percent;
@@ -365,7 +378,7 @@ mod tests {
         g.status_filter = StatusFilter::Busy;
         g.filter_save_pending = true;
 
-        g.apply_all(&opts(&[(tmux::SIDEBAR_FILTER, "all")]));
+        g.apply_all(&opts(&[(tmux::SIDEBAR_FILTER, "all")]), false);
 
         assert_eq!(g.status_filter, StatusFilter::Busy);
     }
@@ -415,7 +428,7 @@ mod tests {
 
         // The tick after the failed retry still must not adopt over the
         // pending write.
-        g.apply_all(&opts(&[(tmux::SIDEBAR_BOTTOM_TAB, "git")]));
+        g.apply_all(&opts(&[(tmux::SIDEBAR_BOTTOM_TAB, "git")]), false);
         assert_eq!(g.bottom_tab, BottomTab::Tasks);
     }
 
@@ -428,7 +441,7 @@ mod tests {
         g.bottom_tab = BottomTab::Tasks;
         g.tab_save_pending = true;
 
-        g.apply_all(&opts(&[(tmux::SIDEBAR_BOTTOM_TAB, "activity")]));
+        g.apply_all(&opts(&[(tmux::SIDEBAR_BOTTOM_TAB, "activity")]), false);
 
         assert_eq!(g.bottom_tab, BottomTab::Tasks);
     }
@@ -443,7 +456,7 @@ mod tests {
         g.bottom_tab = BottomTab::GitStatus;
         g.tab_save_pending = true;
 
-        g.apply_all(&opts(&[(tmux::SIDEBAR_BOTTOM_TAB, "tasks")]));
+        g.apply_all(&opts(&[(tmux::SIDEBAR_BOTTOM_TAB, "tasks")]), false);
 
         assert_eq!(g.bottom_tab, BottomTab::GitStatus);
     }
@@ -456,7 +469,7 @@ mod tests {
         let mut g = GlobalState::new();
         assert_eq!(g.bottom_tab, BottomTab::Activity);
 
-        g.apply_all(&opts(&[(tmux::SIDEBAR_FILTER, "busy")]));
+        g.apply_all(&opts(&[(tmux::SIDEBAR_FILTER, "busy")]), false);
 
         assert_eq!(
             g.bottom_tab,
@@ -471,7 +484,7 @@ mod tests {
         g.last_saved_bottom_tab = BottomTab::Activity;
         g.bottom_tab = BottomTab::Activity;
 
-        g.apply_all(&opts(&[(tmux::SIDEBAR_BOTTOM_TAB, "tasks")]));
+        g.apply_all(&opts(&[(tmux::SIDEBAR_BOTTOM_TAB, "tasks")]), false);
 
         assert_eq!(
             g.bottom_tab,
@@ -495,7 +508,7 @@ mod tests {
         g.last_saved_bottom_tab = BottomTab::Tasks;
         g.bottom_tab = BottomTab::GitStatus;
 
-        g.apply_all(&opts(&[(tmux::SIDEBAR_BOTTOM_TAB, "tasks")]));
+        g.apply_all(&opts(&[(tmux::SIDEBAR_BOTTOM_TAB, "tasks")]), false);
 
         assert_eq!(
             g.bottom_tab,
@@ -555,7 +568,7 @@ mod tests {
 
         // The tick after the failed retry still must not adopt over the
         // pending write.
-        g.apply_all(&opts(&[(tmux::SIDEBAR_BOTTOM_HEIGHT, "80")]));
+        g.apply_all(&opts(&[(tmux::SIDEBAR_BOTTOM_HEIGHT, "80")]), false);
         assert_eq!(g.bottom_percent, 50);
     }
 
@@ -568,7 +581,7 @@ mod tests {
         g.bottom_percent = 50;
         g.percent_save_pending = true;
 
-        g.apply_all(&opts(&[(tmux::SIDEBAR_BOTTOM_HEIGHT, "20")]));
+        g.apply_all(&opts(&[(tmux::SIDEBAR_BOTTOM_HEIGHT, "20")]), false);
 
         assert_eq!(g.bottom_percent, 50);
     }
@@ -583,7 +596,7 @@ mod tests {
         g.bottom_percent = 60;
         g.percent_save_pending = true;
 
-        g.apply_all(&opts(&[(tmux::SIDEBAR_BOTTOM_HEIGHT, "70")]));
+        g.apply_all(&opts(&[(tmux::SIDEBAR_BOTTOM_HEIGHT, "70")]), false);
 
         assert_eq!(g.bottom_percent, 60);
     }
@@ -596,7 +609,7 @@ mod tests {
         let mut g = GlobalState::new();
         assert_eq!(g.bottom_percent, ui::DEFAULT_BOTTOM_PERCENT);
 
-        g.apply_all(&opts(&[(tmux::SIDEBAR_FILTER, "busy")]));
+        g.apply_all(&opts(&[(tmux::SIDEBAR_FILTER, "busy")]), false);
 
         assert_eq!(
             g.bottom_percent,
@@ -611,7 +624,7 @@ mod tests {
         g.last_saved_bottom_percent = 30;
         g.bottom_percent = 30;
 
-        g.apply_all(&opts(&[(tmux::SIDEBAR_BOTTOM_HEIGHT, "65")]));
+        g.apply_all(&opts(&[(tmux::SIDEBAR_BOTTOM_HEIGHT, "65")]), false);
 
         assert_eq!(g.bottom_percent, 65, "a peer's height must be adopted");
         assert_eq!(
@@ -619,6 +632,36 @@ mod tests {
             "adoption advances the last_saved guard like the other fields"
         );
         assert!(!g.percent_save_pending);
+    }
+
+    #[test]
+    fn a_live_split_drag_blocks_the_percent_adoption_and_it_resumes() {
+        // Spec "a drag in progress is not reverted": while the drag is
+        // live the rule follows the mouse, so a tick adopting the
+        // server's percent would move it under the mouse. After the
+        // release, and the caller passing `false` again, the next ticks
+        // adopt the shared value like always.
+        let mut g = GlobalState::new();
+        g.last_saved_bottom_percent = 30;
+        g.bottom_percent = 30;
+
+        g.apply_all(&opts(&[(tmux::SIDEBAR_BOTTOM_HEIGHT, "65")]), true);
+
+        assert_eq!(
+            g.bottom_percent, 30,
+            "a tick during a live drag must not adopt the shared percent"
+        );
+        assert_eq!(
+            g.last_saved_bottom_percent, 30,
+            "the blocked adoption must not advance the last_saved guard"
+        );
+
+        g.apply_all(&opts(&[(tmux::SIDEBAR_BOTTOM_HEIGHT, "65")]), false);
+
+        assert_eq!(
+            g.bottom_percent, 65,
+            "after the release the shared value is adopted again"
+        );
     }
 
     #[test]
@@ -630,7 +673,7 @@ mod tests {
         g.last_saved_bottom_percent = 50;
         g.bottom_percent = 75;
 
-        g.apply_all(&opts(&[(tmux::SIDEBAR_BOTTOM_HEIGHT, "50")]));
+        g.apply_all(&opts(&[(tmux::SIDEBAR_BOTTOM_HEIGHT, "50")]), false);
 
         assert_eq!(
             g.bottom_percent, 75,
@@ -648,7 +691,7 @@ mod tests {
             g.last_saved_bottom_percent = 50;
             g.bottom_percent = 50;
 
-            g.apply_all(&opts(&[(tmux::SIDEBAR_BOTTOM_HEIGHT, value)]));
+            g.apply_all(&opts(&[(tmux::SIDEBAR_BOTTOM_HEIGHT, value)]), false);
 
             assert_eq!(
                 g.bottom_percent,
@@ -667,7 +710,7 @@ mod tests {
         g.last_saved_bottom_percent = 50;
         g.bottom_percent = 50;
 
-        g.apply_all(&opts(&[]));
+        g.apply_all(&opts(&[]), false);
 
         assert_eq!(g.bottom_percent, ui::DEFAULT_BOTTOM_PERCENT);
         assert_eq!(g.last_saved_bottom_percent, ui::DEFAULT_BOTTOM_PERCENT);

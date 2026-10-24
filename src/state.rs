@@ -1444,6 +1444,86 @@ mod tests {
         assert_eq!(state.global.bottom_tab, BottomTab::Activity);
     }
 
+    // ─── a live drag ends when a new press arrives ───────────────────────
+
+    #[test]
+    fn a_new_press_ends_a_moved_drag_at_its_saved_rows() {
+        // A release consumed elsewhere (tmux routed it to another pane)
+        // must not leave the drag live blocking percent adoption: the
+        // next press ends the stale drag as if released at its last
+        // rows — the moved branch runs, so the percent save happens —
+        // and the new press is then handled, starting a fresh drag of
+        // its own here.
+        let mut state = AppState::new("%99".into());
+        state.layout.bottom_panel_height = 12;
+        state.global.bottom_percent = 30;
+        state.global.bottom_tab = BottomTab::GitStatus;
+
+        // Drag: press on the rule at row 28, move to row 35 (5 rows),
+        // no release reaches the pane.
+        state.handle_terminal_click(28, 30, 40);
+        state.handle_split_drag_move(35, 40);
+
+        // A new press on the rule (row 28 — the frame never redrew, so
+        // the drawn geometry is unchanged) ends the stale drag and
+        // starts a fresh drag at col 3.
+        state.handle_terminal_click(28, 3, 40);
+
+        assert_eq!(
+            state.global.bottom_percent, 13,
+            "the stale drag saved its last rows (5 of 40 ≈ 13%)"
+        );
+        assert!(
+            state.global.percent_save_pending(),
+            "the stale release must hand the percent to the tmux write"
+        );
+        assert_eq!(
+            state.global.bottom_tab,
+            BottomTab::GitStatus,
+            "the stale end's moved branch selects no tab"
+        );
+        let drag = state
+            .split_drag
+            .expect("the new press must start a fresh drag");
+        assert_eq!(drag.press_col, 3);
+        assert!(!drag.moved, "the fresh press is not yet a drag");
+        assert_eq!(drag.rows, state.layout.bottom_panel_height);
+    }
+
+    #[test]
+    fn a_new_press_ends_an_unmoved_drag_without_a_tab_click() {
+        // An unmoved drag is only a held press: its stale end runs no
+        // tab click, because the user never let the button go on that
+        // label. The new press — here on Git while the stale one sat on
+        // Tasks — is the release that resolves into a click.
+        let mut state = AppState::new("%99".into());
+        state.layout.bottom_panel_height = 12;
+        state.global.bottom_percent = 30;
+        state.global.bottom_tab = BottomTab::Activity;
+
+        // An unmoved press on the Tasks label, then a second press on
+        // the Git label.
+        state.handle_terminal_click(28, 12, 40);
+        state.handle_terminal_click(28, 18, 40);
+
+        assert_eq!(
+            state.global.bottom_tab,
+            BottomTab::Activity,
+            "the stale unmoved press must not release on its label"
+        );
+        let drag = state
+            .split_drag
+            .expect("the new press started a fresh drag");
+        assert_eq!(drag.press_col, 18);
+
+        state.end_split_drag(40);
+        assert_eq!(
+            state.global.bottom_tab,
+            BottomTab::GitStatus,
+            "the new press's unmoved release is the click that selects"
+        );
+    }
+
     // ─── move_pane_selection edge cases ─────────────────────────────
 
     #[test]
