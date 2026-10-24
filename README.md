@@ -28,7 +28,7 @@
 - **Desktop notifications** 
   — native alerts when an agent finishes, needs permission, or errors out
 
-OpenCode uses a small local plugin bridge instead of per-event hook config. The plugin lives at `.opencode/plugins/tmux-agent-sidebar.js` and can be symlinked as a single file into `~/.config/opencode/plugins/` so it coexists with any existing plugins.
+OpenCode uses a small local plugin bridge instead of per-event hook config. The plugin lives at `.opencode/plugins/pmux-explorer.js` and can be symlinked as a single file into `~/.config/opencode/plugins/` so it coexists with any existing plugins.
 
 pi is supported through the pmux extension: pmux ships a pi extension that loads in every pi session and publishes the session's activity to the sidebar.
 
@@ -64,8 +64,8 @@ Reload tmux (`tmux source ~/.tmux.conf`), then press `prefix + I`. The install w
 
   ```sh
   mkdir -p ~/.config/opencode/plugins
-  ln -sf ~/.tmux/plugins/tmux-agent-sidebar/.opencode/plugins/tmux-agent-sidebar.js \
-    ~/.config/opencode/plugins/tmux-agent-sidebar.js
+  ln -sf ~/.tmux/plugins/pmux-explorer/.opencode/plugins/pmux-explorer.js \
+    ~/.config/opencode/plugins/pmux-explorer.js
   ```
 
 Full walkthroughs: [Claude Code setup](https://hiroppy.github.io/tmux-agent-sidebar/getting-started/claude-code/) · [Codex setup](https://hiroppy.github.io/tmux-agent-sidebar/getting-started/codex/) · [OpenCode setup](https://hiroppy.github.io/tmux-agent-sidebar/getting-started/opencode/)

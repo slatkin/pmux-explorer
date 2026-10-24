@@ -23,7 +23,7 @@ const HOOK_COMMAND = (() => {
   const hookScript = resolveHookScript();
   return hookScript
     ? { cmd: "bash", prefix: [hookScript, "opencode"] }
-    : { cmd: "tmux-agent-sidebar", prefix: ["hook", "opencode"] };
+    : { cmd: "pmux-explorer", prefix: ["hook", "opencode"] };
 })();
 
 // Fire-and-forget: OpenCode dispatches the `event` hook without awaiting
@@ -75,7 +75,7 @@ const extractPromptText = (parts) => {
   return chunks.join("\n");
 };
 
-export const TmuxAgentSidebar = async ({ directory }) => {
+export const PmuxExplorer = async ({ directory }) => {
   const cwd = typeof directory === "string" ? directory : "";
 
   return {

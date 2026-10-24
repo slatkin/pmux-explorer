@@ -57,7 +57,7 @@ The `<event>` names and JSON shape at this boundary are the **agent event protoc
 Only the producers differ per agent:
 
 - **claude / codex** — the hook script registered in a settings file; `setup claude|codex` (`src/cli/setup/`) merges the hook config into `~/.claude/settings.json` / `~/.codex/hooks.json` from the adapter's `HOOK_REGISTRATIONS` table.
-- **opencode** — a plugin bridge (`.opencode/plugins/tmux-agent-sidebar.js`) symlinked into `~/.config/opencode/plugins/`.
+- **opencode** — a plugin bridge (`.opencode/plugins/pmux-explorer.js`) symlinked into `~/.config/opencode/plugins/`.
 - **pi** — the pi extension that pmux ships (implemented outside this repo). pi has no hook config file to merge, so `setup pi` prints the producer contract instead: per event, the JSON fields a producer sends, generated from `adapter/pi.rs`'s `PI_EVENTS` table. `PI_EVENTS` is the source of truth for pi's protocol side, and tests pin it and the adapter's `parse()` arms in step.
 
 ### pi support and the pmux subagent
