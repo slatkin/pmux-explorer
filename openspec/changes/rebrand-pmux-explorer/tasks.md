@@ -18,12 +18,12 @@
 
 ## 3. Plugin, shell, and CI layer
 
-- [ ] 3.1 `git mv tmux-agent-sidebar.tmux pmux-explorer.tmux`; update the binary lookup and `@agent_sidebar_bin` to `@pmux_explorer_bin`
-- [ ] 3.2 `git mv agent-sidebar.conf pmux-explorer.conf`; update its `@agent_sidebar_*` options, the hook-dedupe match on `@pmux_explorer_bin`, and the `.tmux` reference to it
-- [ ] 3.3 `hook.sh`, `install-wizard.sh`, `Makefile` (`CLAUDE_PLUGIN` and install/uninstall targets), `scripts/`: names, paths, release asset names
-- [ ] 3.4 `.github/workflows/release.yml`: asset names `pmux-explorer-*`, kept in step with `install-wizard.sh`; `.github/workflows/deploy-website.yml`: names and paths
-- [ ] 3.5 `.claude-plugin/plugin.json` and `marketplace.json`: name and repository
-- [ ] 3.6 `git mv .opencode/plugins/tmux-agent-sidebar.js .opencode/plugins/pmux-explorer.js`; update its contents (`:26`) and the symlink steps in README and `AGENTS.md`
+- [x] 3.1 `git mv tmux-agent-sidebar.tmux pmux-explorer.tmux`; update the binary lookup and `@agent_sidebar_bin` to `@pmux_explorer_bin`
+- [x] 3.2 `git mv agent-sidebar.conf pmux-explorer.conf`; update its `@agent_sidebar_*` options, the hook-dedupe match on `@pmux_explorer_bin`, and the `.tmux` reference to it
+- [x] 3.3 `hook.sh`, `install-wizard.sh`, `Makefile` (`CLAUDE_PLUGIN` and install/uninstall targets), `scripts/`: names, paths, release asset names
+- [x] 3.4 `.github/workflows/release.yml`: asset names `pmux-explorer-*`, kept in step with `install-wizard.sh`; `.github/workflows/deploy-website.yml`: names and paths
+- [x] 3.5 `.claude-plugin/plugin.json` and `marketplace.json`: name and repository
+- [x] 3.6 `git mv .opencode/plugins/tmux-agent-sidebar.js .opencode/plugins/pmux-explorer.js`; update its contents (`:26`) and the symlink steps in README and `AGENTS.md`
 
 ## 4. Docs, skills, website, fixtures
 
