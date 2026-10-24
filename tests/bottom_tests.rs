@@ -490,8 +490,9 @@ fn tasks_scroll_clamps_when_the_list_shrinks() {
         .collect();
 
     let _ = render_to_string(&mut state, 28, 24);
-    // 10 items + spacer = 11 lines in a 18-row content area
-    // (`BOTTOM_PANEL_HEIGHT` − borders): no clamping needed.
+    // 10 items + spacer = 11 lines; at 30% of a 24-row sidebar the
+    // panel draws 7 rows, so the list already overflows the content
+    // rows and the offset may clamp.
     assert_eq!(state.tasks.scroll.total_lines, 11);
     state.tasks.scroll.offset = 5;
 

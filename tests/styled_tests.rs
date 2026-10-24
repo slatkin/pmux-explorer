@@ -25,7 +25,7 @@ fn snapshot_selected_focused_styled() {
     state.rebuild_row_targets();
     state.focus_state.sidebar_focused = true;
     state.global.selected_pane_row = 0;
-    state.bottom_panel_height = 0;
+    state.global.bottom_percent = 0;
 
     // Styled snapshot locks in the selected row's ┃[fg:153,bg:239] marker
     // and the selection background spanning its content cells.
@@ -381,7 +381,7 @@ fn snapshot_custom_theme_colors() {
     };
     // Unfocus sidebar so selected row doesn't use REVERSED (which hides colors)
     state.focus_state.sidebar_focused = false;
-    state.bottom_panel_height = 0;
+    state.global.bottom_percent = 0;
 
     // Styled snapshot locks in the custom theme colors (accent fg:196,
     // agent_claude fg:226, status_idle fg:46).

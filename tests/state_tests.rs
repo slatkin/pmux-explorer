@@ -1217,13 +1217,53 @@ fn rendered_filter_row_and_hit_test_agree_at_the_20_column_minimum() {
 }
 
 #[test]
+fn frame_layout_publishes_the_drawn_bottom_panel_rows() {
+    // `FrameLayout::bottom_panel_height` is the row count the frame
+    // actually drew — the percent split docked, the clamped third while
+    // floating, and zero when the percent hides the panel — never the
+    // configured percent itself.
+    let pane = make_pane(AgentType::Claude, PaneStatus::Idle);
+    let mut state = make_state(vec![]);
+    state.repo_groups = vec![make_repo_group("project", vec![pane])];
+
+    state.global.bottom_percent = 30;
+    render_to_string(&mut state, 40, 40);
+    assert_eq!(
+        state.layout.bottom_panel_height, 12,
+        "30% of a 40-row sidebar draws 12 bottom rows"
+    );
+
+    state.global.bottom_percent = 0;
+    render_to_string(&mut state, 40, 40);
+    assert_eq!(
+        state.layout.bottom_panel_height, 0,
+        "a percent of 0 draws no bottom panel"
+    );
+
+    state.global.bottom_percent = 100;
+    render_to_string(&mut state, 40, 40);
+    assert_eq!(
+        state.layout.bottom_panel_height, 37,
+        "100% of 40 rows clamps to 37 so the agent list keeps 3"
+    );
+
+    state.global.bottom_percent = 53;
+    state.sidebar_pane.floating = true;
+    render_to_string(&mut state, 40, 38);
+    assert_eq!(
+        state.layout.bottom_panel_height, 12,
+        "20 rows of a floating 38-row panel clamp to a third"
+    );
+}
+
+#[test]
 fn floating_panel_clicks_hit_the_clamped_bottom_panel_geometry() {
     // While the sidebar floats, the Activity/Git panel is clamped to a
-    // third of the panel height (20 → 12 of a 38-row panel). The mouse
-    // handlers must hit-test the clamped geometry the frame actually
-    // drew: the drawn tab row switches the tab, a drawn agent row in the
-    // band the unclamped height wrongly claimed selects that agent, and
-    // the wheel over those rows scrolls the agents list.
+    // third of the panel height (53% of 38 rows is 20 rows, clamped to
+    // 12). The mouse handlers must hit-test the clamped geometry the
+    // frame actually drew: the drawn tab row switches the tab, a drawn
+    // agent row in the band the unclamped height wrongly claimed selects
+    // that agent, and the wheel over those rows scrolls the agents list.
     let mut panes = Vec::new();
     for i in 0..20 {
         let mut pane = make_pane(AgentType::Claude, PaneStatus::Idle);
@@ -1233,7 +1273,7 @@ fn floating_panel_clicks_hit_the_clamped_bottom_panel_geometry() {
     let mut state = make_state(vec![]);
     state.repo_groups = vec![make_repo_group("project", panes)];
     state.sidebar_pane.floating = true;
-    state.bottom_panel_height = 20;
+    state.global.bottom_percent = 53;
 
     const TERM_WIDTH: u16 = 40;
     const TERM_HEIGHT: u16 = 38;

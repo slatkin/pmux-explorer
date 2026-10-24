@@ -123,7 +123,7 @@ fn snapshot_version_banner_does_not_duplicate_in_scroll_area() {
         local_version: "0.2.6".into(),
         latest_version: "0.2.7".into(),
     });
-    state.bottom_panel_height = 0;
+    state.global.bottom_percent = 0;
     state.rebuild_row_targets();
 
     let output = render_to_string(&mut state, 28, 10);
@@ -1789,11 +1789,11 @@ fn repo_group_with_root(name: &str, panes: Vec<PaneInfo>) -> RepoGroup {
     }
 }
 
-/// Shrink the bottom panel so the default 20-row bottom block leaves
-/// enough room for popup rendering in narrow test backends.
+/// Shrink the bottom panel to its 3-row minimum (1% clamps up to 3
+/// rows) so popup tests keep room in narrow test backends.
 fn make_state_for_popup_tests(groups: Vec<RepoGroup>) -> pmux_explorer::state::AppState {
     let mut state = make_state_with_groups(groups);
-    state.bottom_panel_height = 3;
+    state.global.bottom_percent = 1;
     state
 }
 
@@ -1952,7 +1952,7 @@ fn snapshot_spawn_modal_narrow_width_still_fits() {
 fn snapshot_spawn_modal_compact_layout_in_short_agent_area() {
     let pane = make_pane(AgentType::Claude, PaneStatus::Idle);
     let mut state = make_state_for_popup_tests(vec![repo_group_with_root("proj", vec![pane])]);
-    // Default bottom_panel_height is 3 in `make_state_for_popup_tests`.
+    // Default bottom panel is the 3-row minimum in `make_state_for_popup_tests`.
     // A 14-row terminal leaves 11 rows for the agents panel — below
     // SPAWN_MODAL_EXPANDED_MIN_HEIGHT (12), so the popup must fall
     // back to the label-less compact layout.
@@ -2029,7 +2029,8 @@ fn snapshot_sidebar_spawned_pane_appends_trailing_remove_marker() {
         ],
     };
     let mut state = make_state_with_groups(vec![group]);
-    state.bottom_panel_height = 3;
+    // 1% clamps up to the 3-row minimum.
+    state.global.bottom_percent = 1;
     let output = render_to_string(&mut state, 30, 20);
     insta::assert_snapshot!(output, @"
      ≡2 ●0 ◐0 ○2 ✕0             ⤢
@@ -2169,7 +2170,8 @@ fn snapshot_sidebar_spawned_long_branch_truncates_and_keeps_x() {
         )],
     };
     let mut state = make_state_with_groups(vec![group]);
-    state.bottom_panel_height = 3;
+    // 1% clamps up to the 3-row minimum.
+    state.global.bottom_percent = 1;
     let output = render_to_string(&mut state, 24, 20);
     insta::assert_snapshot!(output, @"
      ≡1 ●0 ◐0 ○1 ✕0       ⤢
@@ -2211,7 +2213,8 @@ fn snapshot_sidebar_spawned_coexists_with_port_display() {
         )],
     };
     let mut state = make_state_with_groups(vec![group]);
-    state.bottom_panel_height = 3;
+    // 1% clamps up to the 3-row minimum.
+    state.global.bottom_percent = 1;
     state.pane_state_mut("%9").ports = vec![3000];
     let output = render_to_string(&mut state, 30, 20);
     insta::assert_snapshot!(output, @"

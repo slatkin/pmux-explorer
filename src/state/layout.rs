@@ -140,6 +140,37 @@ pub(crate) fn filter_bar_layout(
     (chips, Some(control_col))
 }
 
+/// Rows the bottom panel draws for a `percent` of a sidebar `height`
+/// rows tall, rule included — the single split geometry the renderer,
+/// the hit test and the split drag all read, so the drawn rule and the
+/// clickable rule cannot be in different rows.
+///
+/// A percent of 0, or a sidebar shorter than 6 rows, hides the panel.
+/// Otherwise the rounded percent is clamped so the panel keeps at least
+/// 3 rows (the rule and two content rows) and the agent list keeps at
+/// least 3.
+pub(crate) fn split_rows(percent: u8, height: u16) -> u16 {
+    if percent == 0 || height < 6 {
+        return 0;
+    }
+    let rows = (u32::from(height) * u32::from(percent) + 50) / 100;
+    (rows as u16).clamp(3, height - 3)
+}
+
+/// The inverse of [`split_rows`] for a drag release: a bottom panel of
+/// `rows` rows is this percent of a sidebar `height` rows tall, rounded
+/// to the nearest percent. The result saturates at 100, the largest
+/// percent `@sidebar_bottom_height` accepts.
+// The split-drag release is the only caller; it lands with the drag
+// handlers in a later task.
+#[allow(dead_code)]
+pub(crate) fn percent_for_rows(rows: u16, height: u16) -> u8 {
+    if height == 0 {
+        return 0;
+    }
+    ((u32::from(rows) * 100 + u32::from(height) / 2) / u32::from(height)).min(100) as u8
+}
+
 impl AppState {
     pub fn rebuild_row_targets(&mut self) {
         // Reset stale repo filter if the repo no longer exists, and
@@ -376,5 +407,57 @@ impl AppState {
             self.global.queue_cursor_save();
             self.activate_selected_pane();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // The numbers are the spec's own scenarios, not free-standing
+    // arithmetic: each one pins a documented split case.
+
+    #[test]
+    fn split_rows_draws_the_rounded_percent() {
+        assert_eq!(split_rows(30, 40), 12, "30% of 40 rows is 12");
+        assert_eq!(split_rows(30, 60), 18, "30% of 60 rows is 18");
+    }
+
+    #[test]
+    fn split_rows_clamps_to_the_minimum_heights() {
+        assert_eq!(
+            split_rows(1, 40),
+            3,
+            "a small percent keeps the panel at its 3-row minimum"
+        );
+        assert_eq!(
+            split_rows(100, 40),
+            37,
+            "a large percent keeps the agent list at its 3-row minimum"
+        );
+    }
+
+    #[test]
+    fn split_rows_hides_the_panel() {
+        assert_eq!(split_rows(0, 40), 0, "a percent of 0 hides the panel");
+        assert_eq!(
+            split_rows(30, 5),
+            0,
+            "a sidebar shorter than 6 rows has no bottom panel"
+        );
+    }
+
+    #[test]
+    fn percent_for_rows_rounds_to_the_nearest_percent() {
+        assert_eq!(percent_for_rows(20, 40), 50, "20 rows of 40 is 50%");
+    }
+
+    #[test]
+    fn percent_round_trip_returns_the_same_rows() {
+        assert_eq!(
+            split_rows(percent_for_rows(37, 40), 40),
+            37,
+            "37 rows of 40 must give 37 rows again"
+        );
     }
 }

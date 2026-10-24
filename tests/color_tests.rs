@@ -845,7 +845,7 @@ fn test_branch_color_in_agent_panel() {
     }];
     state.rebuild_row_targets();
     state.focus_state.sidebar_focused = false;
-    state.bottom_panel_height = 0;
+    state.global.bottom_percent = 0;
 
     // Styled snapshot locks in the branch name rendered with branch color
     // (fg:109).
@@ -998,7 +998,7 @@ fn test_running_status_color_in_output() {
     state.repo_groups = vec![make_repo_group("project", vec![pane])];
     state.rebuild_row_targets();
     state.focus_state.sidebar_focused = false;
-    state.bottom_panel_height = 0;
+    state.global.bottom_percent = 0;
 
     // Styled snapshot locks in the running spinner using SPINNER_PULSE[0]
     // color (fg:82).
@@ -1026,7 +1026,7 @@ fn test_waiting_status_color_in_output() {
     state.repo_groups = vec![make_repo_group("project", vec![pane])];
     state.rebuild_row_targets();
     state.focus_state.sidebar_focused = false;
-    state.bottom_panel_height = 0;
+    state.global.bottom_percent = 0;
 
     // Styled snapshot locks in the waiting status using status_waiting
     // color (fg:221).
@@ -1054,7 +1054,7 @@ fn test_error_status_color_in_output() {
     state.repo_groups = vec![make_repo_group("project", vec![pane])];
     state.rebuild_row_targets();
     state.focus_state.sidebar_focused = false;
-    state.bottom_panel_height = 0;
+    state.global.bottom_percent = 0;
 
     // Styled snapshot locks in the error status using status_error
     // color (fg:167).

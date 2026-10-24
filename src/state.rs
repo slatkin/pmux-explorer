@@ -24,8 +24,8 @@ pub use activity::ActivityState;
 pub use filter::{RepoFilter, StatusCounts, StatusFilter};
 pub use focus::{Focus, FocusState};
 pub use global::GlobalState;
-pub(crate) use layout::filter_bar_layout;
 pub use layout::{FrameLayout, HyperlinkOverlay, RepoSpawnTarget, RowTarget, SpawnRemoveTarget};
+pub(crate) use layout::{filter_bar_layout, split_rows};
 pub(crate) use notices::debug_forced_display;
 pub use notices::{ClaudePluginNotice, NoticesCopyTarget, NoticesMissingHookGroup, NoticesState};
 pub use pane_runtime::{PaneRuntimeMap, PaneRuntimeState};
@@ -180,9 +180,6 @@ pub struct AppState {
     pub version_notice: Option<crate::version::UpdateNotice>,
     /// Shared state across sidebar instances, persisted to tmux global variables.
     pub global: GlobalState,
-    /// Height of the bottom panel in lines. Loaded once at startup from
-    /// the `@sidebar_bottom_height` tmux option. A value of 0 hides the panel.
-    pub bottom_panel_height: u16,
     /// Whether the pet animation is drawn and ticked. Loaded once at startup
     /// from the `@sidebar_pet` tmux option. Defaults to `false`.
     pub pet_enabled: bool,
@@ -232,7 +229,6 @@ impl AppState {
             pet_working_paper_seed: 1,
             version_notice: None,
             global: GlobalState::new(),
-            bottom_panel_height: crate::ui::BOTTOM_PANEL_HEIGHT,
             pet_enabled: false,
         };
         crate::state::pet::reseed_pet_idle_motion(&mut state);
@@ -1227,7 +1223,9 @@ mod tests {
         // the agent instead of being swallowed.
         let mut state = AppState::new("%99".into());
         state.sidebar_pane.floating = true;
-        state.bottom_panel_height = 20;
+        // 53% of a 38-row sidebar is 20 rows — the unclamped height the
+        // frame's drawn 12 rows replaced.
+        state.global.bottom_percent = 53;
         state.layout.bottom_panel_height = 12;
         state.layout.pane_row_targets = vec![
             RowTarget {
