@@ -412,58 +412,18 @@ impl AppState {
     /// via line_to_row (adjusted for scroll offset) and activates that pane.
     /// Row 0 is the fixed filter bar, row 1+ maps to the scrollable agent list.
     pub fn handle_mouse_click(&mut self, row: u16, col: u16) {
-        if self.is_notices_popup_open() {
-            if let Some(area) = self.notices_popup_area()
-                && point_in_rect(row, col, area)
-            {
-                if let Some(agent) = self.notices_copy_target_at(row, col).map(str::to_string) {
-                    self.copy_notices_prompt(&agent);
-                }
-                return;
-            }
-            self.close_notices_popup();
+        if self.handle_notices_popup_click(row, col) {
             return;
         }
-        if self.is_repo_popup_open() {
-            if let Some(area) = self.repo_popup_area()
-                && point_in_rect(row, col, area)
-            {
-                // Skip clicks on the popup chrome (top border / title row).
-                // Without this guard `saturating_sub(1)` collapses a click on
-                // the title row into `item_index == 0`, switching the filter
-                // to the first repo the moment the user reaches for the
-                // popup.
-                if row > area.y {
-                    let item_index = (row - area.y - 1) as usize;
-                    if item_index < self.repo_names().len() {
-                        self.set_repo_popup_selected(item_index);
-                        self.confirm_repo_popup();
-                    }
-                }
-                return;
-            }
-            self.close_repo_popup();
+        if self.handle_repo_popup_click(row, col) {
             return;
         }
-        if self.is_spawn_input_open() {
-            if let Some(area) = self.spawn_input_popup_area()
-                && point_in_rect(row, col, area)
-            {
-                return;
-            }
-            self.close_spawn_input();
+        if self.handle_spawn_input_click(row, col) {
             return;
         }
-        if self.is_remove_confirm_open() {
-            if let Some(area) = self.remove_confirm_popup_area()
-                && point_in_rect(row, col, area)
-            {
-                return;
-            }
-            self.close_remove_confirm();
+        if self.handle_remove_confirm_click(row, col) {
             return;
         }
-
         if row == 0 {
             self.handle_filter_click(col);
             return;
@@ -472,7 +432,101 @@ impl AppState {
             self.handle_secondary_header_click(col);
             return;
         }
+        if self.handle_agent_row_click(row, col) {
+            return;
+        }
+        let line_index = (row as usize - 2) + self.scrolls.panes.offset;
+        if let Some(Some(agent_row)) = self.layout.line_to_row.get(line_index) {
+            self.global.selected_pane_row = *agent_row;
+            self.global.queue_cursor_save();
+            self.activate_selected_pane();
+        }
+    }
 
+    /// The notices-popup branch of [`Self::handle_mouse_click`]: a click
+    /// inside the popup copies the clicked agent name, a click outside
+    /// closes the popup. `false` when the popup is not open.
+    fn handle_notices_popup_click(&mut self, row: u16, col: u16) -> bool {
+        if !self.is_notices_popup_open() {
+            return false;
+        }
+        if let Some(area) = self.notices_popup_area()
+            && point_in_rect(row, col, area)
+        {
+            if let Some(agent) = self.notices_copy_target_at(row, col).map(str::to_string) {
+                self.copy_notices_prompt(&agent);
+            }
+            return true;
+        }
+        self.close_notices_popup();
+        true
+    }
+
+    /// The repo-popup branch of [`Self::handle_mouse_click`]: a click
+    /// inside the popup selects and confirms the clicked repo, a click
+    /// outside closes the popup. `false` when the popup is not open.
+    fn handle_repo_popup_click(&mut self, row: u16, col: u16) -> bool {
+        if !self.is_repo_popup_open() {
+            return false;
+        }
+        if let Some(area) = self.repo_popup_area()
+            && point_in_rect(row, col, area)
+        {
+            // Skip clicks on the popup chrome (top border / title row).
+            // Without this guard `saturating_sub(1)` collapses a click on
+            // the title row into `item_index == 0`, switching the filter
+            // to the first repo the moment the user reaches for the
+            // popup.
+            if row > area.y {
+                let item_index = (row - area.y - 1) as usize;
+                if item_index < self.repo_names().len() {
+                    self.set_repo_popup_selected(item_index);
+                    self.confirm_repo_popup();
+                }
+            }
+            return true;
+        }
+        self.close_repo_popup();
+        true
+    }
+
+    /// The spawn-modal branch of [`Self::handle_mouse_click`]: a click
+    /// inside the modal is swallowed by it, a click outside dismisses
+    /// it. `false` when the modal is not open.
+    fn handle_spawn_input_click(&mut self, row: u16, col: u16) -> bool {
+        if !self.is_spawn_input_open() {
+            return false;
+        }
+        if let Some(area) = self.spawn_input_popup_area()
+            && point_in_rect(row, col, area)
+        {
+            return true;
+        }
+        self.close_spawn_input();
+        true
+    }
+
+    /// The remove-confirmation branch of [`Self::handle_mouse_click`]:
+    /// a click inside the dialog is swallowed by it, a click outside
+    /// dismisses it. `false` when the dialog is not open.
+    fn handle_remove_confirm_click(&mut self, row: u16, col: u16) -> bool {
+        if !self.is_remove_confirm_open() {
+            return false;
+        }
+        if let Some(area) = self.remove_confirm_popup_area()
+            && point_in_rect(row, col, area)
+        {
+            return true;
+        }
+        self.close_remove_confirm();
+        true
+    }
+
+    /// The agent-list branch of [`Self::handle_mouse_click`]: the `+`
+    /// spawn button and the red `×` remove marker win before the
+    /// body-row fallback so a click on a button never also shifts the
+    /// pane selection. `false` when no control was hit.
+    fn handle_agent_row_click(&mut self, row: u16, col: u16) -> bool {
         // Check the `+` spawn buttons before the pane-row fallback so a
         // click on the button doesn't also shift the pane selection.
         if let Some((repo_name, repo_root, anchor_y)) = self
@@ -483,7 +537,7 @@ impl AppState {
             .map(|t| (t.repo_name.clone(), t.repo_root.clone(), t.rect.y))
         {
             self.open_spawn_input_for_repo(repo_name, repo_root, Some(anchor_y));
-            return;
+            return true;
         }
 
         // Check the red `×` remove markers next to spawn-created branches.
@@ -495,15 +549,9 @@ impl AppState {
             .map(|t| t.pane_id.clone())
         {
             self.open_remove_confirm_for_pane(pane_id);
-            return;
+            return true;
         }
-
-        let line_index = (row as usize - 2) + self.scrolls.panes.offset;
-        if let Some(Some(agent_row)) = self.layout.line_to_row.get(line_index) {
-            self.global.selected_pane_row = *agent_row;
-            self.global.queue_cursor_save();
-            self.activate_selected_pane();
-        }
+        false
     }
 }
 

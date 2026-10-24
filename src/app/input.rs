@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEventKind};
 use ratatui::{Terminal, backend::CrosstermBackend};
 
-use crate::state::{AppState, BottomTab, Focus};
+use crate::state::{AppState, BottomTab, Focus, StatusFilter};
 use crate::worktree::RemoveMode;
 
 /// Dispatch a single crossterm [`Event`] into the [`AppState`], returning
@@ -78,83 +78,100 @@ pub(super) fn handle_key_event(
     state: &mut AppState,
     git_tab_active: &AtomicBool,
 ) -> bool {
+    if handle_modal_key(key, state) {
+        return true;
+    }
+    handle_main_key(key, state, git_tab_active);
+    true
+}
+
+/// Swallow the whole keyboard while a modal layer (notices popup, spawn
+/// modal, remove confirmation or repo popup) is open; a key the layer
+/// does not bind does nothing, but still never reaches the main keys.
+/// `false` when no modal layer is open.
+fn handle_modal_key(key: KeyEvent, state: &mut AppState) -> bool {
     if state.is_notices_popup_open() {
-        if key.code == KeyCode::Esc {
-            state.close_notices_popup();
-        }
-        return true;
-    }
-    if state.is_spawn_input_open() {
-        match key.code {
-            KeyCode::Esc => state.close_spawn_input(),
-            KeyCode::Enter => state.confirm_spawn_input(),
-            KeyCode::Tab | KeyCode::Down => state.spawn_input_next_field(),
-            KeyCode::BackTab | KeyCode::Up => state.spawn_input_prev_field(),
-            KeyCode::Left => state.spawn_input_cycle(-1),
-            KeyCode::Right => state.spawn_input_cycle(1),
-            KeyCode::Backspace => state.spawn_input_pop_char(),
-            KeyCode::Char(c) => state.spawn_input_push_char(c),
-            _ => {}
-        }
-        return true;
-    }
-    if state.is_remove_confirm_open() {
-        match key.code {
-            KeyCode::Esc | KeyCode::Char('n') => state.close_remove_confirm(),
-            KeyCode::Char('c') => state.confirm_remove(RemoveMode::WindowOnly),
-            KeyCode::Enter | KeyCode::Char('y') => {
-                state.confirm_remove(RemoveMode::WindowAndWorktree)
-            }
-            _ => {}
-        }
-        return true;
-    }
-    if state.is_repo_popup_open() {
+        handle_notices_popup_key(key, state);
+    } else if state.is_spawn_input_open() {
+        handle_spawn_input_key(key, state);
+    } else if state.is_remove_confirm_open() {
+        handle_remove_confirm_key(key, state);
+    } else if state.is_repo_popup_open() {
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
-        match key.code {
-            KeyCode::Esc => state.close_repo_popup(),
-            KeyCode::Char('j') | KeyCode::Down => repo_popup_nav_down(state),
-            KeyCode::Char('n') if ctrl => repo_popup_nav_down(state),
-            KeyCode::Char('k') | KeyCode::Up => repo_popup_nav_up(state),
-            KeyCode::Char('p') if ctrl => repo_popup_nav_up(state),
-            KeyCode::Enter => state.confirm_repo_popup(),
-            _ => {}
-        }
-        return true;
+        handle_repo_popup_key(key, state, ctrl);
+    } else {
+        return false;
     }
-    let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+    true
+}
+
+/// Keys while the notices popup is open: Esc closes it, every other key
+/// is swallowed.
+fn handle_notices_popup_key(key: KeyEvent, state: &mut AppState) {
+    if key.code == KeyCode::Esc {
+        state.close_notices_popup();
+    }
+}
+
+/// Keys while the spawn modal is open: it owns the keyboard — Esc
+/// cancels, Enter confirms, Tab/BackTab and the arrows walk the fields,
+/// characters edit the focused field.
+fn handle_spawn_input_key(key: KeyEvent, state: &mut AppState) {
     match key.code {
-        KeyCode::Esc => {
-            if state.focus_state.focus == Focus::ActivityLog
-                || state.focus_state.focus == Focus::Filter
-            {
-                state.focus_state.focus = Focus::Panes;
-            }
-        }
+        KeyCode::Esc => state.close_spawn_input(),
+        KeyCode::Enter => state.confirm_spawn_input(),
+        KeyCode::Tab | KeyCode::Down => state.spawn_input_next_field(),
+        KeyCode::BackTab | KeyCode::Up => state.spawn_input_prev_field(),
+        KeyCode::Left => state.spawn_input_cycle(-1),
+        KeyCode::Right => state.spawn_input_cycle(1),
+        KeyCode::Backspace => state.spawn_input_pop_char(),
+        KeyCode::Char(c) => state.spawn_input_push_char(c),
+        _ => {}
+    }
+}
+
+/// Keys while the remove confirmation is open: Esc and `n` cancel, `c`
+/// removes only the window, Enter and `y` remove the worktree too.
+fn handle_remove_confirm_key(key: KeyEvent, state: &mut AppState) {
+    match key.code {
+        KeyCode::Esc | KeyCode::Char('n') => state.close_remove_confirm(),
+        KeyCode::Char('c') => state.confirm_remove(RemoveMode::WindowOnly),
+        KeyCode::Enter | KeyCode::Char('y') => state.confirm_remove(RemoveMode::WindowAndWorktree),
+        _ => {}
+    }
+}
+
+/// Keys while the repo popup is open: j/Ctrl-n and k/Ctrl-p move the
+/// selection, Enter confirms, Esc cancels.
+fn handle_repo_popup_key(key: KeyEvent, state: &mut AppState, ctrl: bool) {
+    match key.code {
+        KeyCode::Esc => state.close_repo_popup(),
+        KeyCode::Char('j') | KeyCode::Down => repo_popup_nav_down(state),
+        KeyCode::Char('n') if ctrl => repo_popup_nav_down(state),
+        KeyCode::Char('k') | KeyCode::Up => repo_popup_nav_up(state),
+        KeyCode::Char('p') if ctrl => repo_popup_nav_up(state),
+        KeyCode::Enter => state.confirm_repo_popup(),
+        _ => {}
+    }
+}
+
+/// Keys with no modal layer open: bottom-panel navigation and focus,
+/// the filter bar's keys while it has focus, the agent list's item
+/// actions and the bottom tab cycle.
+fn handle_main_key(key: KeyEvent, state: &mut AppState, git_tab_active: &AtomicBool) {
+    let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+    // The filter bar's keys only act while it has focus; elsewhere they
+    // fall through to the wildcard like in the caller's match below.
+    if handle_filter_keys(state, key.code) {
+        return;
+    }
+    match key.code {
+        KeyCode::Esc => esc_returns_focus_to_panes(state),
         KeyCode::Char('j') | KeyCode::Down => pane_nav_down(state),
         KeyCode::Char('n') if ctrl => pane_nav_down(state),
         KeyCode::Char('k') | KeyCode::Up => pane_nav_up(state),
         KeyCode::Char('p') if ctrl => pane_nav_up(state),
         KeyCode::Char('p') => state.toggle_popout(),
-        KeyCode::Char('h') | KeyCode::Left => {
-            if state.focus_state.focus == Focus::Filter {
-                state.global.status_filter = state.global.status_filter.prev();
-                state.global.save_filter();
-                state.rebuild_row_targets();
-            }
-        }
-        KeyCode::Char('l') | KeyCode::Right => {
-            if state.focus_state.focus == Focus::Filter {
-                state.global.status_filter = state.global.status_filter.next();
-                state.global.save_filter();
-                state.rebuild_row_targets();
-            }
-        }
-        KeyCode::Char('r') => {
-            if state.focus_state.focus == Focus::Filter {
-                state.toggle_repo_popup();
-            }
-        }
         KeyCode::Char('n') => {
             if state.focus_state.focus == Focus::Panes {
                 state.open_spawn_input_from_selection();
@@ -170,23 +187,54 @@ pub(super) fn handle_key_event(
                 state.activate_selected_pane();
             }
         }
-        KeyCode::Tab => {
-            // Tab only cycles the status filter while the filter bar has
-            // focus, exactly like the Left/Right keys. Cycling it from the
-            // agent list made Tab change a server-wide setting by accident.
-            if state.focus_state.focus == Focus::Filter {
-                state.global.status_filter = state.global.status_filter.next();
-                state.global.save_filter();
-                state.rebuild_row_targets();
-            }
-        }
-        KeyCode::BackTab => {
-            state.next_bottom_tab();
-            git_tab_active.store(state.global.bottom_tab.is_git_status(), Ordering::Relaxed);
-        }
+        KeyCode::BackTab => handle_back_tab(state, git_tab_active),
         _ => {}
     }
+}
+
+/// The filter bar's own keys while it has focus: Left/h and Right/l
+/// step the status filter, Tab cycles it like Right does, `r` opens the
+/// repo popup. Tab only cycles the status filter while the filter bar
+/// has focus — cycling it from the agent list made Tab change a
+/// server-wide setting by accident.
+fn handle_filter_keys(state: &mut AppState, code: KeyCode) -> bool {
+    if state.focus_state.focus != Focus::Filter {
+        return false;
+    }
+    match code {
+        KeyCode::Char('h') | KeyCode::Left => {
+            apply_status_filter(state, state.global.status_filter.prev());
+        }
+        KeyCode::Char('l') | KeyCode::Right | KeyCode::Tab => {
+            apply_status_filter(state, state.global.status_filter.next());
+        }
+        KeyCode::Char('r') => state.toggle_repo_popup(),
+        _ => return false,
+    }
     true
+}
+
+/// Adopt a new status filter: persist it and rebuild the agent rows to
+/// match. Shared by the Left/Right keys and Tab.
+fn apply_status_filter(state: &mut AppState, filter: StatusFilter) {
+    state.global.status_filter = filter;
+    state.global.save_filter();
+    state.rebuild_row_targets();
+}
+
+/// Esc from the bottom panel (activity log or filter bar) returns focus
+/// to the agent list.
+fn esc_returns_focus_to_panes(state: &mut AppState) {
+    if state.focus_state.focus == Focus::ActivityLog || state.focus_state.focus == Focus::Filter {
+        state.focus_state.focus = Focus::Panes;
+    }
+}
+
+/// BackTab advances the bottom panel's tab cycle and keeps the git
+/// poller flag in step with the Git tab.
+fn handle_back_tab(state: &mut AppState, git_tab_active: &AtomicBool) {
+    state.next_bottom_tab();
+    git_tab_active.store(state.global.bottom_tab.is_git_status(), Ordering::Relaxed);
 }
 
 fn pane_nav_down(state: &mut AppState) {
