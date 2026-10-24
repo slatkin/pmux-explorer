@@ -33,8 +33,8 @@ fn notices_popup_version_text(notice: Option<&crate::version::UpdateNotice>) -> 
 /// Description of how the `Plugin / claude` sub-item should render.
 /// `body` is the text that appears after `- ` on the sub-item line, and
 /// `show_prompt_button` toggles the right-aligned `[prompt]` clickable
-/// label (set for both `InstallRecommended` and `DuplicateHooks`, since
-/// both states are resolved by the same migration recipe).
+/// label (set for `InstallRecommended`, which is resolved by the
+/// install recipe the prompt hands the LLM).
 struct PluginSubItem {
     body: String,
     show_prompt_button: bool,
@@ -43,11 +43,7 @@ struct PluginSubItem {
 fn notices_popup_plugin_subitem(notice: Option<&ClaudePluginNotice>) -> Option<PluginSubItem> {
     match (debug_forced_display(), notice) {
         (_, Some(ClaudePluginNotice::InstallRecommended)) => Some(PluginSubItem {
-            body: "migrate".to_string(),
-            show_prompt_button: true,
-        }),
-        (_, Some(ClaudePluginNotice::DuplicateHooks)) => Some(PluginSubItem {
-            body: "cleanup".to_string(),
+            body: "install".to_string(),
             show_prompt_button: true,
         }),
         (_, Some(ClaudePluginNotice::Stale)) => Some(PluginSubItem {
@@ -398,12 +394,6 @@ mod tests {
         state
     }
 
-    fn state_with_plugin_duplicate_hooks() -> AppState {
-        let mut state = AppState::new(String::new());
-        state.notices.claude_plugin_notice = Some(ClaudePluginNotice::DuplicateHooks);
-        state
-    }
-
     fn render_notices_popup_text(state: &mut AppState, width: u16, height: u16) -> String {
         let backend = TestBackend::new(width, height);
         let mut terminal = Terminal::new(backend).unwrap();
@@ -480,34 +470,17 @@ mod tests {
     }
 
     #[test]
-    fn snapshot_notices_popup_plugin_duplicate_hooks() {
-        // Plugin is installed AND the user still has legacy
-        // settings.json hook entries → render the cleanup nudge with
-        // the [prompt] button. The migration prompt handles cleanup.
-        let mut state = state_with_plugin_duplicate_hooks();
-        let text = render_notices_popup_text(&mut state, 40, 10);
-        insta::assert_snapshot!(text, @r"
-        ┌──────────────────────────┐
-        │ Notices                  │
-        │   Plugin                 │
-        │     claude               │
-        │       cleanup    [prompt]│
-        └──────────────────────────┘
-        ");
-    }
-
-    #[test]
     fn snapshot_notices_popup_plugin_install_recommended_only() {
-        // No plugin install recorded → show migration prompt with the
+        // No plugin install recorded → show install prompt with the
         // [prompt] click button right-aligned on the sub-item row.
         let mut state = state_with_plugin_install_recommended();
         let text = render_notices_popup_text(&mut state, 40, 10);
-        insta::assert_snapshot!(text, @r"
+        insta::assert_snapshot!(text, @"
         ┌──────────────────────────┐
         │ Notices                  │
         │   Plugin                 │
         │     claude               │
-        │       migrate    [prompt]│
+        │       install    [prompt]│
         └──────────────────────────┘
         ");
     }

@@ -1,15 +1,15 @@
 #[allow(dead_code, unused_imports)]
 mod test_helpers;
 
-use test_helpers::*;
-use tmux_agent_sidebar::activity::{ActivityEntry, TaskProgress, TaskStatus};
-use tmux_agent_sidebar::group::{PaneGitInfo, RepoGroup};
-use tmux_agent_sidebar::pmux_task::PmuxTaskKind;
-use tmux_agent_sidebar::state::{Focus, PopupState, RepoFilter, StatusFilter};
-use tmux_agent_sidebar::tmux::{
+use pmux_explorer::activity::{ActivityEntry, TaskProgress, TaskStatus};
+use pmux_explorer::group::{PaneGitInfo, RepoGroup};
+use pmux_explorer::pmux_task::PmuxTaskKind;
+use pmux_explorer::state::{Focus, PopupState, RepoFilter, StatusFilter};
+use pmux_explorer::tmux::{
     AgentType, PaneInfo, PaneStatus, PermissionMode, SessionInfo, SubagentInfo, SubagentParent,
     WindowInfo, WorktreeMetadata,
 };
+use test_helpers::*;
 
 // ─── UI Snapshot Tests ─────────────────────────────────────────────
 
@@ -119,7 +119,7 @@ fn snapshot_version_banner_does_not_duplicate_in_scroll_area() {
         }],
     }]);
     state.repo_groups = vec![make_repo_group("project", vec![pane])];
-    state.version_notice = Some(tmux_agent_sidebar::version::UpdateNotice {
+    state.version_notice = Some(pmux_explorer::version::UpdateNotice {
         local_version: "0.2.6".into(),
         latest_version: "0.2.7".into(),
     });
@@ -302,7 +302,7 @@ fn snapshot_two_agents_same_window_ui() {
         prompt_is_response: false,
         started_at: None,
         wait_reason: String::new(),
-        permission_mode: tmux_agent_sidebar::tmux::PermissionMode::Default,
+        permission_mode: pmux_explorer::tmux::PermissionMode::Default,
         subagents: vec![],
         pane_pid: None,
         worktree: WorktreeMetadata::default(),
@@ -324,7 +324,7 @@ fn snapshot_two_agents_same_window_ui() {
         prompt_is_response: false,
         started_at: None,
         wait_reason: String::new(),
-        permission_mode: tmux_agent_sidebar::tmux::PermissionMode::Default,
+        permission_mode: pmux_explorer::tmux::PermissionMode::Default,
         subagents: vec![],
         pane_pid: None,
         worktree: WorktreeMetadata::default(),
@@ -585,7 +585,7 @@ fn snapshot_activity_log_long_label_ui() {
     state.activity.entries = vec![ActivityEntry {
         timestamp: "10:32".into(),
         tool: "Read".into(),
-        label: "config/tmux-agent-sidebar-rs/src/very-long-filename.rs".into(),
+        label: "config/pmux-explorer-rs/src/very-long-filename.rs".into(),
     }];
 
     let output = render_to_string(&mut state, 28, 25);
@@ -596,9 +596,9 @@ fn snapshot_activity_log_long_label_ui() {
     ┃ ● claude
     ╭ Activity│Tasks│Git ──────╮
     │10:32                 Read│
-    │  config/tmux-agent-sideba│
-    │  r-rs/src/very-long-filen│
-    │  ame.rs                  │
+    │  config/pmux-explorer-rs/│
+    │  src/very-long-filename.r│
+    │  s                       │
     ╰──────────────────────────╯
     ");
 }
@@ -729,8 +729,8 @@ fn snapshot_narrow_width_ui() {
 
 /// Create a state with a dummy session so draw() doesn't show "No agent panes found"
 fn make_state_with_groups(
-    groups: Vec<tmux_agent_sidebar::group::RepoGroup>,
-) -> tmux_agent_sidebar::state::AppState {
+    groups: Vec<pmux_explorer::group::RepoGroup>,
+) -> pmux_explorer::state::AppState {
     let pane = make_pane(AgentType::Claude, PaneStatus::Idle);
     let mut state = make_state(vec![SessionInfo {
         session_name: "main".into(),
@@ -759,7 +759,7 @@ fn snapshot_worktree_branch_ui() {
         is_worktree: true,
         worktree_name: None,
     };
-    let mut state = make_state_with_groups(vec![tmux_agent_sidebar::group::RepoGroup {
+    let mut state = make_state_with_groups(vec![pmux_explorer::group::RepoGroup {
         name: "project".into(),
         has_focus: true,
         panes: vec![(pane, git_info)],
@@ -787,7 +787,7 @@ fn snapshot_worktree_long_branch_truncated_ui() {
         is_worktree: true,
         worktree_name: None,
     };
-    let mut state = make_state_with_groups(vec![tmux_agent_sidebar::group::RepoGroup {
+    let mut state = make_state_with_groups(vec![pmux_explorer::group::RepoGroup {
         name: "project".into(),
         has_focus: true,
         panes: vec![(pane, git_info)],
@@ -814,7 +814,7 @@ fn snapshot_long_branch_with_ports_ui() {
         is_worktree: false,
         worktree_name: None,
     };
-    let mut state = make_state_with_groups(vec![tmux_agent_sidebar::group::RepoGroup {
+    let mut state = make_state_with_groups(vec![pmux_explorer::group::RepoGroup {
         name: "project".into(),
         has_focus: true,
         panes: vec![(pane, git_info)],
@@ -932,7 +932,7 @@ fn snapshot_all_elements_combined_ui() {
         worktree_name: None,
     };
 
-    let mut state = make_state_with_groups(vec![tmux_agent_sidebar::group::RepoGroup {
+    let mut state = make_state_with_groups(vec![pmux_explorer::group::RepoGroup {
         name: "project".into(),
         has_focus: true,
         panes: vec![(pane, git_info)],
@@ -1116,7 +1116,7 @@ fn snapshot_response_with_branch_ui() {
         is_worktree: false,
         worktree_name: None,
     };
-    let mut state = make_state_with_groups(vec![tmux_agent_sidebar::group::RepoGroup {
+    let mut state = make_state_with_groups(vec![pmux_explorer::group::RepoGroup {
         name: "project".into(),
         has_focus: true,
         panes: vec![(pane, git_info)],
@@ -1208,7 +1208,7 @@ fn snapshot_worktree_with_name_ui() {
         is_worktree: true,
         worktree_name: Some("auth-wt".into()),
     };
-    let mut state = make_state_with_groups(vec![tmux_agent_sidebar::group::RepoGroup {
+    let mut state = make_state_with_groups(vec![pmux_explorer::group::RepoGroup {
         name: "project".into(),
         has_focus: true,
         panes: vec![(pane, git_info)],
@@ -1235,7 +1235,7 @@ fn snapshot_worktree_name_same_as_branch_ui() {
         is_worktree: true,
         worktree_name: Some("feat/auth".into()),
     };
-    let mut state = make_state_with_groups(vec![tmux_agent_sidebar::group::RepoGroup {
+    let mut state = make_state_with_groups(vec![pmux_explorer::group::RepoGroup {
         name: "project".into(),
         has_focus: true,
         panes: vec![(pane, git_info)],
@@ -1791,7 +1791,7 @@ fn repo_group_with_root(name: &str, panes: Vec<PaneInfo>) -> RepoGroup {
 
 /// Shrink the bottom panel so the default 20-row bottom block leaves
 /// enough room for popup rendering in narrow test backends.
-fn make_state_for_popup_tests(groups: Vec<RepoGroup>) -> tmux_agent_sidebar::state::AppState {
+fn make_state_for_popup_tests(groups: Vec<RepoGroup>) -> pmux_explorer::state::AppState {
     let mut state = make_state_with_groups(groups);
     state.bottom_panel_height = 3;
     state

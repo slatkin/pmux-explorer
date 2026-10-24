@@ -1,11 +1,11 @@
 #[allow(dead_code, unused_imports)]
 mod test_helpers;
 
+use pmux_explorer::activity::ActivityEntry;
+use pmux_explorer::state::{BottomTab, Focus};
+use pmux_explorer::task_store;
+use pmux_explorer::tmux::{AgentType, PaneStatus, SessionInfo, WindowInfo};
 use test_helpers::*;
-use tmux_agent_sidebar::activity::ActivityEntry;
-use tmux_agent_sidebar::state::{BottomTab, Focus};
-use tmux_agent_sidebar::task_store;
-use tmux_agent_sidebar::tmux::{AgentType, PaneStatus, SessionInfo, WindowInfo};
 
 // ─── Bottom Tab Tests ──────────────────────────────────────────────
 
@@ -43,14 +43,14 @@ fn test_scroll_bottom_dispatches() {
 
     // Set up git scroll state
     state.git.unstaged_files = vec![
-        tmux_agent_sidebar::git::GitFileEntry {
+        pmux_explorer::git::GitFileEntry {
             status: 'M',
             name: "file1.rs".into(),
             additions: 0,
             deletions: 0,
             path: String::new(),
         },
-        tmux_agent_sidebar::git::GitFileEntry {
+        pmux_explorer::git::GitFileEntry {
             status: 'M',
             name: "file2.rs".into(),
             additions: 0,
@@ -97,14 +97,14 @@ fn snapshot_git_status_tab_ui() {
     state.git.branch = "feature/sidebar".into();
     state.git.ahead_behind = Some((2, 1));
     state.git.unstaged_files = vec![
-        tmux_agent_sidebar::git::GitFileEntry {
+        pmux_explorer::git::GitFileEntry {
             status: 'M',
             name: "src/ui/panes.rs".into(),
             additions: 30,
             deletions: 10,
             path: String::new(),
         },
-        tmux_agent_sidebar::git::GitFileEntry {
+        pmux_explorer::git::GitFileEntry {
             status: 'M',
             name: "src/state.rs".into(),
             additions: 12,
@@ -597,14 +597,14 @@ fn snapshot_git_full_info_ui() {
     state.git.ahead_behind = Some((0, 0));
     state.git.diff_stat = Some((120, 30));
     state.git.unstaged_files = vec![
-        tmux_agent_sidebar::git::GitFileEntry {
+        pmux_explorer::git::GitFileEntry {
             status: 'M',
             name: "src/state.rs".into(),
             additions: 42,
             deletions: 10,
             path: String::new(),
         },
-        tmux_agent_sidebar::git::GitFileEntry {
+        pmux_explorer::git::GitFileEntry {
             status: 'M',
             name: "src/ui/bottom.rs".into(),
             additions: 85,
@@ -688,7 +688,7 @@ fn snapshot_git_staged_file_diff_right_ui() {
     state.focus_state.sidebar_focused = true;
     state.git.branch = "main".into();
     state.git.diff_stat = Some((10, 2));
-    state.git.staged_files = vec![tmux_agent_sidebar::git::GitFileEntry {
+    state.git.staged_files = vec![pmux_explorer::git::GitFileEntry {
         status: 'M',
         name: "app.rs".into(),
         additions: 10,
@@ -730,7 +730,7 @@ fn snapshot_git_unstaged_long_name_diff_right_ui() {
     state.focus_state.sidebar_focused = true;
     state.git.branch = "main".into();
     state.git.diff_stat = Some((150, 50));
-    state.git.unstaged_files = vec![tmux_agent_sidebar::git::GitFileEntry {
+    state.git.unstaged_files = vec![pmux_explorer::git::GitFileEntry {
         status: 'M',
         name: "very-long-filename-that-should-be-truncated.rs".into(),
         additions: 150,
@@ -772,14 +772,14 @@ fn snapshot_git_long_filename_truncated_ui() {
     state.focus_state.sidebar_focused = true;
     state.git.branch = "main".into();
     state.git.unstaged_files = vec![
-        tmux_agent_sidebar::git::GitFileEntry {
+        pmux_explorer::git::GitFileEntry {
             status: 'M',
             name: "very-long-filename-that-should-be-truncated.rs".into(),
             additions: 150,
             deletions: 50,
             path: String::new(),
         },
-        tmux_agent_sidebar::git::GitFileEntry {
+        pmux_explorer::git::GitFileEntry {
             status: 'M',
             name: "short.rs".into(),
             additions: 8,
@@ -826,49 +826,49 @@ fn snapshot_git_more_than_5_files() {
     state.focus_state.sidebar_focused = true;
     state.git.branch = "main".into();
     state.git.unstaged_files = vec![
-        tmux_agent_sidebar::git::GitFileEntry {
+        pmux_explorer::git::GitFileEntry {
             status: 'M',
             name: "a.rs".into(),
             additions: 100,
             deletions: 0,
             path: String::new(),
         },
-        tmux_agent_sidebar::git::GitFileEntry {
+        pmux_explorer::git::GitFileEntry {
             status: 'M',
             name: "b.rs".into(),
             additions: 80,
             deletions: 0,
             path: String::new(),
         },
-        tmux_agent_sidebar::git::GitFileEntry {
+        pmux_explorer::git::GitFileEntry {
             status: 'M',
             name: "c.rs".into(),
             additions: 60,
             deletions: 0,
             path: String::new(),
         },
-        tmux_agent_sidebar::git::GitFileEntry {
+        pmux_explorer::git::GitFileEntry {
             status: 'M',
             name: "d.rs".into(),
             additions: 40,
             deletions: 0,
             path: String::new(),
         },
-        tmux_agent_sidebar::git::GitFileEntry {
+        pmux_explorer::git::GitFileEntry {
             status: 'M',
             name: "e.rs".into(),
             additions: 20,
             deletions: 0,
             path: String::new(),
         },
-        tmux_agent_sidebar::git::GitFileEntry {
+        pmux_explorer::git::GitFileEntry {
             status: 'M',
             name: "f.rs".into(),
             additions: 10,
             deletions: 0,
             path: String::new(),
         },
-        tmux_agent_sidebar::git::GitFileEntry {
+        pmux_explorer::git::GitFileEntry {
             status: 'M',
             name: "g.rs".into(),
             additions: 5,
@@ -1418,12 +1418,12 @@ fn snapshot_branch_truncated_ui() {
         }],
     }]);
     // Use a repo group with a long branch name via PaneGitInfo
-    state.repo_groups = vec![tmux_agent_sidebar::group::RepoGroup {
+    state.repo_groups = vec![pmux_explorer::group::RepoGroup {
         name: "dotfiles".into(),
         has_focus: true,
         panes: vec![(
             pane,
-            tmux_agent_sidebar::group::PaneGitInfo {
+            pmux_explorer::group::PaneGitInfo {
                 repo_root: Some("/home/user/dotfiles".into()),
                 branch: Some("feature/tmux-sidebar-dashboard-refactor".into()),
                 is_worktree: false,
@@ -1469,14 +1469,14 @@ fn snapshot_git_staged_unstaged_untracked_ui() {
     state.git.pr_number = Some("5".into());
     state.git.diff_stat = Some((12, 3));
     state.git.staged_files = vec![
-        tmux_agent_sidebar::git::GitFileEntry {
+        pmux_explorer::git::GitFileEntry {
             status: 'M',
             name: "app.rs".into(),
             additions: 10,
             deletions: 2,
             path: String::new(),
         },
-        tmux_agent_sidebar::git::GitFileEntry {
+        pmux_explorer::git::GitFileEntry {
             status: 'A',
             name: "new.rs".into(),
             additions: 2,
@@ -1484,7 +1484,7 @@ fn snapshot_git_staged_unstaged_untracked_ui() {
             path: String::new(),
         },
     ];
-    state.git.unstaged_files = vec![tmux_agent_sidebar::git::GitFileEntry {
+    state.git.unstaged_files = vec![pmux_explorer::git::GitFileEntry {
         status: 'M',
         name: "config.toml".into(),
         additions: 0,
@@ -1536,7 +1536,7 @@ fn snapshot_git_long_branch_with_pr_ui() {
     state.git.branch = "feature/very-long-branch-name".into();
     state.git.pr_number = Some("123".into());
     state.git.diff_stat = Some((5, 2));
-    state.git.unstaged_files = vec![tmux_agent_sidebar::git::GitFileEntry {
+    state.git.unstaged_files = vec![pmux_explorer::git::GitFileEntry {
         status: 'M',
         name: "main.rs".into(),
         additions: 5,
@@ -1581,7 +1581,7 @@ fn snapshot_git_staged_only_ui() {
     state.focus_state.sidebar_focused = true;
     state.git.branch = "main".into();
     state.git.diff_stat = Some((20, 0));
-    state.git.staged_files = vec![tmux_agent_sidebar::git::GitFileEntry {
+    state.git.staged_files = vec![pmux_explorer::git::GitFileEntry {
         status: 'A',
         name: "new_feature.rs".into(),
         additions: 20,
@@ -1625,7 +1625,7 @@ fn snapshot_git_many_files_more_indicator_ui() {
     state.focus_state.sidebar_focused = true;
     state.git.branch = "dev".into();
     state.git.unstaged_files = (0..7)
-        .map(|i| tmux_agent_sidebar::git::GitFileEntry {
+        .map(|i| pmux_explorer::git::GitFileEntry {
             status: 'M',
             name: format!("f{i}.rs"),
             additions: 1,
@@ -1678,7 +1678,7 @@ fn snapshot_git_more_than_10_files_ui() {
     state.focus_state.sidebar_focused = true;
     state.git.branch = "dev".into();
     state.git.unstaged_files = (0..12)
-        .map(|i| tmux_agent_sidebar::git::GitFileEntry {
+        .map(|i| pmux_explorer::git::GitFileEntry {
             status: 'M',
             name: format!("f{i}.rs"),
             additions: 1,
@@ -1733,21 +1733,15 @@ fn snapshot_focused_group_active_border_styled() {
         }],
     }]);
     state.repo_groups = vec![
-        tmux_agent_sidebar::group::RepoGroup {
+        pmux_explorer::group::RepoGroup {
             name: "dotfiles".into(),
             has_focus: true,
-            panes: vec![(
-                pane1.clone(),
-                tmux_agent_sidebar::group::PaneGitInfo::default(),
-            )],
+            panes: vec![(pane1.clone(), pmux_explorer::group::PaneGitInfo::default())],
         },
-        tmux_agent_sidebar::group::RepoGroup {
+        pmux_explorer::group::RepoGroup {
             name: "my-app".into(),
             has_focus: false,
-            panes: vec![(
-                pane2.clone(),
-                tmux_agent_sidebar::group::PaneGitInfo::default(),
-            )],
+            panes: vec![(pane2.clone(), pmux_explorer::group::PaneGitInfo::default())],
         },
     ];
     state.focus_state.focused_pane_id = Some("%1".into());

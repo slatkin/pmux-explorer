@@ -30,7 +30,7 @@ pub struct PaneInfo {
     /// status row.
     pub pane_name: Option<String>,
     /// `true` when the window this pane lives in was created by the
-    /// sidebar's spawn flow (via the `@agent-sidebar-spawned` window
+    /// sidebar's spawn flow (via the `@pmux-explorer-spawned` window
     /// option). Used by the row renderer to show a clickable red `×`
     /// in place of the usual `+` worktree marker.
     pub sidebar_spawned: bool,

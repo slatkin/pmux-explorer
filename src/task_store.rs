@@ -1,6 +1,6 @@
 //! Per-pane task store backing the bottom panel's Tasks tab.
 //!
-//! One JSON file per tmux pane at `/tmp/tmux-agent-tasks<PANE>.json`,
+//! One JSON file per tmux pane at `/tmp/pmux-explorer-tasks<PANE>.json`,
 //! mirroring the activity log's path encoding, mtime polling, and
 //! session semantics: agents write through the `task-set` /
 //! `task-update` CLI subcommands, the TUI only reads.
@@ -66,7 +66,7 @@ struct StoreFile {
 /// contain a `%` that is awkward in file names.
 pub fn store_file_path(pane_id: &str) -> PathBuf {
     PathBuf::from(format!(
-        "/tmp/tmux-agent-tasks{}.json",
+        "/tmp/pmux-explorer-tasks{}.json",
         crate::activity::encode_pane_id_for_file_name(pane_id)
     ))
 }
@@ -177,7 +177,7 @@ mod tests {
     #[test]
     fn store_file_path_encodes_percent_like_activity_log() {
         let path = store_file_path("%5");
-        assert_eq!(path.to_str().unwrap(), "/tmp/tmux-agent-tasks_5.json");
+        assert_eq!(path.to_str().unwrap(), "/tmp/pmux-explorer-tasks_5.json");
     }
 
     #[test]

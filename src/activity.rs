@@ -45,7 +45,7 @@ pub(crate) fn encode_pane_id_for_file_name(pane_id: &str) -> String {
 
 pub fn log_file_path(pane_id: &str) -> PathBuf {
     PathBuf::from(format!(
-        "/tmp/tmux-agent-activity{}.log",
+        "/tmp/pmux-explorer-activity{}.log",
         encode_pane_id_for_file_name(pane_id)
     ))
 }
@@ -332,7 +332,7 @@ mod tests {
     #[test]
     fn test_log_file_path() {
         let path = log_file_path("%5");
-        assert_eq!(path.to_str().unwrap(), "/tmp/tmux-agent-activity_5.log");
+        assert_eq!(path.to_str().unwrap(), "/tmp/pmux-explorer-activity_5.log");
     }
 
     #[test]
