@@ -2,12 +2,12 @@
 
 PLUGIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-if [[ -x "$PLUGIN_DIR/bin/tmux-agent-sidebar" ]]; then
-    SIDEBAR_BINARY="$PLUGIN_DIR/bin/tmux-agent-sidebar"
-elif [[ -x "$PLUGIN_DIR/target/release/tmux-agent-sidebar" ]]; then
-    SIDEBAR_BINARY="$PLUGIN_DIR/target/release/tmux-agent-sidebar"
-elif command -v "tmux-agent-sidebar" &>/dev/null; then
-    SIDEBAR_BINARY="tmux-agent-sidebar"
+if [[ -x "$PLUGIN_DIR/bin/pmux-explorer" ]]; then
+    SIDEBAR_BINARY="$PLUGIN_DIR/bin/pmux-explorer"
+elif [[ -x "$PLUGIN_DIR/target/release/pmux-explorer" ]]; then
+    SIDEBAR_BINARY="$PLUGIN_DIR/target/release/pmux-explorer"
+elif command -v "pmux-explorer" &>/dev/null; then
+    SIDEBAR_BINARY="pmux-explorer"
 fi
 
 if [[ -z "$SIDEBAR_BINARY" ]]; then
@@ -23,6 +23,6 @@ if [[ -n "$EXPECTED_VERSION" && "$INSTALLED_VERSION" != "$EXPECTED_VERSION" ]]; 
     exit 0
 fi
 
-tmux set -g @agent_sidebar_bin "$SIDEBAR_BINARY"
+tmux set -g @pmux_explorer_bin "$SIDEBAR_BINARY"
 
-tmux source-file "$PLUGIN_DIR/agent-sidebar.conf"
+tmux source-file "$PLUGIN_DIR/pmux-explorer.conf"
