@@ -16,6 +16,7 @@ read from tmux on every refresh tick.
 | `selected_pane_row` | `@sidebar_cursor` | User input (j/k key); tmux write flushed after a short debounce | Cursor position in agent list |
 | `repo_filter` | `@sidebar_repo_filter` | User input (repo popup) | Repository filter (All or specific repo) |
 | `bottom_tab` | `@sidebar_bottom_tab` | On user tab switch (cycle key / tab-title click); tmux write retried when rejected | Selected bottom tab (Activity/Tasks/Git), shared server-wide; each instance adopts a peer's selection on its next refresh tick |
+| `bottom_percent` | `@sidebar_bottom_height` | User input (rule drag release); tmux write retried when rejected | Bottom panel height as a percent of the sidebar height (0 hides the panel; unset, empty, or an out-of-range value gives 30); shared server-wide, each instance adopts a peer's value on its next refresh tick (the `percent_save_pending` latch follows the same pattern) |
 
 Each field has a corresponding `last_saved_*` to prevent sync conflicts — only overwrites tmux if the local write succeeded.
 
@@ -33,7 +34,7 @@ rejects a `set -g @sidebar_bottom_tab` write, the latch is set and
 the value the rejected write was meant to replace and adopting it
 would revert the user's selection. `retry_pending_tab_save` retries
 the write once per refresh tick, before the tick reads the shared
-options, so a successful retry is what that tick reads back. The two
+options, so a successful retry is what that tick reads back. These
 latches are independent.
 
 ### Per-pane State (keyed by pane ID)
@@ -148,7 +149,7 @@ Per-pane file-based state:
 │  pane_states.map[..].ports, agent liveness cleanup          │
 ├─────────────────────────────────────────────────────────────┤
 │  Once at startup                                             │
-│  theme, bottom_panel_height, notices.claude_plugin_*,       │
+│  theme, notices.claude_plugin_*,                            │
 │  notices.claude_settings_has_residual_hooks,                │
 │  notices.claude_plugin_notice, notices.missing_hook_groups  │
 ├─────────────────────────────────────────────────────────────┤
@@ -190,7 +191,7 @@ TUI main loop (app::run in app.rs; submodules app/{setup,workers,input,render,pa
     → retry_pending_filter_save / retry_pending_tab_save
                                      ← a write tmux rejected is retried before the shared read
     → get_sidebar_pane_reading()     ← reads pane state + @sidebar_* in one display-message
-    → global.apply_all()             ← applies the shared options (filter, cursor, bottom tab, repo filter) under the last_saved_* guards
+    → global.apply_all()             ← applies the shared options (filter, cursor, bottom tab, repo filter, bottom percent) under the last_saved_* guards
     → query_sessions() (tmux.rs)     ← reads @pane_* via `tmux list-panes -a`
     → pane_name resolved in the same query (the pane title when it is
       a real name — em dash suffixes trimmed; no extra tmux call)
