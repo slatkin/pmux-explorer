@@ -19,7 +19,8 @@
 # Per-scenario env vars (optional, set before build_layout):
 #   FOCUS=PANE_WAITING|PANE_BACKGROUND|PANE_ERROR|MAIN_PANE
 #         which agent pane is the "focused" one. Default MAIN_PANE.
-#   BOTTOM_HEIGHT=N — override @sidebar_bottom_height (0 hides the panel).
+#   BOTTOM_HEIGHT=N — override @sidebar_bottom_height as a percent of the
+#                   sidebar height (0 hides the panel).
 #   CROP_ROWS=N:M  — vertical crop applied to capture_single output.
 #   CROP_COLS=N:M  — horizontal crop applied to capture_single output.
 #
