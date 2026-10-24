@@ -24,7 +24,8 @@ const LOCK_GLYPH: &str = "☑";
 const UNLOCK_GLYPH: &str = "☐";
 
 /// Render the status filter bar, returning the line and the columns of
-/// the two right-edge controls (lock, pop-out) for click hit-testing.
+/// the right-edge controls (the lock, and the pop-out where the row is
+/// wide enough to hold it) for click hit-testing.
 pub(super) fn render_filter_bar<'a>(
     state: &AppState,
     width: u16,
@@ -65,9 +66,10 @@ pub(super) fn render_filter_bar<'a>(
     };
 
     let mut spans: Vec<Span<'a>> = Vec::new();
-    // The leading gutter column, skipped when the control region owns
-    // the whole row (a one- or two-column row).
-    let region_start = control.lock.unwrap_or(control.popout);
+    // The leading gutter column, skipped when the control region reaches
+    // column 0 (a one-column row, or a three-column row under the old
+    // glyph-pair layout).
+    let region_start = control.lock;
     if region_start > 0 {
         spans.push(Span::raw(" "));
     }
@@ -130,17 +132,20 @@ pub(super) fn render_filter_bar<'a>(
         .last()
         .map_or(region_start.min(1), |chip| chip.start + chip.width);
     spans.push(Span::raw(" ".repeat((region_start - drawn_end) as usize)));
-    if control.lock.is_some() {
-        spans.push(Span::styled(lock_glyph, lock_style));
-    }
-    spans.push(Span::styled(
-        control_glyph,
-        Style::default().fg(theme.status_running),
-    ));
-    // The spacer after the pop-out glyph only fits on a row three
-    // columns wide or more; a narrower row draws the glyphs alone.
-    if control.popout + 1 < width {
-        spans.push(Span::raw(" "));
+    // The lock glyph is on every non-empty row; the pop-out glyph only
+    // rides along where the row is three columns wide or more.
+    spans.push(Span::styled(lock_glyph, lock_style));
+    if let Some(popout) = control.popout {
+        spans.push(Span::styled(
+            control_glyph,
+            Style::default().fg(theme.status_running),
+        ));
+        // The spacer after the pop-out glyph only fits on a row three
+        // columns wide or more; on a full-width line it touches the
+        // right border, so it is dropped there.
+        if popout + 1 < width {
+            spans.push(Span::raw(" "));
+        }
     }
 
     (Line::from(spans), Some(control))
@@ -491,12 +496,12 @@ mod tests {
             };
             assert_eq!(
                 control.popout,
-                width - 2,
+                Some(width - 2),
                 "pop-out column one space off the right edge at width {width}"
             );
             assert_eq!(
                 control.lock,
-                Some(width - 3),
+                width - 3,
                 "lock column one cell left of the pop-out glyph at width {width}"
             );
             assert_eq!(
@@ -540,6 +545,18 @@ mod tests {
         state.sidebar_pane.floating = true;
         let text = filter_bar_text(&state);
         insta::assert_snapshot!(text, @" ≡0 ●0 ◐0 ○0 ✕0  ☐⤡ ");
+    }
+
+    #[test]
+    fn snapshot_filter_bar_narrow_rows_keep_the_lock_glyph_alone() {
+        // The narrow degradation of the control region: where the row
+        // cannot hold the pop-out glyph and its spacer, the pop-out is
+        // dropped first and the spec-mandated lock glyph takes the row's
+        // last column (column 1 in the two-column row); a one-column row
+        // keeps the lock glyph too.
+        let state = make_state_with_groups(vec![]);
+        insta::assert_snapshot!(filter_bar_text_at(&state, 2), @" ☐");
+        insta::assert_snapshot!(filter_bar_text_at(&state, 1), @"☐");
     }
 
     // ─── the row with multi-digit counts (the 20 column minimum) ───

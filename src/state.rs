@@ -1869,6 +1869,25 @@ mod tests {
                 .is_some_and(|(msg, _)| msg.starts_with("Pop-out unavailable:")),
             "the pop-out column still pops out"
         );
+
+        // The narrow degradation keeps the same mapping: on a two-column
+        // row the pop-out control is dropped and the lock takes the row's
+        // last column, so a click there still toggles the lock, while the
+        // column before it owns neither control and changes nothing.
+        state.global.width_lock = false;
+        state.layout.filter_bar_width = 2;
+        reset_filter_debounce(&mut state);
+        state.handle_filter_click(1);
+        assert!(
+            state.global.width_lock,
+            "the lock still toggles on a two-column row"
+        );
+        reset_filter_debounce(&mut state);
+        state.handle_filter_click(0);
+        assert!(
+            state.global.width_lock,
+            "a left-column click on a two-column row changes nothing"
+        );
     }
 
     #[test]
