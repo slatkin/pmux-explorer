@@ -1,8 +1,8 @@
 ## 1. Baseline and pre-rename uninstall
 
-- [ ] 1.1 Create a worktree with `wt rebrand-pmux-explorer`; run `cargo test` and record that it passes
-- [ ] 1.2 Record the old-name inventory with `git grep -l` for each form: `tmux-agent-sidebar`, `tmux_agent_sidebar`, `TMUX_AGENT_SIDEBAR`, `agent_sidebar`, `agent-sidebar`, `tmux-agent-` (the `/tmp` prefix), and `hiroppy`. Exclude `openspec/changes/archive/` and this change's folder. List file names that need `git mv` separately (`ls` of `*sidebar*`)
-- [ ] 1.3 With the OLD Makefile still in place, run `make uninstall` to remove `~/.local/bin/tmux-agent-sidebar`, and `claude plugin uninstall tmux-agent-sidebar@slatkin`
+- [x] 1.1 Create a worktree with `wt rebrand-pmux-explorer`; run `cargo test` and record that it passes
+- [x] 1.2 Record the old-name inventory with `git grep -l` for each form: `tmux-agent-sidebar`, `tmux_agent_sidebar`, `TMUX_AGENT_SIDEBAR`, `agent_sidebar`, `agent-sidebar`, `tmux-agent-` (the `/tmp` prefix), and `hiroppy`. Exclude `openspec/changes/archive/` and this change's folder. List file names that need `git mv` separately (`ls` of `*sidebar*`)
+- [x] 1.3 With the OLD Makefile still in place, run `make uninstall` to remove `~/.local/bin/tmux-agent-sidebar`, and `claude plugin uninstall tmux-agent-sidebar@slatkin`
 
 ## 2. Rust crate and binary
 
