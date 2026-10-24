@@ -20,7 +20,7 @@ const _CODEX_TABLE_REACHABLE: &[HookRegistration] = CodexAdapter::HOOK_REGISTRAT
 /// not interpret specially, it is returned as-is. This matters for the
 /// common case (`/Users/alice/.../hook.sh`) because aggressive quoting
 /// would suppress tilde expansion on the fallback path
-/// `~/.tmux/plugins/tmux-agent-sidebar/hook.sh` and break the emitted
+/// `~/.tmux/plugins/pmux-explorer/hook.sh` and break the emitted
 /// hook commands. This mirrors Python's `shlex.quote` behaviour.
 ///
 /// Slow path: wrap the value in single quotes and escape any internal
@@ -144,8 +144,8 @@ fn collect_hook_specs(config: &serde_json::Value) -> Vec<HookSpec> {
 ///
 /// Comparison uses `trigger`, `matcher`, and the canonicalized hook command.
 /// The command path is resolved through `std::fs::canonicalize` so a
-/// symlinked plugin directory (`~/.tmux/plugins/tmux-agent-sidebar/hook.sh`
-/// → `~/Programming/tmux-agent-sidebar/hook.sh`) still compares equal, while
+/// symlinked plugin directory (`~/.tmux/plugins/pmux-explorer/hook.sh`
+/// → `~/Programming/pmux-explorer/hook.sh`) still compares equal, while
 /// configs pointing at a stale or renamed checkout canonicalize to a
 /// different real path (or fail to canonicalize at all) and are flagged as
 /// missing.
@@ -288,7 +288,7 @@ pub(crate) fn build_pi_contract() -> serde_json::Value {
 
     serde_json::json!({
         "agent": "pi",
-        "command": "tmux-agent-sidebar hook pi <event>",
+        "command": "pmux-explorer hook pi <event>",
         "events": events,
         "notes": [
             "The pane is the one in $TMUX_PANE, read from the environment of the command.",
@@ -374,7 +374,7 @@ pub(crate) struct ResolvedHookScript {
     pub detected: bool,
 }
 
-const FALLBACK_HOOK_SCRIPT: &str = "~/.tmux/plugins/tmux-agent-sidebar/hook.sh";
+const FALLBACK_HOOK_SCRIPT: &str = "~/.tmux/plugins/pmux-explorer/hook.sh";
 
 /// Resolve the absolute path of `hook.sh` to embed in the generated
 /// commands. Strategy:
@@ -383,9 +383,9 @@ const FALLBACK_HOOK_SCRIPT: &str = "~/.tmux/plugins/tmux-agent-sidebar/hook.sh";
 /// 2. Walk up at most 3 directories from its parent, checking for a
 ///    sibling `hook.sh` at each level. Matches the two layouts the
 ///    project already supports:
-///      - `<plugin>/bin/tmux-agent-sidebar` → `<plugin>/hook.sh`
-///      - `<plugin>/target/release/tmux-agent-sidebar` → `<plugin>/hook.sh`
-/// 3. Fallback: the literal string `~/.tmux/plugins/tmux-agent-sidebar/hook.sh`
+///      - `<plugin>/bin/pmux-explorer` → `<plugin>/hook.sh`
+///      - `<plugin>/target/release/pmux-explorer` → `<plugin>/hook.sh`
+/// 3. Fallback: the literal string `~/.tmux/plugins/pmux-explorer/hook.sh`
 ///    (tilde intentionally not expanded, matches README).
 ///
 /// When step 1 or 2 succeeds, `detected = true`. When step 3 kicks in,
@@ -476,7 +476,7 @@ fn run_setup(args: &[String], hook_script: &str) -> (i32, Option<serde_json::Val
             }
         },
         _ => {
-            eprintln!("usage: tmux-agent-sidebar setup [claude|codex|pi]");
+            eprintln!("usage: pmux-explorer setup [claude|codex|pi]");
             (2, None)
         }
     }

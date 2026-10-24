@@ -4,8 +4,8 @@ set -euo pipefail
 
 PLUGIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BIN_DIR="$PLUGIN_DIR/bin"
-BINARY="$BIN_DIR/tmux-agent-sidebar"
-REPO="slatkin/tmux-agent-sidebar"
+BINARY="$BIN_DIR/pmux-explorer"
+REPO="slatkin/pmux-explorer"
 action="${1:-}"
 
 function finish {
@@ -74,7 +74,7 @@ function download_binary() {
     mkdir -p "$BIN_DIR"
     local platform
     platform="$(detect_platform)"
-    local asset_name="tmux-agent-sidebar-${platform}"
+    local asset_name="pmux-explorer-${platform}"
     local url="https://github.com/$REPO/releases/latest/download/$asset_name"
 
     echo "Downloading binary from $url"
@@ -105,7 +105,7 @@ function build_from_source() {
     cargo build --release --manifest-path "$PLUGIN_DIR/Cargo.toml"
 
     mkdir -p "$BIN_DIR"
-    cp "$PLUGIN_DIR/target/release/tmux-agent-sidebar" "$BINARY"
+    cp "$PLUGIN_DIR/target/release/pmux-explorer" "$BINARY"
 
     post_install_fixups
 
@@ -127,16 +127,16 @@ esac
 # Interactive menu
 function get_message() {
     if [[ "${SIDEBAR_UPDATE:-}" == "1" ]]; then
-        echo "tmux-agent-sidebar has been updated. We need to get the new binary."
+        echo "pmux-explorer has been updated. We need to get the new binary."
     else
-        echo "First time setup. We need to get the tmux-agent-sidebar binary."
+        echo "First time setup. We need to get the pmux-explorer binary."
     fi
 }
 
-tmux display-menu -T "tmux-agent-sidebar" \
+tmux display-menu -T "pmux-explorer" \
     "" \
     "- " "" "" \
-    "-  #[nodim,bold]tmux-agent-sidebar" "" "" \
+    "-  #[nodim,bold]pmux-explorer" "" "" \
     "- " "" "" \
     "-  $(get_message) " "" "" \
     "- " "" "" \

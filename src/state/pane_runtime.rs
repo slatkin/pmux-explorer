@@ -11,7 +11,7 @@ pub struct PaneRuntimeState {
     pub task_progress: Option<TaskProgress>,
     pub task_dismissed_total: Option<usize>,
     pub inactive_since: Option<u64>,
-    /// Last observed mtime of this pane's `/tmp/tmux-agent-activity*.log`.
+    /// Last observed mtime of this pane's `/tmp/pmux-explorer-activity*.log`.
     /// Used by `refresh_task_progress` to skip the (potentially expensive)
     /// re-parse when the log has not been touched since the previous tick.
     pub task_progress_log_mtime: Option<std::time::SystemTime>,

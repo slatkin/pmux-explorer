@@ -39,7 +39,7 @@ setup() {
         ROOT="$PWD"
     fi
     SESSION="$session_name"
-    BIN="$ROOT/target/release/tmux-agent-sidebar"
+    BIN="$ROOT/target/release/pmux-explorer"
     TMUX_CONF="$ROOT/fixtures/scenarios/common/.tmux.conf"
 
     # CRITICAL: if the scenario is invoked from inside a tmux session,
@@ -59,7 +59,7 @@ setup() {
     export TMUX_TMPDIR="$TMUX_DIR"
 
     # Clean slate for activity logs that any prior run may have left.
-    rm -f /tmp/tmux-agent-activity_*.log
+    rm -f /tmp/pmux-explorer-activity_*.log
 
     # The sidebar's port-scan pass clears @pane_* on any pane whose
     # process tree does not contain a real `claude` or `codex`
@@ -86,7 +86,7 @@ cleanup() {
         tmux kill-server 2>/dev/null || true
     fi
     rm -rf "${TMUX_DIR:-}"
-    rm -f /tmp/tmux-agent-activity_*.log
+    rm -f /tmp/pmux-explorer-activity_*.log
 }
 
 # -- layout ---------------------------------------------------------
@@ -139,7 +139,7 @@ build_layout() {
     tmux set-option -t "$MAIN_PANE" -p @pane_subagents \
         "Explore:a1b2c3de,Plan:d4e5f6ab,Bash:deadbeef"
 
-    export MAIN_LOG="/tmp/tmux-agent-activity${MAIN_PANE/\%/_}.log"
+    export MAIN_LOG="/tmp/pmux-explorer-activity${MAIN_PANE/\%/_}.log"
     : > "$MAIN_LOG"
 
     # Off-screen window hosting the 3 other agents. Idle panes are
@@ -220,7 +220,7 @@ build_layout() {
     tmux select-pane -t "$focus_pane"
 
     export FOCUSED_PANE="$focus_pane"
-    export FOCUSED_LOG="/tmp/tmux-agent-activity${focus_pane/\%/_}.log"
+    export FOCUSED_LOG="/tmp/pmux-explorer-activity${focus_pane/\%/_}.log"
     : > "$FOCUSED_LOG"
 }
 

@@ -1,6 +1,6 @@
 ---
 title: tmux options
-description: Every @sidebar_* / @agent-sidebar-* option the plugin reads.
+description: Every @sidebar_* / @pmux-explorer-* option the plugin reads.
 ---
 
 Most options must be set **before** loading the plugin in your `tmux.conf`. Color values can be xterm 256-color numbers (`0`-`255`) or six-digit hex colors (`#RRGGBB` or `RRGGBB`); icons can be any Unicode glyph.
@@ -18,7 +18,7 @@ Most options must be set **before** loading the plugin in your `tmux.conf`. Colo
 | `@sidebar_auto_create`           | `on`    | Auto-create the sidebar on new windows (set `off` to disable)                           |
 | `@sidebar_auto_create_delay`     | `0`     | Seconds to defer auto-create after a window opens, so a declaratively-built window (e.g. tmuxinator's `select-layout`) finishes before the sidebar pane is injected; accepts fractional seconds. `0` keeps the create synchronous |
 | `@sidebar_notifications`         | `on`    | Master switch for desktop notifications                                                 |
-| `@sidebar_notifications_events`  | unset   | Restrict events — see [Notifications](/tmux-agent-sidebar/features/notifications/)       |
+| `@sidebar_notifications_events`  | unset   | Restrict events — see [Notifications](/pmux-explorer/features/notifications/)       |
 | `@sidebar_pet`                  | `off`   | Show the animated pet in a 5-row band above the bottom panel                           |
 
 Setting `@sidebar_min_width` to `0` disables the width floor entirely.
@@ -27,9 +27,9 @@ Setting `@sidebar_min_width` to `0` disables the width floor entirely.
 
 | Option                            | Default     | Description                                               |
 | --------------------------------- | ----------- | --------------------------------------------------------- |
-| `@agent-sidebar-default-agent`    | `claude`    | Agent launched by `n`&nbsp;(also accepts `codex`)         |
-| `@agent-sidebar-branch-prefix`    | `agent/`    | Branch prefix for new worktrees                           |
-| `@agent-sidebar-worktree-dir`     | `.worktrees` | Repo-relative directory for sidebar-spawned worktrees; absolute paths and `..` are rejected |
+| `@pmux-explorer-default-agent`    | `claude`    | Agent launched by `n`&nbsp;(also accepts `codex`)         |
+| `@pmux-explorer-branch-prefix`    | `agent/`    | Branch prefix for new worktrees                           |
+| `@pmux-explorer-worktree-dir`     | `.worktrees` | Repo-relative directory for sidebar-spawned worktrees; absolute paths and `..` are rejected |
 
 ## Status and filter colors
 
@@ -118,7 +118,7 @@ set -g @sidebar_width 32
 set -g @sidebar_position right
 set -g @sidebar_bottom_height 25
 set -g @sidebar_notifications_events "stop,notification"
-set -g @agent-sidebar-default-agent codex
+set -g @pmux-explorer-default-agent codex
 
 # Colors
 set -g @sidebar_color_accent 117
@@ -129,5 +129,5 @@ set -g @sidebar_color_agent_opencode 39
 set -g @sidebar_icon_running '▶'
 set -g @sidebar_icon_error   '⚠'
 
-run-shell ~/.tmux/plugins/tmux-agent-sidebar/tmux-agent-sidebar.tmux
+run-shell ~/.tmux/plugins/pmux-explorer/pmux-explorer.tmux
 ```

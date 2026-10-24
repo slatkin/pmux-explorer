@@ -16,11 +16,11 @@ file lets the bridge coexist with any other plugins you have installed:
 
 ```sh
 mkdir -p ~/.config/opencode/plugins
-ln -sf ~/.tmux/plugins/tmux-agent-sidebar/.opencode/plugins/tmux-agent-sidebar.js \
-  ~/.config/opencode/plugins/tmux-agent-sidebar.js
+ln -sf ~/.tmux/plugins/pmux-explorer/.opencode/plugins/pmux-explorer.js \
+  ~/.config/opencode/plugins/pmux-explorer.js
 ```
 
-If you keep `tmux-agent-sidebar` in a different path, point the symlink at
+If you keep `pmux-explorer` in a different path, point the symlink at
 that copy instead.
 
 ### Restart OpenCode

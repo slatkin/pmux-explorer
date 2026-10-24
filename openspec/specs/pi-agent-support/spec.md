@@ -91,7 +91,7 @@ configuration file.
 - **THEN** a document states the event names, the fields of each event, and the meaning of each field
 
 #### Scenario: The setup command for pi
-- **WHEN** `tmux-agent-sidebar setup pi` runs
+- **WHEN** `pmux-explorer setup pi` runs
 - **THEN** it prints the producer contract and exits successfully, and it changes no configuration file
 
 ### Requirement: a dead pi pane is cleared
@@ -284,20 +284,25 @@ permission mode badge is shown for other agents.
 - **WHEN** a pi pane without a subagent identity is listed
 - **THEN** its status row shows no badge
 
-### Requirement: a subagent pane shows its parent and task
+### Requirement: a subagent pane shows its parent
 
 The pane row of a subagent SHALL show a line directly under the status row
-that names the parent (or `ORPHANED`) and, when there is one, the fuzzy task.
-The line SHALL be cut to the row width.
+that names the parent (or `ORPHANED`). The line SHALL NOT carry the fuzzy
+task: the task names the pmux launch, and the status row's title slot already
+shows the pane name pmux derives from the same launch. The line SHALL be cut
+to the row width.
 
-#### Scenario: Parent and task
-- **WHEN** a subagent with parent `orchestrator` and task `unit1 idle collapse` is listed
-- **THEN** the line under its status row shows `orchestrator` and `unit1 idle collapse`
+#### Scenario: A parent resolves
 
-#### Scenario: No task
-- **WHEN** a subagent with parent `orchestrator` has no task
-- **THEN** the line under its status row shows only `orchestrator`
+- **WHEN** a subagent pane whose parent session id resolves to a live parent pane is listed
+- **THEN** the line under the status row shows the parent's pane name and no task text
+
+#### Scenario: No parent resolves
+
+- **WHEN** a subagent pane whose parent session id resolves to no live pane is listed
+- **THEN** the line under the status row shows `ORPHANED` and no task text
 
 #### Scenario: A narrow sidebar
+
 - **WHEN** the line is wider than the row
 - **THEN** the line is cut to the row width and the row count does not change

@@ -46,4 +46,4 @@ Codex exposes a smaller hook set than Claude Code, so some sidebar features are 
 
 ## Setup
 
-Wire the hooks from inside a Codex pane — see [Codex setup](/tmux-agent-sidebar/getting-started/codex/).
+Wire the hooks from inside a Codex pane — see [Codex setup](/pmux-explorer/getting-started/codex/).

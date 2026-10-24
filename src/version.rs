@@ -5,7 +5,7 @@ use serde_json::Value;
 
 pub const LOCAL_VERSION: &str = crate::VERSION;
 const GITHUB_LATEST_RELEASE_URL: &str =
-    "https://api.github.com/repos/hiroppy/tmux-agent-sidebar/releases/latest";
+    "https://api.github.com/repos/slatkin/pmux-explorer/releases/latest";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UpdateNotice {
@@ -36,7 +36,7 @@ fn fetch_latest_release_version() -> Option<String> {
             "-H",
             "Accept: application/vnd.github+json",
             "-H",
-            "User-Agent: tmux-agent-sidebar",
+            "User-Agent: pmux-explorer",
             GITHUB_LATEST_RELEASE_URL,
         ])
         .output()

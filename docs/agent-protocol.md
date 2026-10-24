@@ -9,7 +9,7 @@ supports extensions. The sidebar does not care which.
 ## The call
 
 ```sh
-tmux-agent-sidebar hook <agent> <event>
+pmux-explorer hook <agent> <event>
 ```
 
 The command reads one JSON object from standard input and writes nothing. It
@@ -224,8 +224,8 @@ agent can use, because every agent can run a shell command, and it needs no
 hook registration.
 
 ```sh
-tmux-agent-sidebar task-set <subject>
-tmux-agent-sidebar task-update <id> <status>
+pmux-explorer task-set <subject>
+pmux-explorer task-update <id> <status>
 ```
 
 `task-set` records one item as `pending` and prints the id the sidebar
@@ -241,7 +241,7 @@ environment of the pane it describes.
 a missing `TMUX_PANE`, where it records nothing.
 
 The list is one JSON file per pane,
-`/tmp/tmux-agent-tasks<PANE>.json`, written beside the activity log. Each
+`/tmp/pmux-explorer-tasks<PANE>.json`, written beside the activity log. Each
 item holds an `id`, a `subject` and a `status`, and the pane id is encoded
 in the file name the way the activity log encodes it. The store keeps at
 most 50 items and trims completed ones oldest first; when no completed

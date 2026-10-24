@@ -2,10 +2,10 @@
 //! binary: `$TMUX_PANE` dispatch and the exact stdout payloads are
 //! child-process behavior the in-crate unit tests cannot observe.
 
+use pmux_explorer::task_store;
 use std::fs;
-use tmux_agent_sidebar::task_store;
 
-const BIN: &str = env!("CARGO_BIN_EXE_tmux-agent-sidebar");
+const BIN: &str = env!("CARGO_BIN_EXE_pmux-explorer");
 
 #[test]
 fn task_commands_round_trip_through_the_binary() {

@@ -57,7 +57,7 @@ pub(super) mod pane_line_field {
     pub const WORKTREE_NAME: usize = 17; // absolute 23 (@pane_worktree_name)
     pub const WORKTREE_BRANCH: usize = 18; // absolute 24 (@pane_worktree_branch)
     pub const SESSION_ID: usize = 19; // absolute 25 (@pane_session_id)
-    pub const SIDEBAR_SPAWNED: usize = 20; // absolute 26 (@agent-sidebar-spawned)
+    pub const SIDEBAR_SPAWNED: usize = 20; // absolute 26 (@pmux-explorer-spawned)
     pub const BG_CMD: usize = 21; // absolute 27 (@pane_bg_cmd)
     pub const SUBAGENT_KIND: usize = 22; // absolute 28 (@pane_subagent_kind)
     pub const SUBAGENT_PARENT: usize = 23; // absolute 29 (@pane_subagent_parent)
@@ -917,7 +917,7 @@ mod tests {
             "",                   // 17: @pane_worktree_name
             "",                   // 18: @pane_worktree_branch
             "",                   // 19: @pane_session_id
-            "",                   // 20: @agent-sidebar-spawned
+            "",                   // 20: @pmux-explorer-spawned
             "",                   // 21: @pane_bg_cmd
             "",                   // 22: @pane_subagent_kind
             "",                   // 23: @pane_subagent_parent
@@ -1610,7 +1610,7 @@ mod tests {
         // 17:@pane_started_at|18:@pane_wait_reason|19:pane_pid|
         // 20:@pane_subagents|21:@pane_cwd|22:@pane_permission_mode|
         // 23:@pane_worktree_name|24:@pane_worktree_branch|
-        // 25:@pane_session_id|26:@agent-sidebar-spawned|27:@pane_bg_cmd|
+        // 25:@pane_session_id|26:@pmux-explorer-spawned|27:@pane_bg_cmd|
         // 28:@pane_subagent_kind|29:@pane_subagent_parent|
         // 30:@pane_subagent_task|31:pane_title|32:host
 
