@@ -34,9 +34,10 @@ impl AppState {
         if !self.global.width_lock {
             // Seed only on a valid probe — see the doc comment.
             if self.sidebar_pane.window_width > 0 {
-                // The floored-and-clamped floor the other width-lock
-                // sites share, in `state/width.rs`.
-                let floor = crate::state::width_floor(self.global.min_width);
+                // The u16-clamped floor that `@sidebar_min_width`
+                // resolves to — the shared `width_floor` helper, also
+                // used by the width guard and the pop-in restore.
+                let floor = width_floor(self.global.min_width);
                 let live_width = if self.sidebar_pane.floating {
                     self.docked_width.unwrap_or(PANEL_WIDTH)
                 } else {
@@ -57,8 +58,8 @@ impl AppState {
 /// The width-lock floor for the tick's parsed `@sidebar_min_width` in
 /// columns ([`GlobalState::min_width`]). `None` falls back to
 /// [`DEFAULT_MIN_WIDTH`], and a floor beyond pane geometry is clamped
-/// into the u16 range at the shared sites — the u32 option value
-/// cannot silently wrap in the u16 math.
+/// into the u16 range — the u32 option value cannot silently wrap in
+/// the u16 math of the three users below (seed, adopt, pop-in).
 pub(crate) fn width_floor(min_width: Option<u32>) -> u16 {
     min_width.unwrap_or(DEFAULT_MIN_WIDTH).min(u16::MAX as u32) as u16
 }
@@ -67,13 +68,13 @@ pub(crate) fn width_floor(min_width: Option<u32>) -> u16 {
 /// shared docked width clamped to at least [`width_floor`] — the floor
 /// binds both ways — and at most `cap`, normally half the adopting
 /// window. The cap binds adopted widths only; a publishing sidebar may
-/// stay wider than half its window.
+/// stay wider than half its window. The two users: the width-lock
+/// step's adopt side (`app/width_guard::step`) and the pop-in restore
+/// (`state/popout::pop_in_restore_width`, design D6).
 pub(crate) fn width_adopt_target(shared: u16, min_width: Option<u32>, cap: u16) -> u16 {
     shared.max(width_floor(min_width)).min(cap)
 }
 
-/// The width-lock step, below, clones these helpers' work; this
-/// doc-comment block anchors them near the other width math.
 #[cfg(test)]
 mod helper_tests {
     use super::*;

@@ -18,8 +18,7 @@
 //! adoption and a size-guard grow fire in the same tick, the adopt resize
 //! lands last and its target — never below the floor — wins.
 
-use crate::state::AppState;
-use crate::state::GlobalState;
+use crate::state::{AppState, GlobalState, width_adopt_target};
 use crate::tmux::{self, SidebarPaneInfo};
 
 /// Cross-tick state of the width-lock step. Lives on [`AppState`] as the
@@ -130,7 +129,7 @@ pub(crate) fn step(
         && let Some(shared) = global.shared_docked_width
         && !global.width_latch.save_pending
     {
-        let target = shared.max(floor).min(cap);
+        let target = width_adopt_target(shared, global.min_width, cap);
         if pane.width != target && pane.width != shared {
             tracker.pending_adopt_observation = true;
             return WidthAction::Adopt { target };

@@ -20,7 +20,7 @@
 //! testable without a real tmux.
 
 use super::AppState;
-use crate::app::size_guard::DEFAULT_MIN_WIDTH;
+use crate::state::{width_adopt_target, width_floor};
 use crate::tmux::{self, SidebarPaneInfo};
 
 /// Width of the floating panel, in columns. Wide enough that the agent
@@ -207,23 +207,16 @@ impl AppState {
     /// runs unlocked, and it is never written to while locked.
     /// Otherwise the capture is spent, as it has always been.
     ///
-    /// The clamp formula is a deliberate duplicate of the width-lock
-    /// step's `target` (`crate::app::width_guard::step`, design D6);
-    /// the floor fallback mirrors `DEFAULT_MIN_WIDTH` there too.
+    /// The clamp runs through the shared `width_floor`/`width_adopt_target`
+    /// helpers in `crate/state/width.rs` — the same helpers the width-lock
+    /// step's adopt side and the enabling seed use (design D6).
     fn pop_in_restore_width(&mut self, info: SidebarPaneInfo) -> Option<u16> {
         if self.global.width_lock
             && let Some(shared) = self.global.shared_docked_width
         {
-            // The floor binds both ways and the cap is half the window,
-            // exactly as on the adopt side; the u16-range clamp of the
-            // u32 floor is the same one the enable seed uses.
-            let floor = self
-                .global
-                .min_width
-                .unwrap_or(DEFAULT_MIN_WIDTH)
-                .min(u16::MAX as u32) as u16;
+            let floor = width_floor(self.global.min_width);
             let cap = floor.max(info.window_width / 2);
-            return Some(shared.max(floor).min(cap));
+            return Some(width_adopt_target(shared, self.global.min_width, cap));
         }
         self.docked_width.take()
     }
