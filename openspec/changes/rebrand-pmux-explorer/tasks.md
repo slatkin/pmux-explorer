@@ -27,11 +27,11 @@
 
 ## 4. Docs, skills, website, fixtures
 
-- [ ] 4.1 README: new name, install steps, one credit line for `hiroppy/tmux-agent-sidebar`; keep `LICENSE`. Replace the `hiroppy.github.io` doc links
-- [ ] 4.2 `docs/` (including `docs/superpowers/*`), `AGENTS.md`, `CLAUDE.md` (drop the upstream link), `.claude/skills/*`
-- [ ] 4.3 `website/`: `astro.config.mjs` (site, base, author and social metadata, remove upstream's accounts), `package.json` and `package-lock.json` name, `src/styles/custom.css`, `public/robots.txt`, docs content including the tmux options reference for `@pmux-explorer-*`
-- [ ] 4.4 `fixtures/` and `renovate.json`: any old-name reference
-- [ ] 4.5 Check whether the website capture PNGs show the old name; if so, run the `regenerate-captures` skill
+- [x] 4.1 README: new name, install steps, one credit line for `hiroppy/tmux-agent-sidebar`; keep `LICENSE`. Replace the `hiroppy.github.io` doc links
+- [x] 4.2 `docs/` (including `docs/superpowers/*`), `AGENTS.md`, `CLAUDE.md` (drop the upstream link), `.claude/skills/*`
+- [x] 4.3 `website/`: `astro.config.mjs` (site, base, author and social metadata, remove upstream's accounts), `package.json` and `package-lock.json` name, `src/styles/custom.css`, `public/robots.txt`, docs content including the tmux options reference for `@pmux-explorer-*`
+- [x] 4.4 `fixtures/` and `renovate.json`: any old-name reference
+- [x] 4.5 Check whether the website capture PNGs show the old name; if so, run the `regenerate-captures` skill
 
 ## 5. Verify
 
