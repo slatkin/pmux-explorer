@@ -1150,9 +1150,15 @@ fn rendered_filter_row_and_hit_test_agree_at_the_20_column_minimum() {
     // spacer on the last column.
     insta::assert_snapshot!(output, @"
      ≡40 ●10 ◐10 ○10  ⤢
-    ╭ Activity│Tasks│… ╮
-    │  No activity yet │
-    ╰──────────────────╯
+    ⓘ                — ▾
+    project
+      ● claude
+    ┃ ● claude
+      ● claude
+      ● claude
+      ● claude
+    ─ Activity│Tasks│G…
+       No activity yet
     ");
 
     // The hit test runs on the width the frame actually rendered with.
@@ -1280,8 +1286,8 @@ fn floating_panel_clicks_hit_the_clamped_bottom_panel_geometry() {
     let output = render_to_string(&mut state, TERM_WIDTH, TERM_HEIGHT);
 
     // The frame snapshot pins the drawn geometry: the clamped 12-row
-    // bottom panel with its tab row, and the agent list running right up
-    // to the panel's border.
+    // bottom panel with its rule row, and the agent list running right
+    // up to the rule.
     insta::assert_snapshot!(output, @"
      ≡20 ●0 ◐0 ○20 ✕0                     ⤡
     ⓘ                                    — ▾
@@ -1308,9 +1314,9 @@ fn floating_panel_clicks_hit_the_clamped_bottom_panel_geometry() {
         Waiting for prompt…
       ○ claude
         Waiting for prompt…
-    ╭ Activity│Tasks│Git ──────────────────╮
-    │            No activity yet           │
-    ╰──────────────────────────────────────╯
+      ○ claude
+    ─ Activity│Tasks│Git ───────────────────
+                 No activity yet
     ");
 
     // The frame published the height it drew: 38/3 clamps 20 → 12.
