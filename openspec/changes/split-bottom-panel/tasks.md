@@ -17,10 +17,10 @@
 
 ## 3. Mouse resize and tab click
 
-- [ ] 3.1 Narrow the Activity hit area in `handle_bottom_tab_click` to the label columns 2–9 (design decision 3) and verify `tab.rs` tests: a click on columns 0 and 1 changes no tab, a click on column 2 selects Activity
-- [ ] 3.2 Add `AppState::split_drag` and the press, drag and release handlers (design decision 4): a press on the rule starts a drag, a drag to another row resizes within the limits, a release after a move saves the percent, a release with no move calls `handle_bottom_tab_click` with the press column; verify state tests for a drag from row 28 to row 20 (percent 50), a drag to row 1 (stops at row 3), a click on `Git`, a click on the dash fill, and a drag that starts on a label
-- [ ] 3.3 Make `apply_all` skip the shared percent while `split_drag` is set (the caller passes the drag state in), and end an active drag at its last rows when a new press arrives (a moved drag saves its rows, an unmoved press selects no tab); verify `GlobalState` and `AppState` tests for each case
-- [ ] 3.4 Wire `Drag(Left)` and `Up(Left)` in `app/input.rs` and move the git-poller sync to the release path; verify that a click on the `Git` label in a state test sets the git tab, and that `cargo clippy` passes
+- [x] 3.1 Narrow the Activity hit area in `handle_bottom_tab_click` to the label columns 2–9 (design decision 3) and verify `tab.rs` tests: a click on columns 0 and 1 changes no tab, a click on column 2 selects Activity
+- [x] 3.2 Add `AppState::split_drag` and the press, drag and release handlers (design decision 4): a press on the rule starts a drag, a drag to another row resizes within the limits, a release after a move saves the percent, a release with no move calls `handle_bottom_tab_click` with the press column; verify state tests for a drag from row 28 to row 20 (percent 50), a drag to row 1 (stops at row 3), a click on `Git`, a click on the dash fill, and a drag that starts on a label
+- [x] 3.3 Make `apply_all` skip the shared percent while `split_drag` is set (the caller passes the drag state in), and end an active drag at its last rows when a new press arrives (a moved drag saves its rows, an unmoved press selects no tab); verify `GlobalState` and `AppState` tests for each case
+- [x] 3.4 Wire `Drag(Left)` and `Up(Left)` in `app/input.rs` and move the git-poller sync to the release path; verify that a click on the `Git` label in a state test sets the git tab, and that `cargo clippy` passes
 
 ## 4. Configuration and docs
 
