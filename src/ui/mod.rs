@@ -141,6 +141,15 @@ mod tests {
                 "expected {value} to parse as {expected}"
             );
         }
+        // Whitespace around the number is tolerated (the trim the old
+        // line-count parse kept): a padded value parses to its number,
+        // not to the default.
+        let opts = opts_with(tmux::SIDEBAR_BOTTOM_HEIGHT, "  8  ");
+        assert_eq!(
+            bottom_percent_from_options(&opts),
+            8,
+            "whitespace-padded \"8\" must parse as 8"
+        );
     }
 
     #[test]

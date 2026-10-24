@@ -1493,19 +1493,31 @@ mod tests {
     #[test]
     fn a_new_press_ends_an_unmoved_drag_without_a_tab_click() {
         // An unmoved drag is only a held press: its stale end runs no
-        // tab click, because the user never let the button go on that
-        // label. The new press — here on Git while the stale one sat on
-        // Tasks — is the release that resolves into a click.
+        // save and no tab click, because the user never let the button
+        // go on that label and nothing was resized. The fixture makes a
+        // save observable: 1% of a 40-row sidebar draws 3 clipped rows
+        // (the 3-row minimum) and a save would round-trip them to 8% —
+        // the drift the moved branch must not run on this end. The new
+        // press — here on Git while the stale one sat on Tasks — is the
+        // only thing that resolves into a click.
         let mut state = AppState::new("%99".into());
-        state.layout.bottom_panel_height = 12;
-        state.global.bottom_percent = 30;
+        state.layout.bottom_panel_height = 3;
+        state.global.bottom_percent = 1;
         state.global.bottom_tab = BottomTab::Activity;
 
         // An unmoved press on the Tasks label, then a second press on
-        // the Git label.
-        state.handle_terminal_click(28, 12, 40);
-        state.handle_terminal_click(28, 18, 40);
+        // the Git label (both on the drawn rule row 37 = 40 - 3).
+        state.handle_terminal_click(37, 12, 40);
+        state.handle_terminal_click(37, 18, 40);
 
+        assert_eq!(
+            state.global.bottom_percent, 1,
+            "the stale unmoved drag must end without saving its rows"
+        );
+        assert!(
+            !state.global.percent_save_pending(),
+            "the unmoved stale end must leave no tmux write pending"
+        );
         assert_eq!(
             state.global.bottom_tab,
             BottomTab::Activity,

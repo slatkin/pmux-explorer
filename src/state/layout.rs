@@ -251,7 +251,14 @@ impl AppState {
     /// clamped height — so a press can only ever land on a row that was
     /// drawn.
     pub fn handle_terminal_click(&mut self, row: u16, col: u16, term_height: u16) -> bool {
-        if let Some(drag) = self.split_drag.take() {
+        // A stale drag whose release was lost: a moved one saves its
+        // rows (the moved branch only); an unmoved one is only a held
+        // press and ends with no save (nothing was resized) and no tab
+        // click, because the user did not release on that label
+        // (decision 4).
+        if let Some(drag) = self.split_drag.take()
+            && drag.moved
+        {
             self.save_split_drag_rows(drag, term_height);
         }
         let bottom_start = term_height.saturating_sub(self.layout.bottom_panel_height);
@@ -316,8 +323,10 @@ impl AppState {
 
     /// The moved branch of a split-drag ending: adopt the drag's rows
     /// as the shared bottom-panel percent and hand it to the tmux
-    /// write. Shared verbatim by the real release (`end_split_drag`)
-    /// and the stale-drag end on a new press.
+    /// write. Both endings share it verbatim — the real release
+    /// (`end_split_drag`) and the stale-drag end on a new press — and
+    /// each caller gates on `drag.moved`: it runs only for a drag that
+    /// moved.
     fn save_split_drag_rows(&mut self, drag: SplitDrag, term_height: u16) {
         self.global.bottom_percent = percent_for_rows(drag.rows, term_height);
         self.global.save_bottom_percent();
