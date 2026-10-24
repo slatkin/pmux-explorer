@@ -143,6 +143,7 @@ Per-pane file-based state:
 | `tmux_pane` | Once at startup | This sidebar's own tmux pane ID |
 | `sidebar_pane` | Every 1s (refresh cycle) | This sidebar's own pane info as tmux reported it on the last refresh (`SidebarPaneInfo`): the pane's active flags, the pane's width, the window's size, and the pane's floating flag. The floating flag is the truth for the docked-vs-floating mode — it is read from the pane, never remembered separately |
 | `docked_width` | On pop-out / pop-in (user input) | The pane width captured when the sidebar was popped out, restored by the pop-in with `resize-pane -x` (`src/state/popout.rs`). `None` while docked and when the pane was already floating when the sidebar started |
+| `width_guard` | Every 1s (refresh cycle) | Cross-tick state of the width-lock step (`src/app/width_guard.rs`): `last_observed_width` records the last docked pane width (`None` until the first docked reading primes it, so a startup width cannot publish itself) and `pending_adopt_observation` is the one-shot echo suppressor armed whenever this instance issues a `resize-pane` — an adoption, or the pop-in restore (`src/state/popout.rs`) — so its own landing is not published back as the shared width |
 | `version_notice` | Once at startup (bg fetch) | GitHub release update notice, `None` when up-to-date |
 
 ---
