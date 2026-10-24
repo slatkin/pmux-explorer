@@ -16,26 +16,39 @@ read from tmux on every refresh tick.
 | `selected_pane_row` | `@sidebar_cursor` | User input (j/k key); tmux write flushed after a short debounce | Cursor position in agent list |
 | `repo_filter` | `@sidebar_repo_filter` | User input (repo popup) | Repository filter (All or specific repo) |
 | `bottom_tab` | `@sidebar_bottom_tab` | On user tab switch (cycle key / tab-title click); tmux write retried when rejected | Selected bottom tab (Activity/Tasks/Git), shared server-wide; each instance adopts a peer's selection on its next refresh tick |
-| `bottom_percent` | `@sidebar_bottom_height` | User input (rule drag release); tmux write retried when rejected | Bottom panel height as a percent of the sidebar height (0 hides the panel; unset, empty, or an out-of-range value gives 30); shared server-wide, each instance adopts a peer's value on its next refresh tick (the `percent_save_pending` latch follows the same pattern) |
+| `bottom_percent` | `@sidebar_bottom_height` | User input (rule drag release); tmux write retried when rejected | Bottom panel height as a percent of the sidebar height (0 hides the panel; unset, empty, or an out-of-range value gives 30); shared server-wide, each instance adopts a peer's value on its next refresh tick (the percent's `SaveLatch` instance follows the same pattern) |
 
-Each field has a corresponding `last_saved_*` to prevent sync conflicts — only overwrites tmux if the local write succeeded.
+Each synced field is guarded so a failed write never loses the user's
+choice: the status filter, the bottom tab and the bottom percent each
+hold one `SaveLatch<T>` instance (`filter_latch`, `tab_latch`,
+`percent_latch` in `GlobalState` — one retry mechanism, written once
+and shared by all three). The cursor and repo filter keep plain
+`last_saved_cursor` / `last_saved_repo_filter` values instead.
 
-The status filter additionally has a `filter_save_pending` latch:
-when tmux rejects a `set -g @sidebar_filter` write, the latch is set
-and `apply_all` skips adopting the shared filter, because tmux still
-holds the stale value the write was meant to replace and adopting it
-would revert the user's choice. `retry_pending_filter_save` retries
-the write once per refresh tick, before the tick reads the shared
-options, so a successful retry is what that tick reads back.
+A `SaveLatch` remembers the last value tmux successfully accepted
+(`last_saved`) and whether tmux refused the last write
+(`save_pending`). While a latch is pending, tmux still holds the
+stale value the refused write was meant to replace, so `apply_all`
+skips adopting the shared value that tick — adopting it would revert
+the user's choice — and it also skips a shared value equal to
+`last_saved`, so a local change whose write has not landed yet stays
+put. `retry_pending_saves` is the one retry surface: it retries every
+pending latch once per refresh tick, before the tick reads the shared
+options, so a successful retry is what that tick reads back, while a
+retry tmux refuses again leaves the latch set for the next tick. The
+retries run together because retrying only some of the latches would
+let the rest drift from the shared values.
 
-The bottom tab has the matching `tab_save_pending` latch: when tmux
-rejects a `set -g @sidebar_bottom_tab` write, the latch is set and
-`apply_all` skips adopting the shared tab, because tmux still holds
-the value the rejected write was meant to replace and adopting it
-would revert the user's selection. `retry_pending_tab_save` retries
-the write once per refresh tick, before the tick reads the shared
-options, so a successful retry is what that tick reads back. These
-latches are independent.
+The three instances differ only at their edges. `filter_latch` and
+`tab_latch` parse their single option and adopt nothing while it is
+absent. `percent_latch` parses the whole option map instead: an
+unset, empty or invalid value resolves to the default
+(`DEFAULT_BOTTOM_PERCENT = 30`) and is adopted. The percent is also
+the only latch with an extra adoption gate — `apply_all` receives
+`split_drag_active` (`AppState::split_drag` is `Some`) and holds the
+shared percent unadopted while it stands, so the tick cannot move the
+rule out from under the mouse; the ticks after the release adopt the
+server value again.
 
 ### Per-pane State (keyed by pane ID)
 
@@ -115,7 +128,7 @@ Per-pane file-based state:
 | `theme` | Once at startup | Color theme from tmux `@sidebar_color_*` variables |
 | `popup` | On user input / render | `PopupState` enum: `None` / `Repo { selected, area }` / `Notices { area }`. Enforces "at most one popup open" via the type system |
 | `layout` | Every frame (render) | `FrameLayout` sub-struct bundling the ephemeral fields the UI rewrites every frame for click hit-testing: `pane_row_targets`, `line_to_row`, `repo_button_col`, `repo_spawn_targets`, `spawn_remove_targets`, `hyperlink_overlays`, `filter_bar_width` (the width the filter row was rendered with, which the click hit test uses) |
-| `notices` | Once at startup / on copy | `NoticesState` sub-struct: `button_col`, `missing_hook_groups`, `claude_plugin_status`, `claude_settings_has_residual_hooks`, `claude_plugin_notice`, `copy_targets`, `copied_at` |
+| `notices` | Once at startup / on copy | `NoticesState` sub-struct: `button_col`, `missing_hook_groups`, `claude_plugin_status`, `claude_plugin_notice`, `copy_targets`, `copied_at` |
 | `timers` | Refresh cycle / on user input | `RefreshTimers` sub-struct gating periodic work: `last_filter_click` (debounce), `last_port_refresh`, `port_scan_initialized` |
 | `pending_osc52_copy` | On successful copy / frame flush | OSC 52 clipboard payload queued for terminal forwarding |
 | `pet_state` | Every 200ms (animation) | `Idle` / `WalkRight` / `Working` / `WalkLeft` |
@@ -150,7 +163,6 @@ Per-pane file-based state:
 ├─────────────────────────────────────────────────────────────┤
 │  Once at startup                                             │
 │  theme, notices.claude_plugin_*,                            │
-│  notices.claude_settings_has_residual_hooks,                │
 │  notices.claude_plugin_notice, notices.missing_hook_groups  │
 ├─────────────────────────────────────────────────────────────┤
 │  Every 2s (git background thread)                           │
@@ -188,7 +200,7 @@ TUI main loop (app::run in app.rs; submodules app/{setup,workers,input,render,pa
     → initializes Claude notices state once
                         ↓
   → refresh() every 1s
-    → retry_pending_filter_save / retry_pending_tab_save
+    → retry_pending_saves
                                      ← a write tmux rejected is retried before the shared read
     → get_sidebar_pane_reading()     ← reads pane state + @sidebar_* in one display-message
     → global.apply_all()             ← applies the shared options (filter, cursor, bottom tab, repo filter, bottom percent) under the last_saved_* guards
@@ -329,7 +341,6 @@ struct NoticesState {
     button_col: Option<u16>,
     missing_hook_groups: Vec<NoticesMissingHookGroup>,
     claude_plugin_status: ClaudePluginStatus,
-    claude_settings_has_residual_hooks: bool,
     claude_plugin_notice: Option<ClaudePluginNotice>,
     copy_targets: Vec<NoticesCopyTarget>,
     copied_at: Option<(String, Instant)>,
