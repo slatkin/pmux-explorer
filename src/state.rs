@@ -37,6 +37,7 @@ pub(crate) use refresh::{TaskProgressDecision, classify_task_progress};
 pub use scroll::{ScrollState, ScrollStates};
 pub use tasks::TasksState;
 pub use timers::RefreshTimers;
+pub(crate) use width::{width_adopt_target, width_floor};
 
 /// Bottom-panel tabs in cycle order. The selected tab is shared state:
 /// it lives in [`GlobalState`], is written with `set -g
@@ -1849,7 +1850,7 @@ mod tests {
         state.handle_filter_click(17); // the lock glyph column
         assert!(state.global.width_lock, "the lock toggles on click");
         assert!(
-            state.global.lock_save_pending,
+            state.global.lock_latch.save_pending,
             "the rejected shared write arms the retry latch"
         );
         assert!(state.flash.is_none(), "the lock click must not pop out");

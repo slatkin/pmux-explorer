@@ -6,6 +6,84 @@ use crate::tmux;
 use super::BottomTab;
 use super::filter::{RepoFilter, StatusFilter};
 
+/// One shared-option write latch: the value the paired `GlobalState`
+/// field carried at its last successful tmux write, guarded by a retry
+/// flag.
+///
+/// `save_*` writes the paired field's value to its shared tmux option
+/// through [`Latch::record_write`]. A write tmux accepts advances
+/// `last_saved` and clears the flag; a write tmux rejects leaves both,
+/// arming the flag:
+///
+/// 1. every refresh tick retries the write (`retry_pending_*_save`)
+///    before the tick reads the shared options, so a successful retry is
+///    what that tick reads back and a transient failure cannot let this
+///    instance drift from the shared value only to have its stale choice
+///    adopted back by (or pushed onto) every other sidebar;
+/// 2. `apply_all` skips adopting the option's value over the field:
+///    the value tmux still holds is the stale one this instance is
+///    trying to replace, so adopting it would revert the user's choice.
+///
+/// The four shared fields (status filter, bottom tab, width lock, shared
+/// docked width) share this one implementation; their `save_*` methods
+/// and `apply_all` arms differ only in which option they write and what
+/// value adoption hands back.
+pub(crate) struct Latch<T: Copy + PartialEq> {
+    /// The paired field's value as it stood at the last successful
+    /// write; the guard adoption compares against.
+    pub(crate) last_saved: T,
+    /// A write that tmux rejected and that is retried on every refresh
+    /// tick. While it is set, the value tmux holds is the stale one
+    /// this instance is trying to replace, so the shared value must not
+    /// be adopted over the user's choice.
+    pub(crate) save_pending: bool,
+}
+
+impl<T: Copy + PartialEq> Latch<T> {
+    /// A latch over an option with nothing on the wire yet: `last_saved`
+    /// starts at the paired field's constructed default.
+    fn new(last_saved: T) -> Self {
+        Self {
+            last_saved,
+            save_pending: false,
+        }
+    }
+
+    /// Record one attempt to write the paired field's value to its
+    /// tmux option. Only an accepted write may advance `last_saved` —
+    /// a failed write must not cause the next sync to overwrite the
+    /// user's choice — and a rejected write arms `save_pending`, so the
+    /// next refresh tick retries the write instead of letting the
+    /// instance drift from the shared value.
+    fn record_write(&mut self, accepted: bool, written: T) {
+        if accepted {
+            self.last_saved = written;
+            self.save_pending = false;
+        } else {
+            self.save_pending = true;
+        }
+    }
+
+    /// `true` while a paired write has not landed: the tick must not
+    /// adopt the option's value over the field's own.
+    fn is_pending(&self) -> bool {
+        self.save_pending
+    }
+
+    /// Take a value read back from the shared options in as the paired
+    /// field's new content. Returns it only when it is genuinely new —
+    /// something a peer wrote rather than this instance's own last
+    /// write — and leaves both the latch and the caller otherwise
+    /// unchanged.
+    fn adopt(&mut self, shared: T) -> Option<T> {
+        if self.save_pending || shared == self.last_saved {
+            return None;
+        }
+        self.last_saved = shared;
+        Some(shared)
+    }
+}
+
 /// State shared across all sidebar instances via tmux global variables.
 /// Read once at startup and re-applied from the shared options on every
 /// refresh tick.
@@ -16,28 +94,17 @@ pub struct GlobalState {
     /// The bottom panel tab, shared like the filters: written with
     /// `set -g @sidebar_bottom_tab` and adopted from that option.
     pub bottom_tab: BottomTab,
-    // Four pending-write latches share this struct: the filter latch
-    // (last_saved_filter / filter_save_pending), the bottom-tab latch
-    // (last_saved_bottom_tab / tab_save_pending), the shared-width
-    // latch (last_saved_shared_docked_width / width_save_pending) and
-    // the lock latch (last_saved_width_lock / lock_save_pending). The
-    // later three are deliberate verbatim copies of the filter's —
-    // same save/retry calls, same rejection branch, same tick
-    // placement — recorded as duplicated code instead of a generic
-    // helper; the full latch rationale lives once on
-    // `filter_save_pending` and the later latches point at it.
-    last_saved_filter: StatusFilter,
-    /// A filter write that tmux rejected and that is retried on every
-    /// refresh tick. While it is set, the value tmux holds is the stale
-    /// one this instance is trying to replace, so the shared value must
-    /// not be adopted over the user's choice.
-    filter_save_pending: bool,
-    /// Last bottom-tab value successfully written to tmux; the tab
-    /// latch's copy of `last_saved_filter`.
-    last_saved_bottom_tab: BottomTab,
-    /// The tab latch's copy of `filter_save_pending`; see that field
-    /// and the shared latch comment above for the full rationale.
-    tab_save_pending: bool,
+    // Four shared fields ride the one [`Latch`] implementation: the
+    // status filter, the bottom tab, the width lock, and the shared
+    // docked width. Each latch pairs a `last_saved` value with a
+    // pending-write flag; its full rationale — retry per refresh tick,
+    // no adoption over a pending write — lives once on the type. The
+    // width latch's flag additionally gates the width guard's adopt
+    // side (design D4), and the two width latches are read by sibling
+    // state/app modules; hence the `pub(crate)` fields.
+    filter_latch: Latch<StatusFilter>,
+    /// The tab latch; see [`Latch`] for the semantics it carries.
+    tab_latch: Latch<BottomTab>,
     /// On/off switch for the shared docked width; mirrored to and
     /// adopted from the `@sidebar_width_lock` tmux option.
     pub width_lock: bool,
@@ -46,23 +113,15 @@ pub struct GlobalState {
     /// `@sidebar_docked_width` tmux option. `shared_` because
     /// `AppState.docked_width` already names the pop-out capture.
     pub shared_docked_width: Option<u16>,
-    /// Last width-lock value successfully written to tmux; the lock
-    /// latch's copy of `last_saved_filter`. `pub(crate)` so sibling
-    /// state/app modules can drive the latch test contract (input
-    /// tests assert the latch arms on a rejected write).
-    pub(crate) last_saved_width_lock: bool,
-    /// The lock latch's copy of `filter_save_pending`; see that field
-    /// and the shared latch comment above for the full rationale.
-    pub(crate) lock_save_pending: bool,
-    /// Last shared width successfully written to tmux; the width
-    /// latch's copy of `last_saved_filter`.
-    pub(crate) last_saved_shared_docked_width: Option<u16>,
-    /// The width latch's copy of `filter_save_pending`; see that field
-    /// for the full rationale. While it is set the width guard must
+    /// The lock latch. `pub(crate)` so sibling state/app modules
+    /// (input's `w` handler and the state tests) can drive the latch
+    /// contract on a rejected write.
+    pub(crate) lock_latch: Latch<bool>,
+    /// The width latch. While its write is pending the width guard must
     /// also skip its adopt side: the value tmux still holds is the
     /// stale shared width this instance is replacing (design D4), and
     /// adopting it back would resize the pane over the user's hand.
-    pub(crate) width_save_pending: bool,
+    pub(crate) width_latch: Latch<Option<u16>>,
     /// Parsed `@sidebar_min_width` as carried on the per-tick reading,
     /// `None` when the option is unset or not numeric. Adopted as-is
     /// every tick with no guard or latch: no sidebar instance ever
@@ -91,16 +150,12 @@ impl GlobalState {
             selected_pane_row: 0,
             repo_filter: RepoFilter::All,
             bottom_tab: BottomTab::Activity,
-            last_saved_filter: StatusFilter::All,
-            filter_save_pending: false,
-            last_saved_bottom_tab: BottomTab::Activity,
-            tab_save_pending: false,
+            filter_latch: Latch::new(StatusFilter::All),
+            tab_latch: Latch::new(BottomTab::Activity),
             width_lock: false,
             shared_docked_width: None,
-            last_saved_width_lock: false,
-            lock_save_pending: false,
-            last_saved_shared_docked_width: None,
-            width_save_pending: false,
+            lock_latch: Latch::new(false),
+            width_latch: Latch::new(None),
             min_width: None,
             last_saved_cursor: 0,
             last_saved_repo_filter: RepoFilter::All,
@@ -108,46 +163,30 @@ impl GlobalState {
         }
     }
 
-    /// Save filter to tmux global variable.
-    /// Only updates `last_saved_filter` on success so that a failed
-    /// write does not cause sync to overwrite the user's choice, and
-    /// sets `filter_save_pending` so the next refresh tick retries the
-    /// write instead of letting the instance drift from the shared
-    /// value.
+    /// Save filter to tmux global variable — the status filter's
+    /// latch write; see [`Latch`] for the accept/reject contract.
     pub fn save_filter(&mut self) {
-        if tmux::run_tmux(&[
+        let accepted = tmux::run_tmux(&[
             "set",
             "-g",
             tmux::SIDEBAR_FILTER,
             self.status_filter.as_str(),
         ])
-        .is_some()
-        {
-            self.last_saved_filter = self.status_filter;
-            self.filter_save_pending = false;
-        } else {
-            self.filter_save_pending = true;
-        }
+        .is_some();
+        self.filter_latch.record_write(accepted, self.status_filter);
     }
 
-    /// Save the selected bottom tab to tmux global variable — the
-    /// tab latch's deliberate copy of the filter's `save_filter`; see
-    /// the shared latch comment on the fields for what the copy
-    /// keeps identical and why.
+    /// Save the selected bottom tab to tmux global variable — the tab
+    /// latch's write; see [`Latch`] for the accept/reject contract.
     pub fn save_bottom_tab(&mut self) {
-        if tmux::run_tmux(&[
+        let accepted = tmux::run_tmux(&[
             "set",
             "-g",
             tmux::SIDEBAR_BOTTOM_TAB,
             self.bottom_tab.as_str(),
         ])
-        .is_some()
-        {
-            self.last_saved_bottom_tab = self.bottom_tab;
-            self.tab_save_pending = false;
-        } else {
-            self.tab_save_pending = true;
-        }
+        .is_some();
+        self.tab_latch.record_write(accepted, self.bottom_tab);
     }
 
     /// Assign the selected bottom tab and persist it to the shared
@@ -160,42 +199,34 @@ impl GlobalState {
     }
 
     /// Save the shared docked width to tmux global variable — the
-    /// width latch's deliberate copy of the filter's `save_filter`;
-    /// see the shared latch comment on the fields for what the copy
-    /// keeps identical and why. Callers (the lock's enabling seed, the
-    /// width guard's publish side) assign the desired width to
-    /// `shared_docked_width` first, then call this.
+    /// width latch's write; see [`Latch`] for the accept/reject
+    /// contract. Callers (the lock's enabling seed, the width guard's
+    /// publish side) assign the desired width to `shared_docked_width`
+    /// first, then call this.
     pub fn save_shared_docked_width(&mut self) {
         let Some(width) = self.shared_docked_width else {
             // Production always assigns Some first, so this branch is
             // only reachable from tests: with nothing to publish there
             // is nothing on the wire to reconcile, and a pending flag
-            // would block adoption forever — clear it instead.
-            self.width_save_pending = false;
+            // would block adoption forever. Off the Latch path
+            // deliberately: clearing the flag alone must not advance
+            // `last_saved` to `None` when a width was saved before.
+            self.width_latch.save_pending = false;
             return;
         };
-        if tmux::run_tmux(&["set", "-g", tmux::SIDEBAR_DOCKED_WIDTH, &width.to_string()]).is_some()
-        {
-            self.last_saved_shared_docked_width = Some(width);
-            self.width_save_pending = false;
-        } else {
-            self.width_save_pending = true;
-        }
+        let accepted =
+            tmux::run_tmux(&["set", "-g", tmux::SIDEBAR_DOCKED_WIDTH, &width.to_string()])
+                .is_some();
+        self.width_latch.record_write(accepted, Some(width));
     }
 
     /// Save the width lock to tmux global variable — the lock latch's
-    /// deliberate copy of the filter's `save_filter`; see the shared
-    /// latch comment on the fields for what the copy keeps identical
-    /// and why. Toggling code assigns the intent to `width_lock`
-    /// first, then calls this.
+    /// write; see [`Latch`] for the accept/reject contract. Toggling
+    /// code assigns the intent to `width_lock` first, then calls this.
     pub fn save_width_lock(&mut self) {
         let label = if self.width_lock { "on" } else { "off" };
-        if tmux::run_tmux(&["set", "-g", tmux::SIDEBAR_WIDTH_LOCK, label]).is_some() {
-            self.last_saved_width_lock = self.width_lock;
-            self.lock_save_pending = false;
-        } else {
-            self.lock_save_pending = true;
-        }
+        let accepted = tmux::run_tmux(&["set", "-g", tmux::SIDEBAR_WIDTH_LOCK, label]).is_some();
+        self.lock_latch.record_write(accepted, self.width_lock);
     }
 
     /// Save cursor position to tmux global variable. Returns `true` when
@@ -270,7 +301,7 @@ impl GlobalState {
     /// tick, before the tick reads the shared options, so a successful
     /// retry is what that tick reads back.
     pub fn retry_pending_filter_save(&mut self) {
-        if self.filter_save_pending {
+        if self.filter_latch.is_pending() {
             self.save_filter();
         }
     }
@@ -280,25 +311,25 @@ impl GlobalState {
     /// before the tick reads the shared options, under the same latch
     /// rationale as the filter.
     pub fn retry_pending_tab_save(&mut self) {
-        if self.tab_save_pending {
+        if self.tab_latch.is_pending() {
             self.save_bottom_tab();
         }
     }
 
     /// Retry a shared-width write tmux rejected — the width latch's
-    /// copy of `retry_pending_tab_save`; same tick placement and
-    /// rationale. On the tick a retried width lands, `apply_all` reads
-    /// the same value back and advances `last_saved_shared_docked_width`.
+    /// retry; same tick placement and rationale. On the tick a retried
+    /// width lands, `apply_all` reads the same value back and advances
+    /// the width latch's `last_saved`.
     pub fn retry_pending_width_save(&mut self) {
-        if self.width_save_pending {
+        if self.width_latch.is_pending() {
             self.save_shared_docked_width();
         }
     }
 
-    /// Retry a width-lock write tmux rejected — the lock latch's copy
-    /// of `retry_pending_tab_save`; same tick placement and rationale.
+    /// Retry a width-lock write tmux rejected — the lock latch's
+    /// retry; same tick placement and rationale.
     pub fn retry_pending_lock_save(&mut self) {
-        if self.lock_save_pending {
+        if self.lock_latch.is_pending() {
             self.save_width_lock();
         }
     }
@@ -321,18 +352,12 @@ impl GlobalState {
     /// tab, repo filter, width lock, shared docked width, min width).
     /// Runs once at startup and on every refresh tick.
     pub fn apply_all(&mut self, opts: &HashMap<String, String>) {
-        // While a filter write is pending, tmux holds the value this
-        // instance is trying to replace. Adopting it would revert the
-        // user's choice, so the filter is left alone until the write
-        // lands.
-        if !self.filter_save_pending
-            && let Some(filter_str) = opts.get(tmux::SIDEBAR_FILTER)
+        if let Some(filter_str) = opts.get(tmux::SIDEBAR_FILTER)
+            && let Some(status_filter) = self
+                .filter_latch
+                .adopt(StatusFilter::from_label(filter_str))
         {
-            let tmux_filter = StatusFilter::from_label(filter_str);
-            if tmux_filter != self.last_saved_filter {
-                self.status_filter = tmux_filter;
-                self.last_saved_filter = tmux_filter;
-            }
+            self.status_filter = status_filter;
         }
         if let Some(cursor_str) = opts.get(tmux::SIDEBAR_CURSOR)
             && let Ok(n) = cursor_str.parse::<usize>()
@@ -346,18 +371,10 @@ impl GlobalState {
             self.selected_pane_row = n;
             self.last_saved_cursor = n;
         }
-        // The tab adoption below is the filter branch above's
-        // deliberate copy: while a tab write is pending the shared
-        // value stays unadopted, and a landed write's new value is
-        // taken in like any other shared field.
-        if !self.tab_save_pending
-            && let Some(tab_str) = opts.get(tmux::SIDEBAR_BOTTOM_TAB)
+        if let Some(tab_str) = opts.get(tmux::SIDEBAR_BOTTOM_TAB)
+            && let Some(bottom_tab) = self.tab_latch.adopt(BottomTab::from_label(tab_str))
         {
-            let tmux_tab = BottomTab::from_label(tab_str);
-            if tmux_tab != self.last_saved_bottom_tab {
-                self.bottom_tab = tmux_tab;
-                self.last_saved_bottom_tab = tmux_tab;
-            }
+            self.bottom_tab = bottom_tab;
         }
         if let Some(repo_str) = opts.get(tmux::SIDEBAR_REPO_FILTER) {
             let tmux_repo = RepoFilter::from_label(repo_str);
@@ -366,25 +383,18 @@ impl GlobalState {
                 self.last_saved_repo_filter = tmux_repo;
             }
         }
-        // The lock and width branches below are the filter branch's
-        // deliberate copies: while the matching write is pending the
-        // shared value stays unadopted, and a landed write's new value
-        // is taken in like any other shared field.
         let tmux_lock = matches!(
             opts.get(tmux::SIDEBAR_WIDTH_LOCK).map(String::as_str),
             Some("on")
         );
-        if !self.lock_save_pending && tmux_lock != self.last_saved_width_lock {
-            self.width_lock = tmux_lock;
-            self.last_saved_width_lock = tmux_lock;
+        if let Some(lock) = self.lock_latch.adopt(tmux_lock) {
+            self.width_lock = lock;
         }
-        if !self.width_save_pending
-            && let Some(width_str) = opts.get(tmux::SIDEBAR_DOCKED_WIDTH)
+        if let Some(width_str) = opts.get(tmux::SIDEBAR_DOCKED_WIDTH)
             && let Ok(width) = width_str.parse::<u16>()
-            && Some(width) != self.last_saved_shared_docked_width
+            && let Some(shared) = self.width_latch.adopt(Some(width))
         {
-            self.shared_docked_width = Some(width);
-            self.last_saved_shared_docked_width = Some(width);
+            self.shared_docked_width = shared;
         }
         // The parsed floor needs no guard or latch: nothing in the
         // sidebar ever writes `@sidebar_min_width`, so a peer's value
@@ -417,9 +427,9 @@ mod tests {
         // holds is the stale one the instance is trying to replace.
         // Adopting it would revert the user's choice.
         let mut g = GlobalState::new();
-        g.last_saved_filter = StatusFilter::All;
+        g.filter_latch.last_saved = StatusFilter::All;
         g.status_filter = StatusFilter::Busy;
-        g.filter_save_pending = true;
+        g.filter_latch.save_pending = true;
 
         g.apply_all(&opts(&[(tmux::SIDEBAR_FILTER, "all")]));
 
@@ -433,17 +443,17 @@ mod tests {
         // rejection branch: the guard stays at the save-less value and
         // the write is flagged pending instead.
         let mut g = GlobalState::new();
-        g.last_saved_bottom_tab = BottomTab::Activity;
+        g.tab_latch.last_saved = BottomTab::Activity;
         g.bottom_tab = BottomTab::Tasks;
 
         g.save_bottom_tab();
 
         assert_eq!(
-            g.last_saved_bottom_tab,
+            g.tab_latch.last_saved,
             BottomTab::Activity,
-            "only an accepted write may advance last_saved_bottom_tab"
+            "only an accepted write may advance the tab latch's last_saved"
         );
-        assert!(g.tab_save_pending);
+        assert!(g.tab_latch.save_pending);
         assert_eq!(
             g.bottom_tab,
             BottomTab::Tasks,
@@ -458,15 +468,21 @@ mod tests {
         // guard nor the selection may move, and the tab latch stays
         // independent of the filter's.
         let mut g = GlobalState::new();
-        g.last_saved_bottom_tab = BottomTab::Activity;
+        g.tab_latch.last_saved = BottomTab::Activity;
         g.bottom_tab = BottomTab::Tasks;
-        g.tab_save_pending = true;
+        g.tab_latch.save_pending = true;
 
         g.retry_pending_tab_save();
 
-        assert!(g.tab_save_pending, "a rejected retry keeps the latch set");
-        assert!(!g.filter_save_pending, "the two latches are independent");
-        assert_eq!(g.last_saved_bottom_tab, BottomTab::Activity);
+        assert!(
+            g.tab_latch.save_pending,
+            "a rejected retry keeps the latch set"
+        );
+        assert!(
+            !g.filter_latch.save_pending,
+            "the two latches are independent"
+        );
+        assert_eq!(g.tab_latch.last_saved, BottomTab::Activity);
         assert_eq!(g.bottom_tab, BottomTab::Tasks);
 
         // The tick after the failed retry still must not adopt over the
@@ -480,9 +496,9 @@ mod tests {
         // tmux rejected this instance's tab write; the stale tab it
         // holds must not revert the user's choice on adoption.
         let mut g = GlobalState::new();
-        g.last_saved_bottom_tab = BottomTab::Activity;
+        g.tab_latch.last_saved = BottomTab::Activity;
         g.bottom_tab = BottomTab::Tasks;
-        g.tab_save_pending = true;
+        g.tab_latch.save_pending = true;
 
         g.apply_all(&opts(&[(tmux::SIDEBAR_BOTTOM_TAB, "activity")]));
 
@@ -495,9 +511,9 @@ mod tests {
         // selection whose write is still being retried: the retry path
         // pushes the local tab back to the server.
         let mut g = GlobalState::new();
-        g.last_saved_bottom_tab = BottomTab::Activity;
+        g.tab_latch.last_saved = BottomTab::Activity;
         g.bottom_tab = BottomTab::GitStatus;
-        g.tab_save_pending = true;
+        g.tab_latch.save_pending = true;
 
         g.apply_all(&opts(&[(tmux::SIDEBAR_BOTTOM_TAB, "tasks")]));
 
@@ -524,7 +540,7 @@ mod tests {
     #[test]
     fn a_new_tab_value_from_tmux_is_adopted() {
         let mut g = GlobalState::new();
-        g.last_saved_bottom_tab = BottomTab::Activity;
+        g.tab_latch.last_saved = BottomTab::Activity;
         g.bottom_tab = BottomTab::Activity;
 
         g.apply_all(&opts(&[(tmux::SIDEBAR_BOTTOM_TAB, "tasks")]));
@@ -535,11 +551,11 @@ mod tests {
             "a peer's tab selection must be adopted"
         );
         assert_eq!(
-            g.last_saved_bottom_tab,
+            g.tab_latch.last_saved,
             BottomTab::Tasks,
             "adoption advances the last_saved guard like the other fields"
         );
-        assert!(!g.tab_save_pending);
+        assert!(!g.tab_latch.save_pending);
     }
 
     #[test]
@@ -548,7 +564,7 @@ mod tests {
         // an already-known value must not touch the field (a local
         // change whose write is on the wire stays put).
         let mut g = GlobalState::new();
-        g.last_saved_bottom_tab = BottomTab::Tasks;
+        g.tab_latch.last_saved = BottomTab::Tasks;
         g.bottom_tab = BottomTab::GitStatus;
 
         g.apply_all(&opts(&[(tmux::SIDEBAR_BOTTOM_TAB, "tasks")]));
@@ -581,11 +597,11 @@ mod tests {
 
         assert!(g.width_lock, "a peer's lock=on must be adopted");
         assert!(
-            g.last_saved_width_lock,
+            g.lock_latch.last_saved,
             "adoption advances the guard like the other fields"
         );
         assert_eq!(g.shared_docked_width, Some(45));
-        assert_eq!(g.last_saved_shared_docked_width, Some(45));
+        assert_eq!(g.width_latch.last_saved, Some(45));
         assert_eq!(g.min_width, Some(24));
     }
 
@@ -599,7 +615,7 @@ mod tests {
         assert_eq!(g.shared_docked_width, Some(45));
 
         g.shared_docked_width = Some(35);
-        g.width_save_pending = true;
+        g.width_latch.save_pending = true;
 
         g.apply_all(&opts(&[
             (tmux::SIDEBAR_DOCKED_WIDTH, "45"),
@@ -619,8 +635,8 @@ mod tests {
     fn a_local_lock_whose_write_failed_is_not_reverted() {
         let mut g = GlobalState::new();
         g.width_lock = true;
-        g.last_saved_width_lock = false; // only an accepted write advances it
-        g.lock_save_pending = true;
+        g.lock_latch.last_saved = false; // only an accepted write advances it
+        g.lock_latch.save_pending = true;
 
         g.apply_all(&opts(&[(tmux::SIDEBAR_WIDTH_LOCK, "off")]));
 
@@ -675,7 +691,7 @@ mod tests {
         g.apply_all(&opts(&[(tmux::SIDEBAR_WIDTH_LOCK, "off")]));
 
         assert!(!g.width_lock);
-        assert!(!g.lock_save_pending);
+        assert!(!g.lock_latch.save_pending);
     }
 
     #[test]

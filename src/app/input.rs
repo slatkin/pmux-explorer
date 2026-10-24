@@ -303,11 +303,11 @@ mod tests {
 
         assert!(state.global.width_lock, "the `w` key flips the lock intent");
         assert!(
-            state.global.lock_save_pending,
+            state.global.lock_latch.save_pending,
             "the rejected shared write arms the retry latch"
         );
         assert!(
-            !state.global.last_saved_width_lock,
+            !state.global.lock_latch.last_saved,
             "only an accepted write advances the guard"
         );
 

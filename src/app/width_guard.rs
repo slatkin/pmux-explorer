@@ -22,8 +22,6 @@ use crate::state::AppState;
 use crate::state::GlobalState;
 use crate::tmux::{self, SidebarPaneInfo};
 
-use super::size_guard::DEFAULT_MIN_WIDTH;
-
 /// Cross-tick state of the width-lock step. Lives on [`AppState`] as the
 /// `width_guard` field, beside the other per-feature state, so the pop-in
 /// restore (`state/popout.rs`) can arm
@@ -67,8 +65,9 @@ pub(crate) enum WidthAction {
 ///
 /// `pane` is the tick's reading of this instance's own sidebar;
 /// `global` carries the shared settings adopted at this tick's refresh.
-/// The floor is the tick's `global.min_width`, falling back to
-/// [`DEFAULT_MIN_WIDTH`] when the option is unset.
+/// The floor is the tick's `global.min_width`, floored by
+/// `crate::state::width_floor` — the same helper the enabling seed and
+/// the pop-in restore clamp use.
 pub(crate) fn step(
     tracker: &mut WidthGuardState,
     pane: SidebarPaneInfo,
@@ -103,13 +102,9 @@ pub(crate) fn step(
     }
 
     let locked = global.width_lock;
-    // A floor beyond pane geometry cannot be honored anyway; the same
-    // clamp the enabling seed uses keeps the u32 option value from
-    // silently wrapping in the u16 math below.
-    let floor = global
-        .min_width
-        .unwrap_or(DEFAULT_MIN_WIDTH)
-        .min(u16::MAX as u32) as u16;
+    // The floored-and-clamped floor the other width-lock sites share,
+    // in `state/width.rs`.
+    let floor = crate::state::width_floor(global.min_width);
     let cap = floor.max(pane.window_width / 2);
 
     // Publish: something resized the pane to a usable width. The field is
@@ -133,7 +128,7 @@ pub(crate) fn step(
     if action == WidthAction::Idle
         && locked
         && let Some(shared) = global.shared_docked_width
-        && !global.width_save_pending
+        && !global.width_latch.save_pending
     {
         let target = shared.max(floor).min(cap);
         if pane.width != target && pane.width != shared {
@@ -198,7 +193,7 @@ mod tests {
         g.width_lock = true;
         g.shared_docked_width = shared;
         g.min_width = min_width;
-        g.width_save_pending = pending;
+        g.width_latch.save_pending = pending;
         g
     }
 

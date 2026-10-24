@@ -34,15 +34,9 @@ impl AppState {
         if !self.global.width_lock {
             // Seed only on a valid probe — see the doc comment.
             if self.sidebar_pane.window_width > 0 {
-                // A floor beyond pane geometry cannot be honored
-                // anyway; clamping keeps the u32 option value from
-                // silently wrapping in the u16 cast.
-                let floor_u32 = self
-                    .global
-                    .min_width
-                    .unwrap_or(DEFAULT_MIN_WIDTH)
-                    .min(u16::MAX as u32);
-                let floor = floor_u32 as u16;
+                // The floored-and-clamped floor the other width-lock
+                // sites share, in `state/width.rs`.
+                let floor = crate::state::width_floor(self.global.min_width);
                 let live_width = if self.sidebar_pane.floating {
                     self.docked_width.unwrap_or(PANEL_WIDTH)
                 } else {
@@ -57,6 +51,53 @@ impl AppState {
             self.global.width_lock = false;
         }
         self.global.save_width_lock();
+    }
+}
+
+/// The width-lock floor for the tick's parsed `@sidebar_min_width` in
+/// columns ([`GlobalState::min_width`]). `None` falls back to
+/// [`DEFAULT_MIN_WIDTH`], and a floor beyond pane geometry is clamped
+/// into the u16 range at the shared sites — the u32 option value
+/// cannot silently wrap in the u16 math.
+pub(crate) fn width_floor(min_width: Option<u32>) -> u16 {
+    min_width.unwrap_or(DEFAULT_MIN_WIDTH).min(u16::MAX as u32) as u16
+}
+
+/// The width an adopting sidebar resizes to with `resize-pane -x`: the
+/// shared docked width clamped to at least [`width_floor`] — the floor
+/// binds both ways — and at most `cap`, normally half the adopting
+/// window. The cap binds adopted widths only; a publishing sidebar may
+/// stay wider than half its window.
+pub(crate) fn width_adopt_target(shared: u16, min_width: Option<u32>, cap: u16) -> u16 {
+    shared.max(width_floor(min_width)).min(cap)
+}
+
+/// The width-lock step, below, clones these helpers' work; this
+/// doc-comment block anchors them near the other width math.
+#[cfg(test)]
+mod helper_tests {
+    use super::*;
+
+    #[test]
+    fn width_floor_none_falls_back_to_default() {
+        assert_eq!(width_floor(None), DEFAULT_MIN_WIDTH as u16);
+        assert_eq!(width_floor(Some(24)), 24);
+        assert_eq!(width_floor(Some(u32::MAX)), u16::MAX, "clamped at u16::MAX");
+    }
+
+    #[test]
+    fn width_adopt_target_floors_and_caps() {
+        assert_eq!(width_adopt_target(80, Some(20), 100), 80);
+        assert_eq!(
+            width_adopt_target(8, Some(20), 100),
+            20,
+            "the floor binds both ways"
+        );
+        assert_eq!(
+            width_adopt_target(80, Some(20), 50),
+            50,
+            "the cap clamps adopted widths"
+        );
     }
 }
 
@@ -92,10 +133,10 @@ mod tests {
         // the width seed ran before the lock flag (D5 order), so this
         // pane's squeeze-free width is on the wire for whichever peer
         // next adopts lock=on.
-        assert!(state.global.width_save_pending);
-        assert!(state.global.lock_save_pending);
+        assert!(state.global.width_latch.save_pending);
+        assert!(state.global.lock_latch.save_pending);
         assert!(
-            !state.global.last_saved_width_lock,
+            !state.global.lock_latch.last_saved,
             "a rejected flag write must not advance the guard"
         );
     }
@@ -165,11 +206,11 @@ mod tests {
             "the width stays unseeded on a failed probe"
         );
         assert!(
-            state.global.lock_save_pending,
+            state.global.lock_latch.save_pending,
             "the flag write is still attempted"
         );
         assert!(
-            !state.global.width_save_pending,
+            !state.global.width_latch.save_pending,
             "no width write was ever attempted"
         );
     }
@@ -184,10 +225,10 @@ mod tests {
 
         state.toggle_width_lock();
 
-        assert!(state.global.width_save_pending);
-        assert!(state.global.lock_save_pending);
+        assert!(state.global.width_latch.save_pending);
+        assert!(state.global.lock_latch.save_pending);
         assert_eq!(
-            state.global.last_saved_shared_docked_width, None,
+            state.global.width_latch.last_saved, None,
             "a rejected seed write must not advance the guard"
         );
         assert_eq!(
@@ -213,7 +254,7 @@ mod tests {
             "unlocking leaves the stale shared width behind (reused on re-enable)"
         );
         assert!(
-            !state.global.width_save_pending,
+            !state.global.width_latch.save_pending,
             "no width write happens on disable"
         );
     }
@@ -234,88 +275,93 @@ mod tests {
     }
 
     #[test]
-    fn a_rejected_write_leaves_last_saved_at_the_old_value_width() {
-        // Filter-latch shape: only an accepted write may advance the
-        // `last_saved_*` guard; the rejected intent stays in the field
-        // for the retry latched onto the next ticks.
+    fn a_rejected_write_leaves_last_saved_at_the_old_value() {
+        // Filter-latch shape, driven through both width-side saves (the
+        // width and lock latches ride the same `Latch::record_write`):
+        // only an accepted write may advance the `last_saved` guard; the
+        // rejected intent stays in the field for the retry over the next
+        // ticks.
         let mut g = GlobalState::new();
         g.shared_docked_width = Some(45);
 
         g.save_shared_docked_width();
 
         assert_eq!(
-            g.last_saved_shared_docked_width, None,
-            "only an accepted write may advance last_saved_shared_docked_width"
+            g.width_latch.last_saved, None,
+            "only an accepted write may advance the width latch's last_saved"
         );
-        assert!(g.width_save_pending);
+        assert!(g.width_latch.save_pending);
         assert_eq!(
             g.shared_docked_width,
             Some(45),
             "a rejected write must not drop the intent"
         );
-    }
 
-    #[test]
-    fn a_rejected_write_leaves_last_saved_at_the_old_value_lock() {
         let mut g = GlobalState::new();
         g.width_lock = true;
 
         g.save_width_lock();
 
         assert!(
-            !g.last_saved_width_lock,
-            "only an accepted write may advance last_saved_width_lock"
+            !g.lock_latch.last_saved,
+            "only an accepted write may advance the lock latch's last_saved"
         );
-        assert!(g.lock_save_pending);
+        assert!(g.lock_latch.save_pending);
     }
 
     #[test]
-    fn retry_pending_width_save_keeps_the_latch_while_tmux_rejects() {
+    fn retry_pending_saves_keep_the_latch_while_tmux_rejects() {
+        // A retried write that tmux rejects again keeps the latch (the
+        // next tick retries again) and leaves both the guard and the
+        // live field untouched — through either width-side retry.
         let mut g = GlobalState::new();
         g.shared_docked_width = Some(45);
-        g.width_save_pending = true;
+        g.width_latch.save_pending = true;
 
         g.retry_pending_width_save();
 
-        assert!(g.width_save_pending, "a rejected retry keeps the latch set");
-        assert_eq!(g.last_saved_shared_docked_width, None);
+        assert!(
+            g.width_latch.save_pending,
+            "a rejected retry keeps the latch set"
+        );
+        assert_eq!(g.width_latch.last_saved, None);
         assert_eq!(
             g.shared_docked_width,
             Some(45),
             "the retried intent stays in the field"
         );
-    }
 
-    #[test]
-    fn retry_pending_lock_save_keeps_the_latch_while_tmux_rejects() {
         let mut g = GlobalState::new();
         g.width_lock = true;
-        g.lock_save_pending = true;
+        g.lock_latch.save_pending = true;
 
         g.retry_pending_lock_save();
 
-        assert!(g.lock_save_pending, "a rejected retry keeps the latch set");
-        assert!(!g.last_saved_width_lock);
+        assert!(
+            g.lock_latch.save_pending,
+            "a rejected retry keeps the latch set"
+        );
+        assert!(!g.lock_latch.last_saved);
     }
 
     #[test]
     fn the_two_width_latches_are_independent() {
         let mut g = GlobalState::new();
-        g.width_save_pending = true;
+        g.width_latch.save_pending = true;
 
         g.retry_pending_lock_save();
 
         assert!(
-            g.width_save_pending,
+            g.width_latch.save_pending,
             "a lock retry must not clear the width latch"
         );
 
-        g.lock_save_pending = true;
-        g.width_save_pending = false;
+        g.lock_latch.save_pending = true;
+        g.width_latch.save_pending = false;
         g.retry_pending_width_save();
 
         assert!(
-            g.lock_save_pending,
+            g.lock_latch.save_pending,
             "a width retry must not clear the lock latch"
         );
     }
@@ -324,14 +370,14 @@ mod tests {
     fn retry_pending_saves_reaches_both_width_latches() {
         let mut g = GlobalState::new();
         g.shared_docked_width = Some(45);
-        g.width_save_pending = true;
-        g.lock_save_pending = true;
+        g.width_latch.save_pending = true;
+        g.lock_latch.save_pending = true;
 
         g.retry_pending_saves();
 
         // Both retries ran; tmux rejected again, so both latches stay.
-        assert!(g.width_save_pending);
-        assert!(g.lock_save_pending);
+        assert!(g.width_latch.save_pending);
+        assert!(g.lock_latch.save_pending);
     }
 
     #[test]
