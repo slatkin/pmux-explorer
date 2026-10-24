@@ -261,7 +261,10 @@ fn test_agents_auto_scroll_shows_last_selected_pane() {
 #[test]
 fn test_agents_auto_scroll_up_shows_group_header() {
     // After scrolling down, selecting the first agent should scroll
-    // back up enough to show the group header.
+    // back up enough to show the group header. At 25 frame rows the
+    // 30% split leaves the list viewport 2 lines short of the 17-line
+    // total (15 vs 17), so the up-scroll branch `first < offset` can
+    // fire; at 26 it is 1 short and the branch misses by equality.
     let mut panes = Vec::new();
     for i in 0..8 {
         let mut pane = make_pane(AgentType::Claude, PaneStatus::Idle);
@@ -286,22 +289,33 @@ fn test_agents_auto_scroll_up_shows_group_header() {
 
     // Scroll to bottom
     state.global.selected_pane_row = 7;
-    let _ = render_to_string(&mut state, 28, 26);
+    let _ = render_to_string(&mut state, 28, 25);
     assert!(state.scrolls.panes.offset > 0, "should have scrolled down");
 
     // Now select first agent and re-render
     state.global.selected_pane_row = 0;
     // The snapshot locks in that the `project` repo header is visible after
     // scrolling back up to the first agent.
-    insta::assert_snapshot!(render_to_string(&mut state, 28, 26), @"
+    insta::assert_snapshot!(render_to_string(&mut state, 28, 25), @"
      ≡8 ●0 ◐0 ○8 ✕0           ⤢
     ⓘ                        — ▾
     project
       ○ claude
         Waiting for prompt…
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+    ┃ ○ claude
+        Waiting for prompt…
+      ○ claude
+        Waiting for prompt…
+      ○ claude
+        Waiting for prompt…
+      ○ claude
+        Waiting for prompt…
+      ○ claude
+        Waiting for prompt…
+      ○ claude
+        Waiting for prompt…
+    ─ Activity│Tasks│Git ───────
+           No activity yet
     ");
 }
 
