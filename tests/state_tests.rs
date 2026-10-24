@@ -694,7 +694,7 @@ fn apply_all_picks_up_change_from_another_instance() {
     // Startup: this instance starts with default (All)
     g.apply_all(&make_opts(&[(tmux::SIDEBAR_FILTER, "running")]));
     assert_eq!(g.status_filter, StatusFilter::Busy);
-    // last_saved_filter is now Running
+    // last_saved (the filter latch) is now Running
 
     // Another instance changes filter to Waiting (writes to tmux)
     // The next tick applies the value the other instance wrote:
