@@ -59,7 +59,14 @@ pub fn draw(frame: &mut Frame, state: &mut AppState) {
     state.layout.hyperlink_overlays.clear();
     let area = frame.area();
 
-    let bot_h = split_rows(state.global.bottom_percent, area.height);
+    // While a split drag has moved, the frame draws the drag's rows —
+    // the rule follows the mouse row and no percent value is adopted
+    // during the drag; the release path, not a tick, writes the
+    // percent. Before any move the shared percent's geometry stands.
+    let bot_h = match &state.split_drag {
+        Some(drag) if drag.moved => drag.rows,
+        _ => split_rows(state.global.bottom_percent, area.height),
+    };
     let bot_h = if state.sidebar_pane.floating {
         // A floating panel keeps the agent list readable: the Activity/Git
         // bottom panel takes at most a third of the panel height. The

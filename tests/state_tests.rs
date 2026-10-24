@@ -1324,15 +1324,26 @@ fn floating_panel_clicks_hit_the_clamped_bottom_panel_geometry() {
     let bottom_start = TERM_HEIGHT - state.layout.bottom_panel_height;
     assert_eq!(bottom_start, 26, "the tab row is drawn at row 26");
 
-    // A click on the drawn tab row (row 26) switches the tab. With the
-    // unclamped height the boundary sat at row 18 and this click was
-    // swallowed.
+    // A click on the drawn tab row (row 26) starts a split drag on the
+    // drawn rows; with the unclamped height the boundary sat at row 18
+    // and this click was swallowed. The unmoved release then selects
+    // the tab.
     state.global.bottom_tab = BottomTab::GitStatus;
     assert!(
         state.handle_terminal_click(bottom_start, 3, TERM_HEIGHT),
         "the drawn tab row must be clickable"
     );
-    assert_eq!(state.global.bottom_tab, BottomTab::Activity);
+    assert_eq!(
+        state.global.bottom_tab,
+        BottomTab::GitStatus,
+        "a press on the rule must not select a tab yet"
+    );
+    state.end_split_drag(TERM_HEIGHT);
+    assert_eq!(
+        state.global.bottom_tab,
+        BottomTab::Activity,
+        "the unmoved release is the click that selects"
+    );
 
     // A click on a drawn agent row inside the band 18..26 — above the
     // clamped panel, below where the unclamped height put the boundary —

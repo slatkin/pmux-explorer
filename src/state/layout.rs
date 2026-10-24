@@ -1,4 +1,4 @@
-use super::{AppState, RepoFilter, StatusCounts, StatusFilter};
+use super::{AppState, RepoFilter, StatusCounts, StatusFilter, clamp_bottom_height};
 
 #[derive(Debug, Clone)]
 pub struct RowTarget {
@@ -157,18 +157,47 @@ pub(crate) fn split_rows(percent: u8, height: u16) -> u16 {
     (rows as u16).clamp(3, height - 3)
 }
 
-/// The inverse of [`split_rows`] for a drag release: a bottom panel of
-/// `rows` rows is this percent of a sidebar `height` rows tall, rounded
-/// to the nearest percent. The result saturates at 100, the largest
-/// percent `@sidebar_bottom_height` accepts.
-// The split-drag release is the only caller; it lands with the drag
-// handlers in a later task.
-#[allow(dead_code)]
+/// The inverse of [`split_rows`] for a split-drag release: a bottom
+/// panel of `rows` rows is this percent of a sidebar `height` rows tall,
+/// rounded to the nearest percent. The result saturates at 100, the
+/// largest percent `@sidebar_bottom_height` accepts.
 pub(crate) fn percent_for_rows(rows: u16, height: u16) -> u8 {
     if height == 0 {
         return 0;
     }
     ((u32::from(rows) * 100 + u32::from(height) / 2) / u32::from(height)).min(100) as u8
+}
+
+/// A press on the rule between the agent list and the bottom panel that
+/// may still become a drag or a tab click. A release with a move saves
+/// the percent `rows` round-trips to (decision 4); a release without one
+/// is a click and selects the tab the press column names.
+#[derive(Debug, Clone, Copy)]
+pub struct SplitDrag {
+    /// Column of the press, kept for the unmoved release's tab click.
+    pub press_col: u16,
+    /// Whether a drag event reached a row other than the rule row.
+    pub moved: bool,
+    /// The bottom-panel rows the drag shows, already clamped to the
+    /// split minimums (and the floating limit while the sidebar
+    /// floats) — the renderer draws exactly this many rows, rule
+    /// included, for as long as the drag moves.
+    pub rows: u16,
+}
+
+/// Clamp a split drag's row count to the limits decision 4 takes over
+/// from decision 2 plus the floating third-panel limit. `0` mirrors
+/// [`split_rows`] on a sidebar too short for a split: no rule survives.
+fn clamp_drag_rows(rows: u16, term_height: u16, floating: bool) -> u16 {
+    if term_height < 6 {
+        return 0;
+    }
+    let rows = rows.clamp(3, term_height - 3);
+    if floating {
+        clamp_bottom_height(rows, term_height)
+    } else {
+        rows
+    }
 }
 
 impl AppState {
@@ -203,26 +232,78 @@ impl AppState {
         }
     }
 
-    /// Handle a left mouse click at (`row`, `col`) in a terminal
-    /// `term_height` rows tall. Clicks on the bottom panel's tab row (the
-    /// panel's first drawn row) go to the tab header, clicks above it to
-    /// the agents panel. Returns `true` when the click landed on the tab
-    /// row, so the caller can keep the background git poller in sync with
-    /// a possible tab switch.
+    /// Handle a left mouse press at (`row`, `col`) in a terminal
+    /// `term_height` rows tall. Presses on the rule (the bottom panel's
+    /// first drawn row) start a split drag — any press column can drag,
+    /// and only an unmoved release selects a tab (decision 4). Presses
+    /// above the rule go to the agents panel. Returns `true` when the
+    /// press landed on the rule row, so the caller can keep the
+    /// background git poller in sync (the release path re-stores the
+    /// current tab; a press alone never switches it).
     ///
-    /// The bottom-panel height comes from [`FrameLayout`], the height the
-    /// last frame actually drew — while floating that is the clamped
-    /// height — so a click can only ever land on a row that was drawn.
+    /// The bottom-panel height comes from [`FrameLayout`], the height
+    /// the last frame actually drew — while floating that is the
+    /// clamped height — so a press can only ever land on a row that was
+    /// drawn.
     pub fn handle_terminal_click(&mut self, row: u16, col: u16, term_height: u16) -> bool {
         let bottom_start = term_height.saturating_sub(self.layout.bottom_panel_height);
         if row < bottom_start {
             self.handle_mouse_click(row, col);
             false
         } else if row == bottom_start {
-            self.handle_bottom_tab_click(col);
+            // A press anywhere on the rule starts a drag. On the drawn
+            // rows, so the release's unmoved click and the drawn rule
+            // agree even when the panel floats.
+            self.split_drag = Some(SplitDrag {
+                press_col: col,
+                moved: false,
+                rows: self.layout.bottom_panel_height,
+            });
             true
         } else {
             false
+        }
+    }
+
+    /// Track a held-button move (`Drag(Left)`) at `row` during a split
+    /// drag. A move to another row marks the drag moved and resizes the
+    /// drawn split to the mouse row, clamped to the split minimums (and
+    /// the floating limit while the sidebar floats); over the rule row
+    /// itself the drag stays the unmoved press a release treats as a
+    /// click. No drag: nothing to move.
+    pub fn handle_split_drag_move(&mut self, row: u16, term_height: u16) {
+        let Some(drag) = &mut self.split_drag else {
+            return;
+        };
+        // Against the row the rule is drawn at: while unmoved `rows`
+        // still holds the drawn rows at the press, while moved the
+        // renderer draws `rows` — in both states the rule sits at
+        // `term_height - rows`.
+        if row == term_height.saturating_sub(drag.rows) {
+            return;
+        }
+        drag.moved = true;
+        drag.rows = clamp_drag_rows(
+            term_height.saturating_sub(row),
+            term_height,
+            self.sidebar_pane.floating,
+        );
+    }
+
+    /// Finish a split drag on a button release. A drag that moved saves
+    /// its rows as the shared bottom-panel percent (~a tmux write per
+    /// drag, not per move); an unmoved press resolves as a click and
+    /// selects the tab the press column names. No drag: the release
+    /// belongs to nothing.
+    pub fn end_split_drag(&mut self, term_height: u16) {
+        let Some(drag) = self.split_drag.take() else {
+            return;
+        };
+        if drag.moved {
+            self.global.bottom_percent = percent_for_rows(drag.rows, term_height);
+            self.global.save_bottom_percent();
+        } else {
+            self.handle_bottom_tab_click(drag.press_col);
         }
     }
 

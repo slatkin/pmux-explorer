@@ -156,6 +156,16 @@ impl GlobalState {
         }
     }
 
+    /// Whether the bottom-percent write is waiting for tmux to accept
+    /// it. Read-only test window into the private latch: the split-drag
+    /// release tests must assert that a release hands the percent to
+    /// `save_bottom_percent`, and the latch is exactly what a refused
+    /// write leaves behind.
+    #[cfg(test)]
+    pub(crate) fn percent_save_pending(&self) -> bool {
+        self.percent_save_pending
+    }
+
     /// Save cursor position to tmux global variable. Returns `true` when
     /// tmux accepted the write so callers can decide whether to clear a
     /// queued save or keep retrying.

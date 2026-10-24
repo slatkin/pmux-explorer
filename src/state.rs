@@ -24,7 +24,9 @@ pub use activity::ActivityState;
 pub use filter::{RepoFilter, StatusCounts, StatusFilter};
 pub use focus::{Focus, FocusState};
 pub use global::GlobalState;
-pub use layout::{FrameLayout, HyperlinkOverlay, RepoSpawnTarget, RowTarget, SpawnRemoveTarget};
+pub use layout::{
+    FrameLayout, HyperlinkOverlay, RepoSpawnTarget, RowTarget, SpawnRemoveTarget, SplitDrag,
+};
 pub(crate) use layout::{filter_bar_layout, split_rows};
 pub(crate) use notices::debug_forced_display;
 pub use notices::{ClaudePluginNotice, NoticesCopyTarget, NoticesMissingHookGroup, NoticesState};
@@ -102,6 +104,13 @@ pub struct AppState {
     /// the UI layer; consumed by mouse/keyboard handlers before the
     /// next render.
     pub layout: FrameLayout,
+    /// Live split drag: a press on the rule until its release. While a
+    /// moved drag is set the bottom panel renders [`SplitDrag::rows`]
+    /// instead of the shared percent's height, and `apply_all` holds
+    /// the shared percent's adoption back so a tick cannot move the
+    /// rule under the mouse. Set by a press on the rule, consumed by
+    /// the release (or the stale-drag end on a new press).
+    pub split_drag: Option<SplitDrag>,
     pub activity: ActivityState,
     /// Focused pane's task store for the Tasks tab (refreshed by
     /// `refresh_pane_tasks` with the activity log's mtime check).
@@ -194,6 +203,7 @@ impl AppState {
             flash: None,
             spinner_frame: 0,
             layout: FrameLayout::default(),
+            split_drag: None,
             activity: ActivityState::new(),
             tasks: TasksState::new(),
             tmux_pane,
@@ -1186,9 +1196,24 @@ mod tests {
         let mut state = AppState::new("%99".into());
         state.layout.bottom_panel_height = 20;
         state.global.bottom_tab = BottomTab::GitStatus;
-        // term_height=50, bottom panel 20 → tab row at row 30
+        // term_height=50, bottom panel 20 → rule at row 30. The press
+        // starts a split drag (any press column resizes — decision 4);
+        // only the release, if the mouse never left the rule, selects.
         assert!(state.handle_terminal_click(30, 3, 50));
-        assert_eq!(state.global.bottom_tab, BottomTab::Activity);
+        assert_eq!(
+            state.global.bottom_tab,
+            BottomTab::GitStatus,
+            "the press alone must not select a tab"
+        );
+
+        state.end_split_drag(50);
+
+        assert_eq!(
+            state.global.bottom_tab,
+            BottomTab::Activity,
+            "the unmoved release is the click that selects"
+        );
+        assert!(state.split_drag.is_none(), "the release ends the drag");
     }
 
     #[test]
@@ -1243,7 +1268,11 @@ mod tests {
 
         // Row 26 is the drawn tab row (38 - 12); the unclamped height
         // would have put the boundary at row 18 and swallowed this click.
+        // The press starts a drag on the drawn geometry; the unmoved
+        // release is the click that selects.
         assert!(state.handle_terminal_click(26, 3, 38));
+        assert_eq!(state.global.bottom_tab, BottomTab::GitStatus);
+        state.end_split_drag(38);
         assert_eq!(state.global.bottom_tab, BottomTab::Activity);
 
         // Row 25 is a drawn agent-list row above the clamped panel.
@@ -1267,6 +1296,152 @@ mod tests {
         state.handle_mouse_scroll(28, 38, state.layout.bottom_panel_height, 3);
         assert_eq!(state.activity.scroll.offset, 3);
         assert_eq!(state.scrolls.panes.offset, 3);
+    }
+
+    // ─── split drag: press, move, release ─────────────────────────────
+
+    #[test]
+    fn a_split_drag_resizes_and_the_release_saves_the_percent() {
+        // Spec "a drag up": 30% of a 40-row sidebar draws the rule on
+        // row 28; dragging to row 20 keeps 20 bottom rows during the
+        // drag and the release saves the percent. In tests every tmux
+        // write hits the isolated socket and is refused, so the save
+        // shows as the pending latch.
+        let mut state = AppState::new("%99".into());
+        state.layout.bottom_panel_height = 12;
+        state.global.bottom_percent = 30;
+        state.global.bottom_tab = BottomTab::GitStatus;
+
+        // Press on the dash fill of the rule.
+        assert!(state.handle_terminal_click(28, 30, 40));
+        assert_eq!(
+            state.global.bottom_percent, 30,
+            "the press alone must not resize"
+        );
+        assert!(state.split_drag.is_some(), "the press starts the drag");
+
+        state.handle_split_drag_move(20, 40);
+        let drag = state.split_drag.expect("the drag must still be live");
+        assert!(drag.moved, "moving to row 20 is a drag, not a held press");
+        assert_eq!(drag.rows, 20, "the rule follows the mouse row");
+
+        state.end_split_drag(40);
+        assert!(state.split_drag.is_none());
+        assert_eq!(
+            state.global.bottom_percent, 50,
+            "20 bottom rows of a 40-row sidebar are 50 percent"
+        );
+        assert!(
+            state.global.percent_save_pending(),
+            "the release must hand the percent to the tmux write"
+        );
+    }
+
+    #[test]
+    fn a_split_drag_past_the_agent_minimum_stops_at_the_limit() {
+        // Spec "a drag past the limit": the rule dragged to row 1 of a
+        // 40-row sidebar stops at row 3 — 37 bottom rows — so the agent
+        // list keeps its 3 minimum rows.
+        let mut state = AppState::new("%99".into());
+        state.layout.bottom_panel_height = 12;
+
+        assert!(state.handle_terminal_click(28, 30, 40));
+        state.handle_split_drag_move(1, 40);
+
+        let drag = state.split_drag.expect("the drag must still be live");
+        assert_eq!(drag.rows, 37, "37 bottom rows put the drawn rule on row 3");
+    }
+
+    #[test]
+    fn an_unmoved_release_on_git_selects_the_git_tab() {
+        // Spec "a click on a tab label": press and release on the Git
+        // label with no move — the release selects the tab and the
+        // split height does not change.
+        let mut state = AppState::new("%99".into());
+        state.layout.bottom_panel_height = 12;
+        state.global.bottom_percent = 30;
+
+        // Press on col 18, inside the Git label.
+        assert!(state.handle_terminal_click(28, 18, 40));
+        assert_eq!(
+            state.global.bottom_tab,
+            BottomTab::Activity,
+            "a press on a label must not select it yet"
+        );
+
+        state.end_split_drag(40);
+
+        assert_eq!(
+            state.global.bottom_tab,
+            BottomTab::GitStatus,
+            "col 18 is inside the Git label"
+        );
+        assert_eq!(
+            state.global.bottom_percent, 30,
+            "a click must not resize the split"
+        );
+    }
+
+    #[test]
+    fn an_unmoved_release_on_the_dash_fill_changes_nothing() {
+        // Spec "a click on the dashes": the fill right of the labels is
+        // outside every label's hitbox, so neither the tab nor the
+        // split may change.
+        let mut state = AppState::new("%99".into());
+        state.layout.bottom_panel_height = 12;
+        state.global.bottom_percent = 30;
+        state.global.bottom_tab = BottomTab::Tasks;
+
+        state.handle_terminal_click(28, 30, 40);
+        state.end_split_drag(40);
+
+        assert_eq!(state.global.bottom_tab, BottomTab::Tasks);
+        assert_eq!(
+            state.global.bottom_percent, 30,
+            "a click must not resize the split"
+        );
+    }
+
+    #[test]
+    fn a_drag_that_starts_on_a_label_resizes_without_selecting_the_tab() {
+        // Spec "a drag that starts on a tab label": pressing the Tasks
+        // label and dragging to another row resizes the split; the tab
+        // selection must not follow the press.
+        let mut state = AppState::new("%99".into());
+        state.layout.bottom_panel_height = 12;
+        state.global.bottom_percent = 30;
+        state.global.bottom_tab = BottomTab::Tasks;
+
+        // Press on col 12, inside the Tasks label, then drag.
+        state.handle_terminal_click(28, 12, 40);
+        state.handle_split_drag_move(20, 40);
+        state.end_split_drag(40);
+
+        assert_eq!(
+            state.global.bottom_percent, 50,
+            "the drag resized the split"
+        );
+        assert_eq!(
+            state.global.bottom_tab,
+            BottomTab::Tasks,
+            "the drag selected no tab"
+        );
+    }
+
+    #[test]
+    fn drag_and_release_without_a_press_change_nothing() {
+        // crossterm can deliver a Drag or an Up whose Down never reached
+        // this pane (pane focus mid-press). The handlers must no-op on
+        // them instead of inventing a split resize or a tab click.
+        let mut state = AppState::new("%99".into());
+        state.layout.bottom_panel_height = 12;
+
+        state.handle_split_drag_move(20, 40);
+        state.end_split_drag(40);
+
+        assert!(state.split_drag.is_none());
+        assert_eq!(state.global.bottom_percent, 30);
+        assert_eq!(state.global.bottom_tab, BottomTab::Activity);
     }
 
     // ─── move_pane_selection edge cases ─────────────────────────────
