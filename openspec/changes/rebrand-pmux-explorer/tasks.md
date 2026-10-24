@@ -6,15 +6,15 @@
 
 ## 2. Rust crate and binary
 
-- [ ] 2.1 `Cargo.toml`: name, `repository`, and any `[lib]`/`[[bin]]` names; update `Cargo.lock`
-- [ ] 2.2 Replace `tmux_agent_sidebar` with `pmux_explorer` in `src/main.rs` and `tests/`
-- [ ] 2.3 `src/version.rs`: release URL to `slatkin/pmux-explorer`; fix its tests. Keep the bare version output format
-- [ ] 2.4 `src/cli/plugin_state.rs`: change `PLUGIN_NAME`; delete the legacy `RESIDUAL_HOOK_NEEDLE` detection (`plugin_state.rs:172-200`), its test fixtures (`:642-663`), and the migration prompt that uses it (`src/ui/notices/prompts.rs:104`)
-- [ ] 2.5 `src/ui/notices/prompts.rs` and `website/.../getting-started/claude-code.md`: plugin references become `pmux-explorer@slatkin`
-- [ ] 2.6 `src/cli/setup/` (including tests): usage text, pi `command` string, fallback hook path, doc comments
-- [ ] 2.7 Rename the `/tmp/tmux-agent-activity*` and `/tmp/tmux-agent-tasks*` prefixes and their test expectations
-- [ ] 2.8 Rename the `@agent-sidebar-*` constants to `@pmux-explorer-*` in `src/worktree/config.rs` and `src/worktree/markers.rs`, and their uses in `src/tmux/query.rs` and `src/tmux/types.rs`; update tests and snapshots
-- [ ] 2.9 Update remaining user-visible strings in `src/` (notices, help text)
+- [x] 2.1 `Cargo.toml`: name, `repository`, and any `[lib]`/`[[bin]]` names; update `Cargo.lock`
+- [x] 2.2 Replace `tmux_agent_sidebar` with `pmux_explorer` in `src/main.rs` and `tests/`
+- [x] 2.3 `src/version.rs`: release URL to `slatkin/pmux-explorer`; fix its tests. Keep the bare version output format
+- [x] 2.4 `src/cli/plugin_state.rs`: change `PLUGIN_NAME`; delete the legacy `RESIDUAL_HOOK_NEEDLE` detection (`plugin_state.rs:172-200`), its test fixtures (`:642-663`), and the migration prompt that uses it (`src/ui/notices/prompts.rs:104`)
+- [x] 2.5 `src/ui/notices/prompts.rs` and `website/.../getting-started/claude-code.md`: plugin references become `pmux-explorer@slatkin`
+- [x] 2.6 `src/cli/setup/` (including tests): usage text, pi `command` string, fallback hook path, doc comments
+- [x] 2.7 Rename the `/tmp/tmux-agent-activity*` and `/tmp/tmux-agent-tasks*` prefixes and their test expectations
+- [x] 2.8 Rename the `@agent-sidebar-*` constants to `@pmux-explorer-*` in `src/worktree/config.rs` and `src/worktree/markers.rs`, and their uses in `src/tmux/query.rs` and `src/tmux/types.rs`; update tests and snapshots
+- [x] 2.9 Update remaining user-visible strings in `src/` (notices, help text)
 
 ## 3. Plugin, shell, and CI layer
 
