@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::time::Instant;
 
 use crate::tmux;
+use crate::ui;
 
 use super::BottomTab;
 use super::filter::{RepoFilter, StatusFilter};
@@ -16,13 +17,20 @@ pub struct GlobalState {
     /// The bottom panel tab, shared like the filters: written with
     /// `set -g @sidebar_bottom_tab` and adopted from that option.
     pub bottom_tab: BottomTab,
-    // Two pending-write latches share this struct: the filter latch
-    // (last_saved_filter / filter_save_pending) and the bottom-tab
-    // latch (last_saved_bottom_tab / tab_save_pending). The tab latch
-    // is a deliberate verbatim copy of the filter's — same save/retry
+    /// The bottom panel height as a percent of the sidebar height,
+    /// shared like the filters: written with
+    /// `set -g @sidebar_bottom_height <n>` and adopted from that
+    /// option.
+    pub bottom_percent: u8,
+    // Three pending-write latches share this struct: the filter latch
+    // (last_saved_filter / filter_save_pending), the bottom-tab latch
+    // (last_saved_bottom_tab / tab_save_pending) and the
+    // bottom-percent latch (last_saved_bottom_percent /
+    // percent_save_pending). The tab and percent latches are
+    // deliberate verbatim copies of the filter's — same save/retry
     // calls, same rejection branch, same tick placement — recorded as
     // duplicated code instead of a generic helper; the full latch
-    // rationale lives once on `filter_save_pending` and the tab copies
+    // rationale lives once on `filter_save_pending` and the copies
     // point at it.
     last_saved_filter: StatusFilter,
     /// A filter write that tmux rejected and that is retried on every
@@ -36,6 +44,13 @@ pub struct GlobalState {
     /// The tab latch's copy of `filter_save_pending`; see that field
     /// and the shared latch comment above for the full rationale.
     tab_save_pending: bool,
+    /// Last bottom-percent value successfully written to tmux; the
+    /// percent latch's copy of `last_saved_filter`.
+    last_saved_bottom_percent: u8,
+    /// The percent latch's copy of `filter_save_pending`; see that
+    /// field and the shared latch comment above for the full
+    /// rationale.
+    percent_save_pending: bool,
     /// Last cursor value successfully written to tmux.
     last_saved_cursor: usize,
     /// Last repo filter value successfully written to tmux.
@@ -57,10 +72,13 @@ impl GlobalState {
             selected_pane_row: 0,
             repo_filter: RepoFilter::All,
             bottom_tab: BottomTab::Activity,
+            bottom_percent: ui::DEFAULT_BOTTOM_PERCENT,
             last_saved_filter: StatusFilter::All,
             filter_save_pending: false,
             last_saved_bottom_tab: BottomTab::Activity,
             tab_save_pending: false,
+            last_saved_bottom_percent: ui::DEFAULT_BOTTOM_PERCENT,
+            percent_save_pending: false,
             last_saved_cursor: 0,
             last_saved_repo_filter: RepoFilter::All,
             pending_cursor_save_since: None,
@@ -116,6 +134,26 @@ impl GlobalState {
     pub fn set_bottom_tab(&mut self, tab: BottomTab) {
         self.bottom_tab = tab;
         self.save_bottom_tab();
+    }
+
+    /// Save the bottom panel percent to tmux global variable — the
+    /// percent latch's deliberate copy of the filter's `save_filter`;
+    /// see the shared latch comment on the fields for what the copy
+    /// keeps identical and why.
+    pub fn save_bottom_percent(&mut self) {
+        if tmux::run_tmux(&[
+            "set",
+            "-g",
+            tmux::SIDEBAR_BOTTOM_HEIGHT,
+            &self.bottom_percent.to_string(),
+        ])
+        .is_some()
+        {
+            self.last_saved_bottom_percent = self.bottom_percent;
+            self.percent_save_pending = false;
+        } else {
+            self.percent_save_pending = true;
+        }
     }
 
     /// Save cursor position to tmux global variable. Returns `true` when
@@ -205,19 +243,32 @@ impl GlobalState {
         }
     }
 
-    /// Retry every shared write tmux rejected (filter, bottom tab),
-    /// so an instance cannot drift from the shared values. Runs once
-    /// per refresh tick, before the tick reads the shared options, so
-    /// a successful retry is what that tick reads back. The two writes
-    /// must stay paired: retrying only one would let the other drift
-    /// and be adopted back by every other sidebar.
+    /// Retry a bottom-percent write tmux rejected. Runs next to
+    /// `retry_pending_filter_save` at the top of each refresh tick,
+    /// before the tick reads the shared options, under the same latch
+    /// rationale as the filter.
+    pub fn retry_pending_percent_save(&mut self) {
+        if self.percent_save_pending {
+            self.save_bottom_percent();
+        }
+    }
+
+    /// Retry every shared write tmux rejected (filter, bottom tab,
+    /// bottom percent), so an instance cannot drift from the shared
+    /// values. Runs once per refresh tick, before the tick reads the
+    /// shared options, so a successful retry is what that tick reads
+    /// back. The writes must stay together: retrying only some would
+    /// let the others drift and be adopted back by every other
+    /// sidebar.
     pub fn retry_pending_saves(&mut self) {
         self.retry_pending_filter_save();
         self.retry_pending_tab_save();
+        self.retry_pending_percent_save();
     }
 
     /// Apply the shared options read from tmux (filter, cursor, bottom
-    /// tab, repo filter). Runs once at startup and on every refresh tick.
+    /// tab, bottom percent, repo filter). Runs once at startup and on
+    /// every refresh tick.
     pub fn apply_all(&mut self, opts: &HashMap<String, String>) {
         // While a filter write is pending, tmux holds the value this
         // instance is trying to replace. Adopting it would revert the
@@ -255,6 +306,21 @@ impl GlobalState {
             if tmux_tab != self.last_saved_bottom_tab {
                 self.bottom_tab = tmux_tab;
                 self.last_saved_bottom_tab = tmux_tab;
+            }
+        }
+        // The percent adoption below is the filter branch above's
+        // deliberate copy, like the tab's: while a percent write is
+        // pending the shared value stays unadopted, and a landed
+        // write's new value is taken in like any other shared field.
+        // Unlike the label fields the percent parse has a default, so
+        // it runs on the whole option map: an unset, empty or invalid
+        // option resolves to `DEFAULT_BOTTOM_PERCENT` instead of
+        // being skipped.
+        if !self.percent_save_pending {
+            let tmux_percent = ui::bottom_percent_from_options(opts);
+            if tmux_percent != self.last_saved_bottom_percent {
+                self.bottom_percent = tmux_percent;
+                self.last_saved_bottom_percent = tmux_percent;
             }
         }
         if let Some(repo_str) = opts.get(tmux::SIDEBAR_REPO_FILTER) {
@@ -426,5 +492,174 @@ mod tests {
             BottomTab::GitStatus,
             "a shared value matching last_saved must not overwrite a local change"
         );
+    }
+
+    // ─── bottom-percent latch (verbatim copies of the tab latch tests)
+
+    #[test]
+    fn a_rejected_percent_write_keeps_the_last_saved_value_and_sets_the_latch() {
+        // In tests every tmux call runs against a socket no server
+        // listens on, so `save_bottom_percent` deterministically takes
+        // the rejection branch: the guard stays at the save-less value
+        // and the write is flagged pending instead.
+        let mut g = GlobalState::new();
+        g.last_saved_bottom_percent = 30;
+        g.bottom_percent = 50;
+
+        g.save_bottom_percent();
+
+        assert_eq!(
+            g.last_saved_bottom_percent, 30,
+            "only an accepted write may advance last_saved_bottom_percent"
+        );
+        assert!(g.percent_save_pending);
+        assert_eq!(
+            g.bottom_percent, 50,
+            "a rejected write must not drop the user's height"
+        );
+    }
+
+    #[test]
+    fn retry_pending_percent_save_keeps_latching_while_tmux_rejects() {
+        // A retried write that tmux rejects again must keep the latch
+        // (the next tick retries again) and bump nothing: neither the
+        // guard nor the percent may move, and the percent latch stays
+        // independent of the other two.
+        let mut g = GlobalState::new();
+        g.last_saved_bottom_percent = 30;
+        g.bottom_percent = 50;
+        g.percent_save_pending = true;
+
+        g.retry_pending_percent_save();
+
+        assert!(
+            g.percent_save_pending,
+            "a rejected retry keeps the latch set"
+        );
+        assert!(
+            !g.filter_save_pending && !g.tab_save_pending,
+            "the latches are independent"
+        );
+        assert_eq!(g.last_saved_bottom_percent, 30);
+        assert_eq!(g.bottom_percent, 50);
+
+        // The tick after the failed retry still must not adopt over the
+        // pending write.
+        g.apply_all(&opts(&[(tmux::SIDEBAR_BOTTOM_HEIGHT, "80")]));
+        assert_eq!(g.bottom_percent, 50);
+    }
+
+    #[test]
+    fn a_pending_percent_save_is_not_overwritten_by_the_shared_value() {
+        // tmux rejected this instance's percent write; the stale value
+        // it holds must not revert the user's choice on adoption.
+        let mut g = GlobalState::new();
+        g.last_saved_bottom_percent = 30;
+        g.bottom_percent = 50;
+        g.percent_save_pending = true;
+
+        g.apply_all(&opts(&[(tmux::SIDEBAR_BOTTOM_HEIGHT, "20")]));
+
+        assert_eq!(g.bottom_percent, 50);
+    }
+
+    #[test]
+    fn a_pending_percent_save_wins_over_a_peer_value_too() {
+        // Even a peer's genuinely new value must not overwrite a local
+        // height whose write is still being retried: the retry path
+        // pushes the local percent back to the server.
+        let mut g = GlobalState::new();
+        g.last_saved_bottom_percent = 30;
+        g.bottom_percent = 60;
+        g.percent_save_pending = true;
+
+        g.apply_all(&opts(&[(tmux::SIDEBAR_BOTTOM_HEIGHT, "70")]));
+
+        assert_eq!(g.bottom_percent, 60);
+    }
+
+    #[test]
+    fn no_shared_height_key_leaves_the_percent_default() {
+        // `GlobalState::new` starts on `DEFAULT_BOTTOM_PERCENT`; a
+        // fresh server has no `@sidebar_bottom_height` key, so the
+        // percent resolves to the default and stays put.
+        let mut g = GlobalState::new();
+        assert_eq!(g.bottom_percent, ui::DEFAULT_BOTTOM_PERCENT);
+
+        g.apply_all(&opts(&[(tmux::SIDEBAR_FILTER, "busy")]));
+
+        assert_eq!(
+            g.bottom_percent,
+            ui::DEFAULT_BOTTOM_PERCENT,
+            "an unset height option must not change the constructed default"
+        );
+    }
+
+    #[test]
+    fn a_new_percent_value_from_tmux_is_adopted() {
+        let mut g = GlobalState::new();
+        g.last_saved_bottom_percent = 30;
+        g.bottom_percent = 30;
+
+        g.apply_all(&opts(&[(tmux::SIDEBAR_BOTTOM_HEIGHT, "65")]));
+
+        assert_eq!(g.bottom_percent, 65, "a peer's height must be adopted");
+        assert_eq!(
+            g.last_saved_bottom_percent, 65,
+            "adoption advances the last_saved guard like the other fields"
+        );
+        assert!(!g.percent_save_pending);
+    }
+
+    #[test]
+    fn an_unchanged_shared_percent_is_not_re_adopted() {
+        // The guard compares against the last saved percent, so
+        // re-reading an already-known value must not touch the field
+        // (a local change whose write is on the wire stays put).
+        let mut g = GlobalState::new();
+        g.last_saved_bottom_percent = 50;
+        g.bottom_percent = 75;
+
+        g.apply_all(&opts(&[(tmux::SIDEBAR_BOTTOM_HEIGHT, "50")]));
+
+        assert_eq!(
+            g.bottom_percent, 75,
+            "a shared value matching last_saved must not overwrite a local change"
+        );
+    }
+
+    #[test]
+    fn an_invalid_shared_height_adopts_the_default() {
+        // The percent parse has a default: an option value outside
+        // 0..=100 or not an integer resolves to `DEFAULT_BOTTOM_PERCENT`
+        // and is adopted like any other shared value.
+        for value in ["abc", "150", ""] {
+            let mut g = GlobalState::new();
+            g.last_saved_bottom_percent = 50;
+            g.bottom_percent = 50;
+
+            g.apply_all(&opts(&[(tmux::SIDEBAR_BOTTOM_HEIGHT, value)]));
+
+            assert_eq!(
+                g.bottom_percent,
+                ui::DEFAULT_BOTTOM_PERCENT,
+                "an invalid shared value {value:?} must adopt the default"
+            );
+        }
+    }
+
+    #[test]
+    fn a_cleared_height_option_resets_to_the_default() {
+        // With the option gone from the shared map the percent resolves
+        // to the default, so clearing the option server-wide brings
+        // every instance back to `DEFAULT_BOTTOM_PERCENT`.
+        let mut g = GlobalState::new();
+        g.last_saved_bottom_percent = 50;
+        g.bottom_percent = 50;
+
+        g.apply_all(&opts(&[]));
+
+        assert_eq!(g.bottom_percent, ui::DEFAULT_BOTTOM_PERCENT);
+        assert_eq!(g.last_saved_bottom_percent, ui::DEFAULT_BOTTOM_PERCENT);
     }
 }

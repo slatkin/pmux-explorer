@@ -18,6 +18,11 @@ use crate::{state::AppState, tmux};
 
 pub const BOTTOM_PANEL_HEIGHT: u16 = 20;
 
+/// The bottom panel height used when `@sidebar_bottom_height` is unset,
+/// empty, or not an integer from 0 to 100, as a percent of the sidebar
+/// height.
+pub const DEFAULT_BOTTOM_PERCENT: u8 = 30;
+
 /// Rows reserved between the pane list and the bottom panel when the pet is
 /// enabled. The pet and its desk/chair all render inside this band so they
 /// never overdraw the pane list above or the bottom panel's border below.
@@ -36,6 +41,19 @@ pub fn bottom_panel_height_from_options(opts: &HashMap<String, String>) -> u16 {
 pub fn bottom_panel_height_from_tmux() -> u16 {
     let opts = tmux::get_all_global_options();
     bottom_panel_height_from_options(&opts)
+}
+
+/// Read `@sidebar_bottom_height` as a percent of the sidebar height,
+/// falling back to [`DEFAULT_BOTTOM_PERCENT`]. An integer from 0 to 100
+/// is the percent — an unset option, an empty value, or any other value
+/// gives the default. A percent of 0 hides the bottom panel entirely.
+pub fn bottom_percent_from_options(opts: &HashMap<String, String>) -> u8 {
+    opts.get(tmux::SIDEBAR_BOTTOM_HEIGHT)
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .and_then(|s| s.parse::<u8>().ok())
+        .filter(|p| *p <= 100)
+        .unwrap_or(DEFAULT_BOTTOM_PERCENT)
 }
 
 /// Read `@sidebar_pet` from tmux global options, defaulting to `false` (off).
@@ -143,6 +161,48 @@ mod tests {
     fn bottom_height_falls_back_on_empty_value() {
         let opts = opts_with(tmux::SIDEBAR_BOTTOM_HEIGHT, "");
         assert_eq!(bottom_panel_height_from_options(&opts), BOTTOM_PANEL_HEIGHT);
+    }
+
+    #[test]
+    fn bottom_percent_defaults_when_option_missing() {
+        let opts = HashMap::new();
+        assert_eq!(bottom_percent_from_options(&opts), DEFAULT_BOTTOM_PERCENT);
+    }
+
+    #[test]
+    fn bottom_percent_parses_valid_values() {
+        for (value, expected) in [("30", 30), ("0", 0), ("100", 100)] {
+            let opts = opts_with(tmux::SIDEBAR_BOTTOM_HEIGHT, value);
+            assert_eq!(
+                bottom_percent_from_options(&opts),
+                expected,
+                "expected {value} to parse as {expected}"
+            );
+        }
+    }
+
+    #[test]
+    fn bottom_percent_falls_back_above_100() {
+        for value in ["101", "150", "300"] {
+            let opts = opts_with(tmux::SIDEBAR_BOTTOM_HEIGHT, value);
+            assert_eq!(
+                bottom_percent_from_options(&opts),
+                DEFAULT_BOTTOM_PERCENT,
+                "expected {value} to fall back to the default"
+            );
+        }
+    }
+
+    #[test]
+    fn bottom_percent_falls_back_on_invalid_value() {
+        let opts = opts_with(tmux::SIDEBAR_BOTTOM_HEIGHT, "abc");
+        assert_eq!(bottom_percent_from_options(&opts), DEFAULT_BOTTOM_PERCENT);
+    }
+
+    #[test]
+    fn bottom_percent_falls_back_on_empty_value() {
+        let opts = opts_with(tmux::SIDEBAR_BOTTOM_HEIGHT, "");
+        assert_eq!(bottom_percent_from_options(&opts), DEFAULT_BOTTOM_PERCENT);
     }
 
     #[test]
