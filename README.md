@@ -2,8 +2,6 @@
 
 <p align="center">One tmux sidebar that tracks every Claude Code, Codex, and OpenCode pane across every session and window. See status, background shells, prompts, Git state, activity, and worktrees without switching windows.</p>
 
-<p align="center"><img src="website/src/assets/captures/hero.png" alt="pmux-explorer hero" /></p>
-
 <p align="center">
   <a href="https://slatkin.github.io/pmux-explorer/">Documentation</a> ·
   <a href="https://slatkin.github.io/pmux-explorer/getting-started/installation/">Getting Started</a> ·
