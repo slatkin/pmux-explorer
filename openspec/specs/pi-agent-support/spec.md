@@ -91,7 +91,7 @@ configuration file.
 - **THEN** a document states the event names, the fields of each event, and the meaning of each field
 
 #### Scenario: The setup command for pi
-- **WHEN** `tmux-agent-sidebar setup pi` runs
+- **WHEN** `pmux-explorer setup pi` runs
 - **THEN** it prints the producer contract and exits successfully, and it changes no configuration file
 
 ### Requirement: a dead pi pane is cleared

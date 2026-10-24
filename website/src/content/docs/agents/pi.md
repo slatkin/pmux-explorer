@@ -48,5 +48,5 @@ human opened it by hand.
 
 The producer is the pmux pi extension, so install pmux as a pi package and
 nothing else. The contract it implements is written down in the sidebar's
-[agent event protocol](https://github.com/slatkin/tmux-agent-sidebar/blob/main/docs/agent-protocol.md),
-and `tmux-agent-sidebar setup pi` prints it as JSON.
+[agent event protocol](https://github.com/slatkin/pmux-explorer/blob/main/docs/agent-protocol.md),
+and `pmux-explorer setup pi` prints it as JSON.

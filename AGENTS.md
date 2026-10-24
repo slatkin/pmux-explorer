@@ -2,7 +2,7 @@
 
 A tmux sidebar TUI (built with Ratatui + Crossterm) that monitors AI coding agents (Claude Code, Codex, OpenCode, and pi) across all tmux sessions/windows/panes in real-time. Distributed as a single binary via tmux plugin managers.
 
-This is the `slatkin` fork of [hiroppy/tmux-agent-sidebar](https://github.com/hiroppy/tmux-agent-sidebar), forked to add pi support and no longer tracking upstream. The pi work is the `AgentType::Pi` agent (color option, event adapter, process-tree integration), the documented producer protocol (`docs/agent-protocol.md`), and the pmux subagent identity for pi panes spawned by pmux. The design records for these changes live in `openspec/changes/archive/` (`pi-agent-support`, `pi-subagent-identity`, …).
+This project was forked to add pi support and no longer tracks upstream. The pi work is the `AgentType::Pi` agent (color option, event adapter, process-tree integration), the documented producer protocol (`docs/agent-protocol.md`), and the pmux subagent identity for pi panes spawned by pmux. The design records for these changes live in `openspec/changes/archive/` (`pi-agent-support`, `pi-subagent-identity`, …).
 
 ## Build & Development Commands
 
@@ -41,11 +41,11 @@ Producers (hook.sh, plugins, extensions) → CLI `hook` subcommand
                            ↓
         cli/hook/handlers dispatches on_* per event, which:
           • sets tmux pane options (@pane_status, @pane_attention, etc.)
-          • appends to /tmp/tmux-agent-activity*.log
+          • appends to /tmp/pmux-explorer-activity*.log
                            ↓
 TUI event loop (app::run) → AppState::sync_global_state()
           • reads tmux panes via single `list-panes -a`
-          • parses /tmp/tmux-agent-activity*.log
+          • parses /tmp/pmux-explorer-activity*.log
                            ↓
                 ui::draw() renders frame
 ```
@@ -77,10 +77,10 @@ pi's producer is external, but everything the sidebar does with pi's events live
 - **`adapter/`** — Per-agent adapters (`claude`, `codex`, `opencode`, `pi`). Each binds its agent's upstream events to internal `AgentEventKind`s (a `HOOK_REGISTRATIONS` table for `claude`/`codex`, the printable `PI_EVENTS` producer contract for pi) and a `parse()` maps raw JSON payloads into `AgentEvent`, rewriting per-agent names onto the shared shape: pi's lowercase tool names (`read`, `bash`) become the canonical PascalCase labels and pi's `path` file key is copied beside `file_path`; alias spellings (`wait_reason` for `notification_type`, the `error*` variants for `error`) are accepted. Single source of truth consumed by the setup wizard, README snippets, and tests; table-versus-`parse()` drift is pinned by per-adapter tests.
 - **`event.rs` + `event/`** — Internal event layer: `AgentEvent` (pre-extracted fields; handlers never touch raw JSON or agent names), `AgentEventKind` (compile-time enum for hook kinds), `EventAdapter` trait + `resolve_adapter`.
 - **`pmux_task.rs`** — Parses the pmux task prompt a pi subagent's first turn carries into `PmuxTask { kind, parent_session_id, task }`. Only the `name` attribute of the `<file>` tag is read; a path not matching the `/artifacts/<parent session id>/context|pmux-resume/` shape returns `None`, and the prompt stays stored as the pane prompt. The contract is specified in `docs/agent-protocol.md` ("A pmux task prompt").
-- **`task_store.rs` / `task_reminders.rs`** — Per-pane task store (one JSON file per pane at `/tmp/tmux-agent-tasks*.json`) behind the `task-set` / `task-update` subcommands: `record_task`/`update_task_status` write, the TUI only reads, and trim keeps the cap at [`MAX_ITEMS`]. `task_reminders.rs` is the single wording source for the two agent reminders the help text, `docs/agent-protocol.md`, and the pmux companion embed verbatim.
+- **`task_store.rs` / `task_reminders.rs`** — Per-pane task store (one JSON file per pane at `/tmp/pmux-explorer-tasks*.json`) behind the `task-set` / `task-update` subcommands: `record_task`/`update_task_status` write, the TUI only reads, and trim keeps the cap at [`MAX_ITEMS`]. `task_reminders.rs` is the single wording source for the two agent reminders the help text, `docs/agent-protocol.md`, and the pmux companion embed verbatim.
 - **`cli/hook.rs` + `cli/hook/`** — Receives real-time status updates from agent producers; dispatch in `hook.rs`, with submodules `context` (shared helpers + `AgentContext`), `handlers` (per-event `on_*` handlers), `activity` (activity log writing), `notifications` (desktop notification helpers).
 - **`git.rs`** — Git operations (branch, ahead/behind, PR numbers via `gh` CLI, diff stats). Runs in a background polling thread.
-- **`activity.rs`** — Parses `/tmp/tmux-agent-activity*.log` files, maps tool types to colors.
+- **`activity.rs`** — Parses `/tmp/pmux-explorer-activity*.log` files, maps tool types to colors.
 - **`group.rs`** — Groups panes by repository path.
 - **`worktree.rs` / `tool_name.rs` / `version.rs` / `port.rs` / `clipboard.rs` / `desktop_notification.rs`** — Leaf helpers used across modules (worktree metadata parsing, tool-name classification, version reporting, port detection, clipboard + desktop notification shims).
 - **`ui/`** — Rendering layer: `mod.rs` (entry `draw`), `panes.rs` (agent list + repo filter) with submodules under `panes/` (`filter_bar`, `row` split into `row/{status,branch,body,ctx}.rs` — status row, branch/ports row, body rows including the pmux subagent identity row, plus `row_collector`, `click_targets`, `popups`); `bottom.rs` + `bottom/` with submodules (`activity`, `tasks`, `git`) for the Activity/Tasks/Git tabs; `colors.rs` (256-color theme); `icons.rs` (agent/status glyphs); `notices.rs` (transient banner rendering); `text.rs` (text formatting/truncation).
@@ -99,7 +99,7 @@ Tests are in `/tests/` using Ratatui's `TestBackend` for UI rendering assertions
 
 ## Debugging (Local tmux Plugin)
 
-`~/.tmux/plugins/tmux-agent-sidebar` is typically a symlink to this repository, so `cargo build --release` alone updates the binary tmux loads. Just restart the sidebar (toggle off → on via the tmux keybinding) to pick up the new build.
+`~/.tmux/plugins/pmux-explorer` is typically a symlink to this repository, so `cargo build --release` alone updates the binary tmux loads. Just restart the sidebar (toggle off → on via the tmux keybinding) to pick up the new build.
 
 ```bash
 cargo build --release
@@ -109,8 +109,8 @@ cargo build --release
 **When working in a worktree**: Worktrees build into their own `target/release/`, which is not what the plugin directory points at, so the artifact must be copied manually AND re-signed. On macOS (Darwin 24+), `cargo` produces a `linker-signed` ad-hoc signature that the kernel will SIGKILL (signal 9) immediately after a `cp` — the kernel refuses to honor a linker-only signature on a file it didn't write itself. Replace it with a fresh ad-hoc signature to avoid the kill:
 
 ```bash
-cp <worktree-path>/target/release/tmux-agent-sidebar ~/.tmux/plugins/tmux-agent-sidebar/target/release/tmux-agent-sidebar
-codesign --force --sign - ~/.tmux/plugins/tmux-agent-sidebar/target/release/tmux-agent-sidebar
+cp <worktree-path>/target/release/pmux-explorer ~/.tmux/plugins/pmux-explorer/target/release/pmux-explorer
+codesign --force --sign - ~/.tmux/plugins/pmux-explorer/target/release/pmux-explorer
 ```
 
 If tmux reports `terminated by signal 9` after a worktree build, you almost certainly skipped the `codesign` step. Clearing `com.apple.provenance` with `xattr -c` is not required — the kernel only cares about the signature flavor.
