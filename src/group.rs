@@ -89,54 +89,7 @@ pub fn group_panes_by_repo(sessions: &[crate::tmux::SessionInfo]) -> Vec<RepoGro
     for session in sessions {
         for window in &session.windows {
             for pane in &window.panes {
-                // Cache the base git info per path. `get` first avoids a key
-                // clone on cache hits; misses fall through to `insert` which
-                // owns the key plus the (expensive) git-command lookup.
-                let mut git_info = match git_cache.get(pane.path.as_str()) {
-                    Some(cached) => cached.clone(),
-                    None => {
-                        let resolved = resolve_pane_git_info(&pane.path);
-                        git_cache.insert(pane.path.clone(), resolved.clone());
-                        resolved
-                    }
-                };
-
-                // Override with hook-provided worktree info (Claude Code
-                // provides this; Codex does not, so the git-command base
-                // remains as fallback).
-                if !pane.worktree.name.is_empty() {
-                    git_info.worktree_name = Some(pane.worktree.name.clone());
-                    git_info.is_worktree = true;
-                }
-                if !pane.worktree.branch.is_empty() {
-                    git_info.branch = Some(pane.worktree.branch.clone());
-                    git_info.is_worktree = true;
-                }
-
-                let group_key = match &git_info.repo_root {
-                    Some(root) => root.clone(),
-                    None => pane.path.clone(),
-                };
-
-                let display_name = group_key
-                    .rsplit('/')
-                    .next()
-                    .unwrap_or(&group_key)
-                    .to_string();
-
-                let has_focus = window.window_active && pane.pane_active;
-
-                let group = groups.entry(group_key).or_insert_with(|| RepoGroup {
-                    name: display_name,
-                    has_focus: false,
-                    panes: Vec::new(),
-                });
-
-                if has_focus {
-                    group.has_focus = true;
-                }
-
-                group.panes.push((pane.clone(), git_info));
+                add_pane_to_groups(&mut groups, &mut git_cache, window, pane);
             }
         }
     }
@@ -144,6 +97,82 @@ pub fn group_panes_by_repo(sessions: &[crate::tmux::SessionInfo]) -> Vec<RepoGro
     let mut result: Vec<RepoGroup> = groups.into_values().collect();
     result.sort_by_key(|a| a.name.to_lowercase());
     result
+}
+
+/// Fold one pane into its repo group, resolving git info through the cache.
+fn add_pane_to_groups(
+    groups: &mut IndexMap<String, RepoGroup>,
+    git_cache: &mut std::collections::HashMap<String, PaneGitInfo>,
+    window: &crate::tmux::WindowInfo,
+    pane: &PaneInfo,
+) {
+    let mut git_info = cached_git_info(git_cache, &pane.path);
+    apply_worktree_overrides(&mut git_info, &pane.worktree);
+
+    let group_key = pane_group_key(&git_info, &pane.path);
+    let display_name = repo_display_name(&group_key);
+    let has_focus = window.window_active && pane.pane_active;
+
+    let group = groups.entry(group_key).or_insert_with(|| RepoGroup {
+        name: display_name,
+        has_focus: false,
+        panes: Vec::new(),
+    });
+
+    if has_focus {
+        group.has_focus = true;
+    }
+
+    group.panes.push((pane.clone(), git_info));
+}
+
+/// Look up cached git info for a pane path, resolving (and caching) on miss.
+fn cached_git_info(
+    git_cache: &mut std::collections::HashMap<String, PaneGitInfo>,
+    path: &str,
+) -> PaneGitInfo {
+    // Cache the base git info per path. `get` first avoids a key
+    // clone on cache hits; misses fall through to `insert` which
+    // owns the key plus the (expensive) git-command lookup.
+    match git_cache.get(path) {
+        Some(cached) => cached.clone(),
+        None => {
+            let resolved = resolve_pane_git_info(path);
+            git_cache.insert(path.to_string(), resolved.clone());
+            resolved
+        }
+    }
+}
+
+/// Override base git info with hook-provided worktree metadata when present.
+/// (Claude Code provides this; Codex does not, so the git-command base
+/// remains as fallback.)
+fn apply_worktree_overrides(git_info: &mut PaneGitInfo, worktree: &crate::tmux::WorktreeMetadata) {
+    if !worktree.name.is_empty() {
+        git_info.worktree_name = Some(worktree.name.clone());
+        git_info.is_worktree = true;
+    }
+    if !worktree.branch.is_empty() {
+        git_info.branch = Some(worktree.branch.clone());
+        git_info.is_worktree = true;
+    }
+}
+
+/// Group key: repo root when known, otherwise the pane's raw path.
+fn pane_group_key(git_info: &PaneGitInfo, path: &str) -> String {
+    git_info
+        .repo_root
+        .clone()
+        .unwrap_or_else(|| path.to_string())
+}
+
+/// Display name: the repo directory basename, or the raw key for non-git paths.
+fn repo_display_name(group_key: &str) -> String {
+    group_key
+        .rsplit('/')
+        .next()
+        .unwrap_or(group_key)
+        .to_string()
 }
 
 /// Resolve a possibly-relative git path to an absolute canonical path.
