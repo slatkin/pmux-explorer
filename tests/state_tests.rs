@@ -588,7 +588,7 @@ fn apply_all_ignores_tmux_filter_matching_last_saved() {
     g.status_filter = StatusFilter::Busy;
 
     let opts = make_opts(&[(tmux::SIDEBAR_FILTER, "all")]);
-    g.apply_all(&opts);
+    g.apply_all(&opts, false);
 
     assert_eq!(
         g.status_filter,
@@ -602,7 +602,7 @@ fn apply_all_applies_filter_from_tmux() {
     let mut g = make_global();
 
     let opts = make_opts(&[(tmux::SIDEBAR_FILTER, "waiting")]);
-    g.apply_all(&opts);
+    g.apply_all(&opts, false);
 
     assert_eq!(g.status_filter, StatusFilter::Waiting);
 }
@@ -612,7 +612,7 @@ fn apply_all_applies_cursor_from_tmux() {
     let mut g = make_global();
 
     let opts = make_opts(&[(tmux::SIDEBAR_CURSOR, "3")]);
-    g.apply_all(&opts);
+    g.apply_all(&opts, false);
 
     assert_eq!(g.selected_pane_row, 3);
 }
@@ -622,7 +622,7 @@ fn apply_all_applies_repo_filter_from_tmux() {
     let mut g = make_global();
 
     let opts = make_opts(&[(tmux::SIDEBAR_REPO_FILTER, "my-app")]);
-    g.apply_all(&opts);
+    g.apply_all(&opts, false);
 
     assert_eq!(g.repo_filter, RepoFilter::Repo("my-app".into()));
 }
@@ -634,7 +634,7 @@ fn apply_all_empty_opts_changes_nothing() {
     g.repo_filter = RepoFilter::Repo("app".into());
     g.selected_pane_row = 2;
 
-    g.apply_all(&std::collections::HashMap::new());
+    g.apply_all(&std::collections::HashMap::new(), false);
 
     assert_eq!(g.status_filter, StatusFilter::Busy);
     assert_eq!(g.repo_filter, RepoFilter::Repo("app".into()));
@@ -646,7 +646,7 @@ fn apply_all_applies_error_filter_from_tmux() {
     let mut g = make_global();
 
     let opts = make_opts(&[(tmux::SIDEBAR_FILTER, "error")]);
-    g.apply_all(&opts);
+    g.apply_all(&opts, false);
 
     assert_eq!(g.status_filter, StatusFilter::Error);
 }
@@ -658,7 +658,7 @@ fn apply_all_invalid_filter_defaults_to_all() {
 
     // "garbage" parses as All, All == last_saved → no change
     let opts = make_opts(&[(tmux::SIDEBAR_FILTER, "garbage")]);
-    g.apply_all(&opts);
+    g.apply_all(&opts, false);
 
     assert_eq!(
         g.status_filter,
@@ -676,7 +676,7 @@ fn apply_all_applies_all_three_from_tmux() {
         (tmux::SIDEBAR_CURSOR, "7"),
         (tmux::SIDEBAR_REPO_FILTER, "my-app"),
     ]);
-    g.apply_all(&opts);
+    g.apply_all(&opts, false);
 
     assert_eq!(g.status_filter, StatusFilter::Error);
     assert_eq!(g.selected_pane_row, 7);
@@ -692,13 +692,13 @@ fn apply_all_picks_up_change_from_another_instance() {
     let mut g = make_global();
 
     // Startup: this instance starts with default (All)
-    g.apply_all(&make_opts(&[(tmux::SIDEBAR_FILTER, "running")]));
+    g.apply_all(&make_opts(&[(tmux::SIDEBAR_FILTER, "running")]), false);
     assert_eq!(g.status_filter, StatusFilter::Busy);
     // last_saved_filter is now Running
 
     // Another instance changes filter to Waiting (writes to tmux)
     // The next tick applies the value the other instance wrote:
-    g.apply_all(&make_opts(&[(tmux::SIDEBAR_FILTER, "waiting")]));
+    g.apply_all(&make_opts(&[(tmux::SIDEBAR_FILTER, "waiting")]), false);
 
     assert_eq!(
         g.status_filter,
@@ -711,12 +711,12 @@ fn apply_all_picks_up_change_from_another_instance() {
 fn apply_all_picks_up_cursor_from_another_instance() {
     let mut g = make_global();
 
-    g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "3")]));
+    g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "3")]), false);
     assert_eq!(g.selected_pane_row, 3);
     // last_saved_cursor is now 3
 
     // Another instance moves cursor to 7
-    g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "7")]));
+    g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "7")]), false);
 
     assert_eq!(
         g.selected_pane_row, 7,
@@ -731,14 +731,14 @@ fn apply_all_does_not_revert_pending_cursor_save() {
     // before the flush must not drag the cursor back to 2.
     let mut g = make_global();
 
-    g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "2")]));
+    g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "2")]), false);
     assert_eq!(g.selected_pane_row, 2);
     g.selected_pane_row = 5;
     g.queue_cursor_save();
 
     // Ticks run while the save is still pending (tmux value unchanged).
-    g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "2")]));
-    g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "2")]));
+    g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "2")]), false);
+    g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "2")]), false);
 
     assert_eq!(
         g.selected_pane_row, 5,
@@ -754,12 +754,12 @@ fn apply_all_does_not_clobber_a_pending_cursor_move_with_a_remote_value() {
     // the flush persist the peer's value instead of the user's.
     let mut g = make_global();
 
-    g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "2")]));
+    g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "2")]), false);
     assert_eq!(g.selected_pane_row, 2);
     g.selected_pane_row = 5;
     g.queue_cursor_save();
 
-    g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "9")]));
+    g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "9")]), false);
 
     assert_eq!(
         g.selected_pane_row, 5,
@@ -774,17 +774,23 @@ fn apply_all_picks_up_cursor_and_repo_filter_from_another_instance() {
     // next tick adopts both in a single apply.
     let mut g = make_global();
 
-    g.apply_all(&make_opts(&[
-        (tmux::SIDEBAR_CURSOR, "1"),
-        (tmux::SIDEBAR_REPO_FILTER, "app"),
-    ]));
+    g.apply_all(
+        &make_opts(&[
+            (tmux::SIDEBAR_CURSOR, "1"),
+            (tmux::SIDEBAR_REPO_FILTER, "app"),
+        ]),
+        false,
+    );
     assert_eq!(g.selected_pane_row, 1);
     assert_eq!(g.repo_filter, RepoFilter::Repo("app".into()));
 
-    g.apply_all(&make_opts(&[
-        (tmux::SIDEBAR_CURSOR, "6"),
-        (tmux::SIDEBAR_REPO_FILTER, "other"),
-    ]));
+    g.apply_all(
+        &make_opts(&[
+            (tmux::SIDEBAR_CURSOR, "6"),
+            (tmux::SIDEBAR_REPO_FILTER, "other"),
+        ]),
+        false,
+    );
 
     assert_eq!(
         g.selected_pane_row, 6,
@@ -804,13 +810,13 @@ fn apply_all_unchanged_tmux_value_leaves_local_change_alone() {
     // that keep re-reading it must not clobber the local choice.
     let mut g = make_global();
 
-    g.apply_all(&make_opts(&[(tmux::SIDEBAR_REPO_FILTER, "app")]));
+    g.apply_all(&make_opts(&[(tmux::SIDEBAR_REPO_FILTER, "app")]), false);
     assert_eq!(g.repo_filter, RepoFilter::Repo("app".into()));
     g.repo_filter = RepoFilter::Repo("mine".into());
 
-    g.apply_all(&make_opts(&[(tmux::SIDEBAR_REPO_FILTER, "app")]));
-    g.apply_all(&make_opts(&[(tmux::SIDEBAR_REPO_FILTER, "app")]));
-    g.apply_all(&make_opts(&[(tmux::SIDEBAR_REPO_FILTER, "app")]));
+    g.apply_all(&make_opts(&[(tmux::SIDEBAR_REPO_FILTER, "app")]), false);
+    g.apply_all(&make_opts(&[(tmux::SIDEBAR_REPO_FILTER, "app")]), false);
+    g.apply_all(&make_opts(&[(tmux::SIDEBAR_REPO_FILTER, "app")]), false);
 
     assert_eq!(
         g.repo_filter,
@@ -851,7 +857,7 @@ fn a_bottom_tab_selected_in_one_instance_is_adopted_by_another_within_one_tick()
     assert_eq!(b.global.bottom_tab, BottomTab::Activity);
 
     b.global
-        .apply_all(&make_opts(&[(tmux::SIDEBAR_BOTTOM_TAB, "tasks")]));
+        .apply_all(&make_opts(&[(tmux::SIDEBAR_BOTTOM_TAB, "tasks")]), false);
 
     assert_eq!(
         b.global.bottom_tab,
@@ -1150,9 +1156,15 @@ fn rendered_filter_row_and_hit_test_agree_at_the_20_column_minimum() {
     // spacer on the last column.
     insta::assert_snapshot!(output, @"
      ≡40 ●10 ◐10 ○10  ⤢
-    ╭ Activity│Tasks│… ╮
-    │  No activity yet │
-    ╰──────────────────╯
+    ⓘ                — ▾
+    project
+      ● claude
+    ┃ ● claude
+      ● claude
+      ● claude
+      ● claude
+    ─ Activity│Tasks│G…
+       No activity yet
     ");
 
     // The hit test runs on the width the frame actually rendered with.
@@ -1217,13 +1229,53 @@ fn rendered_filter_row_and_hit_test_agree_at_the_20_column_minimum() {
 }
 
 #[test]
+fn frame_layout_publishes_the_drawn_bottom_panel_rows() {
+    // `FrameLayout::bottom_panel_height` is the row count the frame
+    // actually drew — the percent split docked, the clamped third while
+    // floating, and zero when the percent hides the panel — never the
+    // configured percent itself.
+    let pane = make_pane(AgentType::Claude, PaneStatus::Idle);
+    let mut state = make_state(vec![]);
+    state.repo_groups = vec![make_repo_group("project", vec![pane])];
+
+    state.global.bottom_percent = 30;
+    render_to_string(&mut state, 40, 40);
+    assert_eq!(
+        state.layout.bottom_panel_height, 12,
+        "30% of a 40-row sidebar draws 12 bottom rows"
+    );
+
+    state.global.bottom_percent = 0;
+    render_to_string(&mut state, 40, 40);
+    assert_eq!(
+        state.layout.bottom_panel_height, 0,
+        "a percent of 0 draws no bottom panel"
+    );
+
+    state.global.bottom_percent = 100;
+    render_to_string(&mut state, 40, 40);
+    assert_eq!(
+        state.layout.bottom_panel_height, 37,
+        "100% of 40 rows clamps to 37 so the agent list keeps 3"
+    );
+
+    state.global.bottom_percent = 53;
+    state.sidebar_pane.floating = true;
+    render_to_string(&mut state, 40, 38);
+    assert_eq!(
+        state.layout.bottom_panel_height, 12,
+        "20 rows of a floating 38-row panel clamp to a third"
+    );
+}
+
+#[test]
 fn floating_panel_clicks_hit_the_clamped_bottom_panel_geometry() {
     // While the sidebar floats, the Activity/Git panel is clamped to a
-    // third of the panel height (20 → 12 of a 38-row panel). The mouse
-    // handlers must hit-test the clamped geometry the frame actually
-    // drew: the drawn tab row switches the tab, a drawn agent row in the
-    // band the unclamped height wrongly claimed selects that agent, and
-    // the wheel over those rows scrolls the agents list.
+    // third of the panel height (53% of 38 rows is 20 rows, clamped to
+    // 12). The mouse handlers must hit-test the clamped geometry the
+    // frame actually drew: the drawn tab row switches the tab, a drawn
+    // agent row in the band the unclamped height wrongly claimed selects
+    // that agent, and the wheel over those rows scrolls the agents list.
     let mut panes = Vec::new();
     for i in 0..20 {
         let mut pane = make_pane(AgentType::Claude, PaneStatus::Idle);
@@ -1233,15 +1285,15 @@ fn floating_panel_clicks_hit_the_clamped_bottom_panel_geometry() {
     let mut state = make_state(vec![]);
     state.repo_groups = vec![make_repo_group("project", panes)];
     state.sidebar_pane.floating = true;
-    state.bottom_panel_height = 20;
+    state.global.bottom_percent = 53;
 
     const TERM_WIDTH: u16 = 40;
     const TERM_HEIGHT: u16 = 38;
     let output = render_to_string(&mut state, TERM_WIDTH, TERM_HEIGHT);
 
     // The frame snapshot pins the drawn geometry: the clamped 12-row
-    // bottom panel with its tab row, and the agent list running right up
-    // to the panel's border.
+    // bottom panel with its rule row, and the agent list running right
+    // up to the rule.
     insta::assert_snapshot!(output, @"
      ≡20 ●0 ◐0 ○20 ✕0                     ⤡
     ⓘ                                    — ▾
@@ -1268,9 +1320,9 @@ fn floating_panel_clicks_hit_the_clamped_bottom_panel_geometry() {
         Waiting for prompt…
       ○ claude
         Waiting for prompt…
-    ╭ Activity│Tasks│Git ──────────────────╮
-    │            No activity yet           │
-    ╰──────────────────────────────────────╯
+      ○ claude
+    ─ Activity│Tasks│Git ───────────────────
+                 No activity yet
     ");
 
     // The frame published the height it drew: 38/3 clamps 20 → 12.
@@ -1278,15 +1330,26 @@ fn floating_panel_clicks_hit_the_clamped_bottom_panel_geometry() {
     let bottom_start = TERM_HEIGHT - state.layout.bottom_panel_height;
     assert_eq!(bottom_start, 26, "the tab row is drawn at row 26");
 
-    // A click on the drawn tab row (row 26) switches the tab. With the
-    // unclamped height the boundary sat at row 18 and this click was
-    // swallowed.
+    // A click on the drawn tab row (row 26) starts a split drag on the
+    // drawn rows; with the unclamped height the boundary sat at row 18
+    // and this click was swallowed. The unmoved release then selects
+    // the tab.
     state.global.bottom_tab = BottomTab::GitStatus;
     assert!(
         state.handle_terminal_click(bottom_start, 3, TERM_HEIGHT),
         "the drawn tab row must be clickable"
     );
-    assert_eq!(state.global.bottom_tab, BottomTab::Activity);
+    assert_eq!(
+        state.global.bottom_tab,
+        BottomTab::GitStatus,
+        "a press on the rule must not select a tab yet"
+    );
+    state.end_split_drag(TERM_HEIGHT);
+    assert_eq!(
+        state.global.bottom_tab,
+        BottomTab::Activity,
+        "the unmoved release is the click that selects"
+    );
 
     // A click on a drawn agent row inside the band 18..26 — above the
     // clamped panel, below where the unclamped height put the boundary —

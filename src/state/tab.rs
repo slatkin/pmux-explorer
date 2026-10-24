@@ -6,17 +6,20 @@ impl AppState {
         self.global.set_bottom_tab(next);
     }
 
-    /// Handle mouse click on the bottom panel tab header.
-    /// Tab title layout: "╭ Activity│Tasks│Git ──────╮" — col is relative
-    /// to the terminal. The `╭ ` prefix occupies cols 0-1, so the title
+    /// Handle a click on the bottom panel's rule (its first drawn row).
+    /// Rule layout: "─ Activity│Tasks│Git ──────" — col is relative to
+    /// the terminal. The `─ ` prefix occupies cols 0-1, so the label
     /// text starts at col 2: "Activity" spans cols 2..9, "│" at col 10,
     /// "Tasks" spans cols 11..15, "│" at col 16, "Git" spans cols 17..19.
     pub fn handle_bottom_tab_click(&mut self, col: u16) {
-        // Offset by 1 for the left border character
+        // Only the drawn labels are clickable. The `─ ` prefix cols 0-1
+        // and the dash fill right of `Git` change nothing — a click
+        // outside a label must not write the shared value at all, so
+        // the Activity hitbox is the label columns only (decision 3).
         let x = col.saturating_sub(1) as usize;
-        // "Activity" = 8 chars (1..8), "│" = 1 char (9), "Tasks" = 5
+        // "Activity" = 8 chars on x 1..9, "│" = 1 char (9), "Tasks" = 5
         // chars (10..14), "│" = 1 char (15), "Git" = 3 chars (16..18)
-        let selected = if x < 9 {
+        let selected = if (1..9).contains(&x) {
             Some(BottomTab::Activity)
         } else if (10..15).contains(&x) {
             Some(BottomTab::Tasks)
@@ -185,11 +188,15 @@ mod tests {
 
     #[test]
     fn click_on_each_title_selects_its_tab() {
-        // Title layout "╭ Activity│Tasks│Git …─╮": x = clicked col − 1.
-        // One click into each of the three hitbox ranges.
+        // Rule layout "─ Activity│Tasks│Git …─": x = clicked col − 1.
+        // One click into each of the three hitbox ranges, including
+        // the first label's leftmost column.
         let mut state = AppState::new("%99".into());
 
-        state.handle_bottom_tab_click(3); // "Activity"
+        state.handle_bottom_tab_click(2); // left edge of "Activity"
+        assert_eq!(state.global.bottom_tab, BottomTab::Activity);
+
+        state.handle_bottom_tab_click(3); // middle of "Activity"
         assert_eq!(state.global.bottom_tab, BottomTab::Activity);
 
         state.handle_bottom_tab_click(13); // "Tasks"
@@ -211,6 +218,23 @@ mod tests {
                 state.global.bottom_tab,
                 BottomTab::Tasks,
                 "col {col} sits outside a title hitbox"
+            );
+        }
+    }
+
+    #[test]
+    fn click_on_the_prefix_left_of_activity_changes_nothing() {
+        // The `─ ` before the first label is rule, not label: a click
+        // on the prefix column or a col-0 event changes nothing.
+        let mut state = AppState::new("%99".into());
+        state.global.bottom_tab = BottomTab::Tasks;
+
+        for col in [0u16, 1] {
+            state.handle_bottom_tab_click(col);
+            assert_eq!(
+                state.global.bottom_tab,
+                BottomTab::Tasks,
+                "col {col} is left of the first label"
             );
         }
     }

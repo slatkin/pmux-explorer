@@ -13,29 +13,30 @@ use ratatui::{
     layout::{Constraint, Direction, Layout},
 };
 
-use crate::state::clamp_bottom_height;
-use crate::{state::AppState, tmux};
+use crate::state::{AppState, clamp_bottom_height, split_rows};
+use crate::tmux;
 
-pub const BOTTOM_PANEL_HEIGHT: u16 = 20;
+/// The bottom panel height used when `@sidebar_bottom_height` is unset,
+/// empty, or not an integer from 0 to 100, as a percent of the sidebar
+/// height.
+pub const DEFAULT_BOTTOM_PERCENT: u8 = 30;
 
 /// Rows reserved between the pane list and the bottom panel when the pet is
 /// enabled. The pet and its desk/chair all render inside this band so they
 /// never overdraw the pane list above or the bottom panel's border below.
 pub const PET_SCENE_HEIGHT: u16 = 5;
 
-/// Read `@sidebar_bottom_height` from tmux global options, falling back to the default.
-/// A value of 0 hides the bottom panel entirely.
-pub fn bottom_panel_height_from_options(opts: &HashMap<String, String>) -> u16 {
+/// Read `@sidebar_bottom_height` as a percent of the sidebar height,
+/// falling back to [`DEFAULT_BOTTOM_PERCENT`]. An integer from 0 to 100
+/// is the percent — an unset option, an empty value, or any other value
+/// gives the default. A percent of 0 hides the bottom panel entirely.
+pub fn bottom_percent_from_options(opts: &HashMap<String, String>) -> u8 {
     opts.get(tmux::SIDEBAR_BOTTOM_HEIGHT)
         .map(|s| s.trim())
         .filter(|s| !s.is_empty())
-        .and_then(|s| s.parse::<u16>().ok())
-        .unwrap_or(BOTTOM_PANEL_HEIGHT)
-}
-
-pub fn bottom_panel_height_from_tmux() -> u16 {
-    let opts = tmux::get_all_global_options();
-    bottom_panel_height_from_options(&opts)
+        .and_then(|s| s.parse::<u8>().ok())
+        .filter(|p| *p <= 100)
+        .unwrap_or(DEFAULT_BOTTOM_PERCENT)
 }
 
 /// Read `@sidebar_pet` from tmux global options, defaulting to `false` (off).
@@ -58,43 +59,58 @@ pub fn draw(frame: &mut Frame, state: &mut AppState) {
     state.layout.hyperlink_overlays.clear();
     let area = frame.area();
 
+    // While a split drag has moved, the frame draws the drag's rows —
+    // the rule follows the mouse row and no percent value is adopted
+    // during the drag; the release path, not a tick, writes the
+    // percent. Before any move the shared percent's geometry stands.
+    let bot_h = match &state.split_drag {
+        Some(drag) if drag.moved => drag.rows,
+        _ => split_rows(state.global.bottom_percent, area.height),
+    };
     let bot_h = if state.sidebar_pane.floating {
         // A floating panel keeps the agent list readable: the Activity/Git
-        // bottom panel takes at most a third of the panel height.
-        clamp_bottom_height(state.bottom_panel_height, area.height)
+        // bottom panel takes at most a third of the panel height. The
+        // floating limit lands after the split minimums, so a short
+        // floating panel can draw below 3 rows.
+        clamp_bottom_height(bot_h, area.height)
     } else {
-        state.bottom_panel_height
+        bot_h
     };
     // Publish the height this frame actually drew so the mouse handlers
     // hit-test the drawn geometry (`FrameLayout::bottom_panel_height`),
-    // never the raw configured height.
+    // never the configured percent.
     state.layout.bottom_panel_height = bot_h;
-    let divider_h = if bot_h > 0 && state.pet_enabled {
-        PET_SCENE_HEIGHT
-    } else {
-        1
-    };
 
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints(if bot_h > 0 {
-            vec![
-                Constraint::Min(1),
-                Constraint::Length(divider_h),
-                Constraint::Length(bot_h),
-            ]
+            vec![Constraint::Min(1), Constraint::Length(bot_h)]
         } else {
             vec![Constraint::Min(1)]
         })
         .split(area);
 
-    panes::draw_agents(frame, state, chunks[0]);
+    // When the pet is on, its band is taken from the bottom of the agent
+    // part, directly above the rule — only when that still leaves the
+    // band plus at least 3 agent rows. Otherwise the band does not show.
+    let (agent_area, pet_area) =
+        if state.pet_enabled && bot_h > 0 && chunks[0].height >= PET_SCENE_HEIGHT + 3 {
+            let split = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Min(1), Constraint::Length(PET_SCENE_HEIGHT)])
+                .split(chunks[0]);
+            (split[0], Some(split[1]))
+        } else {
+            (chunks[0], None)
+        };
 
-    if bot_h > 0 && chunks.len() > 2 {
-        bottom::draw_bottom(frame, state, chunks[2]);
-        if state.pet_enabled {
+    panes::draw_agents(frame, state, agent_area);
+
+    if bot_h > 0 && chunks.len() > 1 {
+        bottom::draw_bottom(frame, state, chunks[1]);
+        if let Some(pet_area) = pet_area {
             let running_count = state.running_count();
-            pet::draw_pet(frame, state, chunks[1], running_count);
+            pet::draw_pet(frame, state, pet_area, running_count);
         }
     }
 }
@@ -110,39 +126,54 @@ mod tests {
     }
 
     #[test]
-    fn bottom_height_defaults_when_option_missing() {
+    fn bottom_percent_defaults_when_option_missing() {
         let opts = HashMap::new();
-        assert_eq!(bottom_panel_height_from_options(&opts), BOTTOM_PANEL_HEIGHT);
+        assert_eq!(bottom_percent_from_options(&opts), DEFAULT_BOTTOM_PERCENT);
     }
 
     #[test]
-    fn bottom_height_parses_valid_value() {
-        let opts = opts_with(tmux::SIDEBAR_BOTTOM_HEIGHT, "12");
-        assert_eq!(bottom_panel_height_from_options(&opts), 12);
-    }
-
-    #[test]
-    fn bottom_height_trims_whitespace() {
+    fn bottom_percent_parses_valid_values() {
+        for (value, expected) in [("30", 30), ("0", 0), ("100", 100)] {
+            let opts = opts_with(tmux::SIDEBAR_BOTTOM_HEIGHT, value);
+            assert_eq!(
+                bottom_percent_from_options(&opts),
+                expected,
+                "expected {value} to parse as {expected}"
+            );
+        }
+        // Whitespace around the number is tolerated (the trim the old
+        // line-count parse kept): a padded value parses to its number,
+        // not to the default.
         let opts = opts_with(tmux::SIDEBAR_BOTTOM_HEIGHT, "  8  ");
-        assert_eq!(bottom_panel_height_from_options(&opts), 8);
+        assert_eq!(
+            bottom_percent_from_options(&opts),
+            8,
+            "whitespace-padded \"8\" must parse as 8"
+        );
     }
 
     #[test]
-    fn bottom_height_zero_hides_panel() {
-        let opts = opts_with(tmux::SIDEBAR_BOTTOM_HEIGHT, "0");
-        assert_eq!(bottom_panel_height_from_options(&opts), 0);
+    fn bottom_percent_falls_back_above_100() {
+        for value in ["101", "150", "300"] {
+            let opts = opts_with(tmux::SIDEBAR_BOTTOM_HEIGHT, value);
+            assert_eq!(
+                bottom_percent_from_options(&opts),
+                DEFAULT_BOTTOM_PERCENT,
+                "expected {value} to fall back to the default"
+            );
+        }
     }
 
     #[test]
-    fn bottom_height_falls_back_on_invalid_value() {
+    fn bottom_percent_falls_back_on_invalid_value() {
         let opts = opts_with(tmux::SIDEBAR_BOTTOM_HEIGHT, "abc");
-        assert_eq!(bottom_panel_height_from_options(&opts), BOTTOM_PANEL_HEIGHT);
+        assert_eq!(bottom_percent_from_options(&opts), DEFAULT_BOTTOM_PERCENT);
     }
 
     #[test]
-    fn bottom_height_falls_back_on_empty_value() {
+    fn bottom_percent_falls_back_on_empty_value() {
         let opts = opts_with(tmux::SIDEBAR_BOTTOM_HEIGHT, "");
-        assert_eq!(bottom_panel_height_from_options(&opts), BOTTOM_PANEL_HEIGHT);
+        assert_eq!(bottom_percent_from_options(&opts), DEFAULT_BOTTOM_PERCENT);
     }
 
     #[test]

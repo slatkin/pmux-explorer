@@ -14,7 +14,7 @@ Most options must be set **before** loading the plugin in your `tmux.conf`. Colo
 | `@sidebar_width`                 | `15%`   | Width in columns or as a percentage                                                     |
 | `@sidebar_min_width`             | `20`    | Minimum sidebar width in columns; the sidebar grows itself back when squeezed below it  |
 | `@sidebar_position`              | `left`  | Sidebar placement (`left` or `right`)                                                   |
-| `@sidebar_bottom_height`         | `20`    | Bottom panel height in lines (set `0` to hide)                                          |
+| `@sidebar_bottom_height`         | `30`    | Bottom panel height as a percent of the sidebar height (set `0` to hide); resize by dragging the rule above the panel. A configuration with a line count gets that number as a percent |
 | `@sidebar_auto_create`           | `on`    | Auto-create the sidebar on new windows (set `off` to disable)                           |
 | `@sidebar_auto_create_delay`     | `0`     | Seconds to defer auto-create after a window opens, so a declaratively-built window (e.g. tmuxinator's `select-layout`) finishes before the sidebar pane is injected; accepts fractional seconds. `0` keeps the create synchronous |
 | `@sidebar_notifications`         | `on`    | Master switch for desktop notifications                                                 |

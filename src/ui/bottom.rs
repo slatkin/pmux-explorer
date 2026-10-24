@@ -7,7 +7,7 @@ use ratatui::{
     layout::{Alignment, Rect},
     style::{Color, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph},
+    widgets::Paragraph,
 };
 
 use crate::state::{AppState, BottomTab, Focus};
@@ -26,73 +26,59 @@ fn render_centered(frame: &mut Frame, area: Rect, text: &str, color: Color) {
     frame.render_widget(paragraph, area);
 }
 
-/// Top border row of the bottom panel: the bracket, the tab run, the
-/// fill dashes, and the closing bracket. The full title run plus the
-/// two bracket pieces needs `title + 4` display columns; when `width`
-/// is smaller (the floor is the same 20 columns the filter bar treats
-/// as its minimum), each title span truncates against a shared
-/// displayed-width budget so the closing `╮` always renders and the
-/// row stays exactly `width` long.
-fn top_line_border(
-    title_spans: &[Span<'static>],
-    bracket_style: Style,
-    width: u16,
-) -> Line<'static> {
-    let bracket = 4usize; // "╭ " + " ╮"
-    let mut remaining = (width as usize).saturating_sub(bracket);
-    let mut spans = vec![Span::styled("╭ ", bracket_style)];
+/// The rule row that tops the bottom panel: a `─ ` prefix, the tab run,
+/// one separating space, and `─` fill to the right edge. No left, right
+/// or bottom border character exists around it. The prefix plus that
+/// space need 3 display columns; when `width` is smaller (the floor is
+/// the same 20 columns the filter bar treats as its minimum), each title
+/// span truncates against a shared displayed-width budget so the rule
+/// stays exactly `width` long.
+fn top_line_border(title_spans: &[Span<'static>], rule_style: Style, width: u16) -> Line<'static> {
+    let fixed = 3usize; // "─ " + the space before the fill
+    let mut remaining = (width as usize).saturating_sub(fixed);
+    let mut spans = vec![Span::styled("─ ", rule_style)];
     for span in title_spans {
         let text = truncate_to_width(&span.content, remaining);
         remaining = remaining.saturating_sub(display_width(&text));
         spans.push(Span::styled(text, span.style));
     }
     spans.push(Span::styled(
-        format!(" {}╮", "─".repeat(remaining)),
-        bracket_style,
+        format!(" {}", "─".repeat(remaining)),
+        rule_style,
     ));
     Line::from(spans)
 }
 
 pub fn draw_bottom(frame: &mut Frame, state: &mut AppState, area: Rect) {
     let theme = &state.theme;
-    let border_color = if state.focus_state.focus == Focus::ActivityLog {
+    let rule_color = if state.focus_state.focus == Focus::ActivityLog {
         theme.accent
     } else {
         theme.border_inactive
     };
 
-    let tab_title = build_tab_title(state);
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .style(Style::default().fg(border_color));
-
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
+    // No block: the rule is the panel's first row and the tab renderers
+    // take the rows under it with the full sidebar width and no padding,
+    // so content starts at column 0 as the agent rows do.
+    let rule_rect = Rect::new(area.x, area.y, area.width, 1);
+    let content_rect = Rect {
+        x: area.x,
+        y: area.y + 1,
+        width: area.width,
+        height: area.height.saturating_sub(1),
+    };
 
     let top_line = top_line_border(
-        &tab_title.spans,
-        Style::default().fg(border_color),
+        &build_tab_title(state).spans,
+        Style::default().fg(rule_color),
         area.width,
     );
-    let top_rect = Rect::new(area.x, area.y, area.width, 1);
-    frame.render_widget(Paragraph::new(top_line), top_rect);
-
-    let bottom_line = Line::from(Span::styled(
-        format!("╰{}╯", "─".repeat((area.width as usize).saturating_sub(2))),
-        Style::default().fg(border_color),
-    ));
-    let bottom_rect = Rect::new(
-        area.x,
-        area.y + area.height.saturating_sub(1),
-        area.width,
-        1,
-    );
-    frame.render_widget(Paragraph::new(bottom_line), bottom_rect);
+    frame.render_widget(Paragraph::new(top_line), rule_rect);
 
     match state.global.bottom_tab {
-        BottomTab::Activity => activity::draw_activity_content(frame, state, inner),
-        BottomTab::Tasks => tasks::draw_tasks_content(frame, state, inner),
-        BottomTab::GitStatus => git::draw_git_content(frame, state, inner),
+        BottomTab::Activity => activity::draw_activity_content(frame, state, content_rect),
+        BottomTab::Tasks => tasks::draw_tasks_content(frame, state, content_rect),
+        BottomTab::GitStatus => git::draw_git_content(frame, state, content_rect),
     }
 }
 
@@ -124,32 +110,34 @@ mod tests {
     use crate::ui::text::truncate_to_width;
 
     #[test]
-    fn top_line_border_keeps_both_corners_when_the_title_truncates() {
+    fn top_line_border_fits_the_width_and_truncates_the_tab_run() {
         let state = AppState::new("%99".into());
         let title = build_tab_title(&state);
-        let brackets = Style::default().fg(Color::Indexed(240));
+        let rule = Style::default().fg(Color::Indexed(240));
         let text = |line: Line<'static>| -> String {
             line.spans.iter().map(|s| s.content.as_ref()).collect()
         };
 
-        // 30 and 22 leave room for the full 18-cell tab run (22 has no
-        // columns left for fill dashes); 20 — the supported minimum — and
-        // 18 truncate the tail of the run but still close the corner.
+        // 30 and 22 leave the full 18-cell tab run plus fill dashes;
+        // 20 — the supported minimum — and 18 truncate the tail of the
+        // run (Git goes to "G…", then to nothing) but the rule stays
+        // exactly the width. The `─ ` prefix is 2 columns, so the label
+        // columns never move.
         assert_eq!(
-            text(top_line_border(&title.spans, brackets, 30)),
-            "╭ Activity│Tasks│Git ────────╮"
+            text(top_line_border(&title.spans, rule, 30)),
+            "─ Activity│Tasks│Git ─────────"
         );
         assert_eq!(
-            text(top_line_border(&title.spans, brackets, 22)),
-            "╭ Activity│Tasks│Git ╮"
+            text(top_line_border(&title.spans, rule, 22)),
+            "─ Activity│Tasks│Git ─"
         );
         assert_eq!(
-            text(top_line_border(&title.spans, brackets, 20)),
-            "╭ Activity│Tasks│\u{2026} ╮"
+            text(top_line_border(&title.spans, rule, 20)),
+            "─ Activity│Tasks│G\u{2026} "
         );
         assert_eq!(
-            text(top_line_border(&title.spans, brackets, 18)),
-            "╭ Activity│Tasks ╮"
+            text(top_line_border(&title.spans, rule, 18)),
+            "─ Activity│Tasks│ "
         );
     }
 

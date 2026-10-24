@@ -1,4 +1,4 @@
-use super::{AppState, RepoFilter, StatusCounts, StatusFilter};
+use super::{AppState, RepoFilter, StatusCounts, StatusFilter, clamp_bottom_height};
 
 #[derive(Debug, Clone)]
 pub struct RowTarget {
@@ -140,6 +140,66 @@ pub(crate) fn filter_bar_layout(
     (chips, Some(control_col))
 }
 
+/// Rows the bottom panel draws for a `percent` of a sidebar `height`
+/// rows tall, rule included — the single split geometry the renderer,
+/// the hit test and the split drag all read, so the drawn rule and the
+/// clickable rule cannot be in different rows.
+///
+/// A percent of 0, or a sidebar shorter than 6 rows, hides the panel.
+/// Otherwise the rounded percent is clamped so the panel keeps at least
+/// 3 rows (the rule and two content rows) and the agent list keeps at
+/// least 3.
+pub(crate) fn split_rows(percent: u8, height: u16) -> u16 {
+    if percent == 0 || height < 6 {
+        return 0;
+    }
+    let rows = (u32::from(height) * u32::from(percent) + 50) / 100;
+    (rows as u16).clamp(3, height - 3)
+}
+
+/// The inverse of [`split_rows`] for a split-drag release: a bottom
+/// panel of `rows` rows is this percent of a sidebar `height` rows tall,
+/// rounded to the nearest percent. The result saturates at 100, the
+/// largest percent `@sidebar_bottom_height` accepts.
+pub(crate) fn percent_for_rows(rows: u16, height: u16) -> u8 {
+    if height == 0 {
+        return 0;
+    }
+    ((u32::from(rows) * 100 + u32::from(height) / 2) / u32::from(height)).min(100) as u8
+}
+
+/// A press on the rule between the agent list and the bottom panel that
+/// may still become a drag or a tab click. A release with a move saves
+/// the percent `rows` round-trips to (decision 4); a release without one
+/// is a click and selects the tab the press column names.
+#[derive(Debug, Clone, Copy)]
+pub struct SplitDrag {
+    /// Column of the press, kept for the unmoved release's tab click.
+    pub press_col: u16,
+    /// Whether a drag event reached a row other than the rule row.
+    pub moved: bool,
+    /// The bottom-panel rows the drag shows, already clamped to the
+    /// split minimums (and the floating limit while the sidebar
+    /// floats) — the renderer draws exactly this many rows, rule
+    /// included, for as long as the drag moves.
+    pub rows: u16,
+}
+
+/// Clamp a split drag's row count to the limits decision 4 takes over
+/// from decision 2 plus the floating third-panel limit. `0` mirrors
+/// [`split_rows`] on a sidebar too short for a split: no rule survives.
+fn clamp_drag_rows(rows: u16, term_height: u16, floating: bool) -> u16 {
+    if term_height < 6 {
+        return 0;
+    }
+    let rows = rows.clamp(3, term_height - 3);
+    if floating {
+        clamp_bottom_height(rows, term_height)
+    } else {
+        rows
+    }
+}
+
 impl AppState {
     pub fn rebuild_row_targets(&mut self) {
         // Reset stale repo filter if the repo no longer exists, and
@@ -172,27 +232,104 @@ impl AppState {
         }
     }
 
-    /// Handle a left mouse click at (`row`, `col`) in a terminal
-    /// `term_height` rows tall. Clicks on the bottom panel's tab row (the
-    /// panel's first drawn row) go to the tab header, clicks above it to
-    /// the agents panel. Returns `true` when the click landed on the tab
-    /// row, so the caller can keep the background git poller in sync with
-    /// a possible tab switch.
+    /// Handle a left mouse press at (`row`, `col`) in a terminal
+    /// `term_height` rows tall. Presses on the rule (the bottom panel's
+    /// first drawn row) start a split drag — any press column can drag,
+    /// and only an unmoved release selects a tab (decision 4). Presses
+    /// above the rule go to the agents panel. Returns `true` when the
+    /// press landed on the rule row.
     ///
-    /// The bottom-panel height comes from [`FrameLayout`], the height the
-    /// last frame actually drew — while floating that is the clamped
-    /// height — so a click can only ever land on a row that was drawn.
+    /// A press first ends a live drag whose release never reached this
+    /// pane (a Down on another pane consumed it): the stale drag ends
+    /// as if released at its last rows so the instance is not left
+    /// blocked from percent adoption, and only the moved branch of that
+    /// stale end runs — the new press, not the lost release, is the
+    /// click that may resolve on a label (decision 4).
+    ///
+    /// The bottom-panel height comes from [`FrameLayout`], the height
+    /// the last frame actually drew — while floating that is the
+    /// clamped height — so a press can only ever land on a row that was
+    /// drawn.
     pub fn handle_terminal_click(&mut self, row: u16, col: u16, term_height: u16) -> bool {
+        // A stale drag whose release was lost: a moved one saves its
+        // rows (the moved branch only); an unmoved one is only a held
+        // press and ends with no save (nothing was resized) and no tab
+        // click, because the user did not release on that label
+        // (decision 4).
+        if let Some(drag) = self.split_drag.take()
+            && drag.moved
+        {
+            self.save_split_drag_rows(drag, term_height);
+        }
         let bottom_start = term_height.saturating_sub(self.layout.bottom_panel_height);
         if row < bottom_start {
             self.handle_mouse_click(row, col);
             false
         } else if row == bottom_start {
-            self.handle_bottom_tab_click(col);
+            // A press anywhere on the rule starts a drag. On the drawn
+            // rows, so the release's unmoved click and the drawn rule
+            // agree even when the panel floats.
+            self.split_drag = Some(SplitDrag {
+                press_col: col,
+                moved: false,
+                rows: self.layout.bottom_panel_height,
+            });
             true
         } else {
             false
         }
+    }
+
+    /// Track a held-button move (`Drag(Left)`) at `row` during a split
+    /// drag. A move to another row marks the drag moved and resizes the
+    /// drawn split to the mouse row, clamped to the split minimums (and
+    /// the floating limit while the sidebar floats); over the rule row
+    /// itself the drag stays the unmoved press a release treats as a
+    /// click. No drag: nothing to move.
+    pub fn handle_split_drag_move(&mut self, row: u16, term_height: u16) {
+        let Some(drag) = &mut self.split_drag else {
+            return;
+        };
+        // Against the row the rule is drawn at: while unmoved `rows`
+        // still holds the drawn rows at the press, while moved the
+        // renderer draws `rows` — in both states the rule sits at
+        // `term_height - rows`.
+        if row == term_height.saturating_sub(drag.rows) {
+            return;
+        }
+        drag.moved = true;
+        drag.rows = clamp_drag_rows(
+            term_height.saturating_sub(row),
+            term_height,
+            self.sidebar_pane.floating,
+        );
+    }
+
+    /// Finish a split drag on a button release. A drag that moved saves
+    /// its rows as the shared bottom-panel percent (~a tmux write per
+    /// drag, not per move); an unmoved press resolves as a click and
+    /// selects the tab the press column names. No drag: the release
+    /// belongs to nothing.
+    pub fn end_split_drag(&mut self, term_height: u16) {
+        let Some(drag) = self.split_drag.take() else {
+            return;
+        };
+        if drag.moved {
+            self.save_split_drag_rows(drag, term_height);
+        } else {
+            self.handle_bottom_tab_click(drag.press_col);
+        }
+    }
+
+    /// The moved branch of a split-drag ending: adopt the drag's rows
+    /// as the shared bottom-panel percent and hand it to the tmux
+    /// write. Both endings share it verbatim — the real release
+    /// (`end_split_drag`) and the stale-drag end on a new press — and
+    /// each caller gates on `drag.moved`: it runs only for a drag that
+    /// moved.
+    fn save_split_drag_rows(&mut self, drag: SplitDrag, term_height: u16) {
+        self.global.bottom_percent = percent_for_rows(drag.rows, term_height);
+        self.global.save_bottom_percent();
     }
 
     /// Handle mouse scroll event, routing to agents or bottom panel based on Y position.
@@ -284,58 +421,18 @@ impl AppState {
     /// via line_to_row (adjusted for scroll offset) and activates that pane.
     /// Row 0 is the fixed filter bar, row 1+ maps to the scrollable agent list.
     pub fn handle_mouse_click(&mut self, row: u16, col: u16) {
-        if self.is_notices_popup_open() {
-            if let Some(area) = self.notices_popup_area()
-                && point_in_rect(row, col, area)
-            {
-                if let Some(agent) = self.notices_copy_target_at(row, col).map(str::to_string) {
-                    self.copy_notices_prompt(&agent);
-                }
-                return;
-            }
-            self.close_notices_popup();
+        if self.handle_notices_popup_click(row, col) {
             return;
         }
-        if self.is_repo_popup_open() {
-            if let Some(area) = self.repo_popup_area()
-                && point_in_rect(row, col, area)
-            {
-                // Skip clicks on the popup chrome (top border / title row).
-                // Without this guard `saturating_sub(1)` collapses a click on
-                // the title row into `item_index == 0`, switching the filter
-                // to the first repo the moment the user reaches for the
-                // popup.
-                if row > area.y {
-                    let item_index = (row - area.y - 1) as usize;
-                    if item_index < self.repo_names().len() {
-                        self.set_repo_popup_selected(item_index);
-                        self.confirm_repo_popup();
-                    }
-                }
-                return;
-            }
-            self.close_repo_popup();
+        if self.handle_repo_popup_click(row, col) {
             return;
         }
-        if self.is_spawn_input_open() {
-            if let Some(area) = self.spawn_input_popup_area()
-                && point_in_rect(row, col, area)
-            {
-                return;
-            }
-            self.close_spawn_input();
+        if self.handle_spawn_input_click(row, col) {
             return;
         }
-        if self.is_remove_confirm_open() {
-            if let Some(area) = self.remove_confirm_popup_area()
-                && point_in_rect(row, col, area)
-            {
-                return;
-            }
-            self.close_remove_confirm();
+        if self.handle_remove_confirm_click(row, col) {
             return;
         }
-
         if row == 0 {
             self.handle_filter_click(col);
             return;
@@ -344,7 +441,101 @@ impl AppState {
             self.handle_secondary_header_click(col);
             return;
         }
+        if self.handle_agent_row_click(row, col) {
+            return;
+        }
+        let line_index = (row as usize - 2) + self.scrolls.panes.offset;
+        if let Some(Some(agent_row)) = self.layout.line_to_row.get(line_index) {
+            self.global.selected_pane_row = *agent_row;
+            self.global.queue_cursor_save();
+            self.activate_selected_pane();
+        }
+    }
 
+    /// The notices-popup branch of [`Self::handle_mouse_click`]: a click
+    /// inside the popup copies the clicked agent name, a click outside
+    /// closes the popup. `false` when the popup is not open.
+    fn handle_notices_popup_click(&mut self, row: u16, col: u16) -> bool {
+        if !self.is_notices_popup_open() {
+            return false;
+        }
+        if let Some(area) = self.notices_popup_area()
+            && point_in_rect(row, col, area)
+        {
+            if let Some(agent) = self.notices_copy_target_at(row, col).map(str::to_string) {
+                self.copy_notices_prompt(&agent);
+            }
+            return true;
+        }
+        self.close_notices_popup();
+        true
+    }
+
+    /// The repo-popup branch of [`Self::handle_mouse_click`]: a click
+    /// inside the popup selects and confirms the clicked repo, a click
+    /// outside closes the popup. `false` when the popup is not open.
+    fn handle_repo_popup_click(&mut self, row: u16, col: u16) -> bool {
+        if !self.is_repo_popup_open() {
+            return false;
+        }
+        if let Some(area) = self.repo_popup_area()
+            && point_in_rect(row, col, area)
+        {
+            // Skip clicks on the popup chrome (top border / title row).
+            // Without this guard `saturating_sub(1)` collapses a click on
+            // the title row into `item_index == 0`, switching the filter
+            // to the first repo the moment the user reaches for the
+            // popup.
+            if row > area.y {
+                let item_index = (row - area.y - 1) as usize;
+                if item_index < self.repo_names().len() {
+                    self.set_repo_popup_selected(item_index);
+                    self.confirm_repo_popup();
+                }
+            }
+            return true;
+        }
+        self.close_repo_popup();
+        true
+    }
+
+    /// The spawn-modal branch of [`Self::handle_mouse_click`]: a click
+    /// inside the modal is swallowed by it, a click outside dismisses
+    /// it. `false` when the modal is not open.
+    fn handle_spawn_input_click(&mut self, row: u16, col: u16) -> bool {
+        if !self.is_spawn_input_open() {
+            return false;
+        }
+        if let Some(area) = self.spawn_input_popup_area()
+            && point_in_rect(row, col, area)
+        {
+            return true;
+        }
+        self.close_spawn_input();
+        true
+    }
+
+    /// The remove-confirmation branch of [`Self::handle_mouse_click`]:
+    /// a click inside the dialog is swallowed by it, a click outside
+    /// dismisses it. `false` when the dialog is not open.
+    fn handle_remove_confirm_click(&mut self, row: u16, col: u16) -> bool {
+        if !self.is_remove_confirm_open() {
+            return false;
+        }
+        if let Some(area) = self.remove_confirm_popup_area()
+            && point_in_rect(row, col, area)
+        {
+            return true;
+        }
+        self.close_remove_confirm();
+        true
+    }
+
+    /// The agent-list branch of [`Self::handle_mouse_click`]: the `+`
+    /// spawn button and the red `×` remove marker win before the
+    /// body-row fallback so a click on a button never also shifts the
+    /// pane selection. `false` when no control was hit.
+    fn handle_agent_row_click(&mut self, row: u16, col: u16) -> bool {
         // Check the `+` spawn buttons before the pane-row fallback so a
         // click on the button doesn't also shift the pane selection.
         if let Some((repo_name, repo_root, anchor_y)) = self
@@ -355,7 +546,7 @@ impl AppState {
             .map(|t| (t.repo_name.clone(), t.repo_root.clone(), t.rect.y))
         {
             self.open_spawn_input_for_repo(repo_name, repo_root, Some(anchor_y));
-            return;
+            return true;
         }
 
         // Check the red `×` remove markers next to spawn-created branches.
@@ -367,14 +558,60 @@ impl AppState {
             .map(|t| t.pane_id.clone())
         {
             self.open_remove_confirm_for_pane(pane_id);
-            return;
+            return true;
         }
+        false
+    }
+}
 
-        let line_index = (row as usize - 2) + self.scrolls.panes.offset;
-        if let Some(Some(agent_row)) = self.layout.line_to_row.get(line_index) {
-            self.global.selected_pane_row = *agent_row;
-            self.global.queue_cursor_save();
-            self.activate_selected_pane();
-        }
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // The numbers are the spec's own scenarios, not free-standing
+    // arithmetic: each one pins a documented split case.
+
+    #[test]
+    fn split_rows_draws_the_rounded_percent() {
+        assert_eq!(split_rows(30, 40), 12, "30% of 40 rows is 12");
+        assert_eq!(split_rows(30, 60), 18, "30% of 60 rows is 18");
+    }
+
+    #[test]
+    fn split_rows_clamps_to_the_minimum_heights() {
+        assert_eq!(
+            split_rows(1, 40),
+            3,
+            "a small percent keeps the panel at its 3-row minimum"
+        );
+        assert_eq!(
+            split_rows(100, 40),
+            37,
+            "a large percent keeps the agent list at its 3-row minimum"
+        );
+    }
+
+    #[test]
+    fn split_rows_hides_the_panel() {
+        assert_eq!(split_rows(0, 40), 0, "a percent of 0 hides the panel");
+        assert_eq!(
+            split_rows(30, 5),
+            0,
+            "a sidebar shorter than 6 rows has no bottom panel"
+        );
+    }
+
+    #[test]
+    fn percent_for_rows_rounds_to_the_nearest_percent() {
+        assert_eq!(percent_for_rows(20, 40), 50, "20 rows of 40 is 50%");
+    }
+
+    #[test]
+    fn percent_round_trip_returns_the_same_rows() {
+        assert_eq!(
+            split_rows(percent_for_rows(37, 40), 40),
+            37,
+            "37 rows of 40 must give 37 rows again"
+        );
     }
 }
