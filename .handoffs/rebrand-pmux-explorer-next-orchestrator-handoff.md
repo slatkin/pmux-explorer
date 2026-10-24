@@ -1,10 +1,10 @@
 # Orchestrator handoff — rebrand-pmux-explorer
 
-Date: 2026-10-24 · Change: rebrand-pmux-explorer · Worktree: ~/Dev/worktrees/rebrand-pmux-explorer · Branch: feat/rebrand-pmux-explorer · Accepted HEAD: 186ac49
+Date: 2026-10-24 · Change: rebrand-pmux-explorer · Worktree: ~/Dev/worktrees/rebrand-pmux-explorer · Branch: feat/rebrand-pmux-explorer · Accepted HEAD: aee48bb
 
 ## Start here
 
-Rename tmux-agent-sidebar → pmux-explorer repo-wide. Change artifacts committed on the feature branch (186ac49). Baseline done. Next: U-rust.
+Rename tmux-agent-sidebar → pmux-explorer repo-wide. Change artifacts committed on the feature branch (186ac49). Baseline + U-rust done. Next: U-shell.
 
 ## Accepted units
 
@@ -13,21 +13,22 @@ Rename tmux-agent-sidebar → pmux-explorer repo-wide. Change artifacts committe
   - 1.2 inventory at /tmp/rebrand-inventory.txt. Counts (excl. archive + change dir): tmux-agent-sidebar 54, tmux_agent_sidebar 13, TMUX_AGENT_SIDEBAR 1, agent_sidebar 15, agent-sidebar 59, tmux-agent- 59, hiroppy 13. `git mv` list: `.opencode/plugins/tmux-agent-sidebar.js`, `agent-sidebar.conf`, `tmux-agent-sidebar.tmux`.
   - 1.3 `make uninstall` ran (removed nonexistent ~/.local/bin binary = no-op). No `tmux-agent-sidebar@slatkin` plugin and no `slatkin` marketplace installed — nothing to remove.
 
+- U-rust (rows 2.1–2.9) ACCEPTED: impl `95797bc` (33 files, src/+Cargo.*+tests/), task-state `aee48bb`. rust-reviewer PASS no findings. Deviations recorded: `plugin_manifest_omits_redundant_hooks_field` fails until row 3.5 lands plugin.json (self-resolving); popup label `migrate`→`install`; fn rename `build_claude_install_prompt`. Known-fail set is now 4 until row 3.5.
+
 ## Active state
 
-- U-rust (rows 2.1–2.9) ISSUED to rust-worker `rebrand-urust` from clean HEAD 186ac49. Waiting on worker report.
+- U-shell (rows 3.1–3.6) ISSUED to worker `rebrand-ushell` from clean HEAD aee48bb. Waiting on worker report. Note for worker: it un-breaks `plugin_manifest_omits_redundant_hooks_field` via row 3.5.
 
 ## First action
 
-Await `rebrand-urust` report → mechanical verify → rust-reviewer on the unit range → accept → dispatch U-shell.
+Await `rebrand-ushell` report → mechanical verify → reviewer on the unit range → accept → dispatch U-docs.
 
 ## Next unit
 
-- U-shell (rows 3.1–3.6): .tmux/conf/hook.sh/install-wizard/Makefile/workflows/.claude-plugin/.opencode renames incl. 3 `git mv`. Role: `worker` (rote). SCOUT: none — rows name every file; inventory confirms.
+- U-docs (rows 4.1–4.5): README/docs/AGENTS.md/CLAUDE.md/.claude/skills/website/fixtures/renovate.json + capture-PNG check. Role: `worker` (doc lane). SCOUT: none — inventory gives the file list; 4.5 is a conditional check.
 
 ## Following queue
 
-- U-docs (rows 4.1–4.5): README/docs/AGENTS.md/CLAUDE.md/.claude/skills/website/fixtures/renovate.json + capture-PNG check. Role: `worker` (doc lane). SCOUT: none.
 - Verify (rows 5.1–5.4): orchestrator gates — cargo clean/fmt/clippy/test, insta diff review, zero-match git grep re-run, release build + `version`/`setup pi` smoke, `openspec validate`.
 
 ## Environment truths (differ from design doc)
