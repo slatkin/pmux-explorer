@@ -7,12 +7,15 @@ pub mod desktop_notification;
 pub mod event;
 pub mod git;
 pub mod group;
+pub(crate) mod mcp;
 pub mod pmux_task;
 pub mod port;
 pub(crate) mod process;
 pub mod state;
 pub mod task_reminders;
 pub mod task_store;
+#[cfg(test)]
+pub(crate) mod test_support;
 pub mod time;
 pub mod tmux;
 pub mod tool_name;

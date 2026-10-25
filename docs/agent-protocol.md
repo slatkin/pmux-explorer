@@ -268,6 +268,96 @@ none.
 
   `Reminder: make sure the task board is up to date.`
 
+## The channel endpoint
+
+Everything above this section flows one way: an agent tells the sidebar what
+happened. The channel endpoint flows the other way. A Claude session that was
+started with the channels flag carries a small server — this binary in its
+`--mcp` mode, which Claude Code spawns from the plugin's inline
+`mcpServers.pmux` entry through the wrapper `mcp.sh` beside `hook.sh` — and
+that server listens on a Unix socket, the channel endpoint, that local
+processes of the same user write to. pmux uses it to hand the session a report
+pointer without anyone typing into the pane.
+
+Each connection carries one request line and one reply line, and then closes.
+A connection from a peer with another uid is closed with no reply. A request
+line longer than 4 KiB, or one that does not arrive within 2 seconds, gets
+`{"ok":false,"reason":"invalid"}` — and so does a request that is not JSON,
+has a `v` other than `1`, or names an unknown `kind`.
+
+### The path
+
+The endpoint path is `<dir>/<h>-<n>.sock`, derived from the environment so a
+sender needs no registry. `<dir>` is `$XDG_RUNTIME_DIR/pmux-channel`, or
+`/tmp/pmux-channel-<uid>` when `XDG_RUNTIME_DIR` is unset or empty. `<h>` is
+the 16-digit lowercase hex FNV-1a 64-bit hash of the tmux socket path — the
+first comma field of `TMUX` — so two tmux servers stay apart. `<n>` is
+`TMUX_PANE` without its `%`. With `TMUX=/tmp/tmux-1000/default,1,0`,
+`TMUX_PANE=%12` and `XDG_RUNTIME_DIR=/run/user/1000`, the path is
+`/run/user/1000/pmux-channel/79301cf9592f327a-12.sock`. The rule matches pmux
+`report-channel` byte for byte, and both sides pin that vector.
+
+The server creates the directory with mode 0700 and refuses a directory
+another uid owns, creates the socket with mode 0600, and replaces a socket
+file nothing
+answers on — a leftover from a crashed server. A socket a live owner listens
+on is left alone. With no `TMUX` or `TMUX_PANE`, or after a refusal, the
+server runs with no endpoint and logs the reason on stderr.
+
+### The arm probe
+
+The server starts unarmed and arms only when the model proves the channel
+path. After `notifications/initialized`, it emits one probe event:
+`notifications/claude/channel` with `meta` `{"kind":"probe","nonce":<32hex>}`
+and one-line content that asks Claude to run
+`<exe> channel-ready --nonce <nonce>` and do nothing else. `<exe>` is the
+shell-quoted absolute path of the running binary, so the command works when
+`pmux-explorer` is not on `PATH`.
+
+The answer to the probe is a shell command, not an MCP tool:
+`pmux-explorer channel-ready --nonce <n>` sends one `arm` request to the
+endpoint of its own pane — its own `TMUX` and `TMUX_PANE` pick the path —
+prints the reply line on stdout, and exits 0 when the reply has `armed:true`.
+Otherwise it exits 1 with a message on stderr: on a `nonce` reply, on a
+missing `--nonce`, and when the endpoint is missing or does not answer within
+2 seconds.
+
+An arm request is `{"v":1,"kind":"arm","nonce":<string>}`. A nonce equal to
+the probe's arms the server for the rest of the process and gets
+`{"ok":true,"armed":true}`; a different nonce gets
+`{"ok":false,"reason":"nonce"}` and arms nothing; a correct nonce on an
+already-armed server gets the armed reply again. A status request,
+`{"v":1,"kind":"status"}`, replies
+`{"ok":true,"armed":<bool>,"pane":<TMUX_PANE>}` and emits nothing to Claude.
+
+### The report request
+
+The sender's request is
+`{"v":1,"kind":"report","id":<32hex>,"text":<pointer>,"bytes":<n>,"token":<32hex>}`.
+It is valid only when `id` is 32 lowercase hex characters and `text` is one
+line of at most 1 KiB that starts with `pmux report <id>. `. On an armed
+server, a valid report is emitted to Claude as `notifications/claude/channel`
+with `content` equal to `text` and `meta`
+`{"kind":"report","report_id":<id>,"bytes":"<n>"}`, and the reply
+`{"ok":true,"emitted":true}` goes out only after that write is flushed. On an
+unarmed server nothing is emitted and the reply is
+`{"ok":false,"reason":"unarmed"}` — the sender falls back to tmux. A stdout
+write that fails gets `{"ok":false,"reason":"write-failed"}`.
+
+Two fields of a report are opaque. The `token` field is never validated and
+never emitted. The `bytes` field is copied into `meta.bytes` as a string
+exactly as given — or `""` when the field is absent. The server sends `text`
+as it got it, after the shape check, so the pointer wording has one owner.
+
+### Probe repeats
+
+Claude Code may register the channel listener after `notifications/initialized`,
+so the first probe can be lost. While the server is unarmed, a `report`
+request therefore sends the probe again — the same nonce — at most once per
+60 seconds and at most 3 repeats in the life of the process. A flagged session
+whose model never runs the command sees at most four probe turns, not one per
+minute. An armed server never probes again.
+
 ## The pane state the sidebar keeps
 
 The events above are the only input. The sidebar turns them into tmux pane
