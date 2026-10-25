@@ -87,11 +87,12 @@
   Console auth, org `channelsEnabled`, an interactive session), and
   `src/mcp/` in `CLAUDE.md` Key Modules. Verify by reading them against
   the spec and D6.
-- [ ] 6.3 Run `cargo fmt --check`, `cargo clippy`, `cargo test` and
+- [x] 6.3 Run `cargo fmt --check`, `cargo clippy`, `cargo test` and
   `cargo build --release`, then
   `openspec validate channel-endpoint --strict`. Run `claude plugin
   validate` by hand on the checkout (it is not hermetic, so no test runs
-  it).
+  it). (Automated gates green 2026-10-25; `claude plugin validate` and
+  the flagged-session live check are user-run — see PR.)
 
 ## Workflow follow-up
 
