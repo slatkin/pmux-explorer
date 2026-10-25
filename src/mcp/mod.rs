@@ -34,12 +34,13 @@ mod probe;
 mod rpc;
 
 pub use client::{ArmError, send_arm};
+pub(crate) use connection::reply;
 pub use connection::{DEFAULT_READ_TIMEOUT, EndpointState, accept_loop};
 pub use endpoint::bind;
 pub use path::{EndpointEnv, endpoint_path};
 pub use probe::Probe;
 
-pub use rpc::{Incoming, LineWriter, PARSE_ERROR, error_reply, parse_line, request_reply};
+pub(crate) use rpc::{Incoming, LineWriter, PARSE_ERROR, error_reply, parse_line, request_reply};
 
 /// The stderr prefix every server log line carries.
 const LOG_PREFIX: &str = "pmux-explorer --mcp:";
@@ -58,11 +59,11 @@ pub fn run_server() -> i32 {
     let env = EndpointEnv::from_process();
     let uid = env.uid;
 
-    let (probe, probe_fired) = match Probe::for_current_exe() {
-        Ok(probe) => (probe, false),
+    let probe = match Probe::for_current_exe() {
+        Ok(probe) => probe,
         Err(error) => {
             eprintln!("{LOG_PREFIX} no arm probe ({error}); the server runs unarmed");
-            (Probe::unarmed(), true)
+            Probe::unarmed()
         }
     };
     let state = Arc::new(EndpointState::new(
@@ -97,12 +98,7 @@ pub fn run_server() -> i32 {
     let stdin_state = Arc::clone(&state);
     let stdin_writer = writer.clone();
     let stdin_thread = thread::spawn(move || {
-        stdin_loop(
-            &stdin_state.probe,
-            &stdin_writer,
-            io::stdin().lock(),
-            probe_fired,
-        );
+        stdin_loop(&stdin_state.probe, &stdin_writer, io::stdin().lock());
     });
     stdin_thread.join().expect("the stdin loop must not panic");
 
@@ -120,20 +116,16 @@ pub fn run_server() -> i32 {
 /// The stdin loop: one JSON-RPC message per line in, one reply per request
 /// out, and the arm probe after the first `notifications/initialized`.
 ///
-/// `probe_fired` starts `true` for a server running unarmed
-/// ([`Probe::unarmed`]), so no probe is ever emitted; otherwise the first
-/// `initialized` notification fires the probe and a duplicate cannot
-/// re-fire it. Every failure — a stdin read error, a failed write — is
-/// logged to stderr and the loop continues; only EOF or an unreadable
-/// stdin ends it. A malformed line gets the [`PARSE_ERROR`] reply with a
-/// null `id`, since a malformed line carries no parsed id, and the server
-/// keeps running.
-fn stdin_loop<R: io::Read, W: io::Write>(
-    probe: &Probe,
-    writer: &LineWriter<W>,
-    reader: R,
-    mut probe_fired: bool,
-) {
+/// The first `initialized` notification fires the probe and a duplicate
+/// cannot re-fire it. An unarmed server never emits a probe: the single
+/// probe write point refuses an empty nonce, so the guarantee does not
+/// depend on any caller-side flag. Every failure — a stdin read error, a
+/// failed write — is logged to stderr and the loop continues; only EOF or
+/// an unreadable stdin ends it. A malformed line gets the [`PARSE_ERROR`]
+/// reply with a null `id`, since a malformed line carries no parsed id,
+/// and the server keeps running.
+fn stdin_loop<R: io::Read, W: io::Write>(probe: &Probe, writer: &LineWriter<W>, reader: R) {
+    let mut probe_fired = false;
     let mut reader = BufReader::new(reader);
     let mut line = String::new();
     loop {
@@ -202,10 +194,10 @@ mod tests {
     }
 
     /// Runs the stdin loop over `input` and returns the stdout it wrote.
-    fn stdout_of(probe: &Probe, input: &str, probe_fired: bool) -> String {
+    fn stdout_of(probe: &Probe, input: &str) -> String {
         let recorder = Recorder::default();
         let writer = LineWriter::new(recorder.clone());
-        stdin_loop(probe, &writer, input.as_bytes(), probe_fired);
+        stdin_loop(probe, &writer, input.as_bytes());
         recorder.stdout()
     }
 
@@ -216,7 +208,6 @@ mod tests {
         let stdout = stdout_of(
             &probe(),
             "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"ping\"}\n",
-            false,
         );
         let reply: Value = serde_json::from_str(stdout.trim_end()).unwrap();
         assert_eq!(reply["id"], 7);
@@ -231,7 +222,6 @@ mod tests {
                 "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}\n",
                 "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"ping\"}\n",
             ),
-            false,
         );
         let lines: Vec<Value> = stdout
             .lines()
@@ -256,7 +246,6 @@ mod tests {
                 "not json\n",
                 "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"ping\"}\n"
             ),
-            false,
         );
         let lines: Vec<Value> = stdout
             .lines()
@@ -280,7 +269,6 @@ mod tests {
                 "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}\n",
                 "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"ping\"}\n",
             ),
-            false,
         );
         let lines: Vec<Value> = stdout
             .lines()
@@ -302,7 +290,6 @@ mod tests {
         let stdout = stdout_of(
             &probe(),
             "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\"}\n",
-            false,
         );
         assert_eq!(stdout, "");
     }
@@ -311,10 +298,11 @@ mod tests {
 
     #[test]
     fn an_unarmed_server_emits_no_probe_at_all() {
+        // No caller-side flag is passed: the empty-nonce refusal at the
+        // single probe write point is the only thing preventing emission.
         let stdout = stdout_of(
             &Probe::unarmed(),
             "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}\n",
-            true,
         );
         assert_eq!(stdout, "");
     }

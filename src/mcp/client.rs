@@ -65,7 +65,7 @@ mod tests {
     /// Serves an unarmed endpoint state at a fresh socket path, returning
     /// the path. The accept loop runs detached with the short answer
     /// window this client's tests use.
-    fn serve_armed_state(dir: &Path) -> PathBuf {
+    fn serve_unarmed(dir: &Path) -> PathBuf {
         let path = dir.join("79301cf9592f327a-12.sock");
         crate::test_support::serve_unarmed_endpoint(
             &path,
@@ -79,7 +79,7 @@ mod tests {
     #[test]
     fn send_arm_gets_the_armed_reply() {
         let tmp = tempdir().unwrap();
-        let path = serve_armed_state(tmp.path());
+        let path = serve_unarmed(tmp.path());
         let reply = send_arm(&path, NONCE, Duration::from_secs(2)).unwrap();
         let reply: serde_json::Value = serde_json::from_str(&reply).unwrap();
         assert_eq!(reply, serde_json::json!({"ok": true, "armed": true}));

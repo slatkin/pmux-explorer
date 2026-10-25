@@ -32,6 +32,34 @@ use std::time::{Duration, Instant};
 use super::probe::Probe;
 use super::rpc::{CHANNEL_NOTIFICATION_METHOD, LineWriter};
 
+/// The reply vocabulary shared by the producer in this module and the
+/// `channel-ready` reader (`crate::cli`): every reply field name and
+/// reason value is one constant, so a rename fails to compile on both
+/// sides instead of silently degrading the arm handshake to exit 1 with
+/// an "unknown reply". The wire spelling of each constant is pinned by
+/// the reply tests below.
+pub(crate) mod reply {
+    /// The success flag every reply carries.
+    pub(crate) const OK: &str = "ok";
+    /// Whether the notification write reached stdout.
+    pub(crate) const EMITTED: &str = "emitted";
+    /// Whether the server armed.
+    pub(crate) const ARMED: &str = "armed";
+    /// The pane id a `status` reply reports.
+    pub(crate) const PANE: &str = "pane";
+    /// Why a reply says `ok: false`.
+    pub(crate) const REASON: &str = "reason";
+
+    /// The report arrived before any arm request matched.
+    pub(crate) const UNARMED: &str = "unarmed";
+    /// The notification write failed.
+    pub(crate) const WRITE_FAILED: &str = "write-failed";
+    /// The arm nonce did not match the probe's nonce.
+    pub(crate) const NONCE: &str = "nonce";
+    /// The request was unusable.
+    pub(crate) const INVALID: &str = "invalid";
+}
+
 /// The request line limit: a longer line gets the `invalid` reply.
 const MAX_REQUEST_LINE_BYTES: usize = 4096;
 
@@ -262,11 +290,11 @@ fn report_reply<W: io::Write>(
         // the listener may have registered after the last probe, and this
         // report still takes the tmux fallback regardless.
         let _ = state.probe.emit_repeat(writer);
-        return json!({"ok": false, "reason": "unarmed"});
+        return json!({reply::OK: false, reply::REASON: reply::UNARMED});
     }
     match writer.write_json(&channel_notification(&report)) {
-        Ok(()) => json!({"ok": true, "emitted": true}),
-        Err(_) => json!({"ok": false, "reason": "write-failed"}),
+        Ok(()) => json!({reply::OK: true, reply::EMITTED: true}),
+        Err(_) => json!({reply::OK: false, reply::REASON: reply::WRITE_FAILED}),
     }
 }
 
@@ -282,24 +310,24 @@ fn arm_reply(state: &EndpointState, object: &Map<String, Value>) -> Value {
     let nonce = state.probe.nonce();
     let matches = !nonce.is_empty() && object.get("nonce").and_then(Value::as_str) == Some(nonce);
     if !matches {
-        return json!({"ok": false, "reason": "nonce"});
+        return json!({reply::OK: false, reply::REASON: reply::NONCE});
     }
     state.armed.store(true, Ordering::Relaxed);
-    json!({"ok": true, "armed": true})
+    json!({reply::OK: true, reply::ARMED: true})
 }
 
 /// Builds the reply for one `status` request. It never emits anything.
 fn status_reply(state: &EndpointState) -> Value {
     json!({
-        "ok": true,
-        "armed": state.armed.load(Ordering::Relaxed),
-        "pane": state.pane,
+        reply::OK: true,
+        reply::ARMED: state.armed.load(Ordering::Relaxed),
+        reply::PANE: state.pane,
     })
 }
 
 /// The `invalid` reply, for every unusable request.
 fn invalid_reply() -> Value {
-    json!({"ok": false, "reason": "invalid"})
+    json!({reply::OK: false, reply::REASON: reply::INVALID})
 }
 
 /// One shape-valid report request: the checked fields, plus `bytes` as a

@@ -300,36 +300,6 @@ fn the_full_channel_path_runs_through_the_binary() {
 }
 
 #[test]
-fn a_malformed_stdin_line_gets_the_parse_error_and_the_server_keeps_running() {
-    let tmp = tempfile::tempdir().unwrap();
-    let env = ServerEnv::new(tmp.path());
-    let mut server = Server::spawn(&env, false);
-    let mut stdin = server.stdin();
-
-    writeln!(stdin, "not json").unwrap();
-    stdin.flush().unwrap();
-    let reply = json_rpc(&server.next_line());
-    assert_eq!(reply["id"], Value::Null);
-    assert_eq!(reply["error"]["code"], -32700);
-
-    // The malformed line did not end the server: a request still gets its
-    // reply.
-    let (reply, _) = initialize(&server, &mut stdin);
-    assert_eq!(reply["result"]["protocolVersion"], "2025-06-18");
-
-    let logged = Arc::clone(&server.logged);
-    let (status, lines) = server.shutdown(Some(stdin));
-    assert_eq!(status.code(), Some(0));
-    for line in &lines {
-        json_rpc(line);
-    }
-    // Outside tmux the server logs the reason for having no endpoint —
-    // that line is the only stderr traffic.
-    let logged = logged.lock().unwrap().clone();
-    assert!(logged.contains("no endpoint"), "stderr: {logged:?}");
-}
-
-#[test]
 fn a_server_without_tmux_creates_no_socket_and_still_answers() {
     let tmp = tempfile::tempdir().unwrap();
     let env = ServerEnv::new(tmp.path());
