@@ -16,6 +16,9 @@ use std::process::Command;
 
 const PLUGIN_JSON_PATH: &str = ".claude-plugin/plugin.json";
 const MCP_SH_PATH: &str = "mcp.sh";
+/// The binary lookup `mcp.sh` sources; copied beside every wrapper copy,
+/// since the lookup resolves the binary relative to itself.
+const LOOKUP_SH_PATH: &str = "bin-lookup.sh";
 
 /// A host tool located on the test runner's own `PATH`, to symlink into
 /// a stripped-down `PATH` for the wrapper children: the script needs
@@ -45,12 +48,16 @@ fn stripped_path(dir: &Path) -> PathBuf {
     bin
 }
 
-/// A copy of the checkout's `mcp.sh` under `dir`, made executable.
+/// Copies the checkout's `mcp.sh` and its sourced `bin-lookup.sh` under
+/// `dir`, with `mcp.sh` made executable.
 fn wrapper_copy(dir: &Path) -> PathBuf {
     let raw = fs::read_to_string(MCP_SH_PATH)
         .unwrap_or_else(|e| panic!("failed to read {MCP_SH_PATH}: {e}"));
-    let script = dir.join("mcp.sh");
+    let lookup = fs::read_to_string(LOOKUP_SH_PATH)
+        .unwrap_or_else(|e| panic!("failed to read {LOOKUP_SH_PATH}: {e}"));
+    let script = dir.join(MCP_SH_PATH);
     fs::write(&script, raw).unwrap();
+    fs::write(dir.join(LOOKUP_SH_PATH), lookup).unwrap();
     fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
     script
 }

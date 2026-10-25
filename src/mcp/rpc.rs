@@ -213,7 +213,7 @@ impl<W: io::Write> LineWriter<W> {
     /// Locks the shared writer.
     ///
     /// # Errors
-    /// Apoisoning means an earlier write panicked mid-line; the next
+    /// A poisoning means an earlier write panicked mid-line; the next
     /// write gets a `BrokenPipe` error instead of a panic, so the caller
     /// closes the connection cleanly.
     fn lock(&self) -> io::Result<MutexGuard<'_, W>> {
@@ -229,6 +229,7 @@ impl<W: io::Write> LineWriter<W> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::{Failing, Recorder};
     use serde_json::json;
 
     fn request(method: &str, params: Value, id: Value) -> RpcRequest {
@@ -379,55 +380,17 @@ mod tests {
 
     // Row 1.1: the shared line writer.
 
-    struct Recorder {
-        buf: Vec<u8>,
-        flushes: usize,
-    }
-
-    impl io::Write for Recorder {
-        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-            self.buf.extend_from_slice(buf);
-            Ok(buf.len())
-        }
-
-        fn flush(&mut self) -> io::Result<()> {
-            self.flushes += 1;
-            Ok(())
-        }
-    }
-
     #[test]
     fn each_write_is_one_line_and_one_flush() {
-        let writer = LineWriter::new(Recorder {
-            buf: Vec::new(),
-            flushes: 0,
-        });
+        let recorder = Recorder::default();
+        let writer = LineWriter::new(recorder.clone());
         writer.write_json(&json!({"a": 1})).unwrap();
-        {
-            let recorder = writer.inner.lock().unwrap();
-            assert_eq!(String::from_utf8_lossy(&recorder.buf), "{\"a\":1}\n");
-            assert_eq!(recorder.flushes, 1);
-        }
+        assert_eq!(recorder.stdout(), "{\"a\":1}\n");
+        assert_eq!(recorder.flushes(), 1);
         let clone = writer.clone();
         clone.write_json(&json!({"b": "line\nbreak"})).unwrap();
-        let recorder = writer.inner.lock().unwrap();
-        assert_eq!(
-            String::from_utf8_lossy(&recorder.buf),
-            "{\"a\":1}\n{\"b\":\"line\\nbreak\"}\n",
-        );
-        assert_eq!(recorder.flushes, 2);
-    }
-
-    struct Failing;
-
-    impl io::Write for Failing {
-        fn write(&mut self, _buf: &[u8]) -> io::Result<usize> {
-            Err(io::Error::new(io::ErrorKind::BrokenPipe, "gone"))
-        }
-
-        fn flush(&mut self) -> io::Result<()> {
-            Ok(())
-        }
+        assert_eq!(recorder.stdout(), "{\"a\":1}\n{\"b\":\"line\\nbreak\"}\n",);
+        assert_eq!(recorder.flushes(), 2);
     }
 
     #[test]

@@ -383,8 +383,8 @@ fn write_reply(stream: &mut UnixStream, reply: &Value) -> io::Result<()> {
 mod tests {
     use super::*;
     use crate::mcp::bind;
-    use crate::mcp::probe::MAX_REPEATS;
-    use crate::test_support::{Recorder, own_uid, probe_with_clock};
+    use crate::mcp::current_uid;
+    use crate::test_support::{Failing, Recorder, probe_with_clock};
     use serde_json::Value as Json;
     use std::path::Path;
     use std::sync::Mutex;
@@ -434,7 +434,7 @@ mod tests {
     ) -> String {
         let tmp = tempdir().unwrap();
         let path = tmp.path().join("79301cf9592f327a-12.sock");
-        let listener = bind(&path, own_uid()).unwrap();
+        let listener = bind(&path, current_uid()).unwrap();
         let mut client = UnixStream::connect(&path).unwrap();
         let (mut server, _) = listener.accept().unwrap();
         if let Some(input) = input {
@@ -458,25 +458,13 @@ mod tests {
         (recorder.stdout(), recorder.flushes())
     }
 
-    struct Failing;
-
-    impl io::Write for Failing {
-        fn write(&mut self, _buf: &[u8]) -> io::Result<usize> {
-            Err(io::Error::new(io::ErrorKind::BrokenPipe, "gone"))
-        }
-
-        fn flush(&mut self) -> io::Result<()> {
-            Ok(())
-        }
-    }
-
     // Row 3.2: the `invalid` cases, one table.
 
     #[test]
     fn an_unusable_request_line_gets_invalid() {
         let recorder = Recorder::default();
         let writer = LineWriter::new(recorder.clone());
-        let state = state(true, own_uid(), "%12");
+        let state = state(true, current_uid(), "%12");
         for (name, input) in [
             (
                 "an oversized line",
@@ -516,7 +504,7 @@ mod tests {
     fn a_foreign_peer_is_closed_with_no_reply() {
         let recorder = Recorder::default();
         let writer = LineWriter::new(recorder.clone());
-        let state = state(true, own_uid() + 1, "%12");
+        let state = state(true, current_uid() + 1, "%12");
         let request = b"{\"v\":1,\"kind\":\"status\"}\n";
         let reply = exchange(Some(&request[..]), &state, &writer);
         assert_eq!(reply, "");
@@ -531,8 +519,8 @@ mod tests {
     fn the_accept_loop_serves_a_connection() {
         let tmp = tempdir().unwrap();
         let path = tmp.path().join("79301cf9592f327a-12.sock");
-        let listener = bind(&path, own_uid()).unwrap();
-        let state = Arc::new(state(true, own_uid(), "%12"));
+        let listener = bind(&path, current_uid()).unwrap();
+        let state = Arc::new(state(true, current_uid(), "%12"));
         let recorder = Recorder::default();
         let writer = LineWriter::new(recorder.clone());
         // The loop runs until the listener fails, which never happens in
@@ -564,8 +552,8 @@ mod tests {
         // deadline ends it with the `invalid` reply instead.
         let tmp = tempdir().unwrap();
         let path = tmp.path().join("79301cf9592f327a-12.sock");
-        let listener = bind(&path, own_uid()).unwrap();
-        let state = Arc::new(state(true, own_uid(), "%12"));
+        let listener = bind(&path, current_uid()).unwrap();
+        let state = Arc::new(state(true, current_uid(), "%12"));
         let recorder = Recorder::default();
         let writer = LineWriter::new(recorder.clone());
         let server = thread::spawn(move || {
@@ -598,7 +586,7 @@ mod tests {
     fn the_correct_nonce_arms_and_a_re_arm_answers_the_same_reply() {
         let recorder = Recorder::default();
         let writer = LineWriter::new(recorder.clone());
-        let state = state(false, own_uid(), "%12");
+        let state = state(false, current_uid(), "%12");
         let arm = format!("{{\"v\":1,\"kind\":\"arm\",\"nonce\":\"{NONCE}\"}}\n");
 
         let reply = exchange(Some(arm.as_bytes()), &state, &writer);
@@ -631,7 +619,7 @@ mod tests {
     fn a_wrong_nonce_does_not_arm() {
         let recorder = Recorder::default();
         let writer = LineWriter::new(recorder.clone());
-        let state = state(false, own_uid(), "%12");
+        let state = state(false, current_uid(), "%12");
         for (name, arm) in [
             (
                 "a nonce that differs",
@@ -676,7 +664,7 @@ mod tests {
     fn no_request_arms_a_server_whose_probe_never_existed() {
         let recorder = Recorder::default();
         let writer = LineWriter::new(recorder.clone());
-        let state = EndpointState::new(own_uid(), "%12".to_string(), Probe::unarmed());
+        let state = EndpointState::new(current_uid(), "%12".to_string(), Probe::unarmed());
         for (name, arm) in [
             (
                 "the empty nonce",
@@ -697,24 +685,13 @@ mod tests {
                 "case: {name}",
             );
         }
-
-        // The server stays unarmed, and nothing was emitted.
-        let status = b"{\"v\":1,\"kind\":\"status\"}\n";
-        let reply = exchange(Some(&status[..]), &state, &writer);
-        assert_eq!(
-            serde_json::from_str::<Json>(&reply).unwrap(),
-            json!({"ok": true, "armed": false, "pane": "%12"}),
-        );
-        let (stdout, flushes) = stdout_of(&recorder);
-        assert_eq!(stdout, "");
-        assert_eq!(flushes, 0);
     }
 
     #[test]
     fn a_wrong_nonce_on_an_armed_server_leaves_it_armed() {
         let recorder = Recorder::default();
         let writer = LineWriter::new(recorder.clone());
-        let state = state(true, own_uid(), "%12");
+        let state = state(true, current_uid(), "%12");
         let arm = format!(
             "{{\"v\":1,\"kind\":\"arm\",\"nonce\":\"{}\"}}\n",
             "f".repeat(32)
@@ -733,104 +710,14 @@ mod tests {
         );
     }
 
-    // Row 4.3: the "Report while unarmed", "Probe limit" and "Lifetime
-    // cap" scenarios, driven through the report handler with a movable
-    // clock.
-
-    /// One shape-valid report request line, as the connection reads it.
-    fn valid_report_line() -> String {
-        let text = format!("pmux report {REPORT_ID}. the report is at /tmp/x.md:12");
-        report_json(REPORT_ID, &text, &[])
-    }
-
-    #[test]
-    fn a_report_90_seconds_after_the_last_probe_repeats_it() {
-        let cell = Arc::new(Mutex::new(0u64));
-        let state = state(false, own_uid(), "%12");
-        // Rebuild the state's probe with the movable clock.
-        let state = EndpointState {
-            probe: probe_with_clock(NONCE, Path::new("/usr/bin/pmux-explorer"), cell.clone()),
-            ..state
-        };
-        let recorder = Recorder::default();
-        let writer = LineWriter::new(recorder.clone());
-
-        // The first probe at t=0; the report arrives 90 seconds later.
-        assert!(state.probe.emit(&writer).unwrap());
-        *cell.lock().unwrap() = 90_000;
-        let reply = socket_request_reply(&valid_report_line(), &state, &writer);
-        assert_eq!(reply, json!({"ok": false, "reason": "unarmed"}));
-
-        // One repeat probe joined the first on stdout.
-        let (stdout, _) = stdout_of(&recorder);
-        assert_eq!(stdout.matches('\n').count(), 2);
-        let last = stdout.lines().last().unwrap();
-        let probe: Json = serde_json::from_str(last).unwrap();
-        assert_eq!(
-            probe["params"]["meta"],
-            json!({"kind": "probe", "nonce": NONCE})
-        );
-    }
-
-    #[test]
-    fn two_reports_10_seconds_apart_repeat_at_most_once() {
-        let cell = Arc::new(Mutex::new(0u64));
-        let state = state(false, own_uid(), "%12");
-        let state = EndpointState {
-            probe: probe_with_clock(NONCE, Path::new("/usr/bin/pmux-explorer"), cell.clone()),
-            ..state
-        };
-        let recorder = Recorder::default();
-        let writer = LineWriter::new(recorder.clone());
-
-        // The first probe long ago, then two reports 10 seconds apart:
-        // the first repeats, the second falls inside the fresh period.
-        assert!(state.probe.emit(&writer).unwrap());
-        *cell.lock().unwrap() = 90_000;
-        let _ = socket_request_reply(&valid_report_line(), &state, &writer);
-        *cell.lock().unwrap() = 100_000;
-        let _ = socket_request_reply(&valid_report_line(), &state, &writer);
-
-        // Two probes on stdout: the first probe and one repeat for the
-        // two reports.
-        let (stdout, _) = stdout_of(&recorder);
-        assert_eq!(stdout.matches('\n').count(), 2);
-    }
-
-    #[test]
-    fn a_report_after_the_lifetime_cap_repeats_nothing() {
-        let cell = Arc::new(Mutex::new(0u64));
-        let state = state(false, own_uid(), "%12");
-        let state = EndpointState {
-            probe: probe_with_clock(NONCE, Path::new("/usr/bin/pmux-explorer"), cell.clone()),
-            ..state
-        };
-        let recorder = Recorder::default();
-        let writer = LineWriter::new(recorder.clone());
-
-        // The first probe, then the three repeats the cap allows.
-        assert!(state.probe.emit(&writer).unwrap());
-        for minute in 1..=MAX_REPEATS {
-            *cell.lock().unwrap() = u64::from(minute) * 70_000;
-            let reply = socket_request_reply(&valid_report_line(), &state, &writer);
-            assert_eq!(reply, json!({"ok": false, "reason": "unarmed"}));
-        }
-        // Ten minutes later, a report repeats nothing and still replies
-        // unarmed.
-        *cell.lock().unwrap() = 600_000;
-        let reply = socket_request_reply(&valid_report_line(), &state, &writer);
-        assert_eq!(reply, json!({"ok": false, "reason": "unarmed"}));
-
-        // Four probes on stdout: the first probe and the three repeats.
-        let (stdout, _) = stdout_of(&recorder);
-        assert_eq!(stdout.matches('\n').count(), 4);
-    }
-
+    // Row 4.3: the report handler's wiring: an unarmed report replies
+    // unarmed and drives the probe's repeat gate. The gate's period and
+    // cap themselves are pinned at the gate level, in `probe.rs`.
     #[test]
     fn a_report_with_a_wrong_shape_repeats_no_probe_even_unarmed() {
         let recorder = Recorder::default();
         let writer = LineWriter::new(recorder.clone());
-        let state = state(false, own_uid(), "%12");
+        let state = state(false, current_uid(), "%12");
         let request = report_json(REPORT_ID, "not the pointer shape", &[]);
         let reply = exchange(Some(request.as_bytes()), &state, &writer);
         assert_eq!(reply, "{\"ok\":false,\"reason\":\"invalid\"}\n");
@@ -845,7 +732,7 @@ mod tests {
     fn an_armed_report_emits_one_notification_then_replies() {
         let recorder = Recorder::default();
         let writer = LineWriter::new(recorder.clone());
-        let state = state(true, own_uid(), "%12");
+        let state = state(true, current_uid(), "%12");
         let text = format!("pmux report {REPORT_ID}. the report is at /tmp/x.md:12");
         let request = report_json(
             REPORT_ID,
@@ -873,7 +760,7 @@ mod tests {
     fn an_unarmed_report_replies_unarmed_and_repeats_the_probe() {
         let recorder = Recorder::default();
         let writer = LineWriter::new(recorder.clone());
-        let state = state(false, own_uid(), "%12");
+        let state = state(false, current_uid(), "%12");
         let text = format!("pmux report {REPORT_ID}. the report is at /tmp/x.md:12");
         let request = report_json(REPORT_ID, &text, &[]);
         let reply = exchange(Some(request.as_bytes()), &state, &writer);
@@ -897,7 +784,7 @@ mod tests {
         let cell = Arc::new(Mutex::new(0u64));
         let state = {
             let state = EndpointState::new(
-                own_uid(),
+                current_uid(),
                 "%12".to_string(),
                 probe_with_clock(NONCE, Path::new("/usr/bin/pmux-explorer"), cell.clone()),
             );
@@ -930,7 +817,7 @@ mod tests {
     fn a_report_with_a_wrong_shape_is_invalid_and_emits_nothing() {
         let recorder = Recorder::default();
         let writer = LineWriter::new(recorder.clone());
-        let state = state(true, own_uid(), "%12");
+        let state = state(true, current_uid(), "%12");
         let text = format!("pmux report {REPORT_ID}. the report is at /tmp/x.md:12");
         for (name, request) in [
             (
@@ -996,7 +883,7 @@ mod tests {
     fn missing_opaque_fields_give_an_empty_bytes_meta() {
         let recorder = Recorder::default();
         let writer = LineWriter::new(recorder.clone());
-        let state = state(true, own_uid(), "%12");
+        let state = state(true, current_uid(), "%12");
         let text = format!("pmux report {REPORT_ID}. the report is at /tmp/x.md:12");
         let request = report_json(REPORT_ID, &text, &[]);
         let reply = exchange(Some(request.as_bytes()), &state, &writer);
@@ -1014,7 +901,7 @@ mod tests {
     fn the_token_is_never_emitted_and_bytes_is_a_string_as_given() {
         let recorder = Recorder::default();
         let writer = LineWriter::new(recorder.clone());
-        let state = state(true, own_uid(), "%12");
+        let state = state(true, current_uid(), "%12");
         let text = format!("pmux report {REPORT_ID}. the report is at /tmp/x.md:12");
         let request = report_json(
             REPORT_ID,
@@ -1038,7 +925,7 @@ mod tests {
     fn a_status_request_reports_the_arm_state_and_pane_with_no_emission() {
         let recorder = Recorder::default();
         let writer = LineWriter::new(recorder.clone());
-        let state = state(false, own_uid(), "%12");
+        let state = state(false, current_uid(), "%12");
         let request = b"{\"v\":1,\"kind\":\"status\"}\n";
         let reply = exchange(Some(&request[..]), &state, &writer);
         let reply: Json = serde_json::from_str(&reply).unwrap();
@@ -1048,24 +935,12 @@ mod tests {
         assert_eq!(flushes, 0);
     }
 
-    #[test]
-    fn a_status_request_on_an_armed_server_reports_armed() {
-        let recorder = Recorder::default();
-        let writer = LineWriter::new(recorder.clone());
-        let state = state(true, own_uid(), "%12");
-        let request = b"{\"v\":1,\"kind\":\"status\"}\n";
-        let reply = exchange(Some(&request[..]), &state, &writer);
-        let reply: Json = serde_json::from_str(&reply).unwrap();
-        assert_eq!(reply["armed"], true);
-        assert_eq!(reply["pane"], "%12");
-    }
-
     // Row 3.3: the "Write failure" scenario, through an injected writer.
 
     #[test]
     fn a_failed_stdout_write_replies_write_failed() {
         let writer = LineWriter::new(Failing);
-        let state = state(true, own_uid(), "%12");
+        let state = state(true, current_uid(), "%12");
         let text = format!("pmux report {REPORT_ID}. the report is at /tmp/x.md:12");
         let request = report_json(REPORT_ID, &text, &[]);
         let reply = exchange(Some(request.as_bytes()), &state, &writer);

@@ -111,15 +111,7 @@ pub(crate) fn sanitize_tmux_value(s: &str) -> String {
 /// The answer window is the endpoint's own read timeout (2 seconds), so a
 /// server that never replies fails at the same pace the socket rules set.
 fn cmd_channel_ready(args: &[String]) -> i32 {
-    let tmux = std::env::var("TMUX").ok();
-    let tmux_pane = std::env::var("TMUX_PANE").ok();
-    let xdg_runtime_dir = std::env::var("XDG_RUNTIME_DIR").ok();
-    let env = mcp::EndpointEnv {
-        tmux: tmux.as_deref(),
-        tmux_pane: tmux_pane.as_deref(),
-        xdg_runtime_dir: xdg_runtime_dir.as_deref(),
-        uid: mcp::current_uid(),
-    };
+    let env = mcp::EndpointEnv::from_process();
     let (stdout, stderr, code) = run_channel_ready(
         nonce_argument(args).as_deref(),
         env,
@@ -448,7 +440,7 @@ mod tests {
             tmux: Some(&served.0),
             tmux_pane: Some(&served.1),
             xdg_runtime_dir: Some(&served.2),
-            uid: crate::test_support::own_uid(),
+            uid: crate::mcp::current_uid(),
         }
     }
 
@@ -457,7 +449,7 @@ mod tests {
     /// the env triple and the shared state.
     fn served_endpoint(dir: &std::path::Path) -> ((String, String, String), Arc<EndpointState>) {
         let xdg = dir.to_string_lossy().to_string();
-        let uid = crate::test_support::own_uid();
+        let uid = crate::mcp::current_uid();
         let path = crate::mcp::endpoint_path(mcp::EndpointEnv {
             tmux: Some(TEST_TMUX),
             tmux_pane: Some(TEST_PANE),
@@ -472,17 +464,11 @@ mod tests {
             Arc::new(std::sync::Mutex::new(0)),
         );
         let state = Arc::new(EndpointState::new(uid, TEST_PANE.to_string(), probe));
-        // The loop runs until the listener fails, which never happens in
-        // this test, so the thread is left detached after the exchange.
-        let served = Arc::clone(&state);
-        thread::spawn(move || {
-            let _ = crate::mcp::accept_loop(
-                listener,
-                served,
-                crate::mcp::LineWriter::new(std::io::sink()),
-                mcp::DEFAULT_READ_TIMEOUT,
-            );
-        });
+        crate::test_support::serve_detached(
+            listener,
+            Arc::clone(&state),
+            mcp::DEFAULT_READ_TIMEOUT,
+        );
         ((TEST_TMUX.to_string(), TEST_PANE.to_string(), xdg), state)
     }
 
@@ -550,7 +536,7 @@ mod tests {
             tmux: Some(TEST_TMUX),
             tmux_pane: Some(TEST_PANE),
             xdg_runtime_dir: Some(tmp.path().to_string_lossy().as_ref()),
-            uid: crate::test_support::own_uid(),
+            uid: crate::mcp::current_uid(),
         })
         .unwrap();
         assert!(message.contains(&expected.to_string_lossy().to_string()));
@@ -580,10 +566,10 @@ mod tests {
             tmux: Some(TEST_TMUX),
             tmux_pane: Some(TEST_PANE),
             xdg_runtime_dir: Some(&xdg),
-            uid: crate::test_support::own_uid(),
+            uid: crate::mcp::current_uid(),
         })
         .unwrap();
-        let listener = crate::mcp::bind(&path, crate::test_support::own_uid()).unwrap();
+        let listener = crate::mcp::bind(&path, crate::mcp::current_uid()).unwrap();
         thread::spawn(move || {
             let _ = listener.accept();
             thread::sleep(Duration::from_secs(2));
@@ -594,7 +580,7 @@ mod tests {
                 tmux: Some(TEST_TMUX),
                 tmux_pane: Some(TEST_PANE),
                 xdg_runtime_dir: Some(&xdg),
-                uid: crate::test_support::own_uid(),
+                uid: crate::mcp::current_uid(),
             },
             Duration::from_millis(150),
         );

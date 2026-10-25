@@ -58,16 +58,8 @@ const LOG_PREFIX: &str = "pmux-explorer --mcp:";
 /// server runs unarmed — no probe is ever emitted and no request arms it.
 pub fn run_server() -> i32 {
     let writer = LineWriter::new(io::stdout());
-    let uid = current_uid();
-    let tmux = std::env::var("TMUX").ok();
-    let tmux_pane = std::env::var("TMUX_PANE").ok();
-    let xdg_runtime_dir = std::env::var("XDG_RUNTIME_DIR").ok();
-    let env = EndpointEnv {
-        tmux: tmux.as_deref(),
-        tmux_pane: tmux_pane.as_deref(),
-        xdg_runtime_dir: xdg_runtime_dir.as_deref(),
-        uid,
-    };
+    let env = EndpointEnv::from_process();
+    let uid = env.uid;
 
     let (probe, probe_fired) = match Probe::for_current_exe() {
         Ok(probe) => (probe, false),
@@ -78,7 +70,7 @@ pub fn run_server() -> i32 {
     };
     let state = Arc::new(EndpointState::new(
         uid,
-        tmux_pane.clone().unwrap_or_default(),
+        env.tmux_pane.unwrap_or_default().to_string(),
         probe,
     ));
 

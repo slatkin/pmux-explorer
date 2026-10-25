@@ -129,7 +129,7 @@ fn bind_socket(path: &Path) -> Result<UnixListener, BindError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::own_uid;
+    use crate::mcp::current_uid;
     use tempfile::tempdir;
 
     fn endpoint_in(dir: &Path) -> PathBuf {
@@ -146,7 +146,7 @@ mod tests {
     fn the_bind_creates_the_directory_0700_and_the_socket_0600() {
         let tmp = tempdir().unwrap();
         let path = endpoint_in(tmp.path());
-        let listener = bind(&path, own_uid()).unwrap();
+        let listener = bind(&path, current_uid()).unwrap();
         assert_eq!(mode_of(tmp.path()), 0o700);
         assert_eq!(mode_of(&path), 0o600);
         // The bound endpoint accepts a connection.
@@ -165,7 +165,7 @@ mod tests {
         assert!(path.symlink_metadata().is_ok());
         assert!(UnixStream::connect(&path).is_err());
 
-        let listener = bind(&path, own_uid()).unwrap();
+        let listener = bind(&path, current_uid()).unwrap();
         assert_eq!(mode_of(&path), 0o600);
         UnixStream::connect(&path).unwrap();
         drop(listener);
@@ -177,9 +177,9 @@ mod tests {
     fn a_live_owner_is_kept() {
         let tmp = tempdir().unwrap();
         let path = endpoint_in(tmp.path());
-        let owner = bind(&path, own_uid()).unwrap();
+        let owner = bind(&path, current_uid()).unwrap();
 
-        let refused = bind(&path, own_uid()).unwrap_err();
+        let refused = bind(&path, current_uid()).unwrap_err();
         assert!(matches!(refused, BindError::LiveOwner { .. }));
         // The live owner still listens after the refused second bind.
         UnixStream::connect(&path).unwrap();
@@ -195,7 +195,7 @@ mod tests {
         fs::create_dir(&dir).unwrap();
         let path = dir.join("79301cf9592f327a-12.sock");
 
-        let refused = bind(&path, own_uid() + 1).unwrap_err();
+        let refused = bind(&path, current_uid() + 1).unwrap_err();
         let BindError::ForeignDirectory {
             path: refused_dir,
             owner,
@@ -204,7 +204,7 @@ mod tests {
             panic!("expected a foreign-directory refusal, got {refused:?}");
         };
         assert_eq!(refused_dir, dir);
-        assert_eq!(owner, own_uid());
+        assert_eq!(owner, current_uid());
         // Nothing was created in the refused directory.
         assert!(path.symlink_metadata().is_err());
     }
@@ -214,7 +214,7 @@ mod tests {
         let tmp = tempdir().unwrap();
         let path = endpoint_in(tmp.path());
         assert!(path.symlink_metadata().is_err());
-        let listener = bind(&path, own_uid()).unwrap();
+        let listener = bind(&path, current_uid()).unwrap();
         UnixStream::connect(&path).unwrap();
         drop(listener);
     }

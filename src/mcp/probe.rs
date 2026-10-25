@@ -280,7 +280,7 @@ fn real_now_millis() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::{Recorder, probe_with_clock};
+    use crate::test_support::{Failing, Recorder, probe_with_clock};
     use std::sync::Arc;
     use std::thread;
 
@@ -464,15 +464,6 @@ mod tests {
     fn a_failed_repeat_write_still_counts_as_sent() {
         // The repeat gate updates before the write, so a broken stdout
         // consumes the repeat rather than retrying it every report.
-        struct Failing;
-        impl io::Write for Failing {
-            fn write(&mut self, _buf: &[u8]) -> io::Result<usize> {
-                Err(io::Error::new(io::ErrorKind::BrokenPipe, "gone"))
-            }
-            fn flush(&mut self) -> io::Result<()> {
-                Ok(())
-            }
-        }
         let cell = Arc::new(Mutex::new(0u64));
         let probe = probe_with_clock(NONCE, Path::new("/usr/bin/pmux-explorer"), cell.clone());
         let writer = LineWriter::new(Failing);

@@ -41,6 +41,29 @@ pub struct EndpointEnv<'a> {
     pub uid: u32,
 }
 
+impl EndpointEnv<'static> {
+    /// The endpoint env captured from this process's environment: the
+    /// tmux variables as inherited and the current uid, read once. The
+    /// captured strings are leaked, so the borrow lives for the process
+    /// — a one-time startup capture for the server and `channel-ready`
+    /// runs. Tests build the struct directly instead, so they touch no
+    /// process env.
+    pub fn from_process() -> Self {
+        fn capture(name: &str) -> Option<&'static str> {
+            std::env::var(name).ok().map(|value| {
+                let leaked: &'static str = Box::leak(value.into_boxed_str());
+                leaked
+            })
+        }
+        EndpointEnv {
+            tmux: capture("TMUX"),
+            tmux_pane: capture("TMUX_PANE"),
+            xdg_runtime_dir: capture("XDG_RUNTIME_DIR"),
+            uid: super::current_uid(),
+        }
+    }
+}
+
 /// The endpoint socket path for one pane, or `None` without tmux.
 ///
 /// The path is `<dir>/<h>-<n>.sock`: `<dir>` is `$XDG_RUNTIME_DIR/pmux-channel`,

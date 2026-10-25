@@ -55,7 +55,8 @@ pub fn send_arm(path: &Path, nonce: &str, timeout: Duration) -> Result<String, A
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mcp::{EndpointState, Probe, accept_loop, bind};
+    use crate::mcp::current_uid;
+    use crate::mcp::{EndpointState, Probe, bind};
     use std::path::PathBuf;
     use std::sync::Arc;
     use std::thread;
@@ -63,28 +64,19 @@ mod tests {
 
     const NONCE: &str = "00112233445566778899aabbccddeeff";
 
-    use crate::test_support::own_uid;
-
     /// Serves an unarmed endpoint state at a fresh socket path, returning
     /// the path. The accept loop runs detached with the request timeout
     /// tests use elsewhere.
     fn serve_armed_state(dir: &Path) -> PathBuf {
         let path = dir.join("79301cf9592f327a-12.sock");
-        let listener = bind(&path, own_uid()).unwrap();
+        let listener = bind(&path, current_uid()).unwrap();
         let probe = Probe::new(
             NONCE.to_string(),
             Path::new("/usr/bin/pmux-explorer"),
             Box::new(|| 0),
         );
-        let state = Arc::new(EndpointState::new(own_uid(), "%12".to_string(), probe));
-        thread::spawn(move || {
-            let _ = accept_loop(
-                listener,
-                state,
-                crate::mcp::LineWriter::new(io::sink()),
-                Duration::from_millis(500),
-            );
-        });
+        let state = Arc::new(EndpointState::new(current_uid(), "%12".to_string(), probe));
+        crate::test_support::serve_detached(listener, state, Duration::from_millis(500));
         path
     }
 
@@ -109,7 +101,7 @@ mod tests {
     fn an_endpoint_that_closes_without_a_reply_is_no_answer() {
         let tmp = tempdir().unwrap();
         let path = tmp.path().join("79301cf9592f327a-12.sock");
-        let listener = bind(&path, own_uid()).unwrap();
+        let listener = bind(&path, current_uid()).unwrap();
         // A peer that reads one line and drops the connection, replying
         // with nothing.
         thread::spawn(move || {
@@ -127,7 +119,7 @@ mod tests {
     fn an_endpoint_that_never_answers_hits_the_timeout() {
         let tmp = tempdir().unwrap();
         let path = tmp.path().join("79301cf9592f327a-12.sock");
-        let listener = bind(&path, own_uid()).unwrap();
+        let listener = bind(&path, current_uid()).unwrap();
         // A peer that accepts and answers nothing; the client's short
         // answer window ends the wait instead of the real 2 seconds.
         thread::spawn(move || {
