@@ -15,6 +15,12 @@
 //! emits. The `token` and `bytes` report fields are opaque: the server
 //! never validates them, never emits `token`, and copies `bytes` into the
 //! event's `meta` as a string as given.
+//!
+//! The `arm` handler is how the server becomes armed: a request whose
+//! nonce equals the probe's nonce ([`crate::mcp::Probe`], design decision
+//! D3) arms the server for the rest of the process. An unarmed server
+//! repeats the probe on a shape-valid report, through the probe's repeat
+//! gate.
 
 use serde_json::{Map, Value, json};
 use std::io::{self, Read, Write};
@@ -23,7 +29,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use super::rpc::LineWriter;
+use super::probe::Probe;
+use super::rpc::{CHANNEL_NOTIFICATION_METHOD, LineWriter};
 
 /// The request line limit: a longer line gets the `invalid` reply.
 const MAX_REQUEST_LINE_BYTES: usize = 4096;
@@ -46,11 +53,32 @@ pub struct EndpointState {
     /// Whether the session answered the arm request with the probe's
     /// nonce; an unarmed server emits no report events.
     pub armed: AtomicBool,
+    /// The nonce the `arm` request must carry — the probe's nonce, fixed
+    /// for the life of the process.
+    pub nonce: String,
     /// The uid a connection's peer must have — the current user's id in
     /// production, an injected value in tests.
     pub uid: u32,
     /// The pane id (`TMUX_PANE`) the `status` reply reports.
     pub pane: String,
+    /// The probe the unarmed reports may repeat.
+    pub probe: Probe,
+}
+
+impl EndpointState {
+    /// The state one endpoint socket serves: unarmed until the `arm`
+    /// request with the probe's nonce arrives, and holding the probe the
+    /// unarmed reports may repeat. The nonce is the probe's, so the arm
+    /// comparison and the probe event can never drift apart.
+    pub fn new(uid: u32, pane: String, probe: Probe) -> Self {
+        Self {
+            armed: AtomicBool::new(false),
+            nonce: probe.nonce().to_string(),
+            uid,
+            pane,
+            probe,
+        }
+    }
 }
 
 /// Accepts endpoint connections until the listener fails.
@@ -198,6 +226,7 @@ fn socket_request_reply<W: io::Write>(
     match object.get("kind").and_then(Value::as_str) {
         Some("report") => report_reply(state, object, writer),
         Some("status") => status_reply(state),
+        Some("arm") => arm_reply(state, object),
         _ => invalid_reply(),
     }
 }
@@ -219,12 +248,31 @@ fn report_reply<W: io::Write>(
         return invalid_reply();
     };
     if !state.armed.load(Ordering::Relaxed) {
+        // An unarmed server repeats the probe first (design decision D3):
+        // the listener may have registered after the last probe, and this
+        // report still takes the tmux fallback regardless.
+        let _ = state.probe.emit_repeat(writer);
         return json!({"ok": false, "reason": "unarmed"});
     }
     match writer.write_json(&channel_notification(&report)) {
         Ok(()) => json!({"ok": true, "emitted": true}),
         Err(_) => json!({"ok": false, "reason": "write-failed"}),
     }
+}
+
+/// Builds the reply for one `arm` request, arming the server on a match.
+///
+/// A request whose `nonce` equals the probe's arms the server for the rest
+/// of the process — idempotent, so a re-arm answers the same reply. Any
+/// other nonce, including a missing or non-string one, does not arm and
+/// gets the `nonce` reply. The handler never emits anything to Claude.
+fn arm_reply(state: &EndpointState, object: &Map<String, Value>) -> Value {
+    let matches = object.get("nonce").and_then(Value::as_str) == Some(state.nonce.as_str());
+    if !matches {
+        return json!({"ok": false, "reason": "nonce"});
+    }
+    state.armed.store(true, Ordering::Relaxed);
+    json!({"ok": true, "armed": true})
 }
 
 /// Builds the reply for one `status` request. It never emits anything.
@@ -300,7 +348,7 @@ fn bytes_as_string(value: Option<&Value>) -> String {
 fn channel_notification(report: &ReportRequest) -> Value {
     json!({
         "jsonrpc": "2.0",
-        "method": "notifications/claude/channel",
+        "method": CHANNEL_NOTIFICATION_METHOD,
         "params": {
             "content": report.text,
             "meta": {
@@ -322,7 +370,9 @@ fn write_reply(stream: &mut UnixStream, reply: &Value) -> io::Result<()> {
 mod tests {
     use super::*;
     use crate::mcp::bind;
+    use crate::mcp::probe::MAX_REPEATS;
     use serde_json::Value as Json;
+    use std::path::Path;
     use std::sync::Mutex;
     use std::thread;
     use tempfile::tempdir;
@@ -333,17 +383,32 @@ mod tests {
 
     const REPORT_ID: &str = "00112233445566778899aabbccddeeff";
 
+    /// The probe nonce the shared test state carries.
+    const NONCE: &str = "00112233445566778899aabbccddeeff";
+
     fn own_uid() -> u32 {
         // SAFETY: `geteuid` has no failure mode and no preconditions.
         unsafe { libc::geteuid() }
     }
 
+    /// A probe with a fixed nonce and exe whose clock reads `cell`, so a
+    /// test drives the repeat period and cap by moving `cell`.
+    fn probe_with_clock(cell: Arc<Mutex<u64>>) -> Probe {
+        Probe::new(
+            NONCE.to_string(),
+            Path::new("/usr/bin/pmux-explorer"),
+            Box::new(move || *cell.lock().unwrap()),
+        )
+    }
+
     fn state(armed: bool, uid: u32, pane: &str) -> EndpointState {
-        EndpointState {
-            armed: AtomicBool::new(armed),
+        let state = EndpointState::new(
             uid,
-            pane: pane.to_string(),
-        }
+            pane.to_string(),
+            probe_with_clock(Arc::new(Mutex::new(0))),
+        );
+        state.armed.store(armed, Ordering::Relaxed);
+        state
     }
 
     /// A report request line with the given text and extra fields.
@@ -509,6 +574,212 @@ mod tests {
         assert_eq!(reply, json!({"ok": true, "armed": true, "pane": "%12"}),);
     }
 
+    // Row 4.1: the "Arm request" scenarios.
+
+    #[test]
+    fn the_correct_nonce_arms_and_a_re_arm_answers_the_same_reply() {
+        let recorder = Recorder::default();
+        let writer = LineWriter::new(recorder.clone());
+        let state = state(false, own_uid(), "%12");
+        let arm = format!("{{\"v\":1,\"kind\":\"arm\",\"nonce\":\"{NONCE}\"}}\n");
+
+        let reply = exchange(Some(arm.as_bytes()), &state, &writer);
+        assert_eq!(
+            serde_json::from_str::<Json>(&reply).unwrap(),
+            json!({"ok": true, "armed": true}),
+        );
+
+        // The arm is visible to a status request, and idempotent: a
+        // re-arm with the correct nonce answers the same reply.
+        let status = b"{\"v\":1,\"kind\":\"status\"}\n";
+        let reply = exchange(Some(&status[..]), &state, &writer);
+        assert_eq!(
+            serde_json::from_str::<Json>(&reply).unwrap(),
+            json!({"ok": true, "armed": true, "pane": "%12"}),
+        );
+        let reply = exchange(Some(arm.as_bytes()), &state, &writer);
+        assert_eq!(
+            serde_json::from_str::<Json>(&reply).unwrap(),
+            json!({"ok": true, "armed": true}),
+        );
+
+        // The arm itself never emits anything to Claude.
+        let (stdout, flushes) = stdout_of(&recorder);
+        assert_eq!(stdout, "");
+        assert_eq!(flushes, 0);
+    }
+
+    #[test]
+    fn a_wrong_nonce_does_not_arm() {
+        let recorder = Recorder::default();
+        let writer = LineWriter::new(recorder.clone());
+        let state = state(false, own_uid(), "%12");
+        for (name, arm) in [
+            (
+                "a nonce that differs",
+                format!(
+                    "{{\"v\":1,\"kind\":\"arm\",\"nonce\":\"{}\"}}\n",
+                    "f".repeat(32)
+                ),
+            ),
+            (
+                "no nonce at all",
+                "{\"v\":1,\"kind\":\"arm\"}\n".to_string(),
+            ),
+            (
+                "a nonce that is not a string",
+                "{\"v\":1,\"kind\":\"arm\",\"nonce\":123}\n".to_string(),
+            ),
+        ] {
+            let reply = exchange(Some(arm.as_bytes()), &state, &writer);
+            assert_eq!(
+                serde_json::from_str::<Json>(&reply).unwrap(),
+                json!({"ok": false, "reason": "nonce"}),
+                "case: {name}",
+            );
+        }
+
+        // The server stays unarmed, and nothing was emitted.
+        let status = b"{\"v\":1,\"kind\":\"status\"}\n";
+        let reply = exchange(Some(&status[..]), &state, &writer);
+        assert_eq!(
+            serde_json::from_str::<Json>(&reply).unwrap(),
+            json!({"ok": true, "armed": false, "pane": "%12"}),
+        );
+        let (stdout, flushes) = stdout_of(&recorder);
+        assert_eq!(stdout, "");
+        assert_eq!(flushes, 0);
+    }
+
+    #[test]
+    fn a_wrong_nonce_on_an_armed_server_leaves_it_armed() {
+        let recorder = Recorder::default();
+        let writer = LineWriter::new(recorder.clone());
+        let state = state(true, own_uid(), "%12");
+        let arm = format!(
+            "{{\"v\":1,\"kind\":\"arm\",\"nonce\":\"{}\"}}\n",
+            "f".repeat(32)
+        );
+        let reply = exchange(Some(arm.as_bytes()), &state, &writer);
+        assert_eq!(
+            serde_json::from_str::<Json>(&reply).unwrap(),
+            json!({"ok": false, "reason": "nonce"}),
+        );
+
+        let status = b"{\"v\":1,\"kind\":\"status\"}\n";
+        let reply = exchange(Some(&status[..]), &state, &writer);
+        assert_eq!(
+            serde_json::from_str::<Json>(&reply).unwrap(),
+            json!({"ok": true, "armed": true, "pane": "%12"}),
+        );
+    }
+
+    // Row 4.3: the "Report while unarmed", "Probe limit" and "Lifetime
+    // cap" scenarios, driven through the report handler with a movable
+    // clock.
+
+    /// One shape-valid report request line, as the connection reads it.
+    fn valid_report_line() -> String {
+        let text = format!("pmux report {REPORT_ID}. the report is at /tmp/x.md:12");
+        report_json(REPORT_ID, &text, &[])
+    }
+
+    #[test]
+    fn a_report_90_seconds_after_the_last_probe_repeats_it() {
+        let cell = Arc::new(Mutex::new(0u64));
+        let state = state(false, own_uid(), "%12");
+        // Rebuild the state's probe with the movable clock.
+        let state = EndpointState {
+            probe: probe_with_clock(cell.clone()),
+            ..state
+        };
+        let recorder = Recorder::default();
+        let writer = LineWriter::new(recorder.clone());
+
+        // The first probe at t=0; the report arrives 90 seconds later.
+        state.probe.emit(&writer).unwrap();
+        *cell.lock().unwrap() = 90_000;
+        let reply = socket_request_reply(&valid_report_line(), &state, &writer);
+        assert_eq!(reply, json!({"ok": false, "reason": "unarmed"}));
+
+        // One repeat probe joined the first on stdout.
+        let (stdout, _) = stdout_of(&recorder);
+        assert_eq!(stdout.matches('\n').count(), 2);
+        let last = stdout.lines().last().unwrap();
+        let probe: Json = serde_json::from_str(last).unwrap();
+        assert_eq!(
+            probe["params"]["meta"],
+            json!({"kind": "probe", "nonce": NONCE})
+        );
+    }
+
+    #[test]
+    fn two_reports_10_seconds_apart_repeat_at_most_once() {
+        let cell = Arc::new(Mutex::new(0u64));
+        let state = state(false, own_uid(), "%12");
+        let state = EndpointState {
+            probe: probe_with_clock(cell.clone()),
+            ..state
+        };
+        let recorder = Recorder::default();
+        let writer = LineWriter::new(recorder.clone());
+
+        // The first probe long ago, then two reports 10 seconds apart:
+        // the first repeats, the second falls inside the fresh period.
+        state.probe.emit(&writer).unwrap();
+        *cell.lock().unwrap() = 90_000;
+        let _ = socket_request_reply(&valid_report_line(), &state, &writer);
+        *cell.lock().unwrap() = 100_000;
+        let _ = socket_request_reply(&valid_report_line(), &state, &writer);
+
+        // Two probes on stdout: the first probe and one repeat for the
+        // two reports.
+        let (stdout, _) = stdout_of(&recorder);
+        assert_eq!(stdout.matches('\n').count(), 2);
+    }
+
+    #[test]
+    fn a_report_after_the_lifetime_cap_repeats_nothing() {
+        let cell = Arc::new(Mutex::new(0u64));
+        let state = state(false, own_uid(), "%12");
+        let state = EndpointState {
+            probe: probe_with_clock(cell.clone()),
+            ..state
+        };
+        let recorder = Recorder::default();
+        let writer = LineWriter::new(recorder.clone());
+
+        // The first probe, then the three repeats the cap allows.
+        state.probe.emit(&writer).unwrap();
+        for minute in 1..=MAX_REPEATS {
+            *cell.lock().unwrap() = u64::from(minute) * 70_000;
+            let reply = socket_request_reply(&valid_report_line(), &state, &writer);
+            assert_eq!(reply, json!({"ok": false, "reason": "unarmed"}));
+        }
+        // Ten minutes later, a report repeats nothing and still replies
+        // unarmed.
+        *cell.lock().unwrap() = 600_000;
+        let reply = socket_request_reply(&valid_report_line(), &state, &writer);
+        assert_eq!(reply, json!({"ok": false, "reason": "unarmed"}));
+
+        // Four probes on stdout: the first probe and the three repeats.
+        let (stdout, _) = stdout_of(&recorder);
+        assert_eq!(stdout.matches('\n').count(), 4);
+    }
+
+    #[test]
+    fn a_report_with_a_wrong_shape_repeats_no_probe_even_unarmed() {
+        let recorder = Recorder::default();
+        let writer = LineWriter::new(recorder.clone());
+        let state = state(false, own_uid(), "%12");
+        let request = report_json(REPORT_ID, "not the pointer shape", &[]);
+        let reply = exchange(Some(request.as_bytes()), &state, &writer);
+        assert_eq!(reply, "{\"ok\":false,\"reason\":\"invalid\"}\n");
+        let (stdout, flushes) = stdout_of(&recorder);
+        assert_eq!(stdout, "");
+        assert_eq!(flushes, 0);
+    }
+
     // Row 3.3: the "Report request" scenarios.
 
     #[test]
@@ -540,7 +811,7 @@ mod tests {
     }
 
     #[test]
-    fn an_unarmed_report_replies_unarmed_and_emits_nothing() {
+    fn an_unarmed_report_replies_unarmed_and_repeats_the_probe() {
         let recorder = Recorder::default();
         let writer = LineWriter::new(recorder.clone());
         let state = state(false, own_uid(), "%12");
@@ -549,9 +820,48 @@ mod tests {
         let reply = exchange(Some(request.as_bytes()), &state, &writer);
         let reply: Json = serde_json::from_str(&reply).unwrap();
         assert_eq!(reply, json!({"ok": false, "reason": "unarmed"}));
+
+        // One flushed line: the probe repeat, with the state's nonce.
         let (stdout, flushes) = stdout_of(&recorder);
-        assert_eq!(stdout, "");
-        assert_eq!(flushes, 0);
+        assert_eq!(flushes, 1);
+        assert_eq!(stdout.matches('\n').count(), 1);
+        let probe: Json = serde_json::from_str(stdout.trim_end()).unwrap();
+        assert_eq!(probe["method"], CHANNEL_NOTIFICATION_METHOD);
+        assert_eq!(
+            probe["params"]["meta"],
+            json!({"kind": "probe", "nonce": NONCE})
+        );
+    }
+
+    #[test]
+    fn an_unarmed_report_within_the_repeat_period_emits_nothing() {
+        let cell = Arc::new(Mutex::new(0u64));
+        let state = {
+            let state =
+                EndpointState::new(own_uid(), "%12".to_string(), probe_with_clock(cell.clone()));
+            state.armed.store(false, Ordering::Relaxed);
+            state
+        };
+        let recorder = Recorder::default();
+        let writer = LineWriter::new(recorder.clone());
+
+        // The first probe goes out at t=0 and stamps the clock; a report
+        // 10 seconds later is inside the repeat period, so it repeats
+        // nothing and still replies unarmed.
+        state.probe.emit(&writer).unwrap();
+        *cell.lock().unwrap() = 10_000;
+        let text = format!("pmux report {REPORT_ID}. the report is at /tmp/x.md:12");
+        let request = report_json(REPORT_ID, &text, &[]);
+        let reply = exchange(Some(request.as_bytes()), &state, &writer);
+        let reply: Json = serde_json::from_str(&reply).unwrap();
+        assert_eq!(reply, json!({"ok": false, "reason": "unarmed"}));
+
+        // Only the first probe ever reached stdout.
+        let (stdout, flushes) = stdout_of(&recorder);
+        assert_eq!(flushes, 1);
+        assert_eq!(stdout.matches('\n').count(), 1);
+        let probe: Json = serde_json::from_str(stdout.trim_end()).unwrap();
+        assert_eq!(probe["params"]["meta"]["kind"], "probe");
     }
 
     #[test]

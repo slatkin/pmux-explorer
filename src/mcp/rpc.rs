@@ -19,6 +19,10 @@ use std::sync::{Arc, Mutex, MutexGuard};
 /// JSON-RPC error code for a request with an unknown method.
 pub const METHOD_NOT_FOUND: i64 = -32601;
 
+/// The channel notification method: the one event kind the server emits,
+/// for a report and for the arm probe alike.
+pub const CHANNEL_NOTIFICATION_METHOD: &str = "notifications/claude/channel";
+
 /// The protocol revisions the server echoes back when the client asks for
 /// one of them; everything else gets the default.
 const ECHOED_PROTOCOL_REVISIONS: [&str; 3] = ["2024-11-05", "2025-03-26", "2025-06-18"];
