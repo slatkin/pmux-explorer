@@ -348,34 +348,31 @@ mod tests {
         assert!(reply["result"].get("instructions").is_none());
     }
 
-    #[test]
-    fn the_newest_revision_is_refused() {
-        let reply = request_reply(&initialize_request(json!("2026-07-28")));
-        assert_eq!(reply["result"]["protocolVersion"], "2025-06-18");
-    }
+    // Row 1.2: the initialize reply's revision negotiation, over the
+    // whole echoed table.
 
     #[test]
-    fn an_older_revision_is_echoed() {
-        let reply = request_reply(&initialize_request(json!("2025-03-26")));
-        assert_eq!(reply["result"]["protocolVersion"], "2025-03-26");
-    }
-
-    #[test]
-    fn the_oldest_revision_is_echoed() {
-        let reply = request_reply(&initialize_request(json!("2024-11-05")));
-        assert_eq!(reply["result"]["protocolVersion"], "2024-11-05");
-    }
-
-    #[test]
-    fn an_unknown_revision_falls_back_to_the_default() {
-        let reply = request_reply(&initialize_request(json!("2024-01-01")));
-        assert_eq!(reply["result"]["protocolVersion"], "2025-06-18");
-    }
-
-    #[test]
-    fn a_missing_revision_falls_back_to_the_default() {
+    fn the_negotiated_revision_echoes_only_the_table_and_defaults_otherwise() {
+        // Every revision in the echoed table comes back unchanged.
+        for revision in ECHOED_PROTOCOL_REVISIONS {
+            let reply = request_reply(&initialize_request(json!(revision)));
+            assert_eq!(reply["result"]["protocolVersion"], revision);
+        }
+        // Everything else — the newest revision the server must never
+        // answer, an unknown revision, and a missing one — gets the
+        // default.
+        for asked in ["2026-07-28", "2024-01-01"] {
+            let reply = request_reply(&initialize_request(json!(asked)));
+            assert_eq!(
+                reply["result"]["protocolVersion"], DEFAULT_PROTOCOL_REVISION,
+                "asked: {asked}",
+            );
+        }
         let reply = request_reply(&request("initialize", json!({}), json!(1)));
-        assert_eq!(reply["result"]["protocolVersion"], "2025-06-18");
+        assert_eq!(
+            reply["result"]["protocolVersion"],
+            DEFAULT_PROTOCOL_REVISION
+        );
     }
 
     // Row 1.1: the shared line writer.

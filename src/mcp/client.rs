@@ -18,8 +18,11 @@ use std::time::Duration;
 pub enum ArmError {
     /// No endpoint socket at the path, or nothing listens on it.
     Unreachable(io::Error),
-    /// The endpoint did not send a reply line within the answer window.
-    NoAnswer(io::Error),
+    /// The endpoint did not send a reply line within the answer window —
+    /// the write or the read failed, the endpoint closed without a reply,
+    /// or the window ran out. No detail is carried: the caller reports
+    /// the answer window, not the underlying I/O error.
+    NoAnswer,
 }
 
 /// Sends one `arm` request line to the endpoint at `path` and returns the
@@ -36,47 +39,40 @@ pub fn send_arm(path: &Path, nonce: &str, timeout: Duration) -> Result<String, A
     let mut stream = UnixStream::connect(path).map_err(ArmError::Unreachable)?;
     stream
         .set_read_timeout(Some(timeout))
-        .map_err(ArmError::NoAnswer)?;
+        .map_err(|_| ArmError::NoAnswer)?;
     let request = json!({"v": 1, "kind": "arm", "nonce": nonce});
-    writeln!(stream, "{request}").map_err(ArmError::NoAnswer)?;
-    stream.flush().map_err(ArmError::NoAnswer)?;
+    writeln!(stream, "{request}").map_err(|_| ArmError::NoAnswer)?;
+    stream.flush().map_err(|_| ArmError::NoAnswer)?;
     let mut line = String::new();
     let mut reader = BufReader::new(stream);
     match reader.read_line(&mut line) {
-        Ok(0) => Err(ArmError::NoAnswer(io::Error::new(
-            io::ErrorKind::UnexpectedEof,
-            "the endpoint closed without a reply",
-        ))),
+        Ok(0) => Err(ArmError::NoAnswer),
         Ok(_) => Ok(line.trim_end_matches(['\r', '\n']).to_string()),
-        Err(error) => Err(ArmError::NoAnswer(error)),
+        Err(_) => Err(ArmError::NoAnswer),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mcp::current_uid;
-    use crate::mcp::{EndpointState, Probe, bind};
+    use crate::mcp::{bind, current_uid};
     use std::path::PathBuf;
-    use std::sync::Arc;
     use std::thread;
     use tempfile::tempdir;
 
     const NONCE: &str = "00112233445566778899aabbccddeeff";
 
     /// Serves an unarmed endpoint state at a fresh socket path, returning
-    /// the path. The accept loop runs detached with the request timeout
-    /// tests use elsewhere.
+    /// the path. The accept loop runs detached with the short answer
+    /// window this client's tests use.
     fn serve_armed_state(dir: &Path) -> PathBuf {
         let path = dir.join("79301cf9592f327a-12.sock");
-        let listener = bind(&path, current_uid()).unwrap();
-        let probe = Probe::new(
-            NONCE.to_string(),
-            Path::new("/usr/bin/pmux-explorer"),
-            Box::new(|| 0),
+        crate::test_support::serve_unarmed_endpoint(
+            &path,
+            "%12",
+            NONCE,
+            Duration::from_millis(500),
         );
-        let state = Arc::new(EndpointState::new(current_uid(), "%12".to_string(), probe));
-        crate::test_support::serve_detached(listener, state, Duration::from_millis(500));
         path
     }
 
@@ -112,7 +108,7 @@ mod tests {
         });
 
         let error = send_arm(&path, NONCE, Duration::from_secs(2)).unwrap_err();
-        assert!(matches!(error, ArmError::NoAnswer(_)));
+        assert!(matches!(error, ArmError::NoAnswer));
     }
 
     #[test]
@@ -129,6 +125,6 @@ mod tests {
         });
 
         let error = send_arm(&path, NONCE, Duration::from_millis(150)).unwrap_err();
-        assert!(matches!(error, ArmError::NoAnswer(_)));
+        assert!(matches!(error, ArmError::NoAnswer));
     }
 }

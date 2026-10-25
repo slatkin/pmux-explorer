@@ -7,7 +7,7 @@ pub mod desktop_notification;
 pub mod event;
 pub mod git;
 pub mod group;
-pub mod mcp;
+pub(crate) mod mcp;
 pub mod pmux_task;
 pub mod port;
 pub(crate) mod process;

@@ -3,8 +3,9 @@
 //! One copy of each helper, so a fix in one place cannot drift from the
 //! rest: the probe with an injected clock, the stdout recorder the
 //! shared [`LineWriter`] is inspected through, the writer whose every
-//! write fails, and the detached endpoint serve scaffold. Compiled only
-//! under `cfg(test)`, so the integration tests in `tests/` never see it.
+//! write fails, and the endpoint serve scaffolds — the detached accept
+//! loop, and the unarmed endpoint built on it. Compiled only under
+//! `cfg(test)`, so the integration tests in `tests/` never see it.
 
 use std::io;
 use std::os::unix::net::UnixListener;
@@ -12,7 +13,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use crate::mcp::{EndpointState, LineWriter, Probe, accept_loop};
+use crate::mcp::{EndpointState, LineWriter, Probe, accept_loop, bind, current_uid};
 
 /// A probe with the given nonce and exe whose clock reads `cell`, so a
 /// test drives the repeat period and cap by moving `cell`.
@@ -70,6 +71,27 @@ impl io::Write for Failing {
     fn flush(&mut self) -> io::Result<()> {
         Ok(())
     }
+}
+
+/// Serves an unarmed endpoint state — the given nonce and pane with a
+/// fixed zero clock — at the socket `path` a test derives, and returns
+/// the shared state. The accept loop runs detached with `timeout`, so a
+/// test's client exchange never blocks the test thread.
+pub(crate) fn serve_unarmed_endpoint(
+    path: &Path,
+    pane: &str,
+    nonce: &str,
+    timeout: Duration,
+) -> Arc<EndpointState> {
+    let listener = bind(path, current_uid()).unwrap();
+    let probe = probe_with_clock(
+        nonce,
+        Path::new("/usr/bin/pmux-explorer"),
+        Arc::new(Mutex::new(0)),
+    );
+    let state = Arc::new(EndpointState::new(current_uid(), pane.to_string(), probe));
+    serve_detached(listener, Arc::clone(&state), timeout);
+    state
 }
 
 /// Serves an already-bound endpoint on a detached thread, writing its

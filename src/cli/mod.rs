@@ -205,7 +205,7 @@ fn run_channel_ready(
             )),
             1,
         ),
-        Err(ArmError::NoAnswer(_)) => (
+        Err(ArmError::NoAnswer) => (
             None,
             Some(format!(
                 "channel-ready: the endpoint at {} did not answer within {answer_timeout:?}",
@@ -449,24 +449,17 @@ mod tests {
     /// the env triple and the shared state.
     fn served_endpoint(dir: &std::path::Path) -> ((String, String, String), Arc<EndpointState>) {
         let xdg = dir.to_string_lossy().to_string();
-        let uid = crate::mcp::current_uid();
         let path = crate::mcp::endpoint_path(mcp::EndpointEnv {
             tmux: Some(TEST_TMUX),
             tmux_pane: Some(TEST_PANE),
             xdg_runtime_dir: Some(&xdg),
-            uid,
+            uid: crate::mcp::current_uid(),
         })
         .unwrap();
-        let listener = crate::mcp::bind(&path, uid).unwrap();
-        let probe = crate::test_support::probe_with_clock(
+        let state = crate::test_support::serve_unarmed_endpoint(
+            &path,
+            TEST_PANE,
             CHANNEL_NONCE,
-            std::path::Path::new("/usr/bin/pmux-explorer"),
-            Arc::new(std::sync::Mutex::new(0)),
-        );
-        let state = Arc::new(EndpointState::new(uid, TEST_PANE.to_string(), probe));
-        crate::test_support::serve_detached(
-            listener,
-            Arc::clone(&state),
             mcp::DEFAULT_READ_TIMEOUT,
         );
         ((TEST_TMUX.to_string(), TEST_PANE.to_string(), xdg), state)

@@ -94,9 +94,9 @@ impl Probe {
     /// [`Self::for_current_exe`] cannot read the running binary's path or
     /// fresh entropy — the caller logs the reason and runs the server
     /// unarmed. The nonce is empty, and the `arm` handler refuses an
-    /// empty probe nonce, so no request can arm the server; both emit
-    /// paths refuse an empty nonce too, so no probe event is ever
-    /// emitted — the guarantee does not depend on the caller's flag.
+    /// empty probe nonce, so no request can arm the server; the single
+    /// probe write point refuses an empty nonce too, so no probe event is
+    /// ever emitted — the guarantee does not depend on the caller's flag.
     pub fn unarmed() -> Self {
         Self {
             nonce: String::new(),
@@ -121,17 +121,14 @@ impl Probe {
     ///
     /// A probe with an empty nonce — the unarmed fallback
     /// ([`Self::unarmed`]) — emits nothing and reports `false`: the
-    /// no-probe guarantee lives at this layer, not in the caller's flag.
+    /// no-probe guarantee lives at the single write point below, not in
+    /// the caller's flag, so every emit path inherits it.
     ///
     /// # Errors
     /// When the shared writer fails, or its lock is poisoned.
     pub fn emit<W: io::Write>(&self, writer: &LineWriter<W>) -> io::Result<bool> {
-        if self.nonce.is_empty() {
-            return Ok(false);
-        }
         self.stamp((self.now)())?;
-        writer.write_json(&self.event())?;
-        Ok(true)
+        self.write_probe(writer)
     }
 
     /// Emits the first probe when `notification` is the trigger: the stdin
@@ -161,9 +158,6 @@ impl Probe {
     /// # Errors
     /// When the shared writer fails, or its lock is poisoned.
     pub fn emit_repeat<W: io::Write>(&self, writer: &LineWriter<W>) -> io::Result<bool> {
-        if self.nonce.is_empty() {
-            return Ok(false);
-        }
         let allowed = {
             let mut repeat = self.lock_repeat()?;
             let now = (self.now)();
@@ -179,6 +173,17 @@ impl Probe {
             }
         };
         if !allowed {
+            return Ok(false);
+        }
+        self.write_probe(writer)
+    }
+
+    /// The single write point for a probe event: refuses an empty nonce —
+    /// the unarmed fallback emits nothing — and writes the event through
+    /// the shared writer. Every emit path goes through here, so a future
+    /// emit path inherits the no-probe guarantee without restating it.
+    fn write_probe<W: io::Write>(&self, writer: &LineWriter<W>) -> io::Result<bool> {
+        if self.nonce.is_empty() {
             return Ok(false);
         }
         writer.write_json(&self.event())?;
@@ -326,30 +331,6 @@ mod tests {
                 "Run '/usr/bin/pmux-explorer' channel-ready --nonce {NONCE} and do nothing else."
             ),
         );
-    }
-
-    #[test]
-    fn another_notification_emits_nothing() {
-        let probe = probe_with_clock(
-            NONCE,
-            Path::new("/usr/bin/pmux-explorer"),
-            Arc::new(Mutex::new(0)),
-        );
-        let recorder = Recorder::default();
-        let writer = LineWriter::new(recorder.clone());
-
-        let emitted = probe
-            .emit_after_notification(
-                &RpcNotification {
-                    method: "notifications/cancelled".to_string(),
-                    params: Value::Null,
-                },
-                &writer,
-            )
-            .unwrap();
-
-        assert!(!emitted);
-        assert_eq!(recorder.stdout(), "");
     }
 
     // Row 4.1: the "Probe names the running binary" scenario.

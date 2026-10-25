@@ -17,8 +17,8 @@
 //! `channel-ready` arm request to an endpoint.
 //!
 //! `--mcp` is a binary mode, so the module surface is crate-only and the
-//! submodules are private — their APIs re-export here, so items live
-//! behind one path.
+//! submodules are private — the API the rest of the crate uses re-exports
+//! here, so those items live behind one path.
 
 use serde_json::Value;
 use std::io::{self, BufRead, BufReader};
@@ -35,14 +35,11 @@ mod rpc;
 
 pub use client::{ArmError, send_arm};
 pub use connection::{DEFAULT_READ_TIMEOUT, EndpointState, accept_loop};
-pub use endpoint::{BindError, bind};
+pub use endpoint::bind;
 pub use path::{EndpointEnv, endpoint_path};
 pub use probe::Probe;
 
-pub use rpc::{
-    Incoming, LineWriter, METHOD_NOT_FOUND, PARSE_ERROR, RpcNotification, RpcRequest, error_reply,
-    parse_line, request_reply,
-};
+pub use rpc::{Incoming, LineWriter, PARSE_ERROR, error_reply, parse_line, request_reply};
 
 /// The stderr prefix every server log line carries.
 const LOG_PREFIX: &str = "pmux-explorer --mcp:";
@@ -185,6 +182,7 @@ pub(crate) fn current_uid() -> u32 {
 
 #[cfg(test)]
 mod tests {
+    use super::rpc::METHOD_NOT_FOUND;
     use super::*;
     use crate::test_support::{Recorder, probe_with_clock};
     use serde_json::json;
