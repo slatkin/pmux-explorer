@@ -265,9 +265,12 @@ fn report_reply<W: io::Write>(
 /// A request whose `nonce` equals the probe's arms the server for the rest
 /// of the process — idempotent, so a re-arm answers the same reply. Any
 /// other nonce, including a missing or non-string one, does not arm and
-/// gets the `nonce` reply. The handler never emits anything to Claude.
+/// gets the `nonce` reply. An empty probe nonce is the unarmed fallback
+/// ([`super::probe::Probe::unarmed`]): no probe ever went out, so no
+/// request can arm the server. The handler never emits anything to Claude.
 fn arm_reply(state: &EndpointState, object: &Map<String, Value>) -> Value {
-    let matches = object.get("nonce").and_then(Value::as_str) == Some(state.nonce.as_str());
+    let matches = !state.nonce.is_empty()
+        && object.get("nonce").and_then(Value::as_str) == Some(state.nonce.as_str());
     if !matches {
         return json!({"ok": false, "reason": "nonce"});
     }
@@ -629,6 +632,47 @@ mod tests {
             (
                 "a nonce that is not a string",
                 "{\"v\":1,\"kind\":\"arm\",\"nonce\":123}\n".to_string(),
+            ),
+        ] {
+            let reply = exchange(Some(arm.as_bytes()), &state, &writer);
+            assert_eq!(
+                serde_json::from_str::<Json>(&reply).unwrap(),
+                json!({"ok": false, "reason": "nonce"}),
+                "case: {name}",
+            );
+        }
+
+        // The server stays unarmed, and nothing was emitted.
+        let status = b"{\"v\":1,\"kind\":\"status\"}\n";
+        let reply = exchange(Some(&status[..]), &state, &writer);
+        assert_eq!(
+            serde_json::from_str::<Json>(&reply).unwrap(),
+            json!({"ok": true, "armed": false, "pane": "%12"}),
+        );
+        let (stdout, flushes) = stdout_of(&recorder);
+        assert_eq!(stdout, "");
+        assert_eq!(flushes, 0);
+    }
+
+    // Row 5.1: the unarmed fallback can never be armed — its probe never
+    // went out, so its nonce is empty and every `arm` request is refused.
+
+    #[test]
+    fn no_request_arms_a_server_whose_probe_never_existed() {
+        let recorder = Recorder::default();
+        let writer = LineWriter::new(recorder.clone());
+        let state = EndpointState::new(own_uid(), "%12".to_string(), Probe::unarmed());
+        for (name, arm) in [
+            (
+                "the empty nonce",
+                "{\"v\":1,\"kind\":\"arm\",\"nonce\":\"\"}\n".to_string(),
+            ),
+            (
+                "a guessed nonce",
+                format!(
+                    "{{\"v\":1,\"kind\":\"arm\",\"nonce\":\"{}\"}}\n",
+                    "f".repeat(32)
+                ),
             ),
         ] {
             let reply = exchange(Some(arm.as_bytes()), &state, &writer);

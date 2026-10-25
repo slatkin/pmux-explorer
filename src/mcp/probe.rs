@@ -90,6 +90,25 @@ impl Probe {
         }
     }
 
+    /// A probe for a server that must run without one: the fallback when
+    /// [`Self::for_current_exe`] cannot read the running binary's path or
+    /// fresh entropy — the caller logs the reason and runs the server
+    /// unarmed. The nonce is empty, and the `arm` handler refuses an
+    /// empty probe nonce, so no request can arm the server; the repeat
+    /// gate is closed for the life of the process, so no probe event is
+    /// ever emitted.
+    pub fn unarmed() -> Self {
+        Self {
+            nonce: String::new(),
+            exe: String::new(),
+            repeat: Mutex::new(RepeatState {
+                last_emit_millis: None,
+                repeats: MAX_REPEATS,
+            }),
+            now: Box::new(real_now_millis),
+        }
+    }
+
     /// The nonce the probe carries and the `arm` request must match.
     pub fn nonce(&self) -> &str {
         &self.nonce
@@ -506,5 +525,20 @@ mod tests {
         assert_send_sync::<Probe>();
         let probe = probe_with_clock(Path::new("/usr/bin/pmux-explorer"), Arc::new(Mutex::new(0)));
         thread::spawn(move || drop(probe)).join().unwrap();
+    }
+
+    // The unarmed fallback: a probe that never emits and never arms.
+
+    #[test]
+    fn an_unarmed_probe_never_repeats_and_carries_no_nonce() {
+        let probe = Probe::unarmed();
+        assert_eq!(probe.nonce(), "");
+        let recorder = Recorder::default();
+        let writer = LineWriter::new(recorder.clone());
+
+        // The repeat gate is closed for the life of the process, however
+        // late a report arrives.
+        assert!(!probe.emit_repeat(&writer).unwrap());
+        assert_eq!(stdout_of(&recorder), "");
     }
 }

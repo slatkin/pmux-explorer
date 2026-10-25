@@ -19,6 +19,11 @@ use std::sync::{Arc, Mutex, MutexGuard};
 /// JSON-RPC error code for a request with an unknown method.
 pub const METHOD_NOT_FOUND: i64 = -32601;
 
+/// JSON-RPC error code for a line that is not a JSON-RPC message. The
+/// stdin loop answers every malformed line with it and a null `id`, since
+/// a malformed line carries no parsed id.
+pub const PARSE_ERROR: i64 = -32700;
+
 /// The channel notification method: the one event kind the server emits,
 /// for a report and for the arm probe alike.
 pub const CHANNEL_NOTIFICATION_METHOD: &str = "notifications/claude/channel";

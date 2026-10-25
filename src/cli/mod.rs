@@ -17,6 +17,12 @@ use crate::tmux;
 /// Run a CLI subcommand. Returns Some(exit_code) if a subcommand was matched,
 /// None if no subcommand was given (caller should launch TUI).
 pub fn run(args: &[String]) -> Option<i32> {
+    // `--mcp` is the MCP channel server mode: a flag, and a mode of the
+    // binary like the TUI — not a one-shot word subcommand (design
+    // decision D6). It serves stdio until stdin's EOF and exits 0.
+    if args.first().map(String::as_str) == Some("--mcp") {
+        return Some(mcp::run_server());
+    }
     let cmd = args.first().map(|s| s.as_str())?;
     let rest = &args[1..];
     let code = match cmd {
