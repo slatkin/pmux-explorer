@@ -22,12 +22,26 @@ const RUNTIME_SUBDIR: &str = "pmux-channel";
 /// The endpoint directory prefix under `/tmp`, followed by `-<uid>`.
 const TMP_SUBDIR_PREFIX: &str = "/tmp/pmux-channel-";
 
-/// The endpoint socket path for one pane, or `None` without tmux.
+/// The tmux environment one endpoint path is derived from.
 ///
-/// `tmux` is the `TMUX` value, `tmux_pane` the `TMUX_PANE` value, and
-/// `xdg_runtime_dir` the `XDG_RUNTIME_DIR` value; the values are arguments,
-/// not process env, so tests set no process env. `uid` is the current
-/// user's id, for the `/tmp` fallback directory.
+/// One value built once at the call site, instead of four positionals
+/// threaded through every caller: swapping two same-typed `Option<&str>`
+/// fields compiles and silently loses the endpoint, while a named field
+/// moves the mistake to a reviewable line. The values are arguments, not
+/// process env, so tests set no process env.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EndpointEnv<'a> {
+    /// The `TMUX` value.
+    pub tmux: Option<&'a str>,
+    /// The `TMUX_PANE` value.
+    pub tmux_pane: Option<&'a str>,
+    /// The `XDG_RUNTIME_DIR` value.
+    pub xdg_runtime_dir: Option<&'a str>,
+    /// The current user's id, for the `/tmp` fallback directory.
+    pub uid: u32,
+}
+
+/// The endpoint socket path for one pane, or `None` without tmux.
 ///
 /// The path is `<dir>/<h>-<n>.sock`: `<dir>` is `$XDG_RUNTIME_DIR/pmux-channel`,
 /// or `/tmp/pmux-channel-<uid>` when `XDG_RUNTIME_DIR` is unset or empty;
@@ -35,20 +49,15 @@ const TMP_SUBDIR_PREFIX: &str = "/tmp/pmux-channel-";
 /// path (the first comma field of `TMUX`); `<n>` is `TMUX_PANE` without its
 /// `%`. `None` means no endpoint: `TMUX` or `TMUX_PANE` missing or empty, a
 /// pane id that is not a number, or an empty tmux socket path.
-pub fn endpoint_path(
-    tmux: Option<&str>,
-    tmux_pane: Option<&str>,
-    xdg_runtime_dir: Option<&str>,
-    uid: u32,
-) -> Option<PathBuf> {
-    let socket = tmux?.split(',').next()?;
+pub fn endpoint_path(env: EndpointEnv<'_>) -> Option<PathBuf> {
+    let socket = env.tmux?.split(',').next()?;
     if socket.is_empty() {
         return None;
     }
-    let pane = pane_number(tmux_pane?)?;
-    let dir = match xdg_runtime_dir.filter(|dir| !dir.is_empty()) {
+    let pane = pane_number(env.tmux_pane?)?;
+    let dir = match env.xdg_runtime_dir.filter(|dir| !dir.is_empty()) {
         Some(runtime_dir) => PathBuf::from(runtime_dir).join(RUNTIME_SUBDIR),
-        None => PathBuf::from(format!("{TMP_SUBDIR_PREFIX}{uid}")),
+        None => PathBuf::from(format!("{TMP_SUBDIR_PREFIX}{}", env.uid)),
     };
     Some(dir.join(format!("{:016x}-{pane}.sock", fnv1a64(socket.as_bytes()))))
 }
@@ -82,16 +91,30 @@ mod tests {
     const VECTOR_RUNTIME_DIR: &str = "/run/user/1000";
     const VECTOR_FILE_NAME: &str = "79301cf9592f327a-12.sock";
 
+    /// The endpoint env the tests derive paths from: uid 1000, matching
+    /// the vector's `/tmp/tmux-1000` socket and `/run/user/1000` dir.
+    fn env<'a>(
+        tmux: Option<&'a str>,
+        tmux_pane: Option<&'a str>,
+        xdg_runtime_dir: Option<&'a str>,
+    ) -> EndpointEnv<'a> {
+        EndpointEnv {
+            tmux,
+            tmux_pane,
+            xdg_runtime_dir,
+            uid: 1000,
+        }
+    }
+
     // Row 2.1: the shared test vector.
 
     #[test]
     fn the_shared_test_vector_holds() {
-        let path = endpoint_path(
+        let path = endpoint_path(env(
             Some(VECTOR_SOCKET),
             Some(VECTOR_PANE),
             Some(VECTOR_RUNTIME_DIR),
-            1000,
-        );
+        ));
         assert_eq!(
             path.as_deref(),
             Some(
@@ -111,7 +134,7 @@ mod tests {
 
     #[test]
     fn an_unset_runtime_dir_falls_back_to_the_tmp_directory() {
-        let path = endpoint_path(Some(VECTOR_SOCKET), Some(VECTOR_PANE), None, 1000).unwrap();
+        let path = endpoint_path(env(Some(VECTOR_SOCKET), Some(VECTOR_PANE), None)).unwrap();
         assert_eq!(
             path.to_string_lossy(),
             "/tmp/pmux-channel-1000/79301cf9592f327a-12.sock"
@@ -120,7 +143,7 @@ mod tests {
 
     #[test]
     fn an_empty_runtime_dir_falls_back_to_the_tmp_directory() {
-        let path = endpoint_path(Some(VECTOR_SOCKET), Some(VECTOR_PANE), Some(""), 1000).unwrap();
+        let path = endpoint_path(env(Some(VECTOR_SOCKET), Some(VECTOR_PANE), Some(""))).unwrap();
         assert_eq!(
             path.to_string_lossy(),
             "/tmp/pmux-channel-1000/79301cf9592f327a-12.sock"
@@ -132,7 +155,7 @@ mod tests {
     #[test]
     fn a_missing_tmux_gives_no_path() {
         assert_eq!(
-            endpoint_path(None, Some(VECTOR_PANE), Some(VECTOR_RUNTIME_DIR), 1000),
+            endpoint_path(env(None, Some(VECTOR_PANE), Some(VECTOR_RUNTIME_DIR))),
             None
         );
     }
@@ -140,7 +163,7 @@ mod tests {
     #[test]
     fn an_empty_tmux_gives_no_path() {
         assert_eq!(
-            endpoint_path(Some(""), Some(VECTOR_PANE), Some(VECTOR_RUNTIME_DIR), 1000),
+            endpoint_path(env(Some(""), Some(VECTOR_PANE), Some(VECTOR_RUNTIME_DIR))),
             None
         );
     }
@@ -148,7 +171,7 @@ mod tests {
     #[test]
     fn a_missing_tmux_pane_gives_no_path() {
         assert_eq!(
-            endpoint_path(Some(VECTOR_SOCKET), None, Some(VECTOR_RUNTIME_DIR), 1000),
+            endpoint_path(env(Some(VECTOR_SOCKET), None, Some(VECTOR_RUNTIME_DIR))),
             None
         );
     }
@@ -156,12 +179,7 @@ mod tests {
     #[test]
     fn an_empty_tmux_pane_gives_no_path() {
         assert_eq!(
-            endpoint_path(
-                Some(VECTOR_SOCKET),
-                Some(""),
-                Some(VECTOR_RUNTIME_DIR),
-                1000
-            ),
+            endpoint_path(env(Some(VECTOR_SOCKET), Some(""), Some(VECTOR_RUNTIME_DIR))),
             None
         );
     }
@@ -169,50 +187,45 @@ mod tests {
     #[test]
     fn a_non_numeric_pane_id_gives_no_path() {
         assert_eq!(
-            endpoint_path(
+            endpoint_path(env(
                 Some(VECTOR_SOCKET),
                 Some("%x"),
-                Some(VECTOR_RUNTIME_DIR),
-                1000
-            ),
+                Some(VECTOR_RUNTIME_DIR)
+            )),
             None
         );
     }
 
     #[test]
     fn the_hash_uses_only_the_first_comma_field() {
-        let with_tail = endpoint_path(
+        let with_tail = endpoint_path(env(
             Some(VECTOR_SOCKET),
             Some(VECTOR_PANE),
             Some(VECTOR_RUNTIME_DIR),
-            1000,
-        )
+        ))
         .unwrap();
-        let without_tail = endpoint_path(
+        let without_tail = endpoint_path(env(
             Some("/tmp/tmux-1000/default"),
             Some(VECTOR_PANE),
             Some(VECTOR_RUNTIME_DIR),
-            1000,
-        )
+        ))
         .unwrap();
         assert_eq!(with_tail, without_tail);
     }
 
     #[test]
     fn two_tmux_servers_get_different_file_names() {
-        let first = endpoint_path(
+        let first = endpoint_path(env(
             Some("/tmp/tmux-1000/default,1,0"),
             Some(VECTOR_PANE),
             Some(VECTOR_RUNTIME_DIR),
-            1000,
-        )
+        ))
         .unwrap();
-        let second = endpoint_path(
+        let second = endpoint_path(env(
             Some("/tmp/tmux-1000/other,1,0"),
             Some(VECTOR_PANE),
             Some(VECTOR_RUNTIME_DIR),
-            1000,
-        )
+        ))
         .unwrap();
         assert_ne!(first, second);
     }

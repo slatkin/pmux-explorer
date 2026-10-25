@@ -94,9 +94,9 @@ impl Probe {
     /// [`Self::for_current_exe`] cannot read the running binary's path or
     /// fresh entropy — the caller logs the reason and runs the server
     /// unarmed. The nonce is empty, and the `arm` handler refuses an
-    /// empty probe nonce, so no request can arm the server; the repeat
-    /// gate is closed for the life of the process, so no probe event is
-    /// ever emitted.
+    /// empty probe nonce, so no request can arm the server; both emit
+    /// paths refuse an empty nonce too, so no probe event is ever
+    /// emitted — the guarantee does not depend on the caller's flag.
     pub fn unarmed() -> Self {
         Self {
             nonce: String::new(),
@@ -116,13 +116,22 @@ impl Probe {
 
     /// Emits the first probe through the shared writer, and stamps the
     /// clock the repeat period measures from — the first probe counts
-    /// against the period, not against the repeat cap.
+    /// against the period, not against the repeat cap. Returns whether
+    /// the probe went out.
+    ///
+    /// A probe with an empty nonce — the unarmed fallback
+    /// ([`Self::unarmed`]) — emits nothing and reports `false`: the
+    /// no-probe guarantee lives at this layer, not in the caller's flag.
     ///
     /// # Errors
     /// When the shared writer fails, or its lock is poisoned.
-    pub fn emit<W: io::Write>(&self, writer: &LineWriter<W>) -> io::Result<()> {
+    pub fn emit<W: io::Write>(&self, writer: &LineWriter<W>) -> io::Result<bool> {
+        if self.nonce.is_empty() {
+            return Ok(false);
+        }
         self.stamp((self.now)())?;
-        writer.write_json(&self.event())
+        writer.write_json(&self.event())?;
+        Ok(true)
     }
 
     /// Emits the first probe when `notification` is the trigger: the stdin
@@ -139,18 +148,22 @@ impl Probe {
         if notification.method != INITIALIZED {
             return Ok(false);
         }
-        self.emit(writer)?;
-        Ok(true)
+        self.emit(writer)
     }
 
     /// Emits a repeat probe when the repeat rules allow one: at most once
     /// per [`REPEAT_PERIOD`] and at most [`MAX_REPEATS`] times per
     /// process, both measured from the last probe of any kind. Returns
-    /// whether the probe went out.
+    /// whether the probe went out. A probe with an empty nonce — the
+    /// unarmed fallback — emits nothing and reports `false`, like
+    /// [`Self::emit`].
     ///
     /// # Errors
     /// When the shared writer fails, or its lock is poisoned.
     pub fn emit_repeat<W: io::Write>(&self, writer: &LineWriter<W>) -> io::Result<bool> {
+        if self.nonce.is_empty() {
+            return Ok(false);
+        }
         let allowed = {
             let mut repeat = self.lock_repeat()?;
             let now = (self.now)();
@@ -267,43 +280,15 @@ fn real_now_millis() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::{Recorder, probe_with_clock};
     use std::sync::Arc;
     use std::thread;
 
     const NONCE: &str = "00112233445566778899aabbccddeeff";
 
-    /// A stdout recorder the test inspects through clones of its shared
-    /// buffer, since the shared [`LineWriter`] keeps the writer private.
-    #[derive(Clone, Default)]
-    struct Recorder(Arc<Mutex<Vec<u8>>>);
-
-    impl io::Write for Recorder {
-        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-            self.0.lock().unwrap().extend_from_slice(buf);
-            Ok(buf.len())
-        }
-
-        fn flush(&mut self) -> io::Result<()> {
-            Ok(())
-        }
-    }
-
-    fn stdout_of(recorder: &Recorder) -> String {
-        String::from_utf8_lossy(&recorder.0.lock().unwrap()).to_string()
-    }
-
-    /// A probe with a fixed nonce and exe whose clock reads `cell`.
-    fn probe_with_clock(exe: &Path, cell: Arc<Mutex<u64>>) -> Probe {
-        Probe::new(
-            NONCE.to_string(),
-            exe,
-            Box::new(move || *cell.lock().unwrap()),
-        )
-    }
-
     /// The probe event the writer received, as JSON.
     fn probe_event(recorder: &Recorder) -> Value {
-        let stdout = stdout_of(recorder);
+        let stdout = recorder.stdout();
         assert_eq!(stdout.matches('\n').count(), 1, "one line: {stdout:?}");
         serde_json::from_str(stdout.trim_end()).unwrap()
     }
@@ -312,7 +297,11 @@ mod tests {
 
     #[test]
     fn initialized_emits_one_probe_with_a_fresh_nonce() {
-        let probe = probe_with_clock(Path::new("/usr/bin/pmux-explorer"), Arc::new(Mutex::new(0)));
+        let probe = probe_with_clock(
+            NONCE,
+            Path::new("/usr/bin/pmux-explorer"),
+            Arc::new(Mutex::new(0)),
+        );
         let recorder = Recorder::default();
         let writer = LineWriter::new(recorder.clone());
 
@@ -341,7 +330,11 @@ mod tests {
 
     #[test]
     fn another_notification_emits_nothing() {
-        let probe = probe_with_clock(Path::new("/usr/bin/pmux-explorer"), Arc::new(Mutex::new(0)));
+        let probe = probe_with_clock(
+            NONCE,
+            Path::new("/usr/bin/pmux-explorer"),
+            Arc::new(Mutex::new(0)),
+        );
         let recorder = Recorder::default();
         let writer = LineWriter::new(recorder.clone());
 
@@ -356,14 +349,18 @@ mod tests {
             .unwrap();
 
         assert!(!emitted);
-        assert_eq!(stdout_of(&recorder), "");
+        assert_eq!(recorder.stdout(), "");
     }
 
     // Row 4.1: the "Probe names the running binary" scenario.
 
     #[test]
     fn the_probe_names_the_shell_quoted_running_binary() {
-        let probe = probe_with_clock(Path::new("/opt/px/pmux-explorer"), Arc::new(Mutex::new(0)));
+        let probe = probe_with_clock(
+            NONCE,
+            Path::new("/opt/px/pmux-explorer"),
+            Arc::new(Mutex::new(0)),
+        );
         assert!(
             probe.content().contains(
                 format!("'/opt/px/pmux-explorer' channel-ready --nonce {NONCE}").as_str()
@@ -404,7 +401,11 @@ mod tests {
 
     #[test]
     fn the_probe_reports_its_nonce_to_the_arm_state() {
-        let probe = probe_with_clock(Path::new("/usr/bin/pmux-explorer"), Arc::new(Mutex::new(0)));
+        let probe = probe_with_clock(
+            NONCE,
+            Path::new("/usr/bin/pmux-explorer"),
+            Arc::new(Mutex::new(0)),
+        );
         assert_eq!(probe.nonce(), NONCE);
     }
 
@@ -414,11 +415,11 @@ mod tests {
     #[test]
     fn a_repeat_within_the_period_is_refused_and_after_it_is_allowed() {
         let cell = Arc::new(Mutex::new(0u64));
-        let probe = probe_with_clock(Path::new("/usr/bin/pmux-explorer"), cell.clone());
+        let probe = probe_with_clock(NONCE, Path::new("/usr/bin/pmux-explorer"), cell.clone());
         let recorder = Recorder::default();
         let writer = LineWriter::new(recorder.clone());
 
-        probe.emit(&writer).unwrap();
+        assert!(probe.emit(&writer).unwrap());
         // 10 seconds after the first probe: no repeat.
         *cell.lock().unwrap() = 10_000;
         assert!(!probe.emit_repeat(&writer).unwrap());
@@ -427,7 +428,7 @@ mod tests {
         assert!(probe.emit_repeat(&writer).unwrap());
 
         // Two probe lines on stdout, the repeat carrying the same nonce.
-        let stdout = stdout_of(&recorder);
+        let stdout = recorder.stdout();
         assert_eq!(stdout.matches('\n').count(), 2);
         let last = stdout.lines().last().unwrap();
         let repeated: Value = serde_json::from_str(last).unwrap();
@@ -440,12 +441,12 @@ mod tests {
     #[test]
     fn the_lifetime_cap_stops_the_repeats_at_three() {
         let cell = Arc::new(Mutex::new(0u64));
-        let probe = probe_with_clock(Path::new("/usr/bin/pmux-explorer"), cell.clone());
+        let probe = probe_with_clock(NONCE, Path::new("/usr/bin/pmux-explorer"), cell.clone());
         let recorder = Recorder::default();
         let writer = LineWriter::new(recorder.clone());
 
         // The first probe, then three repeats spaced beyond the period.
-        probe.emit(&writer).unwrap();
+        assert!(probe.emit(&writer).unwrap());
         for minute in 1..=MAX_REPEATS {
             *cell.lock().unwrap() = u64::from(minute) * 70_000;
             assert!(probe.emit_repeat(&writer).unwrap(), "repeat {minute}");
@@ -455,7 +456,7 @@ mod tests {
         assert!(!probe.emit_repeat(&writer).unwrap());
 
         // Four probe lines in total: the first probe and 3 repeats.
-        let stdout = stdout_of(&recorder);
+        let stdout = recorder.stdout();
         assert_eq!(stdout.matches('\n').count(), 4);
     }
 
@@ -473,7 +474,7 @@ mod tests {
             }
         }
         let cell = Arc::new(Mutex::new(0u64));
-        let probe = probe_with_clock(Path::new("/usr/bin/pmux-explorer"), cell.clone());
+        let probe = probe_with_clock(NONCE, Path::new("/usr/bin/pmux-explorer"), cell.clone());
         let writer = LineWriter::new(Failing);
 
         assert!(probe.emit_repeat(&writer).is_err());
@@ -523,7 +524,11 @@ mod tests {
     fn the_probe_moves_between_threads() {
         fn assert_send_sync<T: Send + Sync>() {}
         assert_send_sync::<Probe>();
-        let probe = probe_with_clock(Path::new("/usr/bin/pmux-explorer"), Arc::new(Mutex::new(0)));
+        let probe = probe_with_clock(
+            NONCE,
+            Path::new("/usr/bin/pmux-explorer"),
+            Arc::new(Mutex::new(0)),
+        );
         thread::spawn(move || drop(probe)).join().unwrap();
     }
 
@@ -539,6 +544,21 @@ mod tests {
         // The repeat gate is closed for the life of the process, however
         // late a report arrives.
         assert!(!probe.emit_repeat(&writer).unwrap());
-        assert_eq!(stdout_of(&recorder), "");
+        // The emit layer itself refuses an empty nonce: even a caller
+        // that ignores the unarmed flag cannot send an unrunnable
+        // `channel-ready --nonce <empty>` command.
+        assert!(!probe.emit(&writer).unwrap());
+        assert!(
+            !probe
+                .emit_after_notification(
+                    &RpcNotification {
+                        method: INITIALIZED.to_string(),
+                        params: Value::Null,
+                    },
+                    &writer,
+                )
+                .unwrap()
+        );
+        assert_eq!(recorder.stdout(), "");
     }
 }

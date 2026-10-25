@@ -114,12 +114,15 @@ fn cmd_channel_ready(args: &[String]) -> i32 {
     let tmux = std::env::var("TMUX").ok();
     let tmux_pane = std::env::var("TMUX_PANE").ok();
     let xdg_runtime_dir = std::env::var("XDG_RUNTIME_DIR").ok();
+    let env = mcp::EndpointEnv {
+        tmux: tmux.as_deref(),
+        tmux_pane: tmux_pane.as_deref(),
+        xdg_runtime_dir: xdg_runtime_dir.as_deref(),
+        uid: mcp::current_uid(),
+    };
     let (stdout, stderr, code) = run_channel_ready(
         nonce_argument(args).as_deref(),
-        tmux.as_deref(),
-        tmux_pane.as_deref(),
-        xdg_runtime_dir.as_deref(),
-        current_uid(),
+        env,
         mcp::DEFAULT_READ_TIMEOUT,
     );
     if let Some(line) = stdout {
@@ -153,10 +156,7 @@ fn nonce_argument(args: &[String]) -> Option<String> {
 /// socket in a temp dir without touching the process env.
 fn run_channel_ready(
     nonce: Option<&str>,
-    tmux: Option<&str>,
-    tmux_pane: Option<&str>,
-    xdg_runtime_dir: Option<&str>,
-    uid: u32,
+    env: mcp::EndpointEnv<'_>,
     answer_timeout: Duration,
 ) -> (Option<String>, Option<String>, i32) {
     let Some(nonce) = nonce else {
@@ -166,7 +166,7 @@ fn run_channel_ready(
             1,
         );
     };
-    let Some(path) = mcp::endpoint_path(tmux, tmux_pane, xdg_runtime_dir, uid) else {
+    let Some(path) = mcp::endpoint_path(env) else {
         return (
             None,
             Some(
@@ -178,11 +178,32 @@ fn run_channel_ready(
     };
     match mcp::send_arm(&path, nonce, answer_timeout) {
         Ok(reply) => {
-            let armed = serde_json::from_str::<serde_json::Value>(&reply)
+            let parsed = serde_json::from_str::<serde_json::Value>(&reply)
                 .ok()
-                .and_then(|value| value.get("armed").and_then(serde_json::Value::as_bool))
+                .unwrap_or(serde_json::Value::Null);
+            let armed = parsed
+                .get("armed")
+                .and_then(serde_json::Value::as_bool)
                 .unwrap_or(false);
-            (Some(reply), None, if armed { 0 } else { 1 })
+            if armed {
+                (Some(reply), None, 0)
+            } else {
+                // Every other failure path writes stderr, and the nonce
+                // reply is one: exit 1 with the reason, stdout reply
+                // still printed.
+                let reason = parsed
+                    .get("reason")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or("unknown reply");
+                (
+                    Some(reply),
+                    Some(format!(
+                        "channel-ready: the endpoint at {} did not arm (reason: {reason})",
+                        path.display(),
+                    )),
+                    1,
+                )
+            }
         }
         Err(ArmError::Unreachable(error)) => (
             None,
@@ -203,13 +224,7 @@ fn run_channel_ready(
     }
 }
 
-/// The current user's id, for the endpoint path's `/tmp` fallback.
-fn current_uid() -> u32 {
-    // SAFETY: `geteuid` has no failure mode and no preconditions.
-    unsafe { libc::geteuid() }
-}
-
-// ─── set-status subcommand ──────────────────────────────────────────────────
+// ─── set-status subcommand ──────────────────────────────────────────────────────
 
 fn cmd_set_status(args: &[String]) -> i32 {
     let status = match args.first() {
@@ -427,9 +442,14 @@ mod tests {
     const TEST_TMUX: &str = "/tmp/tmux-1000/default,1,0";
     const TEST_PANE: &str = "%12";
 
-    fn own_uid() -> u32 {
-        // SAFETY: `geteuid` has no failure mode and no preconditions.
-        unsafe { libc::geteuid() }
+    /// The endpoint env the served endpoint and the client share.
+    fn env_of<'a>(served: &'a (String, String, String)) -> mcp::EndpointEnv<'a> {
+        mcp::EndpointEnv {
+            tmux: Some(&served.0),
+            tmux_pane: Some(&served.1),
+            xdg_runtime_dir: Some(&served.2),
+            uid: crate::test_support::own_uid(),
+        }
     }
 
     /// Serves an unarmed endpoint state — the probe nonce, a fixed clock —
@@ -437,22 +457,25 @@ mod tests {
     /// the env triple and the shared state.
     fn served_endpoint(dir: &std::path::Path) -> ((String, String, String), Arc<EndpointState>) {
         let xdg = dir.to_string_lossy().to_string();
-        let path =
-            crate::mcp::endpoint_path(Some(TEST_TMUX), Some(TEST_PANE), Some(&xdg), own_uid())
-                .unwrap();
-        let listener = crate::mcp::bind(&path, own_uid()).unwrap();
-        let probe = crate::mcp::Probe::new(
-            CHANNEL_NONCE.to_string(),
+        let uid = crate::test_support::own_uid();
+        let path = crate::mcp::endpoint_path(mcp::EndpointEnv {
+            tmux: Some(TEST_TMUX),
+            tmux_pane: Some(TEST_PANE),
+            xdg_runtime_dir: Some(&xdg),
+            uid,
+        })
+        .unwrap();
+        let listener = crate::mcp::bind(&path, uid).unwrap();
+        let probe = crate::test_support::probe_with_clock(
+            CHANNEL_NONCE,
             std::path::Path::new("/usr/bin/pmux-explorer"),
-            Box::new(|| 0),
+            Arc::new(std::sync::Mutex::new(0)),
         );
-        let state = Arc::new(EndpointState::new(own_uid(), TEST_PANE.to_string(), probe));
+        let state = Arc::new(EndpointState::new(uid, TEST_PANE.to_string(), probe));
         // The loop runs until the listener fails, which never happens in
         // this test, so the thread is left detached after the exchange.
-        let dir = std::sync::Mutex::new(Some(dir.to_path_buf()));
         let served = Arc::clone(&state);
         thread::spawn(move || {
-            let _keep_dir_alive = dir;
             let _ = crate::mcp::accept_loop(
                 listener,
                 served,
@@ -461,17 +484,6 @@ mod tests {
             );
         });
         ((TEST_TMUX.to_string(), TEST_PANE.to_string(), xdg), state)
-    }
-
-    /// The env triple `run_channel_ready` takes, from the helper's tuple.
-    fn env_of(
-        served: &(String, String, String),
-    ) -> (Option<String>, Option<String>, Option<String>) {
-        (
-            Some(served.0.clone()),
-            Some(served.1.clone()),
-            Some(served.2.clone()),
-        )
     }
 
     // Row 4.2: the "Channel-ready command" scenarios, against a socket in
@@ -483,10 +495,7 @@ mod tests {
         let (served, _) = served_endpoint(tmp.path());
         let (stdout, stderr, code) = run_channel_ready(
             Some(CHANNEL_NONCE),
-            Some(served.0.as_str()),
-            Some(served.1.as_str()),
-            Some(served.2.as_str()),
-            own_uid(),
+            env_of(&served),
             mcp::DEFAULT_READ_TIMEOUT,
         );
         assert_eq!(code, 0);
@@ -503,10 +512,7 @@ mod tests {
         let (served, _) = served_endpoint(tmp.path());
         let (stdout, stderr, code) = run_channel_ready(
             Some("f".repeat(32).as_str()),
-            Some(served.0.as_str()),
-            Some(served.1.as_str()),
-            Some(served.2.as_str()),
-            own_uid(),
+            env_of(&served),
             mcp::DEFAULT_READ_TIMEOUT,
         );
         assert_eq!(code, 1);
@@ -514,36 +520,38 @@ mod tests {
             serde_json::from_str::<serde_json::Value>(&stdout.unwrap()).unwrap(),
             json!({"ok": false, "reason": "nonce"}),
         );
-        assert_eq!(stderr, None);
+        // The nonce reply is a failure path, so stderr carries the reason
+        // alongside the stdout reply print.
+        let message = stderr.unwrap();
+        assert!(message.contains("did not arm"), "message: {message}");
+        assert!(message.contains("nonce"), "message: {message}");
+        assert!(message.contains(&served.2), "message: {message}");
     }
 
     #[test]
     fn a_missing_endpoint_exits_one_naming_the_path() {
         let tmp = tempfile::tempdir().unwrap();
         // The env triple names a pane whose socket was never created.
-        let env = (
+        let served = (
             TEST_TMUX.to_string(),
             TEST_PANE.to_string(),
             tmp.path().to_string_lossy().to_string(),
         );
         let (stdout, stderr, code) = run_channel_ready(
             Some(CHANNEL_NONCE),
-            Some(env.0.as_str()),
-            Some(env.1.as_str()),
-            Some(env.2.as_str()),
-            own_uid(),
+            env_of(&served),
             mcp::DEFAULT_READ_TIMEOUT,
         );
         assert_eq!(code, 1);
         assert_eq!(stdout, None);
         let message = stderr.unwrap();
         assert!(message.contains("no endpoint"), "message: {message}");
-        let expected = crate::mcp::endpoint_path(
-            Some(TEST_TMUX),
-            Some(TEST_PANE),
-            Some(tmp.path().to_string_lossy().as_ref()),
-            own_uid(),
-        )
+        let expected = crate::mcp::endpoint_path(mcp::EndpointEnv {
+            tmux: Some(TEST_TMUX),
+            tmux_pane: Some(TEST_PANE),
+            xdg_runtime_dir: Some(tmp.path().to_string_lossy().as_ref()),
+            uid: crate::test_support::own_uid(),
+        })
         .unwrap();
         assert!(message.contains(&expected.to_string_lossy().to_string()));
     }
@@ -552,15 +560,8 @@ mod tests {
     fn a_missing_nonce_exits_one_names_the_flag_and_sends_no_request() {
         let tmp = tempfile::tempdir().unwrap();
         let (served, state) = served_endpoint(tmp.path());
-        let env = env_of(&served);
-        let (stdout, stderr, code) = run_channel_ready(
-            None,
-            env.0.as_deref(),
-            env.1.as_deref(),
-            env.2.as_deref(),
-            own_uid(),
-            mcp::DEFAULT_READ_TIMEOUT,
-        );
+        let (stdout, stderr, code) =
+            run_channel_ready(None, env_of(&served), mcp::DEFAULT_READ_TIMEOUT);
         assert_eq!(code, 1);
         assert_eq!(stdout, None);
         let message = stderr.unwrap();
@@ -574,24 +575,27 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         // A raw listener that accepts and answers nothing, so the client's
         // short answer window ends the wait instead of the real 2 seconds.
-        let path = crate::mcp::endpoint_path(
-            Some(TEST_TMUX),
-            Some(TEST_PANE),
-            Some(tmp.path().to_string_lossy().as_ref()),
-            own_uid(),
-        )
+        let xdg = tmp.path().to_string_lossy().to_string();
+        let path = crate::mcp::endpoint_path(mcp::EndpointEnv {
+            tmux: Some(TEST_TMUX),
+            tmux_pane: Some(TEST_PANE),
+            xdg_runtime_dir: Some(&xdg),
+            uid: crate::test_support::own_uid(),
+        })
         .unwrap();
-        let listener = crate::mcp::bind(&path, own_uid()).unwrap();
+        let listener = crate::mcp::bind(&path, crate::test_support::own_uid()).unwrap();
         thread::spawn(move || {
             let _ = listener.accept();
             thread::sleep(Duration::from_secs(2));
         });
         let (stdout, stderr, code) = run_channel_ready(
             Some(CHANNEL_NONCE),
-            Some(TEST_TMUX),
-            Some(TEST_PANE),
-            Some(tmp.path().to_string_lossy().as_ref()),
-            own_uid(),
+            mcp::EndpointEnv {
+                tmux: Some(TEST_TMUX),
+                tmux_pane: Some(TEST_PANE),
+                xdg_runtime_dir: Some(&xdg),
+                uid: crate::test_support::own_uid(),
+            },
             Duration::from_millis(150),
         );
         assert_eq!(code, 1);

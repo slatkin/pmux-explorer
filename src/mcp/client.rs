@@ -63,10 +63,7 @@ mod tests {
 
     const NONCE: &str = "00112233445566778899aabbccddeeff";
 
-    fn own_uid() -> u32 {
-        // SAFETY: `geteuid` has no failure mode and no preconditions.
-        unsafe { libc::geteuid() }
-    }
+    use crate::test_support::own_uid;
 
     /// Serves an unarmed endpoint state at a fresh socket path, returning
     /// the path. The accept loop runs detached with the request timeout

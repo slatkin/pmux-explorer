@@ -129,14 +129,8 @@ fn bind_socket(path: &Path) -> Result<UnixListener, BindError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::own_uid;
     use tempfile::tempdir;
-
-    /// The uid that owns everything the test user creates, for the
-    /// owner check; tests inject a different one to force a refusal.
-    fn own_uid() -> u32 {
-        // SAFETY: `geteuid` has no failure mode and no preconditions.
-        unsafe { libc::geteuid() }
-    }
 
     fn endpoint_in(dir: &Path) -> PathBuf {
         dir.join("79301cf9592f327a-12.sock")

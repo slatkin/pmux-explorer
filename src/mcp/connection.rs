@@ -27,7 +27,7 @@ use std::io::{self, Read, Write};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use super::probe::Probe;
 use super::rpc::{CHANNEL_NOTIFICATION_METHOD, LineWriter};
@@ -53,27 +53,25 @@ pub struct EndpointState {
     /// Whether the session answered the arm request with the probe's
     /// nonce; an unarmed server emits no report events.
     pub armed: AtomicBool,
-    /// The nonce the `arm` request must carry — the probe's nonce, fixed
-    /// for the life of the process.
-    pub nonce: String,
     /// The uid a connection's peer must have — the current user's id in
     /// production, an injected value in tests.
     pub uid: u32,
     /// The pane id (`TMUX_PANE`) the `status` reply reports.
     pub pane: String,
-    /// The probe the unarmed reports may repeat.
+    /// The probe the unarmed reports may repeat; its nonce is the one
+    /// the `arm` request must carry.
     pub probe: Probe,
 }
 
 impl EndpointState {
     /// The state one endpoint socket serves: unarmed until the `arm`
     /// request with the probe's nonce arrives, and holding the probe the
-    /// unarmed reports may repeat. The nonce is the probe's, so the arm
-    /// comparison and the probe event can never drift apart.
+    /// unarmed reports may repeat. The arm comparison reads the probe's
+    /// nonce directly, so the arm comparison and the probe event can
+    /// never drift apart.
     pub fn new(uid: u32, pane: String, probe: Probe) -> Self {
         Self {
             armed: AtomicBool::new(false),
-            nonce: probe.nonce().to_string(),
             uid,
             pane,
             probe,
@@ -115,8 +113,11 @@ pub fn accept_loop<W: io::Write>(
 /// A connection whose peer uid differs from `state.uid`, or whose uid
 /// cannot be read, is closed with no reply and nothing is emitted. A
 /// request line that is oversized, late, or unusable gets the `invalid`
-/// reply. The reply is best-effort: a peer that vanished before the reply
-/// is not an error, and no state changes on a failed reply.
+/// reply. The read deadline is per connection: `read_timeout` bounds the
+/// whole line, not each byte, so a peer dribbling one byte per interval
+/// under the timeout still hits the deadline. The reply is best-effort: a
+/// peer that vanished before the reply is not an error, and no state
+/// changes on a failed reply.
 pub fn handle_connection<W: io::Write>(
     stream: &mut UnixStream,
     state: &EndpointState,
@@ -126,10 +127,8 @@ pub fn handle_connection<W: io::Write>(
     if peer_uid(stream) != Some(state.uid) {
         return;
     }
-    if stream.set_read_timeout(Some(read_timeout)).is_err() {
-        return;
-    }
-    let reply = match read_request_line(stream) {
+    let deadline = Instant::now() + read_timeout;
+    let reply = match read_request_line(stream, deadline) {
         Some(line) => socket_request_reply(&line, state, writer),
         None => invalid_reply(),
     };
@@ -176,16 +175,27 @@ fn peer_uid(stream: &UnixStream) -> Option<u32> {
     (result == 0).then_some(uid)
 }
 
-/// Reads the one request line, up to [`MAX_REQUEST_LINE_BYTES`] bytes.
+/// Reads the one request line, up to [`MAX_REQUEST_LINE_BYTES`] bytes,
+/// under the per-connection `deadline`.
 ///
 /// `None` means no usable line: a line over the limit, a line that does
-/// not arrive within the stream's read timeout, a connection reset, or a
-/// connection closed with nothing sent. A line is complete at `\n`, or at
-/// EOF when at least one byte arrived.
-fn read_request_line(stream: &mut UnixStream) -> Option<String> {
+/// not arrive within the deadline, a connection reset, or a connection
+/// closed with nothing sent. Each read is bounded by the time remaining
+/// to the deadline — not by a fresh timeout — so a peer that dribbles one
+/// byte per interval under the timeout cannot hold the connection open
+/// past the deadline and block the connections behind it. A line is
+/// complete at `\n`, or at EOF when at least one byte arrived.
+fn read_request_line(stream: &mut UnixStream, deadline: Instant) -> Option<String> {
     let mut line: Vec<u8> = Vec::new();
     let mut byte = [0u8];
     loop {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            return None;
+        }
+        if stream.set_read_timeout(Some(remaining)).is_err() {
+            return None;
+        }
         match stream.read(&mut byte) {
             Ok(0) => {
                 return (!line.is_empty()).then(|| String::from_utf8_lossy(&line).into_owned());
@@ -269,8 +279,8 @@ fn report_reply<W: io::Write>(
 /// ([`super::probe::Probe::unarmed`]): no probe ever went out, so no
 /// request can arm the server. The handler never emits anything to Claude.
 fn arm_reply(state: &EndpointState, object: &Map<String, Value>) -> Value {
-    let matches = !state.nonce.is_empty()
-        && object.get("nonce").and_then(Value::as_str) == Some(state.nonce.as_str());
+    let nonce = state.probe.nonce();
+    let matches = !nonce.is_empty() && object.get("nonce").and_then(Value::as_str) == Some(nonce);
     if !matches {
         return json!({"ok": false, "reason": "nonce"});
     }
@@ -374,6 +384,7 @@ mod tests {
     use super::*;
     use crate::mcp::bind;
     use crate::mcp::probe::MAX_REPEATS;
+    use crate::test_support::{Recorder, own_uid, probe_with_clock};
     use serde_json::Value as Json;
     use std::path::Path;
     use std::sync::Mutex;
@@ -389,26 +400,15 @@ mod tests {
     /// The probe nonce the shared test state carries.
     const NONCE: &str = "00112233445566778899aabbccddeeff";
 
-    fn own_uid() -> u32 {
-        // SAFETY: `geteuid` has no failure mode and no preconditions.
-        unsafe { libc::geteuid() }
-    }
-
-    /// A probe with a fixed nonce and exe whose clock reads `cell`, so a
-    /// test drives the repeat period and cap by moving `cell`.
-    fn probe_with_clock(cell: Arc<Mutex<u64>>) -> Probe {
-        Probe::new(
-            NONCE.to_string(),
-            Path::new("/usr/bin/pmux-explorer"),
-            Box::new(move || *cell.lock().unwrap()),
-        )
-    }
-
     fn state(armed: bool, uid: u32, pane: &str) -> EndpointState {
         let state = EndpointState::new(
             uid,
             pane.to_string(),
-            probe_with_clock(Arc::new(Mutex::new(0))),
+            probe_with_clock(
+                NONCE,
+                Path::new("/usr/bin/pmux-explorer"),
+                Arc::new(Mutex::new(0)),
+            ),
         );
         state.armed.store(armed, Ordering::Relaxed);
         state
@@ -455,31 +455,7 @@ mod tests {
 
     /// The stdout the recorder saw, as one string, and the flush count.
     fn stdout_of(recorder: &Recorder) -> (String, usize) {
-        (
-            String::from_utf8_lossy(&recorder.buf.lock().unwrap()).to_string(),
-            *recorder.flushes.lock().unwrap(),
-        )
-    }
-
-    /// A stdout recorder whose state the test inspects through clones of
-    /// its shared buffers, since the shared [`LineWriter`] keeps the
-    /// writer itself private.
-    #[derive(Clone, Default)]
-    struct Recorder {
-        buf: Arc<Mutex<Vec<u8>>>,
-        flushes: Arc<Mutex<usize>>,
-    }
-
-    impl io::Write for Recorder {
-        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-            self.buf.lock().unwrap().extend_from_slice(buf);
-            Ok(buf.len())
-        }
-
-        fn flush(&mut self) -> io::Result<()> {
-            *self.flushes.lock().unwrap() += 1;
-            Ok(())
-        }
+        (recorder.stdout(), recorder.flushes())
     }
 
     struct Failing;
@@ -575,6 +551,45 @@ mod tests {
         client.read_to_string(&mut reply).unwrap();
         let reply: Json = serde_json::from_str(&reply).unwrap();
         assert_eq!(reply, json!({"ok": true, "armed": true, "pane": "%12"}),);
+    }
+
+    // Row 3.2: the read deadline is per connection, not per byte.
+
+    #[test]
+    fn a_dribbled_line_cannot_outlive_the_deadline() {
+        // One byte every 30 ms — each read well inside the 100 ms
+        // timeout, the whole line far past it. A per-byte read timeout
+        // would keep this connection alive until the line completed and
+        // block every later connection behind it; the per-connection
+        // deadline ends it with the `invalid` reply instead.
+        let tmp = tempdir().unwrap();
+        let path = tmp.path().join("79301cf9592f327a-12.sock");
+        let listener = bind(&path, own_uid()).unwrap();
+        let state = Arc::new(state(true, own_uid(), "%12"));
+        let recorder = Recorder::default();
+        let writer = LineWriter::new(recorder.clone());
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            handle_connection(&mut stream, &state, &writer, TEST_READ_TIMEOUT);
+        });
+
+        let mut client = UnixStream::connect(&path).unwrap();
+        let request = b"{\"v\":1,\"kind\":\"status\"}\n";
+        for byte in request {
+            // Once the deadline trips, the server closes and the remaining
+            // dribbled writes fail with EPIPE — expected, not an error.
+            if client.write_all(&[*byte]).is_err() {
+                break;
+            }
+            thread::sleep(Duration::from_millis(30));
+        }
+        let mut reply = String::new();
+        client.read_to_string(&mut reply).unwrap();
+        server.join().unwrap();
+
+        assert_eq!(reply, "{\"ok\":false,\"reason\":\"invalid\"}\n");
+        // The dribbled request was never answered as a request.
+        assert_eq!(stdout_of(&recorder), (String::new(), 0));
     }
 
     // Row 4.1: the "Arm request" scenarios.
@@ -734,14 +749,14 @@ mod tests {
         let state = state(false, own_uid(), "%12");
         // Rebuild the state's probe with the movable clock.
         let state = EndpointState {
-            probe: probe_with_clock(cell.clone()),
+            probe: probe_with_clock(NONCE, Path::new("/usr/bin/pmux-explorer"), cell.clone()),
             ..state
         };
         let recorder = Recorder::default();
         let writer = LineWriter::new(recorder.clone());
 
         // The first probe at t=0; the report arrives 90 seconds later.
-        state.probe.emit(&writer).unwrap();
+        assert!(state.probe.emit(&writer).unwrap());
         *cell.lock().unwrap() = 90_000;
         let reply = socket_request_reply(&valid_report_line(), &state, &writer);
         assert_eq!(reply, json!({"ok": false, "reason": "unarmed"}));
@@ -762,7 +777,7 @@ mod tests {
         let cell = Arc::new(Mutex::new(0u64));
         let state = state(false, own_uid(), "%12");
         let state = EndpointState {
-            probe: probe_with_clock(cell.clone()),
+            probe: probe_with_clock(NONCE, Path::new("/usr/bin/pmux-explorer"), cell.clone()),
             ..state
         };
         let recorder = Recorder::default();
@@ -770,7 +785,7 @@ mod tests {
 
         // The first probe long ago, then two reports 10 seconds apart:
         // the first repeats, the second falls inside the fresh period.
-        state.probe.emit(&writer).unwrap();
+        assert!(state.probe.emit(&writer).unwrap());
         *cell.lock().unwrap() = 90_000;
         let _ = socket_request_reply(&valid_report_line(), &state, &writer);
         *cell.lock().unwrap() = 100_000;
@@ -787,14 +802,14 @@ mod tests {
         let cell = Arc::new(Mutex::new(0u64));
         let state = state(false, own_uid(), "%12");
         let state = EndpointState {
-            probe: probe_with_clock(cell.clone()),
+            probe: probe_with_clock(NONCE, Path::new("/usr/bin/pmux-explorer"), cell.clone()),
             ..state
         };
         let recorder = Recorder::default();
         let writer = LineWriter::new(recorder.clone());
 
         // The first probe, then the three repeats the cap allows.
-        state.probe.emit(&writer).unwrap();
+        assert!(state.probe.emit(&writer).unwrap());
         for minute in 1..=MAX_REPEATS {
             *cell.lock().unwrap() = u64::from(minute) * 70_000;
             let reply = socket_request_reply(&valid_report_line(), &state, &writer);
@@ -881,8 +896,11 @@ mod tests {
     fn an_unarmed_report_within_the_repeat_period_emits_nothing() {
         let cell = Arc::new(Mutex::new(0u64));
         let state = {
-            let state =
-                EndpointState::new(own_uid(), "%12".to_string(), probe_with_clock(cell.clone()));
+            let state = EndpointState::new(
+                own_uid(),
+                "%12".to_string(),
+                probe_with_clock(NONCE, Path::new("/usr/bin/pmux-explorer"), cell.clone()),
+            );
             state.armed.store(false, Ordering::Relaxed);
             state
         };
@@ -892,7 +910,7 @@ mod tests {
         // The first probe goes out at t=0 and stamps the clock; a report
         // 10 seconds later is inside the repeat period, so it repeats
         // nothing and still replies unarmed.
-        state.probe.emit(&writer).unwrap();
+        assert!(state.probe.emit(&writer).unwrap());
         *cell.lock().unwrap() = 10_000;
         let text = format!("pmux report {REPORT_ID}. the report is at /tmp/x.md:12");
         let request = report_json(REPORT_ID, &text, &[]);

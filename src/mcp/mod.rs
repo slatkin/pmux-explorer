@@ -16,9 +16,9 @@
 //! owns the arm probe and its repeat gate (D3); [`client`] sends the
 //! `channel-ready` arm request to an endpoint.
 //!
-//! The visibility echo:`--mcp` is a binary mode, so the module surface is
-//! crate-only and the submodules are private — their APIs re-export here,
-//! so items live behind one path.
+//! `--mcp` is a binary mode, so the module surface is crate-only and the
+//! submodules are private — their APIs re-export here, so items live
+//! behind one path.
 
 use serde_json::Value;
 use std::io::{self, BufRead, BufReader};
@@ -36,8 +36,8 @@ mod rpc;
 pub use client::{ArmError, send_arm};
 pub use connection::{DEFAULT_READ_TIMEOUT, EndpointState, accept_loop};
 pub use endpoint::{BindError, bind};
-pub use path::endpoint_path;
-pub use probe::{INITIALIZED, MAX_REPEATS, Probe, REPEAT_PERIOD};
+pub use path::{EndpointEnv, endpoint_path};
+pub use probe::Probe;
 
 pub use rpc::{
     Incoming, LineWriter, METHOD_NOT_FOUND, PARSE_ERROR, RpcNotification, RpcRequest, error_reply,
@@ -59,7 +59,15 @@ const LOG_PREFIX: &str = "pmux-explorer --mcp:";
 pub fn run_server() -> i32 {
     let writer = LineWriter::new(io::stdout());
     let uid = current_uid();
+    let tmux = std::env::var("TMUX").ok();
     let tmux_pane = std::env::var("TMUX_PANE").ok();
+    let xdg_runtime_dir = std::env::var("XDG_RUNTIME_DIR").ok();
+    let env = EndpointEnv {
+        tmux: tmux.as_deref(),
+        tmux_pane: tmux_pane.as_deref(),
+        xdg_runtime_dir: xdg_runtime_dir.as_deref(),
+        uid,
+    };
 
     let (probe, probe_fired) = match Probe::for_current_exe() {
         Ok(probe) => (probe, false),
@@ -75,15 +83,8 @@ pub fn run_server() -> i32 {
     ));
 
     // The endpoint: the socket to bind, or the reason there is none.
-    let tmux = std::env::var("TMUX").ok();
-    let xdg_runtime_dir = std::env::var("XDG_RUNTIME_DIR").ok();
     let mut owned_socket: Option<PathBuf> = None;
-    match endpoint_path(
-        tmux.as_deref(),
-        tmux_pane.as_deref(),
-        xdg_runtime_dir.as_deref(),
-        uid,
-    ) {
+    match endpoint_path(env) {
         Some(path) => match bind(&path, uid) {
             Ok(listener) => {
                 let accept_state = Arc::clone(&state);
@@ -185,7 +186,7 @@ fn stdin_loop<R: io::Read, W: io::Write>(
 }
 
 /// The current user's id, for the endpoint path and the peer-uid gate.
-fn current_uid() -> u32 {
+pub(crate) fn current_uid() -> u32 {
     // SAFETY: `geteuid` has no failure mode and no preconditions.
     unsafe { libc::geteuid() }
 }
@@ -193,35 +194,20 @@ fn current_uid() -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::{Recorder, probe_with_clock};
     use serde_json::json;
     use std::path::Path;
-    use std::sync::Mutex;
+    use std::sync::{Arc, Mutex};
 
     /// The probe nonce the test probe carries.
     const NONCE: &str = "00112233445566778899aabbccddeeff";
 
-    /// A stdout recorder the test inspects through clones of its shared
-    /// buffer, since the shared [`LineWriter`] keeps the writer private.
-    #[derive(Clone, Default)]
-    struct Recorder(Arc<Mutex<Vec<u8>>>);
-
-    impl io::Write for Recorder {
-        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-            self.0.lock().unwrap().extend_from_slice(buf);
-            Ok(buf.len())
-        }
-
-        fn flush(&mut self) -> io::Result<()> {
-            Ok(())
-        }
-    }
-
     /// A probe with a fixed nonce and exe whose clock never moves.
     fn probe() -> Probe {
-        Probe::new(
-            NONCE.to_string(),
+        probe_with_clock(
+            NONCE,
             Path::new("/usr/bin/pmux-explorer"),
-            Box::new(|| 0),
+            Arc::new(Mutex::new(0)),
         )
     }
 
@@ -230,7 +216,7 @@ mod tests {
         let recorder = Recorder::default();
         let writer = LineWriter::new(recorder.clone());
         stdin_loop(probe, &writer, input.as_bytes(), probe_fired);
-        String::from_utf8_lossy(&recorder.0.lock().unwrap()).to_string()
+        recorder.stdout()
     }
 
     // Row 5.1: the loop answers requests.
