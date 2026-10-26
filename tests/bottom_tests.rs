@@ -358,9 +358,9 @@ fn snapshot_tasks_empty_tab_ui() {
     project
     ┃ ● claude
     ─ Activity│Tasks│Git ───────
-    ✔ Record the task path
-    ◼ Render the list
-    ◻ Prove with a live pane
+     ✔ Record the task path
+     ◼ Render the list
+     ◻ Prove with a live pane
     ");
 }
 
@@ -435,9 +435,9 @@ fn snapshot_tasks_status_colors_styled() {
         },
     ];
 
-    // Completed dims to text_muted (252), in-progress takes the
-    // task-progress color (223), queued stays bright text_active (255):
-    // the same glyph/color contract the agent list's task progress uses.
+    // Completed takes task_completed green (114), in-progress keeps
+    // the task-progress color (223), pending takes task_pending blue
+    // (111); all three sit one column in from the panel edge.
     insta::assert_snapshot!(render_to_styled_string(&mut state, 28, 24), @"
      ≡[fg:111]1[fg:153] ●[fg:114]1[fg:255] ◐[fg:245]0[fg:245] ○[fg:245]0[fg:245] ✕[fg:245]0[fg:245]           ⤢[fg:114]
     ⓘ[fg:221]                        —[fg:252] ▾[fg:252]
@@ -458,9 +458,9 @@ fn snapshot_tasks_status_colors_styled() {
 
     ─[fg:240] [fg:240]A[fg:252]c[fg:252]t[fg:252]i[fg:252]v[fg:252]i[fg:252]t[fg:252]y[fg:252]│[fg:240]T[fg:153]a[fg:153]s[fg:153]k[fg:153]s[fg:153]│[fg:240]G[fg:252]i[fg:252]t[fg:252] [fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]
 
-    ✔[fg:252] [fg:252]d[fg:252]o[fg:252]n[fg:252]e[fg:252]
-    ◼[fg:223] [fg:223]w[fg:223]i[fg:223]p[fg:223]
-    ◻[fg:255] [fg:255]q[fg:255]u[fg:255]e[fg:255]u[fg:255]e[fg:255]d[fg:255]
+     ✔[fg:114] [fg:114]d[fg:114]o[fg:114]n[fg:114]e[fg:114]
+     ◼[fg:223] [fg:223]w[fg:223]i[fg:223]p[fg:223]
+     ◻[fg:111] [fg:111]q[fg:111]u[fg:111]e[fg:111]u[fg:111]e[fg:111]d[fg:111]
     ");
 }
 
@@ -508,7 +508,9 @@ fn tasks_scroll_clamps_when_the_list_shrinks() {
 }
 
 #[test]
-fn snapshot_tasks_subject_truncates_at_narrow_width() {
+fn snapshot_tasks_subject_wraps_at_narrow_width() {
+    // A subject wider than the panel wraps instead of truncating;
+    // continuation rows indent under the subject, past the icon.
     let pane = make_pane(AgentType::Claude, PaneStatus::Running);
     let mut state = make_state(vec![SessionInfo {
         session_name: "main".into(),
@@ -535,14 +537,17 @@ fn snapshot_tasks_subject_truncates_at_narrow_width() {
     project
     ┃ ● claude
     ─ Activity│Tasks│Git ───
-    ◻ a-very-long-task-subj…
+     ◻ a-very-long-task-sub
+       ject-that-runs-out-o
+       f-columns
     ");
 }
 
 #[test]
-fn snapshot_tasks_multiline_subject_shows_first_line_only() {
+fn snapshot_tasks_multiline_subject_shows_every_line() {
     // The store round-trips free text with newlines (pinned by the
-    // task-store test); the one-row-per-item list shows its first line.
+    // task-store test); every source line gets its own row, wrapping
+    // as needed.
     let pane = make_pane(AgentType::Claude, PaneStatus::Running);
     let mut state = make_state(vec![SessionInfo {
         session_name: "main".into(),
@@ -569,7 +574,8 @@ fn snapshot_tasks_multiline_subject_shows_first_line_only() {
     project
     ┃ ● claude
     ─ Activity│Tasks│Git ───────
-    ◻ first line
+     ◻ first line
+       second line
     ");
 }
 

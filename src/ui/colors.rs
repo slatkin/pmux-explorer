@@ -38,6 +38,10 @@ pub struct ColorTheme {
     pub badge_auto: Color,
     pub badge_plan: Color,
     pub task_progress: Color,
+    /// Tasks tab color for `pending` items (`◻`).
+    pub task_pending: Color,
+    /// Tasks tab color for `completed` items (`✔`).
+    pub task_completed: Color,
     pub subagent: Color,
     pub commit_hash: Color,
     pub diff_added: Color,
@@ -79,6 +83,8 @@ impl Default for ColorTheme {
             badge_auto: Color::Indexed(221),
             badge_plan: Color::Indexed(117),
             task_progress: Color::Indexed(223),
+            task_pending: Color::Indexed(111),
+            task_completed: Color::Indexed(114),
             subagent: Color::Indexed(73),
             commit_hash: Color::Indexed(221),
             diff_added: Color::Indexed(114),
@@ -133,6 +139,8 @@ impl ColorTheme {
         theme.selection_bg = read(tmux::SIDEBAR_COLOR_SELECTION, theme.selection_bg);
         theme.branch = read(tmux::SIDEBAR_COLOR_BRANCH, theme.branch);
         theme.task_progress = read(tmux::SIDEBAR_COLOR_TASK_PROGRESS, theme.task_progress);
+        theme.task_pending = read(tmux::SIDEBAR_COLOR_TASK_PENDING, theme.task_pending);
+        theme.task_completed = read(tmux::SIDEBAR_COLOR_TASK_COMPLETED, theme.task_completed);
         theme.subagent = read(tmux::SIDEBAR_COLOR_SUBAGENT, theme.subagent);
         theme.commit_hash = read(tmux::SIDEBAR_COLOR_COMMIT_HASH, theme.commit_hash);
         theme.diff_added = read(tmux::SIDEBAR_COLOR_DIFF_ADDED, theme.diff_added);

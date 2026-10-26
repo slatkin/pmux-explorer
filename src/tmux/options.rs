@@ -178,6 +178,10 @@ pub const SIDEBAR_COLOR_WAIT_REASON: &str = "@sidebar_color_wait_reason";
 pub const SIDEBAR_COLOR_SELECTION: &str = "@sidebar_color_selection";
 pub const SIDEBAR_COLOR_BRANCH: &str = "@sidebar_color_branch";
 pub const SIDEBAR_COLOR_TASK_PROGRESS: &str = "@sidebar_color_task_progress";
+/// Tasks tab `◻` icon + subject color for pending items.
+pub const SIDEBAR_COLOR_TASK_PENDING: &str = "@sidebar_color_task_pending";
+/// Tasks tab `✔` icon + subject color for completed items.
+pub const SIDEBAR_COLOR_TASK_COMPLETED: &str = "@sidebar_color_task_completed";
 pub const SIDEBAR_COLOR_SUBAGENT: &str = "@sidebar_color_subagent";
 pub const SIDEBAR_COLOR_COMMIT_HASH: &str = "@sidebar_color_commit_hash";
 pub const SIDEBAR_COLOR_DIFF_ADDED: &str = "@sidebar_color_diff_added";
