@@ -224,14 +224,20 @@ agent can use, because every agent can run a shell command, and it needs no
 hook registration.
 
 ```sh
+pmux-explorer task-describe <text>
 pmux-explorer task-set <subject>
 pmux-explorer task-update <id> <status>
 ```
 
-`task-set` records one item as `pending` and prints the id the sidebar
-assigns it, so the agent can name the item in a later `task-update`.
-`task-update` moves one item to `pending`, `in_progress` or `completed`;
-an unknown id or an unknown status changes nothing.
+`task-describe` sets the pane-wide description of the work the list
+covers — one or two lines of goal text the Tasks tab renders pinned
+above the items in the standard text color, with one blank row between
+it and the first item. Later calls replace it, and the agent is expected
+to describe the work before recording items. `task-set` records one item
+as `pending` and prints the id the sidebar assigns it, so the agent can
+name the item in a later `task-update`. `task-update` moves one item to
+`pending`, `in_progress` or `completed`; an unknown id or an unknown
+status changes nothing.
 
 **The pane is taken from the environment.** The task command reads
 `TMUX_PANE` the way the hook command does, so it must run in the
@@ -241,8 +247,9 @@ environment of the pane it describes.
 a missing `TMUX_PANE`, where it records nothing.
 
 The list is one JSON file per pane,
-`/tmp/pmux-explorer-tasks<PANE>.json`, written beside the activity log. Each
-item holds an `id`, a `subject` and a `status`, and the pane id is encoded
+`/tmp/pmux-explorer-tasks<PANE>.json`, written beside the activity log. The
+file holds a pane-wide `description` plus the `tasks` array; each item
+carries an `id`, a `subject` and a `status`, and the pane id is encoded
 in the file name the way the activity log encodes it. The store keeps at
 most 50 items and trims completed ones oldest first; when no completed
 item remains, the oldest item is dropped instead. A `session-start`
@@ -261,7 +268,7 @@ none.
 - A turn that starts while the pane's todo list is empty receives, verbatim
   from `RECORD_FIRST_REMINDER`:
 
-  `No tasks recorded yet: before starting work, record your todo list with task-set <subject>.`
+  `No tasks recorded yet: describe the work with task-describe <text>, then record tasks with task-set <subject>.`
 
 - A turn that ends while items are still open receives, verbatim from
   `UPDATE_BEFORE_FINISH_REMINDER`:

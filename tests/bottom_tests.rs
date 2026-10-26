@@ -333,6 +333,7 @@ fn snapshot_tasks_empty_tab_ui() {
     state.global.bottom_tab = BottomTab::Tasks;
     state.focus_state.focus = Focus::ActivityLog;
     state.focus_state.sidebar_focused = true;
+    state.tasks.description = "Build the Tasks tab".into();
     state.tasks.items = vec![
         task_store::TaskItem {
             id: "1".into(),
@@ -358,6 +359,7 @@ fn snapshot_tasks_empty_tab_ui() {
     project
     ┃ ● claude
     ─ Activity│Tasks│Git ───────
+     Build the Tasks tab
      ✔ Record the task path
      ◼ Render the list
      ◻ Prove with a live pane
@@ -505,6 +507,104 @@ fn tasks_scroll_clamps_when_the_list_shrinks() {
     }];
     let _ = render_to_string(&mut state, 28, 24);
     assert_eq!(state.tasks.scroll.offset, 0);
+}
+
+#[test]
+fn snapshot_tasks_description_stays_pinned_while_items_scroll() {
+    // The header is not part of the scroll content: a nonzero offset
+    // moves the items, but the description and its padding row stay
+    // at the top of the tab.
+    let pane = make_pane(AgentType::Claude, PaneStatus::Running);
+    let mut state = make_state(vec![SessionInfo {
+        session_name: "main".into(),
+        windows: vec![WindowInfo {
+            window_id: "@1".into(),
+            window_name: "project".into(),
+            window_active: true,
+            auto_rename: false,
+            panes: vec![pane.clone()],
+        }],
+    }]);
+    state.repo_groups = vec![make_repo_group("project", vec![pane])];
+    state.rebuild_row_targets();
+    state.global.bottom_tab = BottomTab::Tasks;
+    state.tasks.description = "Overhaul the sidebar task board".into();
+    state.tasks.items = (0..10)
+        .map(|i| task_store::TaskItem {
+            id: i.to_string(),
+            subject: format!("task {i}"),
+            status: task_store::TaskItemStatus::Pending,
+        })
+        .collect();
+
+    // Prime the scroll bookkeeping, then scroll three rows down.
+    let _ = render_to_string(&mut state, 28, 24);
+    state.tasks.scroll.scroll(3);
+    insta::assert_snapshot!(render_to_string(&mut state, 28, 24), @"
+     ≡1 ●1 ◐0 ○0 ✕0           ⤢
+    ⓘ                        — ▾
+    project
+    ┃ ● claude
+    ─ Activity│Tasks│Git ───────
+     Overhaul the sidebar task
+     board
+     ◻ task 3
+     ◻ task 4
+     ◻ task 5
+    ");
+}
+
+#[test]
+fn tasks_description_leaves_one_blank_row_before_items() {
+    // `buffer_to_string` drops contentless rows, so the padding row the
+    // description keeps above the list can only be pinned at the buffer
+    // level: one fully-blank row between the last description row and
+    // the first item.
+    let pane = make_pane(AgentType::Claude, PaneStatus::Running);
+    let mut state = make_state(vec![SessionInfo {
+        session_name: "main".into(),
+        windows: vec![WindowInfo {
+            window_id: "@1".into(),
+            window_name: "project".into(),
+            window_active: true,
+            auto_rename: false,
+            panes: vec![pane.clone()],
+        }],
+    }]);
+    state.repo_groups = vec![make_repo_group("project", vec![pane])];
+    state.rebuild_row_targets();
+    state.global.bottom_tab = BottomTab::Tasks;
+    state.tasks.description = "Build the Tasks tab".into();
+    state.tasks.items = vec![task_store::TaskItem {
+        id: "1".into(),
+        subject: "first item".into(),
+        status: task_store::TaskItemStatus::Pending,
+    }];
+
+    let backend = ratatui::backend::TestBackend::new(28, 24);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| pmux_explorer::ui::draw(frame, &mut state))
+        .unwrap();
+    let buf = terminal.backend().buffer().clone();
+
+    // The bottom-panel rule row: column 0 is the `─` prefix.
+    let rule_y = (0..buf.area.height)
+        .find(|&y| buf[(0, y)].symbol() == "─")
+        .expect("the tab rule must render");
+    let row_text = |y: u16| -> String {
+        (0..buf.area.width)
+            .map(|x| buf[(x, y)].symbol())
+            .collect::<String>()
+    };
+
+    assert_eq!(row_text(rule_y + 1).trim(), "Build the Tasks tab");
+    assert_eq!(
+        row_text(rule_y + 2).trim(),
+        "",
+        "one blank row must separate the description from the items"
+    );
+    assert_eq!(row_text(rule_y + 3).trim(), "◻ first item");
 }
 
 #[test]

@@ -337,6 +337,7 @@ impl AppState {
     pub(crate) fn refresh_pane_tasks(&mut self) {
         let Some(ref pane_id) = self.focus_state.focused_pane_id else {
             self.tasks.items.clear();
+            self.tasks.description.clear();
             self.tasks.store_cache = None;
             return;
         };
@@ -344,7 +345,9 @@ impl AppState {
         if file_cache_fresh(self.tasks.store_cache.as_ref(), pane_id, current_mtime) {
             return;
         }
-        self.tasks.items = task_store::read_tasks(pane_id);
+        let list = task_store::read_task_list(pane_id);
+        self.tasks.items = list.items;
+        self.tasks.description = list.description;
         self.tasks.store_cache = current_mtime.map(|m| (pane_id.clone(), m));
     }
 
@@ -860,12 +863,14 @@ mod tests {
         state.focus_state.focused_pane_id = Some(pane_id.into());
         crate::task_store::record_task(pane_id, "first").unwrap();
         crate::task_store::record_task(pane_id, "second").unwrap();
+        crate::task_store::set_description(pane_id, "the goal");
 
         state.refresh_pane_tasks();
 
         assert_eq!(state.tasks.items.len(), 2);
         assert_eq!(state.tasks.items[0].subject, "first");
         assert_eq!(state.tasks.items[1].subject, "second");
+        assert_eq!(state.tasks.description, "the goal");
         assert_eq!(
             state.tasks.store_cache.as_ref().map(|(id, _)| id.as_str()),
             Some(pane_id),

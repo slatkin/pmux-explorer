@@ -15,8 +15,7 @@
 /// Covers a fresh pane and a pane whose store was cleared at session
 /// start alike: both are the same "empty store" condition, so the
 /// wording does not distinguish them.
-pub const RECORD_FIRST_REMINDER: &str =
-    "No tasks recorded yet: before starting work, record your todo list with task-set <subject>.";
+pub const RECORD_FIRST_REMINDER: &str = "No tasks recorded yet: describe the work with task-describe <text>, then record tasks with task-set <subject>.";
 
 /// Wording delivered when a turn ends while todo items are still open.
 pub const UPDATE_BEFORE_FINISH_REMINDER: &str = "Reminder: make sure the task board is up to date.";

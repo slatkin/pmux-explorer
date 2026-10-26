@@ -34,6 +34,7 @@ pub fn run(args: &[String]) -> Option<i32> {
         "set-status" => cmd_set_status(rest),
         "task-set" => cmd_task_set(rest),
         "task-update" => cmd_task_update(rest),
+        "task-describe" => cmd_task_describe(rest),
         "spawn" => spawn::cmd_spawn(rest),
         "capture" => capture::cmd_capture(rest),
         "channel-ready" => cmd_channel_ready(rest),
@@ -254,6 +255,7 @@ fn task_help_text() -> String {
     format!(
         "task-set <subject>             record a pending task item for the calling pane\n\
          task-update <id> <status>      update one item's status (pending|in_progress|completed)\n\
+         task-describe <text>           set the pane's task list description\n\
          \n\
          reminders:\n\
          a turn starting with an empty todo list gets: {}\n\
@@ -289,6 +291,27 @@ fn task_set_for_pane(pane: &str, subject: &str) -> i32 {
     if let Some(id) = crate::task_store::record_task(pane, subject) {
         println!("{id}");
     }
+    0
+}
+
+/// Set the pane-wide description shown above the Tasks tab's item
+/// list. Same join-the-args and exit-0 contracts as `task-set`: the
+/// agent's turn can never break on a task command.
+fn cmd_task_describe(args: &[String]) -> i32 {
+    if task_wants_help(args, 1) {
+        println!("{}", task_help_text());
+        return 0;
+    }
+    let description = args.join(" ");
+    let pane = tmux_pane();
+    if pane.is_empty() {
+        return 0;
+    }
+    task_describe_for_pane(&pane, &description)
+}
+
+fn task_describe_for_pane(pane: &str, description: &str) -> i32 {
+    crate::task_store::set_description(pane, description);
     0
 }
 
@@ -614,6 +637,7 @@ mod tests {
 
         assert_eq!(task_set_for_pane("", "orphan subject"), 0);
         assert_eq!(task_update_for_pane("", "1", "completed"), 0);
+        assert_eq!(task_describe_for_pane("", "orphan description"), 0);
 
         assert_eq!(
             crate::task_store::store_mtime(""),
@@ -628,6 +652,7 @@ mod tests {
         // dispatch mapping can be asserted without touching $TMUX_PANE.
         assert_eq!(run(&["task-set".into()]), Some(0));
         assert_eq!(run(&["task-update".into()]), Some(0));
+        assert_eq!(run(&["task-describe".into()]), Some(0));
     }
 
     #[test]

@@ -42,5 +42,18 @@ fn task_commands_round_trip_through_the_binary() {
     let items = task_store::read_tasks(pane);
     assert_eq!(items[0].status, task_store::TaskItemStatus::Completed);
 
+    // `task-describe` joins its args the same way and stores the
+    // pane-wide description beside the items.
+    let describe = std::process::Command::new(BIN)
+        .args(["task-describe", "Fix the login crash end to end"])
+        .env("TMUX_PANE", pane)
+        .output()
+        .expect("compiled binary must run");
+    assert!(describe.status.success());
+
+    let list = task_store::read_task_list(pane);
+    assert_eq!(list.description, "Fix the login crash end to end");
+    assert_eq!(list.items.len(), 1, "describe must not touch items");
+
     let _ = fs::remove_file(&path);
 }

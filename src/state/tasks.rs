@@ -10,6 +10,9 @@ use crate::task_store::TaskItem;
 pub struct TasksState {
     /// The focused pane's stored items in recorded order.
     pub items: Vec<TaskItem>,
+    /// The focused pane's stored description, rendered pinned above
+    /// the item list.
+    pub description: String,
     /// `(focused_pane_id, mtime)` of the task store most recently read
     /// into `items`. `refresh_pane_tasks` skips re-reading the store
     /// when neither field has changed.
@@ -25,6 +28,7 @@ impl TasksState {
     pub fn new() -> Self {
         Self {
             items: Vec::new(),
+            description: String::new(),
             store_cache: None,
             scroll: ScrollState::default(),
         }

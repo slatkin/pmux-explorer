@@ -58,7 +58,20 @@ pub struct TaskItem {
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct StoreFile {
+    /// Pane-wide description of the work the list covers, written by
+    /// `task-describe`. `#[serde(default)]` keeps stores written before
+    /// the field existed readable as an empty description.
+    #[serde(default)]
+    description: String,
     tasks: Vec<TaskItem>,
+}
+
+/// The pane's store as the Tasks tab consumes it: the pane-wide
+/// description plus the item list.
+#[derive(Debug, Default)]
+pub struct TaskList {
+    pub description: String,
+    pub items: Vec<TaskItem>,
 }
 
 /// Path of a pane's task store. Shares [`crate::activity::encode_pane_id_for_file_name`]
@@ -82,14 +95,24 @@ pub fn store_mtime(pane_id: &str) -> Option<SystemTime> {
 /// Read a pane's stored items in recorded order. A missing or corrupt
 /// store reads as empty, like the activity log reader.
 pub fn read_tasks(pane_id: &str) -> Vec<TaskItem> {
+    read_task_list(pane_id).items
+}
+
+/// Read a pane's whole store — description plus items — in recorded
+/// order. A missing or corrupt store reads as empty, like the
+/// activity log reader.
+pub fn read_task_list(pane_id: &str) -> TaskList {
     if pane_id.is_empty() {
-        return Vec::new();
+        return TaskList::default();
     }
     let Ok(content) = fs::read_to_string(store_file_path(pane_id)) else {
-        return Vec::new();
+        return TaskList::default();
     };
     serde_json::from_str::<StoreFile>(&content)
-        .map(|file| file.tasks)
+        .map(|file| TaskList {
+            description: file.description,
+            items: file.tasks,
+        })
         .unwrap_or_default()
 }
 
@@ -99,22 +122,23 @@ pub fn record_task(pane_id: &str, subject: &str) -> Option<String> {
     if pane_id.is_empty() || subject.trim().is_empty() {
         return None;
     }
-    let mut items = read_tasks(pane_id);
+    let mut list = read_task_list(pane_id);
     // Ids keep counting past trimmed items so a stored id is never reused.
-    let next = items
+    let next = list
+        .items
         .iter()
         .filter_map(|task| task.id.parse::<u64>().ok())
         .max()
         .unwrap_or(0)
         + 1;
     let id = next.to_string();
-    items.push(TaskItem {
+    list.items.push(TaskItem {
         id: id.clone(),
         subject: subject.to_string(),
         status: TaskItemStatus::Pending,
     });
-    trim_items(&mut items);
-    write_store(pane_id, &items);
+    trim_items(&mut list.items);
+    write_store(pane_id, &list);
     Some(id)
 }
 
@@ -124,12 +148,25 @@ pub fn update_task_status(pane_id: &str, id: &str, status: TaskItemStatus) -> bo
     if pane_id.is_empty() {
         return false;
     }
-    let mut items = read_tasks(pane_id);
-    let Some(item) = items.iter_mut().find(|task| task.id == id) else {
+    let mut list = read_task_list(pane_id);
+    let Some(item) = list.items.iter_mut().find(|task| task.id == id) else {
         return false;
     };
     item.status = status;
-    write_store(pane_id, &items);
+    write_store(pane_id, &list);
+    true
+}
+
+/// Set the pane-wide description shown above the Tasks tab's item
+/// list. Later writes replace it; a blank description clears it.
+/// Returns `false` when the pane id is empty, so callers can no-op.
+pub fn set_description(pane_id: &str, description: &str) -> bool {
+    if pane_id.is_empty() {
+        return false;
+    }
+    let mut list = read_task_list(pane_id);
+    list.description = description.trim().to_string();
+    write_store(pane_id, &list);
     true
 }
 
@@ -143,9 +180,10 @@ pub fn clear_tasks(pane_id: &str) {
     let _ = fs::remove_file(store_file_path(pane_id));
 }
 
-fn write_store(pane_id: &str, items: &[TaskItem]) {
+fn write_store(pane_id: &str, list: &TaskList) {
     let file = StoreFile {
-        tasks: items.to_vec(),
+        description: list.description.clone(),
+        tasks: list.items.clone(),
     };
     if let Ok(json) = serde_json::to_string(&file) {
         let _ = fs::write(store_file_path(pane_id), json);
@@ -333,6 +371,63 @@ mod tests {
         fs::write(&path, "not json at all").unwrap();
 
         assert!(read_tasks(pane_id).is_empty());
+
+        cleanup(pane_id);
+    }
+
+    #[test]
+    fn description_round_trips_and_replaces() {
+        let pane_id = "%TASK_DESC";
+        cleanup(pane_id);
+
+        assert!(set_description(pane_id, "Ship the tasks tab"));
+        assert_eq!(read_task_list(pane_id).description, "Ship the tasks tab");
+
+        assert!(set_description(pane_id, "Do something else"));
+        assert_eq!(read_task_list(pane_id).description, "Do something else");
+
+        cleanup(pane_id);
+    }
+
+    #[test]
+    fn description_survives_item_writes_and_blank_clears() {
+        let pane_id = "%TASK_DESC_ITEMS";
+        cleanup(pane_id);
+
+        record_task(pane_id, "an item").unwrap();
+        set_description(pane_id, "the goal");
+        // A later task-set keeps the stored description.
+        record_task(pane_id, "another item").unwrap();
+        let list = read_task_list(pane_id);
+        assert_eq!(list.description, "the goal");
+        assert_eq!(list.items.len(), 2);
+
+        set_description(pane_id, "   ");
+        assert_eq!(read_task_list(pane_id).description, "");
+
+        cleanup(pane_id);
+    }
+
+    #[test]
+    fn description_missing_pane_is_noop() {
+        assert!(!set_description("", "orphan description"));
+    }
+
+    #[test]
+    fn legacy_store_without_description_reads_as_empty() {
+        // Stores written before the description field existed carry no
+        // `description` key; the serde default must read them cleanly.
+        let pane_id = "%TASK_DESC_LEGACY";
+        cleanup(pane_id);
+        fs::write(
+            store_file_path(pane_id),
+            r#"{"tasks":[{"id":"1","subject":"old","status":"pending"}]}"#,
+        )
+        .unwrap();
+
+        let list = read_task_list(pane_id);
+        assert_eq!(list.description, "");
+        assert_eq!(list.items.len(), 1);
 
         cleanup(pane_id);
     }
