@@ -2,8 +2,10 @@
 //!
 //! Items and the pane description come from [`state.tasks`](crate::state::TasksState),
 //! which `refresh_pane_tasks` fills from the pane's store file. The
-//! tab is read-only — the writing pane is always the agent, through
-//! the `task-set` / `task-update` / `task-describe` subcommands.
+//! agent writes items and statuses through the `task-set` /
+//! `task-update` / `task-describe` subcommands; the sidebar's one
+//! write is the close sweep, which empties a list that has sat
+//! all-completed and untouched for 90 seconds.
 
 use ratatui::{
     Frame,

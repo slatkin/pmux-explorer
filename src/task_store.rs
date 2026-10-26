@@ -2,8 +2,11 @@
 //!
 //! One JSON file per tmux pane at `/tmp/pmux-explorer-tasks<PANE>.json`,
 //! mirroring the activity log's path encoding, mtime polling, and
-//! session semantics: agents write through the `task-set` /
-//! `task-update` CLI subcommands, the TUI only reads.
+//! session semantics: the agent writes items and statuses through the
+//! `task-set` / `task-update` / `task-describe` CLI subcommands; the
+//! sidebar's one write is emptying a finished list — once every item
+//! is `completed` and the store has been quiet for [`TASK_CLOSE_SECS`]
+//! seconds, the per-tick close sweep removes the file.
 
 use std::fs;
 use std::path::PathBuf;
@@ -15,6 +18,11 @@ use serde::{Deserialize, Serialize};
 /// pushes past the cap, completed items are trimmed oldest-first; if
 /// none are completed, the oldest item goes so the cap still holds.
 pub const MAX_ITEMS: usize = 50;
+
+/// Seconds an all-completed, untouched task list stays open before the
+/// sidebar's close sweep empties it. Every store write bumps the file
+/// mtime, so an added or reopened item restarts the window.
+pub const TASK_CLOSE_SECS: u64 = 90;
 
 /// Status of a single stored task item.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -170,9 +178,38 @@ pub fn set_description(pane_id: &str, description: &str) -> bool {
     true
 }
 
+/// Whether a pane's task list is due to close: the list holds at
+/// least one item, every item is `completed`, and the store mtime is
+/// at least [`TASK_CLOSE_SECS`] old. `mtime_epoch` is the store file's
+/// mtime in epoch seconds — `None` when there is no store to close —
+/// and `now_epoch` matches `AppState::now`.
+pub fn close_due(list: &TaskList, mtime_epoch: Option<u64>, now_epoch: u64) -> bool {
+    every_item_completed(list) && close_window_elapsed(mtime_epoch, now_epoch)
+}
+
+/// The item half of [`close_due`]: the list holds at least one item
+/// and every item is `completed`. The close sweep caches this per
+/// pane so an unchanged store is not re-read every tick.
+pub(crate) fn every_item_completed(list: &TaskList) -> bool {
+    !list.items.is_empty()
+        && list
+            .items
+            .iter()
+            .all(|item| item.status == TaskItemStatus::Completed)
+}
+
+/// The time half of [`close_due`]: the store mtime sits at least
+/// [`TASK_CLOSE_SECS`] behind `now_epoch`. A `None` or future mtime
+/// reads as not due — a missing store has nothing to close, and a
+/// clock jump closes late, never early.
+pub(crate) fn close_window_elapsed(mtime_epoch: Option<u64>, now_epoch: u64) -> bool {
+    mtime_epoch.is_some_and(|mtime| now_epoch.saturating_sub(mtime) >= TASK_CLOSE_SECS)
+}
+
 /// Remove a pane's store. Used at SessionStart so a pane reused for
 /// new work starts with an empty list, matching the activity log's
-/// session semantics. A missing store is already empty.
+/// session semantics, and by the per-tick close sweep to empty a
+/// finished list. A missing store is already empty.
 pub fn clear_tasks(pane_id: &str) {
     if pane_id.is_empty() {
         return;
@@ -430,6 +467,86 @@ mod tests {
         assert_eq!(list.items.len(), 1);
 
         cleanup(pane_id);
+    }
+
+    fn completed_item(id: &str) -> TaskItem {
+        TaskItem {
+            id: id.into(),
+            subject: "done".into(),
+            status: TaskItemStatus::Completed,
+        }
+    }
+
+    #[test]
+    fn close_due_hits_the_window_boundary_exactly() {
+        let list = TaskList {
+            description: String::new(),
+            items: vec![completed_item("1")],
+        };
+        let mtime = Some(1_000);
+
+        assert!(
+            !close_due(&list, mtime, 1_000 + TASK_CLOSE_SECS - 1),
+            "89 seconds old is inside the window"
+        );
+        assert!(
+            close_due(&list, mtime, 1_000 + TASK_CLOSE_SECS),
+            "90 seconds old closes"
+        );
+    }
+
+    #[test]
+    fn close_due_rejects_an_empty_list() {
+        // A description-only store never closes: there is nothing to
+        // retire and the lingering file dies with /tmp.
+        let list = TaskList {
+            description: "agent described, then died".into(),
+            items: vec![],
+        };
+        assert!(!close_due(&list, Some(1_000), 1_000 + TASK_CLOSE_SECS + 60));
+    }
+
+    #[test]
+    fn close_due_rejects_mixed_statuses() {
+        let mut list = TaskList {
+            description: String::new(),
+            items: vec![completed_item("1")],
+        };
+        list.items.push(TaskItem {
+            id: "2".into(),
+            subject: "still open".into(),
+            status: TaskItemStatus::Pending,
+        });
+
+        assert!(!close_due(&list, Some(1_000), 1_000 + TASK_CLOSE_SECS + 60));
+    }
+
+    #[test]
+    fn close_due_accepts_a_single_completed_item() {
+        let list = TaskList {
+            description: String::new(),
+            items: vec![completed_item("1")],
+        };
+        assert!(close_due(&list, Some(1_000), 1_000 + TASK_CLOSE_SECS));
+    }
+
+    #[test]
+    fn close_due_reads_a_future_mtime_as_not_due() {
+        // A clock jump must close the list late, never early.
+        let list = TaskList {
+            description: String::new(),
+            items: vec![completed_item("1")],
+        };
+        assert!(!close_due(&list, Some(1_000), 1_000 - 1));
+    }
+
+    #[test]
+    fn close_due_reads_a_missing_store_as_not_due() {
+        let list = TaskList {
+            description: String::new(),
+            items: vec![completed_item("1")],
+        };
+        assert!(!close_due(&list, None, 1_000 + TASK_CLOSE_SECS + 60));
     }
 
     #[test]

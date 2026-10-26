@@ -123,7 +123,14 @@ impl AppState {
         out
     }
 
-    fn refresh_activity_data(&mut self) {
+    /// One tick of the file-backed refresh pass: the task-store close
+    /// sweep, then the activity log, the focused pane's task list, and
+    /// every pane's task progress. Touches only `/tmp` files and
+    /// `AppState` — no tmux I/O — so tests drive it directly. The close
+    /// sweep runs first so a focused list that closes renders the
+    /// empty state in the same frame.
+    pub fn refresh_activity_data(&mut self) {
+        self.refresh_task_close();
         self.refresh_activity_log();
         self.refresh_pane_tasks();
         self.refresh_task_progress();
@@ -217,6 +224,72 @@ impl AppState {
         }
 
         None
+    }
+
+    /// Close finished task lists, for every pane in `repo_groups`,
+    /// focused or not. Each pane's store is statted every tick and
+    /// re-read only when the mtime moved (the all-done half of
+    /// [`task_store::close_due`] is cached in `PaneRuntimeState`); when
+    /// `close_due` holds, `clear_tasks` empties the store — items and
+    /// pane-wide description — and the cache entry is dropped.
+    pub(crate) fn refresh_task_close(&mut self) {
+        /// One pane's sweep outcome, applied back to `pane_states` in
+        /// the second pass so `repo_groups` can stay borrowed.
+        struct CloseUpdate {
+            pane_id: String,
+            mtime: Option<std::time::SystemTime>,
+            all_done: bool,
+            due: bool,
+        }
+
+        let mut updates: Vec<CloseUpdate> = Vec::new();
+        for group in &self.repo_groups {
+            for (pane, _) in &group.panes {
+                let pane_id = &pane.pane_id;
+                let current_mtime = task_store::store_mtime(pane_id);
+                let mtime_epoch = current_mtime.and_then(|mtime| {
+                    mtime
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .ok()
+                        .map(|d| d.as_secs())
+                });
+                let prior = self.pane_state(pane_id);
+                let unchanged = current_mtime.is_some()
+                    && current_mtime == prior.and_then(|s| s.task_store_mtime);
+                let (all_done, due) = if unchanged {
+                    // Same mtime: the cached all-done flag is still
+                    // authoritative; only the clock moved.
+                    let all_done = prior.is_some_and(|s| s.task_store_all_done);
+                    (
+                        all_done,
+                        all_done && task_store::close_window_elapsed(mtime_epoch, self.now),
+                    )
+                } else if current_mtime.is_some() {
+                    let list = task_store::read_task_list(pane_id);
+                    (
+                        task_store::every_item_completed(&list),
+                        task_store::close_due(&list, mtime_epoch, self.now),
+                    )
+                } else {
+                    // No store file: nothing to close, nothing to cache.
+                    (false, false)
+                };
+                updates.push(CloseUpdate {
+                    pane_id: pane_id.clone(),
+                    mtime: current_mtime,
+                    all_done,
+                    due,
+                });
+            }
+        }
+        for update in updates {
+            if update.due {
+                task_store::clear_tasks(&update.pane_id);
+                self.set_pane_task_store_cache(&update.pane_id, None, false);
+            } else {
+                self.set_pane_task_store_cache(&update.pane_id, update.mtime, update.all_done);
+            }
+        }
     }
 
     pub(crate) fn refresh_task_progress(&mut self) {
@@ -969,5 +1042,200 @@ mod tests {
 
         cleanup_task_store(pane_a);
         cleanup_task_store(pane_b);
+    }
+
+    // ─── refresh_task_close ───────────────────────────────────────
+
+    fn groups_with(pane_ids: &[&str]) -> Vec<crate::group::RepoGroup> {
+        vec![crate::group::RepoGroup {
+            name: "test".into(),
+            has_focus: true,
+            panes: pane_ids
+                .iter()
+                .map(|id| (test_pane(id), crate::group::PaneGitInfo::default()))
+                .collect(),
+        }]
+    }
+
+    fn sweep_state(pane_ids: &[&str]) -> AppState {
+        let mut state = AppState::new("%99".into());
+        state.repo_groups = groups_with(pane_ids);
+        state.now = crate::time::now_epoch_secs();
+        state
+    }
+
+    /// A finished one-item store for `pane_id`: one completed task
+    /// plus a pane description, so a close must take both with it.
+    fn finished_store(pane_id: &str) {
+        cleanup_task_store(pane_id);
+        let id = crate::task_store::record_task(pane_id, "done item").unwrap();
+        crate::task_store::update_task_status(
+            pane_id,
+            &id,
+            crate::task_store::TaskItemStatus::Completed,
+        );
+        crate::task_store::set_description(pane_id, "the goal");
+    }
+
+    /// Pin the store file's mtime `secs_ago` into the past, the way a
+    /// list quiet for that long looks to the sweep.
+    fn backdate_store(pane_id: &str, secs_ago: u64) {
+        let file = std::fs::File::options()
+            .write(true)
+            .open(crate::task_store::store_file_path(pane_id))
+            .unwrap();
+        file.set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(secs_ago))
+            .unwrap();
+    }
+
+    #[test]
+    fn refresh_task_close_closes_a_finished_list_once_the_window_passes() {
+        let pane_id = "%TC_BOUNDARY";
+        let mut state = sweep_state(&[pane_id]);
+        finished_store(pane_id);
+
+        // First tick reads the store: all done, but the mtime is fresh.
+        state.refresh_task_close();
+        assert!(crate::task_store::store_file_path(pane_id).exists());
+        assert!(state.pane_task_store_all_done(pane_id));
+
+        // 89 seconds in, the mtime is unchanged so the cached flag
+        // answers — and the list still shows.
+        state.now += task_store::TASK_CLOSE_SECS - 1;
+        state.refresh_task_close();
+        assert!(crate::task_store::store_file_path(pane_id).exists());
+
+        // At 90 seconds the close fires: store gone, description with
+        // it, and the pane's cache entry dropped.
+        state.now += 1;
+        state.refresh_task_close();
+        assert!(!crate::task_store::store_file_path(pane_id).exists());
+        assert!(crate::task_store::read_task_list(pane_id).items.is_empty());
+        assert!(state.pane_task_store_mtime(pane_id).is_none());
+        assert!(!state.pane_task_store_all_done(pane_id));
+    }
+
+    #[test]
+    fn refresh_task_close_closes_a_backdated_store_on_first_sight() {
+        // A list that finished while the sidebar was down "should have
+        // closed" already: the first observation past the window
+        // closes it.
+        let pane_id = "%TC_BACKDATED";
+        let mut state = sweep_state(&[pane_id]);
+        finished_store(pane_id);
+        backdate_store(pane_id, task_store::TASK_CLOSE_SECS + 1);
+
+        state.refresh_task_close();
+
+        assert!(!crate::task_store::store_file_path(pane_id).exists());
+    }
+
+    #[test]
+    fn refresh_task_close_closes_an_unfocused_pane_on_time() {
+        let focused = "%TC_FOCUS_A";
+        let unfocused = "%TC_FOCUS_B";
+        let mut state = sweep_state(&[focused, unfocused]);
+        state.focus_state.focused_pane_id = Some(focused.into());
+        finished_store(unfocused);
+        backdate_store(unfocused, task_store::TASK_CLOSE_SECS + 1);
+        crate::task_store::record_task(focused, "still open").unwrap();
+
+        state.refresh_task_close();
+
+        assert!(
+            !crate::task_store::store_file_path(unfocused).exists(),
+            "an unfocused pane's finished list closes on the same clock"
+        );
+        assert!(
+            crate::task_store::store_file_path(focused).exists(),
+            "the focused pane's unfinished list is untouched"
+        );
+
+        cleanup_task_store(focused);
+    }
+
+    #[test]
+    fn refresh_task_close_reopened_item_keeps_the_list_open() {
+        let pane_id = "%TC_REOPEN";
+        let mut state = sweep_state(&[pane_id]);
+        finished_store(pane_id);
+
+        // Reopen the item, then age the store past the window: not
+        // every item is completed, so the list must not close.
+        crate::task_store::update_task_status(
+            pane_id,
+            "1",
+            crate::task_store::TaskItemStatus::Pending,
+        );
+        backdate_store(pane_id, task_store::TASK_CLOSE_SECS + 1);
+        state.refresh_task_close();
+
+        assert!(crate::task_store::store_file_path(pane_id).exists());
+        assert_eq!(
+            crate::task_store::read_task_list(pane_id).items[0].status,
+            crate::task_store::TaskItemStatus::Pending
+        );
+        assert!(!state.pane_task_store_all_done(pane_id));
+
+        cleanup_task_store(pane_id);
+    }
+
+    #[test]
+    fn refresh_task_close_refinished_list_gets_a_fresh_window() {
+        let pane_id = "%TC_REFINISH";
+        let mut state = sweep_state(&[pane_id]);
+        finished_store(pane_id);
+
+        // Reopen, then complete again: the re-completion's mtime owns
+        // the next window.
+        crate::task_store::update_task_status(
+            pane_id,
+            "1",
+            crate::task_store::TaskItemStatus::Pending,
+        );
+        crate::task_store::update_task_status(
+            pane_id,
+            "1",
+            crate::task_store::TaskItemStatus::Completed,
+        );
+        state.refresh_task_close();
+        assert!(crate::task_store::store_file_path(pane_id).exists());
+
+        // The fresh window counts from the re-completion, not the
+        // first finish.
+        state.now += task_store::TASK_CLOSE_SECS - 1;
+        state.refresh_task_close();
+        assert!(
+            crate::task_store::store_file_path(pane_id).exists(),
+            "89 seconds after re-completion is still inside the window"
+        );
+
+        state.now += 1;
+        state.refresh_task_close();
+        assert!(!crate::task_store::store_file_path(pane_id).exists());
+    }
+
+    #[test]
+    fn refresh_task_close_leaves_unfinished_and_empty_stores_alone() {
+        let unfinished = "%TC_OPEN";
+        let empty = "%TC_EMPTY";
+        let mut state = sweep_state(&[unfinished, empty]);
+
+        cleanup_task_store(unfinished);
+        crate::task_store::record_task(unfinished, "still pending").unwrap();
+        backdate_store(unfinished, task_store::TASK_CLOSE_SECS + 1);
+
+        // A description-only store: described, then the agent died.
+        cleanup_task_store(empty);
+        crate::task_store::set_description(empty, "orphan description");
+        backdate_store(empty, task_store::TASK_CLOSE_SECS + 1);
+
+        state.refresh_task_close();
+
+        assert!(crate::task_store::store_file_path(unfinished).exists());
+        assert!(crate::task_store::store_file_path(empty).exists());
+
+        cleanup_task_store(unfinished);
+        cleanup_task_store(empty);
     }
 }

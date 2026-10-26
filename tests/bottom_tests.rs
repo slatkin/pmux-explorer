@@ -398,6 +398,59 @@ fn snapshot_tasks_tab_ui() {
     ");
 }
 
+#[test]
+fn snapshot_tasks_tab_after_finished_list_closes() {
+    let pane = make_pane(AgentType::Claude, PaneStatus::Running);
+    let mut state = make_state(vec![SessionInfo {
+        session_name: "main".into(),
+        windows: vec![WindowInfo {
+            window_id: "@1".into(),
+            window_name: "project".into(),
+            window_active: true,
+            auto_rename: false,
+            panes: vec![pane.clone()],
+        }],
+    }]);
+    state.repo_groups = vec![make_repo_group("project", vec![pane])];
+    state.rebuild_row_targets();
+
+    state.global.bottom_tab = BottomTab::Tasks;
+    state.focus_state.focus = Focus::ActivityLog;
+    state.focus_state.sidebar_focused = true;
+
+    // A finished list — completed item plus a pane description —
+    // whose store has been quiet for more than the 90-second close
+    // window, measured against the state's fixed `now`.
+    let pane_id = "%1";
+    let item_id = task_store::record_task(pane_id, "Ship it").unwrap();
+    task_store::update_task_status(pane_id, &item_id, task_store::TaskItemStatus::Completed);
+    task_store::set_description(pane_id, "a goal nobody sees anymore");
+    let backdated = std::time::UNIX_EPOCH
+        + std::time::Duration::from_secs(state.now - task_store::TASK_CLOSE_SECS - 30);
+    std::fs::File::options()
+        .write(true)
+        .open(task_store::store_file_path(pane_id))
+        .unwrap()
+        .set_modified(backdated)
+        .unwrap();
+
+    // One tick: the close sweep empties the store, and the focused
+    // re-read sees the empty state — description gone with it.
+    state.refresh_activity_data();
+
+    let output = render_to_string(&mut state, 28, 24);
+    insta::assert_snapshot!(output, @"
+     ≡1 ●1 ◐0 ○0 ✕0           ⤢
+    ⓘ                        — ▾
+    project
+    ┃ ● claude
+    ─ Activity│Tasks│Git ───────
+          No tasks recorded
+    ");
+
+    assert!(!task_store::store_file_path(pane_id).exists());
+}
+
 // ─── Tasks tab: per-status colors (the styled snapshot pins the
 // icon/subject cells that the plain snapshots above only show as text)
 // and the scroll clamp used after a store trim shrinks the list.

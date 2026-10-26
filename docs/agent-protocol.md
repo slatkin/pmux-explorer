@@ -255,6 +255,15 @@ most 50 items and trims completed ones oldest first; when no completed
 item remains, the oldest item is dropped instead. A `session-start`
 event clears the pane's store, so a pane reused for new work starts empty.
 
+**A finished list closes itself.** The sidebar watches every listed
+pane's store, not just the focused one: once every item is `completed`
+and the file has been unchanged for 90 seconds, it removes the store —
+items and description — and the Tasks tab returns to its empty state.
+Every store write restarts the window, so a task added or reopened in
+time keeps the list open; when the list is all-completed again, the 90
+seconds count from that last write. An agent returning to a pane whose
+list closed records a fresh list through `task-set`.
+
 ### The task reminders
 
 The task write path carries two short reminders, one per empty-list

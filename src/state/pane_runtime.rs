@@ -15,6 +15,15 @@ pub struct PaneRuntimeState {
     /// Used by `refresh_task_progress` to skip the (potentially expensive)
     /// re-parse when the log has not been touched since the previous tick.
     pub task_progress_log_mtime: Option<std::time::SystemTime>,
+    /// Last observed mtime of this pane's `/tmp/pmux-explorer-tasks*.json`
+    /// store. Used by `refresh_task_close` to skip the store re-read when
+    /// the file has not been touched since the previous tick.
+    pub task_store_mtime: Option<std::time::SystemTime>,
+    /// Whether the task store last read for `task_store_mtime` was
+    /// non-empty with every item `completed` — the item half of
+    /// [`crate::task_store::close_due`], cached so an unchanged store
+    /// needs no re-read.
+    pub task_store_all_done: bool,
 }
 
 /// Per-pane runtime entries keyed by pane id. The selected bottom tab is
@@ -110,6 +119,28 @@ impl AppState {
         self.pane_state(pane_id).and_then(|s| s.inactive_since)
     }
 
+    /// Set the task-store close cache: the store mtime last observed
+    /// and whether that read found every item `completed`.
+    pub fn set_pane_task_store_cache(
+        &mut self,
+        pane_id: &str,
+        mtime: Option<std::time::SystemTime>,
+        all_done: bool,
+    ) {
+        let state = self.pane_state_mut(pane_id);
+        state.task_store_mtime = mtime;
+        state.task_store_all_done = all_done;
+    }
+
+    pub fn pane_task_store_mtime(&self, pane_id: &str) -> Option<std::time::SystemTime> {
+        self.pane_state(pane_id).and_then(|s| s.task_store_mtime)
+    }
+
+    pub fn pane_task_store_all_done(&self, pane_id: &str) -> bool {
+        self.pane_state(pane_id)
+            .is_some_and(|s| s.task_store_all_done)
+    }
+
     pub fn clear_pane_state(&mut self, pane_id: &str) {
         self.pane_states.remove(pane_id);
     }
@@ -153,6 +184,8 @@ mod tests {
         assert!(state.task_dismissed_total.is_none());
         assert!(state.inactive_since.is_none());
         assert!(state.task_progress_log_mtime.is_none());
+        assert!(state.task_store_mtime.is_none());
+        assert!(!state.task_store_all_done);
     }
 
     #[test]
@@ -238,6 +271,8 @@ mod tests {
         );
         state.set_pane_task_dismissed_total(pane_id, Some(7));
         state.set_pane_inactive_since(pane_id, Some(42));
+        let mtime = std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(7);
+        state.set_pane_task_store_cache(pane_id, Some(mtime), true);
 
         assert_eq!(state.pane_ports(pane_id), Some(&[3000][..]));
         assert_eq!(state.pane_command(pane_id), Some("pnpm dev"));
@@ -247,9 +282,13 @@ mod tests {
         );
         assert_eq!(state.pane_task_dismissed_total(pane_id), Some(7));
         assert_eq!(state.pane_inactive_since(pane_id), Some(42));
+        assert_eq!(state.pane_task_store_mtime(pane_id), Some(mtime));
+        assert!(state.pane_task_store_all_done(pane_id));
 
         state.clear_pane_state(pane_id);
         assert!(state.pane_state(pane_id).is_none());
+        assert!(state.pane_task_store_mtime(pane_id).is_none());
+        assert!(!state.pane_task_store_all_done(pane_id));
     }
 
     #[test]

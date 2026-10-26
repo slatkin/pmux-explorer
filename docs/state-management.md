@@ -59,7 +59,7 @@ Each pane's runtime data is split into two buckets:
 | Source | Update Trigger | Description |
 |--------|----------------|-------------|
 | tmux pane options | Event-driven + cleanup on agent exit | Agent type, status, cwd, permission mode, prompt, subagents, worktree, etc. |
-| `PaneRuntimeState` in `AppState` | Refresh cycle + cleanup on agent exit | `ports`, `command`, `task_progress`, `task_dismissed_total`, `inactive_since` |
+| `PaneRuntimeState` in `AppState` | Refresh cycle + cleanup on agent exit | `ports`, `command`, `task_progress`, `task_dismissed_total`, `inactive_since`, `task_store_mtime`, `task_store_all_done` |
 | `PaneInfo` (query result, `src/tmux/types.rs`) | Every 1s (refresh cycle) | Per-pane snapshot read from tmux in one `list-panes -a` call: agent type, status, cwd, prompt, pane PID, worktree, session id, and `pane_name` — the pane's own title (`pane_title`) when it is a real name: non-empty, different from the host name, and not an agent-set OSC title (`π - …` from pi, `✳ …` from Claude Code); other agents' OSC titles are a known gap. A title carrying an em dash keeps only the text before it (a suffix like a branch or a cwd is decoration), and a title that trims to empty is not a name. `None` otherwise. Rendered after the badge slot (subagent ♟/↻ or permission badge) in the status row |
 
 Pane options written to tmux:
@@ -102,12 +102,15 @@ pane disappears (`prune_pane_states_to_current_panes`).
 | `pane_states.map[...].task_dismissed_total` | On task completion | Tracks dismissed completed-task counts |
 | `pane_states.map[...].inactive_since` | On status change | Debounce timestamp (3s grace before hiding tasks) |
 | `pane_states.map[...].task_progress_log_mtime` | Every 1s (refresh cycle) | mtime of the task-progress log last parsed; skips re-parsing when unchanged |
+| `pane_states.map[...].task_store_mtime` | Every 1s (refresh cycle) | mtime of the task store last statted by the close sweep; skips re-reading when unchanged |
+| `pane_states.map[...].task_store_all_done` | Every 1s (refresh cycle) | Whether the store read for `task_store_mtime` was non-empty with every item `completed` — the item half of the close rule, cached |
 
 Per-pane file-based state:
 
 | File | Update Trigger | Read Frequency | Description |
 |------|---------------|----------------|-------------|
 | `/tmp/pmux-explorer-activity_{pane_id}.log` | Each ActivityLog event | Every 1s | Tool usage log (`HH:MM\|tool\|label`), max 200 lines |
+| `/tmp/pmux-explorer-tasks{pane_id}.json` | `task-set` / `task-update` / `task-describe` CLI writes; SessionStart and the close sweep remove it | Every 1s (stat), re-read on mtime change | Per-pane Tasks-tab store (`description` + `tasks` array, max 50 items). A store whose items are all `completed` and whose mtime is 90 s old is removed by `refresh_task_close` — focused pane or not — so a finished list returns to the empty state; any store write (add, reopen, describe) restarts the 90-second window |
 
 ### Local State (single sidebar process only)
 
@@ -210,6 +213,8 @@ TUI main loop (app::run in app.rs; submodules app/{setup,workers,input,render,pa
     → group_panes_by_repo() (group.rs)
     → rebuild_row_targets()          ← applies GlobalState filters
     → refresh_activity_data()        ← reads /tmp activity logs
+      → refresh_task_close()         ← stats every pane's task store; removes a store
+                                       all-completed for 90 s (any write restarts the window)
     → refresh_task_progress()        ← updates PaneRuntimeState.task_progress
     → refresh_port_data()            ← updates PaneRuntimeState.ports
     → scan_session_process_snapshot() ← detects dead panes and clears stale tmux metadata
@@ -281,6 +286,8 @@ struct PaneRuntimeState {
     task_dismissed_total: Option<usize>,
     inactive_since: Option<u64>,
     task_progress_log_mtime: Option<SystemTime>,
+    task_store_mtime: Option<SystemTime>,
+    task_store_all_done: bool,
 }
 
 /// Per-pane runtime entries keyed by pane id. The selected bottom tab
@@ -361,4 +368,5 @@ struct NoticesState {
 8. `layout.line_to_row` is rebuilt every frame — ensures accurate click routing
 9. Pane runtime state is pruned when the pane disappears — prevents stale per-pane ports and task progress from surviving after the agent is gone
 10. At most one popup is open at a time — enforced structurally by the `PopupState` enum, not by parallel boolean flags
-10. Hook-based cleanup wins when available; pid-based cleanup is a slower fallback that removes panes when the agent process is gone but the hook did not fire
+11. Hook-based cleanup wins when available; pid-based cleanup is a slower fallback that removes panes when the agent process is gone but the hook did not fire
+12. A task store with every item `completed` closes 90 seconds after its last write, for every listed pane regardless of focus — adding or reopening an item restarts the window
