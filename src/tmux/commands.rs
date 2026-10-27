@@ -208,6 +208,32 @@ pub fn select_pane(pane_id: &str) {
     let _ = run_tmux(&["select-pane", "-t", pane_id]);
 }
 
+/// Build the `set-option -p` argument list that colours `pane`'s border
+/// while it is the active pane of its window (`pane-active-border-style`).
+/// Kept separate from the executor so tests can pin the tmux invocation
+/// shape.
+pub fn pane_active_border_args(pane_id: &str, style: &str) -> Vec<String> {
+    vec![
+        "set-option".into(),
+        "-p".into(),
+        "-t".into(),
+        pane_id.into(),
+        "pane-active-border-style".into(),
+        style.into(),
+    ]
+}
+
+/// Colour `pane`'s border with `style` while it is the active pane, via
+/// a per-pane `pane-active-border-style` option. tmux consults the
+/// option on every border redraw, so focus transitions are reflected
+/// without any per-tick sidebar work. Cosmetic best-effort: a failed
+/// write leaves tmux's normal border styling in place.
+pub fn set_pane_active_border_style(pane_id: &str, style: &str) {
+    let args = pane_active_border_args(pane_id, style);
+    let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
+    let _ = run_tmux(&arg_refs);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -243,6 +269,21 @@ mod tests {
         assert_eq!(
             move_pane_args("%5", 80, 0),
             vec!["move-pane", "-s", "%5", "-X", "80", "-Y", "0"]
+        );
+    }
+
+    #[test]
+    fn pane_active_border_args_target_the_pane_scope() {
+        assert_eq!(
+            pane_active_border_args("%7", "fg=#e69875"),
+            vec![
+                "set-option",
+                "-p",
+                "-t",
+                "%7",
+                "pane-active-border-style",
+                "fg=#e69875"
+            ]
         );
     }
 }

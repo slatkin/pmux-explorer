@@ -182,6 +182,9 @@ pub const SIDEBAR_COLOR_FOCUS_BG: &str = "@sidebar_color_focus_bg";
 /// Active focus background, painted over the keyboard-owning section on
 /// top of the base focus background.
 pub const SIDEBAR_COLOR_FOCUS_ACTIVE_BG: &str = "@sidebar_color_focus_active_bg";
+/// Border colour tmux uses for the sidebar pane while it is the active
+/// pane of its window (per-pane `pane-active-border-style`).
+pub const SIDEBAR_COLOR_FOCUS_BORDER: &str = "@sidebar_color_focus_border";
 pub const SIDEBAR_COLOR_BRANCH: &str = "@sidebar_color_branch";
 pub const SIDEBAR_COLOR_TASK_PROGRESS: &str = "@sidebar_color_task_progress";
 /// Tasks tab `◻` icon + subject color for pending items.

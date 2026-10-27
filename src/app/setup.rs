@@ -1,5 +1,6 @@
 use crate::cli::plugin_state;
 use crate::state::AppState;
+use crate::tmux;
 use crate::ui;
 
 /// Construct and prime the initial [`AppState`] before the event loop starts.
@@ -11,6 +12,14 @@ use crate::ui;
 pub(super) fn init_state(tmux_pane: String) -> AppState {
     let mut state = AppState::new(tmux_pane);
     state.theme = ui::colors::ColorTheme::from_tmux();
+    // Loud border while the sidebar pane is the active tmux pane: a
+    // per-pane `pane-active-border-style` write, once at startup. tmux
+    // applies it on every border redraw, so focus transitions need no
+    // sidebar involvement. Cosmetic best-effort (see commands.rs).
+    tmux::set_pane_active_border_style(
+        &state.tmux_pane,
+        &ui::colors::tmux_fg_style(state.theme.focus_border),
+    );
     state.icons = ui::icons::StatusIcons::from_tmux();
     state.pet_enabled = ui::pet_enabled_from_tmux();
     state.global.load_from_tmux();

@@ -56,6 +56,7 @@ fn test_all_color_theme_defaults() {
     assert_eq!(theme.diff_deleted, Color::Indexed(174));
     assert_eq!(theme.file_change, Color::Indexed(221));
     assert_eq!(theme.pr_link, Color::Indexed(117));
+    assert_eq!(theme.focus_border, Color::Rgb(0xE6, 0x98, 0x75));
 }
 
 // ─── status_color() for all PaneStatus variants ─────────────────────

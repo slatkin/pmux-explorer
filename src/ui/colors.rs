@@ -61,6 +61,11 @@ pub struct ColorTheme {
     /// Thought tab color of the `HH:mm:ss` line above the thinking text.
     pub thought_timestamp: Color,
     pub response_arrow: Color,
+    /// Border colour tmux draws around the sidebar pane while it is the
+    /// active pane of its window. Default is everforest dark-medium
+    /// orange (`#E69875`): loud against dark backgrounds without
+    /// reading as an error.
+    pub focus_border: Color,
 }
 
 impl Default for ColorTheme {
@@ -107,6 +112,7 @@ impl Default for ColorTheme {
             activity_timestamp: Color::Indexed(109),
             thought_timestamp: Color::Indexed(220),
             response_arrow: Color::Indexed(81),
+            focus_border: Color::Rgb(0xE6, 0x98, 0x75),
         }
     }
 }
@@ -172,6 +178,7 @@ impl ColorTheme {
             theme.thought_timestamp,
         );
         theme.response_arrow = read(tmux::SIDEBAR_COLOR_RESPONSE_ARROW, theme.response_arrow);
+        theme.focus_border = read(tmux::SIDEBAR_COLOR_FOCUS_BORDER, theme.focus_border);
 
         theme
     }
@@ -198,6 +205,19 @@ impl ColorTheme {
             AgentType::Pi => self.agent_pi,
             AgentType::Unknown => self.status_unknown,
         }
+    }
+}
+
+/// Render a theme colour as the `fg=` item of a tmux style string, for
+/// options tmux parses itself (border styles). Indexed colours use
+/// tmux's `colour<n>` spelling; RGB colours use `#RRGGBB`. Any other
+/// colour variant falls back to `default`, which leaves tmux's normal
+/// styling in place.
+pub fn tmux_fg_style(color: Color) -> String {
+    match color {
+        Color::Indexed(n) => format!("fg=colour{n}"),
+        Color::Rgb(r, g, b) => format!("fg=#{r:02x}{g:02x}{b:02x}"),
+        _ => "fg=default".to_string(),
     }
 }
 
@@ -306,6 +326,12 @@ mod tests {
     }
 
     #[test]
+    fn tmux_fg_style_covers_indexed_and_rgb() {
+        assert_eq!(tmux_fg_style(Color::Indexed(42)), "fg=colour42");
+        assert_eq!(tmux_fg_style(Color::Rgb(0xE6, 0x98, 0x75)), "fg=#e69875");
+    }
+
+    #[test]
     fn from_options_accepts_focus_fill_overrides() {
         let mut options = std::collections::HashMap::new();
         options.insert(
@@ -316,11 +342,16 @@ mod tests {
             tmux::SIDEBAR_COLOR_FOCUS_ACTIVE_BG.to_string(),
             "50".to_string(),
         );
+        options.insert(
+            tmux::SIDEBAR_COLOR_FOCUS_BORDER.to_string(),
+            "42".to_string(),
+        );
 
         let theme = ColorTheme::from_options(&options);
 
         assert_eq!(theme.focus_bg, Color::Rgb(0x0a, 0x0b, 0x0c));
         assert_eq!(theme.focus_active_bg, Color::Indexed(50));
+        assert_eq!(theme.focus_border, Color::Indexed(42));
     }
 
     #[test]
@@ -334,12 +365,17 @@ mod tests {
             tmux::SIDEBAR_COLOR_FOCUS_ACTIVE_BG.to_string(),
             "256".to_string(),
         );
+        options.insert(
+            tmux::SIDEBAR_COLOR_FOCUS_BORDER.to_string(),
+            "not-a-color".to_string(),
+        );
 
         let theme = ColorTheme::from_options(&options);
         let default_theme = ColorTheme::default();
 
         assert_eq!(theme.focus_bg, default_theme.focus_bg);
         assert_eq!(theme.focus_active_bg, default_theme.focus_active_bg);
+        assert_eq!(theme.focus_border, default_theme.focus_border);
     }
 
     #[test]
