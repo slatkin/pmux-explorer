@@ -92,7 +92,12 @@ fn parse_iso_utc_secs(ts: &str) -> Option<i64> {
     if !rest.is_empty() && rest != "Z" {
         return None;
     }
-    if !(1..=12).contains(&month) || !(1..=31).contains(&day) {
+    if !(1..=12).contains(&month)
+        || !(1..=days_in_month(year, month)).contains(&day)
+        || hour > 23
+        || min > 59
+        || sec > 59
+    {
         return None;
     }
     Some(days_from_civil(year, month, day) * 86_400 + hour * 3600 + min * 60 + sec)
@@ -108,6 +113,19 @@ fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
     let doy = (153 * mp + 2) / 5 + day - 1; // [0, 365]
     let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy; // [0, 146096]
     era * 146_097 + doe - 719_468
+}
+
+/// Days in one month of one year, leap Februaries included.
+fn days_in_month(year: i64, month: i64) -> i64 {
+    match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        // A Gregorian leap year: divisible by 4, except centuries not
+        // divisible by 400.
+        2 if year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) => 29,
+        2 => 28,
+        _ => 0,
+    }
 }
 
 #[cfg(test)]
@@ -173,5 +191,32 @@ mod tests {
         ] {
             assert!(parse_iso_utc_secs(ts).is_none(), "{ts:?} must not parse");
         }
+    }
+
+    #[test]
+    fn an_out_of_range_time_of_day_gives_none() {
+        for ts in [
+            "2026-10-27T24:00:00Z", // hour 24 (no leap-second handling)
+            "2026-10-27T25:99:99Z", // the corrupt shape the review found
+            "2026-10-27T23:60:00Z", // minute 60
+            "2026-10-27T23:59:60Z", // second 60
+        ] {
+            assert!(parse_iso_utc_secs(ts).is_none(), "{ts:?} must not parse");
+        }
+    }
+
+    #[test]
+    fn a_day_beyond_the_month_gives_none() {
+        for ts in [
+            "2026-02-31T08:00:07Z", // February, non-leap year
+            "2026-02-29T08:00:07Z", // February 29, non-leap year
+            "2026-04-31T08:00:07Z", // April has 30 days
+        ] {
+            assert!(parse_iso_utc_secs(ts).is_none(), "{ts:?} must not parse");
+        }
+        // The leap day a leap year actually has; the century rule too.
+        assert!(parse_iso_utc_secs("2024-02-29T08:00:07Z").is_some());
+        assert!(parse_iso_utc_secs("2000-02-29T00:00:00Z").is_some());
+        assert!(parse_iso_utc_secs("1900-02-29T00:00:00Z").is_none());
     }
 }
