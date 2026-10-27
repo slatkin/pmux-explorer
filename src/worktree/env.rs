@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use super::config::{BRANCH_PREFIX_OPTION, WORKTREE_DIR_OPTION};
+use super::flow::WorktreeError;
 use crate::{git, tmux};
 
 /// All side effects `spawn_with` / `remove_with` depend on, extracted
@@ -22,13 +23,23 @@ pub(crate) trait SpawnEnv {
     /// spawn (`is_free=true`, picks a fresh slug) and remove
     /// (`exists=true`, runs the cleanup).
     fn worktree_path_exists(&self, path: &str) -> bool;
-    fn worktree_add(&self, repo: &str, worktree_path: &str, branch: &str) -> Result<(), String>;
-    fn worktree_remove(&self, repo: &str, worktree_path: &str) -> Result<(), String>;
-    fn branch_delete(&self, repo: &str, branch: &str) -> Result<(), String>;
-    fn new_window(&self, session: &str, cwd: &str, name: &str) -> Result<(String, String), String>;
-    fn kill_window(&self, window_id: &str) -> Result<(), String>;
-    fn set_window_option(&self, window: &str, key: &str, value: &str) -> Result<(), String>;
-    fn send_command(&self, target: &str, command: &str) -> Result<(), String>;
+    fn worktree_add(
+        &self,
+        repo: &str,
+        worktree_path: &str,
+        branch: &str,
+    ) -> Result<(), WorktreeError>;
+    fn worktree_remove(&self, repo: &str, worktree_path: &str) -> Result<(), WorktreeError>;
+    fn branch_delete(&self, repo: &str, branch: &str) -> Result<(), WorktreeError>;
+    fn new_window(
+        &self,
+        session: &str,
+        cwd: &str,
+        name: &str,
+    ) -> Result<(String, String), WorktreeError>;
+    fn kill_window(&self, window_id: &str) -> Result<(), WorktreeError>;
+    fn set_window_option(&self, window: &str, key: &str, value: &str) -> Result<(), WorktreeError>;
+    fn send_command(&self, target: &str, command: &str) -> Result<(), WorktreeError>;
     fn display_message(&self, pane_id: &str, template: &str) -> String;
 }
 
@@ -57,26 +68,31 @@ impl SpawnEnv for RealEnv {
     fn worktree_path_exists(&self, path: &str) -> bool {
         !path.is_empty() && Path::new(path).exists()
     }
-    fn worktree_add(&self, repo: &str, path: &str, branch: &str) -> Result<(), String> {
-        git::worktree_add(repo, path, branch)
+    fn worktree_add(&self, repo: &str, path: &str, branch: &str) -> Result<(), WorktreeError> {
+        git::worktree_add(repo, path, branch).map_err(WorktreeError::Git)
     }
-    fn worktree_remove(&self, repo: &str, path: &str) -> Result<(), String> {
-        git::worktree_remove(repo, path)
+    fn worktree_remove(&self, repo: &str, path: &str) -> Result<(), WorktreeError> {
+        git::worktree_remove(repo, path).map_err(WorktreeError::Git)
     }
-    fn branch_delete(&self, repo: &str, branch: &str) -> Result<(), String> {
-        git::branch_delete(repo, branch)
+    fn branch_delete(&self, repo: &str, branch: &str) -> Result<(), WorktreeError> {
+        git::branch_delete(repo, branch).map_err(WorktreeError::Git)
     }
-    fn new_window(&self, session: &str, cwd: &str, name: &str) -> Result<(String, String), String> {
-        tmux::new_window(session, cwd, name)
+    fn new_window(
+        &self,
+        session: &str,
+        cwd: &str,
+        name: &str,
+    ) -> Result<(String, String), WorktreeError> {
+        tmux::new_window(session, cwd, name).map_err(WorktreeError::Tmux)
     }
-    fn kill_window(&self, window_id: &str) -> Result<(), String> {
-        tmux::kill_window(window_id)
+    fn kill_window(&self, window_id: &str) -> Result<(), WorktreeError> {
+        tmux::kill_window(window_id).map_err(WorktreeError::Tmux)
     }
-    fn set_window_option(&self, window: &str, key: &str, value: &str) -> Result<(), String> {
-        tmux::set_window_option(window, key, value)
+    fn set_window_option(&self, window: &str, key: &str, value: &str) -> Result<(), WorktreeError> {
+        tmux::set_window_option(window, key, value).map_err(WorktreeError::Tmux)
     }
-    fn send_command(&self, target: &str, command: &str) -> Result<(), String> {
-        tmux::send_command(target, command)
+    fn send_command(&self, target: &str, command: &str) -> Result<(), WorktreeError> {
+        tmux::send_command(target, command).map_err(WorktreeError::Tmux)
     }
     fn display_message(&self, pane_id: &str, template: &str) -> String {
         tmux::display_message(pane_id, template)

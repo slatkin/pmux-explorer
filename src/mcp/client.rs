@@ -19,10 +19,13 @@ use std::time::Duration;
 pub enum ArmError {
     /// No endpoint socket at the path, or nothing listens on it.
     Unreachable(io::Error),
-    /// The endpoint did not send a reply line within the answer window —
-    /// the write or the read failed, the endpoint closed without a reply,
-    /// or the window ran out. No detail is carried: the caller reports
-    /// the answer window, not the underlying I/O error.
+    /// The endpoint did not send a reply line within the answer window.
+    ///
+    /// The collapse is deliberate: any transport failure after a
+    /// successful connect — timeout setup, write, flush, a read error, or
+    /// EOF before a reply line — means the same thing to the caller, which
+    /// reports the answer window rather than the transport detail. The
+    /// source `io::Error` is therefore not carried.
     NoAnswer,
 }
 

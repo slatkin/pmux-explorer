@@ -249,6 +249,10 @@ fn normalize_fingerprint(value: &str) -> String {
     value.replace(['|', '\n', '\r'], " ")
 }
 
+/// Send one desktop notification through the platform backend.
+///
+/// The `String` in the error is the complete user-facing message: the
+/// caller prints it verbatim and no caller distinguishes failure kinds.
 fn send_desktop_notification(title: &str, body: &str) -> Result<(), String> {
     // Test-suite guard: never spawn a real notification command while the
     // guard from `.cargo/config.toml` is active.
@@ -350,6 +354,12 @@ fn escape_applescript(value: &str) -> String {
         .replace('"', "\\\"")
 }
 
+/// Run one notification command, waiting at most `timeout` for it.
+///
+/// The `String` in the error is the complete user-facing message, passed
+/// up through [`send_desktop_notification`] and printed verbatim; no
+/// caller distinguishes failure kinds. Every failure path embeds the
+/// source error in that message.
 fn run_notification_command(
     command: &mut Command,
     command_name: &str,

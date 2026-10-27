@@ -1,3 +1,4 @@
+use std::fmt;
 use std::path::{Component, Path, PathBuf};
 
 use super::config::{DEFAULT_BRANCH_PREFIX, RemoveMode};
@@ -7,6 +8,57 @@ use super::markers::{
     SpawnMarkers, spawn_markers_template,
 };
 use super::slug::{MAX_COLLISION_ATTEMPTS, pick_unique_slug, slugify, worktree_path_for};
+
+/// Failure from the spawn/remove flows.
+///
+/// The variants name the error source; [`Display`] renders the same
+/// user-facing text the flows have always produced.
+#[derive(Debug)]
+pub enum WorktreeError {
+    /// The request or a pane's spawn markers cannot be used as given.
+    Invalid(String),
+    /// A `git` invocation failed; `Display` prefixes `git: `.
+    Git(String),
+    /// A `tmux` invocation failed; `Display` prefixes `tmux: `.
+    Tmux(String),
+    /// The primary spawn failure plus the rollback steps that also
+    /// failed, so the user sees the state left behind.
+    SpawnRollback {
+        primary: Box<Self>,
+        rollback: Vec<String>,
+    },
+}
+
+impl WorktreeError {
+    /// The source message without its category prefix. Rollback lines
+    /// name the failed step themselves, so they must not repeat the
+    /// `git:` / `tmux:` prefix.
+    fn detail(&self) -> &str {
+        match self {
+            Self::Invalid(message) | Self::Git(message) | Self::Tmux(message) => message,
+            Self::SpawnRollback { primary, .. } => primary.detail(),
+        }
+    }
+}
+
+impl fmt::Display for WorktreeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Invalid(message) => f.write_str(message),
+            Self::Git(message) => write!(f, "git: {message}"),
+            Self::Tmux(message) => write!(f, "tmux: {message}"),
+            Self::SpawnRollback { primary, rollback } => {
+                write!(
+                    f,
+                    "{primary} (rollback incomplete: {})",
+                    rollback.join("; ")
+                )
+            }
+        }
+    }
+}
+
+impl std::error::Error for WorktreeError {}
 
 #[derive(Debug, Clone)]
 pub struct SpawnRequest {
@@ -21,19 +73,24 @@ pub struct SpawnRequest {
 /// and stash markers at window scope so the matching `x` flow can find
 /// it later. Returns the resulting branch name on success. On any
 /// failure past `git worktree add` the worktree is rolled back.
-pub fn spawn(req: &SpawnRequest) -> Result<String, String> {
+pub fn spawn(req: &SpawnRequest) -> Result<String, WorktreeError> {
     spawn_with(&RealEnv, req)
 }
 
-pub(crate) fn spawn_with<E: SpawnEnv>(env: &E, req: &SpawnRequest) -> Result<String, String> {
+pub(crate) fn spawn_with<E: SpawnEnv>(
+    env: &E,
+    req: &SpawnRequest,
+) -> Result<String, WorktreeError> {
     let slug = slugify(&req.task_name);
     if slug.is_empty() {
-        return Err("name is empty after slugification".into());
+        return Err(WorktreeError::Invalid(
+            "name is empty after slugification".into(),
+        ));
     }
     let repo = req
         .repo_root
         .to_str()
-        .ok_or("repo root is not valid UTF-8")?;
+        .ok_or_else(|| WorktreeError::Invalid("repo root is not valid UTF-8".into()))?;
 
     let prefix = env
         .branch_prefix()
@@ -45,7 +102,9 @@ pub(crate) fn spawn_with<E: SpawnEnv>(env: &E, req: &SpawnRequest) -> Result<Str
         !dir.as_os_str().is_empty()
             && (dir.is_absolute() || dir.components().any(|c| c == Component::ParentDir))
     }) {
-        return Err("worktree directory must be repo-relative".into());
+        return Err(WorktreeError::Invalid(
+            "worktree directory must be repo-relative".into(),
+        ));
     }
 
     let unique = pick_unique_slug(&slug, |s| {
@@ -54,21 +113,26 @@ pub(crate) fn spawn_with<E: SpawnEnv>(env: &E, req: &SpawnRequest) -> Result<Str
             && worktree_path_for(&req.repo_root, s, worktree_dir.as_deref())
                 .is_some_and(|p| env.worktree_path_is_free(&p))
     })
-    .ok_or_else(|| format!("no free branch name found after {MAX_COLLISION_ATTEMPTS} attempts"))?;
+    .ok_or_else(|| {
+        WorktreeError::Invalid(format!(
+            "no free branch name found after {MAX_COLLISION_ATTEMPTS} attempts"
+        ))
+    })?;
 
     let branch = format!("{prefix}{unique}");
     let worktree_path = worktree_path_for(&req.repo_root, &unique, worktree_dir.as_deref())
-        .ok_or("worktree directory must be repo-relative")?;
-    let worktree = worktree_path.to_str().ok_or("worktree path is not UTF-8")?;
+        .ok_or_else(|| WorktreeError::Invalid("worktree directory must be repo-relative".into()))?;
+    let worktree = worktree_path
+        .to_str()
+        .ok_or_else(|| WorktreeError::Invalid("worktree path is not UTF-8".into()))?;
 
-    env.worktree_add(repo, worktree, &branch)
-        .map_err(|e| format!("git: {e}"))?;
+    env.worktree_add(repo, worktree, &branch)?;
 
     let (pane_id, window_id) = env
         .new_window(&req.session, worktree, &unique)
         .map_err(|e| {
             let rb = rollback_spawn(env, repo, worktree, &branch, None);
-            compose_spawn_error(format!("tmux: {e}"), rb)
+            compose_spawn_error(e, rb)
         })?;
 
     // Window scope so sub panes (e.g. Claude Code subagents split from
@@ -82,7 +146,7 @@ pub(crate) fn spawn_with<E: SpawnEnv>(env: &E, req: &SpawnRequest) -> Result<Str
         if let Err(e) = env.set_window_option(&window_id, key, value) {
             let rb = rollback_spawn(env, repo, worktree, &branch, Some(&window_id));
             return Err(compose_spawn_error(
-                format!("tmux: failed to set {key}: {e}"),
+                WorktreeError::Tmux(format!("failed to set {key}: {}", e.detail())),
                 rb,
             ));
         }
@@ -93,7 +157,7 @@ pub(crate) fn spawn_with<E: SpawnEnv>(env: &E, req: &SpawnRequest) -> Result<Str
         &super::config::agent_command(&req.agent, &req.mode),
     ) {
         let rb = rollback_spawn(env, repo, worktree, &branch, Some(&window_id));
-        return Err(compose_spawn_error(format!("tmux: {e}"), rb));
+        return Err(compose_spawn_error(e, rb));
     }
 
     Ok(branch)
@@ -117,13 +181,13 @@ fn rollback_spawn<E: SpawnEnv>(
     if let Some(window_id) = window_id
         && let Err(e) = env.kill_window(window_id)
     {
-        errs.push(format!("kill_window: {e}"));
+        errs.push(format!("kill_window: {}", e.detail()));
     }
     if let Err(e) = env.worktree_remove(repo, worktree_path) {
-        errs.push(format!("worktree_remove: {e}"));
+        errs.push(format!("worktree_remove: {}", e.detail()));
     }
     if let Err(e) = env.branch_delete(repo, branch) {
-        errs.push(format!("branch_delete: {e}"));
+        errs.push(format!("branch_delete: {}", e.detail()));
     }
     errs
 }
@@ -131,14 +195,14 @@ fn rollback_spawn<E: SpawnEnv>(
 /// Combine the primary spawn error with any rollback failures so the
 /// user sees a single string that covers both the trigger and the
 /// state left behind.
-fn compose_spawn_error(primary: String, rollback_errs: Vec<String>) -> String {
+fn compose_spawn_error(primary: WorktreeError, rollback_errs: Vec<String>) -> WorktreeError {
     if rollback_errs.is_empty() {
         primary
     } else {
-        format!(
-            "{primary} (rollback incomplete: {})",
-            rollback_errs.join("; ")
-        )
+        WorktreeError::SpawnRollback {
+            primary: Box::new(primary),
+            rollback: rollback_errs,
+        }
     }
 }
 
@@ -151,7 +215,7 @@ fn compose_spawn_error(primary: String, rollback_errs: Vec<String>) -> String {
 /// sidebar. Each git step is skipped when its target is already
 /// gone (`worktree_path_exists` / `branch_exists`), which lets
 /// retries after a partial-success failure converge.
-pub fn remove(pane_id: &str, mode: RemoveMode) -> Result<(), String> {
+pub fn remove(pane_id: &str, mode: RemoveMode) -> Result<(), WorktreeError> {
     remove_with(&RealEnv, pane_id, mode)
 }
 
@@ -159,36 +223,37 @@ pub(crate) fn remove_with<E: SpawnEnv>(
     env: &E,
     pane_id: &str,
     mode: RemoveMode,
-) -> Result<(), String> {
+) -> Result<(), WorktreeError> {
     let markers = SpawnMarkers::parse(&env.display_message(pane_id, &spawn_markers_template()));
     if !markers.is_spawned() {
-        return Err("pane was not created by sidebar spawn".into());
+        return Err(WorktreeError::Invalid(
+            "pane was not created by sidebar spawn".into(),
+        ));
     }
     if markers.worktree_path.is_empty() {
-        return Err("spawned worktree path is unset".into());
+        return Err(WorktreeError::Invalid(
+            "spawned worktree path is unset".into(),
+        ));
     }
     if markers.branch.is_empty() {
-        return Err("spawned branch is unset".into());
+        return Err(WorktreeError::Invalid("spawned branch is unset".into()));
     }
     if markers.window_id.is_empty() {
-        return Err("could not resolve window id".into());
+        return Err(WorktreeError::Invalid("could not resolve window id".into()));
     }
 
     if mode == RemoveMode::WindowAndWorktree {
         if env.worktree_path_exists(&markers.worktree_path) {
-            env.worktree_remove(&markers.from_repo, &markers.worktree_path)
-                .map_err(|e| format!("git: {e}"))?;
+            env.worktree_remove(&markers.from_repo, &markers.worktree_path)?;
         }
         // `git worktree remove` leaves the branch ref behind; drop
         // it here, before `kill_window`, so a failure still leaves
         // the window as a retry handle.
         if env.branch_exists(&markers.from_repo, &markers.branch) {
-            env.branch_delete(&markers.from_repo, &markers.branch)
-                .map_err(|e| format!("git: {e}"))?;
+            env.branch_delete(&markers.from_repo, &markers.branch)?;
         }
     }
-    env.kill_window(&markers.window_id)
-        .map_err(|e| format!("tmux: {e}"))?;
+    env.kill_window(&markers.window_id)?;
     Ok(())
 }
 
@@ -249,22 +314,22 @@ mod env_tests {
         fn worktree_path_exists(&self, _path: &str) -> bool {
             !self.worktree_path_already_gone.unwrap_or(false)
         }
-        fn worktree_add(&self, repo: &str, path: &str, branch: &str) -> Result<(), String> {
+        fn worktree_add(&self, repo: &str, path: &str, branch: &str) -> Result<(), WorktreeError> {
             self.log(format!("worktree_add({repo},{path},{branch})"));
             Ok(())
         }
-        fn worktree_remove(&self, repo: &str, path: &str) -> Result<(), String> {
+        fn worktree_remove(&self, repo: &str, path: &str) -> Result<(), WorktreeError> {
             self.log(format!("worktree_remove({repo},{path})"));
             if self.fail_worktree_remove {
-                Err("worktree_remove failed".into())
+                Err(WorktreeError::Git("worktree_remove failed".into()))
             } else {
                 Ok(())
             }
         }
-        fn branch_delete(&self, repo: &str, branch: &str) -> Result<(), String> {
+        fn branch_delete(&self, repo: &str, branch: &str) -> Result<(), WorktreeError> {
             self.log(format!("branch_delete({repo},{branch})"));
             if self.fail_branch_delete {
-                Err("branch_delete failed".into())
+                Err(WorktreeError::Git("branch_delete failed".into()))
             } else {
                 Ok(())
             }
@@ -274,32 +339,37 @@ mod env_tests {
             session: &str,
             cwd: &str,
             name: &str,
-        ) -> Result<(String, String), String> {
+        ) -> Result<(String, String), WorktreeError> {
             self.log(format!("new_window({session},{cwd},{name})"));
             Ok(("%1".into(), "@1".into()))
         }
-        fn kill_window(&self, window_id: &str) -> Result<(), String> {
+        fn kill_window(&self, window_id: &str) -> Result<(), WorktreeError> {
             self.log(format!("kill_window({window_id})"));
             if self.fail_kill_window {
-                Err("kill_window failed".into())
+                Err(WorktreeError::Tmux("kill_window failed".into()))
             } else {
                 Ok(())
             }
         }
-        fn set_window_option(&self, window: &str, key: &str, _value: &str) -> Result<(), String> {
+        fn set_window_option(
+            &self,
+            window: &str,
+            key: &str,
+            _value: &str,
+        ) -> Result<(), WorktreeError> {
             let idx = *self.set_option_calls.borrow();
             *self.set_option_calls.borrow_mut() += 1;
             self.log(format!("set_window_option({window},{key})"));
             if Some(idx) == self.fail_set_option_at {
-                Err(format!("set {key} failed"))
+                Err(WorktreeError::Tmux(format!("set {key} failed")))
             } else {
                 Ok(())
             }
         }
-        fn send_command(&self, target: &str, command: &str) -> Result<(), String> {
+        fn send_command(&self, target: &str, command: &str) -> Result<(), WorktreeError> {
             self.log(format!("send_command({target},{command})"));
             if self.fail_send_command {
-                Err("send_command failed".into())
+                Err(WorktreeError::Tmux("send_command failed".into()))
             } else {
                 Ok(())
             }
@@ -367,7 +437,8 @@ mod env_tests {
         };
         let err = spawn_with(&env, &sample_req()).expect_err("spawn must fail");
         assert!(
-            err.contains("worktree directory must be repo-relative"),
+            err.to_string()
+                .contains("worktree directory must be repo-relative"),
             "absolute worktree dir should be rejected before path allocation: {err}"
         );
         assert!(
@@ -384,7 +455,8 @@ mod env_tests {
         };
         let err = spawn_with(&env, &sample_req()).expect_err("spawn must fail");
         assert!(
-            err.contains("worktree directory must be repo-relative"),
+            err.to_string()
+                .contains("worktree directory must be repo-relative"),
             "parent-relative worktree dir should be rejected before path allocation: {err}"
         );
         assert!(
@@ -400,7 +472,10 @@ mod env_tests {
             ..FakeEnv::default()
         };
         let err = spawn_with(&env, &sample_req()).expect_err("spawn must fail");
-        assert!(err.contains(SPAWNED_OPTION), "error mentions marker: {err}");
+        assert!(
+            err.to_string().contains(SPAWNED_OPTION),
+            "error mentions marker: {err}"
+        );
         let calls = env.calls();
         assert!(
             has_call(&calls, "kill_window(@1)"),
@@ -424,7 +499,7 @@ mod env_tests {
         };
         let err = spawn_with(&env, &sample_req()).expect_err("spawn must fail");
         assert!(
-            err.contains(SPAWNED_FROM_OPTION),
+            err.to_string().contains(SPAWNED_FROM_OPTION),
             "error mentions second marker: {err}"
         );
         let calls = env.calls();
@@ -465,7 +540,10 @@ mod env_tests {
         };
         let err =
             remove_with(&env, "%1", RemoveMode::WindowAndWorktree).expect_err("remove must fail");
-        assert!(err.contains("worktree_remove failed"), "error: {err}");
+        assert!(
+            err.to_string().contains("worktree_remove failed"),
+            "error: {err}"
+        );
         let calls = env.calls();
         assert!(
             !has_call(&calls, "kill_window("),
@@ -510,7 +588,7 @@ mod env_tests {
         };
         let err = spawn_with(&env, &sample_req()).expect_err("spawn must fail");
         assert!(
-            err.contains("send_command failed"),
+            err.to_string().contains("send_command failed"),
             "primary error surfaced: {err}"
         );
         let calls = env.calls();
@@ -565,26 +643,31 @@ mod env_tests {
             fn worktree_path_exists(&self, p: &str) -> bool {
                 self.0.worktree_path_exists(p)
             }
-            fn worktree_add(&self, r: &str, p: &str, b: &str) -> Result<(), String> {
+            fn worktree_add(&self, r: &str, p: &str, b: &str) -> Result<(), WorktreeError> {
                 self.0.worktree_add(r, p, b)
             }
-            fn worktree_remove(&self, r: &str, p: &str) -> Result<(), String> {
+            fn worktree_remove(&self, r: &str, p: &str) -> Result<(), WorktreeError> {
                 self.0.worktree_remove(r, p)
             }
-            fn branch_delete(&self, r: &str, b: &str) -> Result<(), String> {
+            fn branch_delete(&self, r: &str, b: &str) -> Result<(), WorktreeError> {
                 self.0.branch_delete(r, b)
             }
-            fn new_window(&self, _s: &str, _c: &str, _n: &str) -> Result<(String, String), String> {
+            fn new_window(
+                &self,
+                _s: &str,
+                _c: &str,
+                _n: &str,
+            ) -> Result<(String, String), WorktreeError> {
                 self.0.log("new_window(fail)".into());
-                Err("new_window failed".into())
+                Err(WorktreeError::Tmux("new_window failed".into()))
             }
-            fn kill_window(&self, w: &str) -> Result<(), String> {
+            fn kill_window(&self, w: &str) -> Result<(), WorktreeError> {
                 self.0.kill_window(w)
             }
-            fn set_window_option(&self, w: &str, k: &str, v: &str) -> Result<(), String> {
+            fn set_window_option(&self, w: &str, k: &str, v: &str) -> Result<(), WorktreeError> {
                 self.0.set_window_option(w, k, v)
             }
-            fn send_command(&self, t: &str, c: &str) -> Result<(), String> {
+            fn send_command(&self, t: &str, c: &str) -> Result<(), WorktreeError> {
                 self.0.send_command(t, c)
             }
             fn display_message(&self, p: &str, t: &str) -> String {
@@ -594,7 +677,7 @@ mod env_tests {
 
         let env = NewWindowFailingEnv::default();
         let err = spawn_with(&env, &sample_req()).expect_err("spawn must fail");
-        assert!(err.contains("new_window failed"));
+        assert!(err.to_string().contains("new_window failed"));
         let calls = env.0.calls();
         assert!(
             !has_call(&calls, "kill_window("),
@@ -619,11 +702,11 @@ mod env_tests {
         };
         let err = spawn_with(&env, &sample_req()).expect_err("spawn must fail");
         assert!(
-            err.contains("rollback incomplete"),
+            err.to_string().contains("rollback incomplete"),
             "rollback failure surfaced: {err}"
         );
         assert!(
-            err.contains("kill_window"),
+            err.to_string().contains("kill_window"),
             "rollback error names kill_window: {err}"
         );
     }
@@ -637,15 +720,15 @@ mod env_tests {
         };
         let err = spawn_with(&env, &sample_req()).expect_err("spawn must fail");
         assert!(
-            err.contains("send_command failed"),
+            err.to_string().contains("send_command failed"),
             "primary error surfaced: {err}"
         );
         assert!(
-            err.contains("rollback incomplete"),
+            err.to_string().contains("rollback incomplete"),
             "rollback failure surfaced: {err}"
         );
         assert!(
-            err.contains("worktree_remove"),
+            err.to_string().contains("worktree_remove"),
             "rollback error names worktree_remove: {err}"
         );
     }
@@ -658,7 +741,7 @@ mod env_tests {
         };
         let err =
             remove_with(&env, "%1", RemoveMode::WindowAndWorktree).expect_err("remove must fail");
-        assert!(err.contains("not created by sidebar spawn"));
+        assert!(err.to_string().contains("not created by sidebar spawn"));
         assert!(!has_call(&env.calls(), "kill_window("));
     }
 
@@ -705,7 +788,7 @@ mod env_tests {
         };
         let err =
             remove_with(&env, "%1", RemoveMode::WindowAndWorktree).expect_err("remove must fail");
-        assert!(err.contains("branch is unset"), "error: {err}");
+        assert!(err.to_string().contains("branch is unset"), "error: {err}");
         assert!(!has_call(&env.calls(), "worktree_remove("));
         assert!(!has_call(&env.calls(), "kill_window("));
     }
@@ -718,7 +801,10 @@ mod env_tests {
         };
         let err =
             remove_with(&env, "%1", RemoveMode::WindowAndWorktree).expect_err("remove must fail");
-        assert!(err.contains("branch_delete failed"), "error: {err}");
+        assert!(
+            err.to_string().contains("branch_delete failed"),
+            "error: {err}"
+        );
         let calls = env.calls();
         assert!(
             has_call(&calls, "worktree_remove("),

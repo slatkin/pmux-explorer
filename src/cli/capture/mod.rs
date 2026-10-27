@@ -30,6 +30,11 @@ pub fn cmd_capture(args: &[String]) -> i32 {
     }
 }
 
+/// Capture a frame sequence into `opts.frames_out`.
+///
+/// The `String` in the error is the complete user-facing message and is
+/// displayed verbatim by [`cmd_capture`]; no caller distinguishes failure
+/// kinds.
 fn run_loop(opts: &Opts) -> Result<(), String> {
     // Safe unwrap: cmd_capture only dispatches here when frames_out is set.
     let dir = opts
@@ -79,6 +84,11 @@ fn run_loop(opts: &Opts) -> Result<(), String> {
     Ok(())
 }
 
+/// Capture one frame to `opts.frame_out`, or to stdout when unset.
+///
+/// The `String` in the error is the complete user-facing message and is
+/// displayed verbatim by [`cmd_capture`]; no caller distinguishes failure
+/// kinds.
 fn run_single(opts: &Opts) -> Result<(), String> {
     let html = capture_window_html(opts)?;
     if let Some(path) = &opts.frame_out {
