@@ -87,17 +87,6 @@ fn snapshot_codex_agent_styled() {
     );
 }
 
-// ─── Agents: Unknown agent type ─────────────────────────────────────
-
-#[test]
-fn snapshot_unknown_agent_styled() {
-    let theme = ColorTheme::default();
-    assert_eq!(
-        theme.agent_color(&AgentType::Unknown),
-        ratatui::style::Color::Rgb(0x56, 0x5f, 0x89)
-    );
-}
-
 // ─── Agents: running icon variants via render ───────────────────────
 
 #[test]

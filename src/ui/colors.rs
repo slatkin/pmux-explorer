@@ -218,7 +218,6 @@ impl ColorTheme {
             AgentType::Codex => self.agent_codex,
             AgentType::OpenCode => self.agent_opencode,
             AgentType::Pi => self.agent_pi,
-            AgentType::Unknown => self.status_unknown,
         }
     }
 }
@@ -322,7 +321,6 @@ mod tests {
             theme.agent_color(&AgentType::Pi),
             Color::Rgb(0xe0, 0xaf, 0x68)
         );
-        assert_eq!(theme.agent_color(&AgentType::Unknown), theme.status_unknown);
     }
 
     #[test]

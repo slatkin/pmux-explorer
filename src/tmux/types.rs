@@ -124,8 +124,6 @@ pub enum AgentType {
     Codex,
     OpenCode,
     Pi,
-    #[allow(dead_code)]
-    Unknown,
 }
 
 #[derive(Debug, Clone)]
@@ -162,7 +160,6 @@ impl AgentType {
             Self::Codex => CODEX_AGENT,
             Self::OpenCode => OPENCODE_AGENT,
             Self::Pi => PI_AGENT,
-            Self::Unknown => "unknown",
         }
     }
 
@@ -251,7 +248,6 @@ mod tests {
         assert_eq!(AgentType::Codex.label(), "codex");
         assert_eq!(AgentType::OpenCode.label(), "opencode");
         assert_eq!(AgentType::Pi.label(), "\u{e22c}");
-        assert_eq!(AgentType::Unknown.label(), "unknown");
     }
 
     #[test]

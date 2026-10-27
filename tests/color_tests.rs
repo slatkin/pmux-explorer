@@ -123,7 +123,6 @@ fn test_agent_color_all_variants() {
         theme.agent_color(&AgentType::Codex),
         Color::Rgb(0xbb, 0x9a, 0xf7)
     );
-    assert_eq!(theme.agent_color(&AgentType::Unknown), theme.status_unknown);
 }
 
 // ─── PermissionMode badge colors ────────────────────────────────────
