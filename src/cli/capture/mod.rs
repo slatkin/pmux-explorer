@@ -40,7 +40,7 @@ fn run_loop(opts: &Opts) -> Result<(), String> {
     let dir = opts
         .frames_out
         .as_ref()
-        .expect("run_loop called without frames_out");
+        .expect("cmd_capture dispatches to run_loop only when frames_out is set");
     fs::create_dir_all(dir).map_err(|e| format!("create {dir}: {e}"))?;
 
     if opts.fps == 0 {
@@ -77,7 +77,8 @@ fn run_loop(opts: &Opts) -> Result<(), String> {
     let manifest_path = std::path::PathBuf::from(dir).join("manifest.json");
     fs::write(
         &manifest_path,
-        serde_json::to_string_pretty(&manifest).unwrap(),
+        serde_json::to_string_pretty(&manifest)
+            .expect("a Value manifest of strings and numbers should be infallible"),
     )
     .map_err(|e| format!("write {}: {e}", manifest_path.display()))?;
 

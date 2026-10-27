@@ -77,7 +77,7 @@ pub(crate) fn build_agent_snippet(agent: &str, hook_script: &str) -> Option<serd
             .entry(reg.trigger.to_string())
             .or_insert_with(|| serde_json::Value::Array(Vec::new()))
             .as_array_mut()
-            .expect("trigger entry must be an array");
+            .expect("trigger entries are created only as arrays by or_insert_with above");
         arr.push(entry);
     }
 
