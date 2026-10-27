@@ -146,6 +146,7 @@ pub(super) fn wait_reason_row(
     wait_reason: &str,
     status: &PaneStatus,
     ctx: &RowCtx,
+    spinner_frame: usize,
 ) -> Option<Line<'static>> {
     if wait_reason.is_empty() {
         return None;
@@ -159,7 +160,17 @@ pub(super) fn wait_reason_row(
     let reason_color = if matches!(status, PaneStatus::Error) {
         ctx.theme.status_error
     } else if action_required {
-        ctx.theme.wait_reason_action
+        // An action-required label blinks: it flips to the dimmed red for
+        // the second half of each spinner cycle (~800 ms at the 200 ms
+        // frame clock) — the same cadence the running icon pulses on — so
+        // the demand for input reads as alive, not as static decoration.
+        // The dim phase stays in the red family rather than greying out.
+        // The chat prompt text itself never blinks.
+        if spinner_frame >= crate::SPINNER_PULSE.len() / 2 {
+            ctx.theme.wait_reason_action_dim
+        } else {
+            ctx.theme.wait_reason_action
+        }
     } else {
         ctx.theme.wait_reason
     };

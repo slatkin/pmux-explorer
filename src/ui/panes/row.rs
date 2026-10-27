@@ -81,7 +81,7 @@ pub(super) fn render_pane_lines_with_ports(
         out.push(line);
     }
     out.extend(subagent_rows(&pane.subagents, ctx));
-    if let Some(line) = wait_reason_row(&pane.wait_reason, &pane.status, ctx) {
+    if let Some(line) = wait_reason_row(&pane.wait_reason, &pane.status, ctx, spinner_frame) {
         out.push(line);
     }
     if let Some(cmd) = pane.bg_shell_cmd.as_deref() {
@@ -1007,7 +1007,7 @@ mod tests {
     fn wait_reason_row_uses_error_color_when_status_is_error() {
         let theme = ColorTheme::default();
         let ctx = test_ctx(&theme, 40, false);
-        let line = wait_reason_row("permission_prompt", &PaneStatus::Error, &ctx)
+        let line = wait_reason_row("permission_prompt", &PaneStatus::Error, &ctx, 0)
             .expect("should render reason line");
         let text_span = line
             .spans
@@ -1021,7 +1021,7 @@ mod tests {
     fn wait_reason_row_labels_a_pi_prompt_kind() {
         let theme = ColorTheme::default();
         let ctx = test_ctx(&theme, 40, false);
-        let line = wait_reason_row("custom", &PaneStatus::Waiting, &ctx)
+        let line = wait_reason_row("custom", &PaneStatus::Waiting, &ctx, 0)
             .expect("should render reason line");
         // Snapshot the visible text; the row padding that follows it is
         // covered by `pad_to`.
@@ -1033,7 +1033,7 @@ mod tests {
         let theme = ColorTheme::default();
         let ctx = test_ctx(&theme, 40, false);
         let color_of = |reason: &str| -> Option<Color> {
-            let line = wait_reason_row(reason, &PaneStatus::Waiting, &ctx)
+            let line = wait_reason_row(reason, &PaneStatus::Waiting, &ctx, 0)
                 .expect("should render reason line");
             // The marker and padding spans carry no foreground, so the first
             // one that does is the reason text.
@@ -1185,6 +1185,46 @@ mod tests {
                 "each wrapped line should carry the left padding, got: {text}"
             );
         }
+    }
+
+    #[test]
+    fn wait_reason_row_blinks_action_required_label() {
+        let theme = ColorTheme::default();
+        let ctx = test_ctx(&theme, 40, false);
+        let fg_at = |reason: &str, frame: usize| {
+            wait_reason_row(reason, &PaneStatus::Waiting, &ctx, frame)
+                .expect("action-required reason should render")
+                .spans
+                .iter()
+                .find_map(|s| s.style.fg)
+        };
+        let blink_frame = crate::SPINNER_PULSE.len() / 2;
+
+        // Red on the first half of the cycle, dimmed red on the second —
+        // a visible pulse on the demand-for-input label only, never grey.
+        assert_eq!(fg_at("custom", 0), Some(theme.wait_reason_action));
+        assert_eq!(
+            fg_at("custom", blink_frame),
+            Some(theme.wait_reason_action_dim)
+        );
+        for reason in ["select", "confirm", "input", "editor"] {
+            assert_eq!(
+                fg_at(reason, blink_frame),
+                Some(theme.wait_reason_action_dim)
+            );
+        }
+
+        // Non-action reasons and the error-status row hold their color.
+        assert_eq!(fg_at("auth_success", 0), Some(theme.wait_reason));
+        assert_eq!(fg_at("auth_success", blink_frame), Some(theme.wait_reason));
+        assert_eq!(
+            wait_reason_row("permission_prompt", &PaneStatus::Error, &ctx, blink_frame)
+                .expect("reason should render")
+                .spans
+                .iter()
+                .find_map(|s| s.style.fg),
+            Some(theme.status_error)
+        );
     }
 
     // ─── pmux subagent badge and identity row (rows 4.1 / 4.2) ───

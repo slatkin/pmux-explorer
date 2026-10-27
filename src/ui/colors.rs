@@ -40,6 +40,9 @@ pub struct ColorTheme {
     /// Tokyo Night red (`#f7768e`) so it does not blend into the yellow
     /// agent title on the row above.
     pub wait_reason_action: Color,
+    /// The dim phase of an action-required reason's blink — same hue
+    /// family as `wait_reason_action`, darker, so the pulse stays red.
+    pub wait_reason_action_dim: Color,
     pub selection_bg: Color,
     /// Base focus background over the whole sidebar while its tmux pane
     /// is the active one. Default Tokyo Night background (`#1a1b26`)
@@ -102,6 +105,7 @@ impl Default for ColorTheme {
             port: Color::Rgb(0x9a, 0xa5, 0xce),
             wait_reason: Color::Rgb(0xe0, 0xaf, 0x68),
             wait_reason_action: Color::Rgb(0xf7, 0x76, 0x8e),
+            wait_reason_action_dim: Color::Rgb(0x8a, 0x3f, 0x4e),
             selection_bg: Color::Rgb(0x41, 0x48, 0x68),
             focus_bg: Color::Rgb(0x1a, 0x1b, 0x26),
             focus_active_bg: Color::Rgb(0x24, 0x28, 0x3b),
@@ -169,6 +173,10 @@ impl ColorTheme {
         theme.wait_reason_action = read(
             tmux::SIDEBAR_COLOR_WAIT_REASON_ACTION,
             theme.wait_reason_action,
+        );
+        theme.wait_reason_action_dim = read(
+            tmux::SIDEBAR_COLOR_WAIT_REASON_ACTION_DIM,
+            theme.wait_reason_action_dim,
         );
         theme.selection_bg = read(tmux::SIDEBAR_COLOR_SELECTION, theme.selection_bg);
         theme.focus_bg = read(tmux::SIDEBAR_COLOR_FOCUS_BG, theme.focus_bg);

@@ -181,6 +181,10 @@ pub const SIDEBAR_COLOR_WAIT_REASON: &str = "@sidebar_color_wait_reason";
 /// Wait-reason text for a reason that demands the user (the permission
 /// class, or a blocking prompt), so it stands apart from the agent title.
 pub const SIDEBAR_COLOR_WAIT_REASON_ACTION: &str = "@sidebar_color_wait_reason_action";
+/// The dimmed phase of an action-required reason's blink — the same hue
+/// family as [`SIDEBAR_COLOR_WAIT_REASON_ACTION`], darker, so the label
+/// pulses red rather than fading to grey.
+pub const SIDEBAR_COLOR_WAIT_REASON_ACTION_DIM: &str = "@sidebar_color_wait_reason_action_dim";
 pub const SIDEBAR_COLOR_SELECTION: &str = "@sidebar_color_selection";
 /// Base focus background, painted over the whole sidebar while its tmux
 /// pane is the active one.
