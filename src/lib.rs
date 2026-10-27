@@ -16,6 +16,7 @@ pub mod task_reminders;
 pub mod task_store;
 #[cfg(test)]
 pub(crate) mod test_support;
+pub mod thinking_feed;
 pub mod time;
 pub mod tmux;
 pub mod tool_name;
