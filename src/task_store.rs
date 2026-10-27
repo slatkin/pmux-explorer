@@ -9,6 +9,7 @@
 //! seconds, the per-tick close sweep removes the file.
 
 use std::fs;
+use std::io;
 use std::path::PathBuf;
 use std::time::SystemTime;
 
@@ -125,10 +126,12 @@ pub fn read_task_list(pane_id: &str) -> TaskList {
 }
 
 /// Record a new pending item for a pane and return its assigned id.
-/// A missing pane id or a blank subject is a no-op returning `None`.
-pub fn record_task(pane_id: &str, subject: &str) -> Option<String> {
+/// A missing pane id or a blank subject is a no-op returning `None`, and
+/// a store that could not be written returns the io error instead of an
+/// id — the id is only reported once it reached the file.
+pub fn record_task(pane_id: &str, subject: &str) -> io::Result<Option<String>> {
     if pane_id.is_empty() || subject.trim().is_empty() {
-        return None;
+        return Ok(None);
     }
     let mut list = read_task_list(pane_id);
     // Ids keep counting past trimmed items so a stored id is never reused.
@@ -146,36 +149,38 @@ pub fn record_task(pane_id: &str, subject: &str) -> Option<String> {
         status: TaskItemStatus::Pending,
     });
     trim_items(&mut list.items);
-    write_store(pane_id, &list);
-    Some(id)
+    write_store(pane_id, &list)?;
+    Ok(Some(id))
 }
 
 /// Set the status of the item with `id`. Returns `false` when the pane
-/// id is empty or the item does not exist, so callers can no-op.
-pub fn update_task_status(pane_id: &str, id: &str, status: TaskItemStatus) -> bool {
+/// id is empty or the item does not exist, so callers can no-op, and
+/// the io error when the change could not be persisted.
+pub fn update_task_status(pane_id: &str, id: &str, status: TaskItemStatus) -> io::Result<bool> {
     if pane_id.is_empty() {
-        return false;
+        return Ok(false);
     }
     let mut list = read_task_list(pane_id);
     let Some(item) = list.items.iter_mut().find(|task| task.id == id) else {
-        return false;
+        return Ok(false);
     };
     item.status = status;
-    write_store(pane_id, &list);
-    true
+    write_store(pane_id, &list)?;
+    Ok(true)
 }
 
 /// Set the pane-wide description shown above the Tasks tab's item
 /// list. Later writes replace it; a blank description clears it.
-/// Returns `false` when the pane id is empty, so callers can no-op.
-pub fn set_description(pane_id: &str, description: &str) -> bool {
+/// Returns `false` when the pane id is empty, so callers can no-op, and
+/// the io error when the description could not be persisted.
+pub fn set_description(pane_id: &str, description: &str) -> io::Result<bool> {
     if pane_id.is_empty() {
-        return false;
+        return Ok(false);
     }
     let mut list = read_task_list(pane_id);
     list.description = description.trim().to_string();
-    write_store(pane_id, &list);
-    true
+    write_store(pane_id, &list)?;
+    Ok(true)
 }
 
 /// Whether a pane's task list is due to close: the list holds at
@@ -214,17 +219,22 @@ pub fn clear_tasks(pane_id: &str) {
     if pane_id.is_empty() {
         return;
     }
+    // Best effort: a store that survives the removal is overwritten by the
+    // next write, so a teardown or close sweep must not fail on it.
     let _ = fs::remove_file(store_file_path(pane_id));
 }
 
-fn write_store(pane_id: &str, list: &TaskList) {
+/// Write a pane's store back as JSON. A `StoreFile` of strings and
+/// unit-variant enums always serializes, so the only expected failure is
+/// the io one — surfaced to the caller because the task commands report
+/// success only when the write landed.
+fn write_store(pane_id: &str, list: &TaskList) -> io::Result<()> {
     let file = StoreFile {
         description: list.description.clone(),
         tasks: list.items.clone(),
     };
-    if let Ok(json) = serde_json::to_string(&file) {
-        let _ = fs::write(store_file_path(pane_id), json);
-    }
+    let json = serde_json::to_string(&file).map_err(io::Error::other)?;
+    fs::write(store_file_path(pane_id), json)
 }
 
 /// Enforce [`MAX_ITEMS`]: drop the oldest completed items first, then
@@ -260,8 +270,8 @@ mod tests {
         let pane_id = "%TASK_RECORD";
         cleanup(pane_id);
 
-        let first = record_task(pane_id, "Fix the login bug").unwrap();
-        let second = record_task(pane_id, "Write the docs").unwrap();
+        let first = record_task(pane_id, "Fix the login bug").unwrap().unwrap();
+        let second = record_task(pane_id, "Write the docs").unwrap().unwrap();
 
         let items = read_tasks(pane_id);
         assert_eq!(items.len(), 2);
@@ -279,7 +289,7 @@ mod tests {
         // Before: whatever state the pane-less store file is in.
         let before = store_mtime("");
 
-        assert_eq!(record_task("", "orphan subject"), None);
+        assert_eq!(record_task("", "orphan subject").unwrap(), None);
 
         assert_eq!(
             store_mtime(""),
@@ -293,7 +303,7 @@ mod tests {
         let pane_id = "%TASK_BLANK";
         cleanup(pane_id);
 
-        assert_eq!(record_task(pane_id, "   "), None);
+        assert_eq!(record_task(pane_id, "   ").unwrap(), None);
         assert!(!store_file_path(pane_id).exists());
 
         cleanup(pane_id);
@@ -303,9 +313,9 @@ mod tests {
     fn update_changes_status_of_existing_item() {
         let pane_id = "%TASK_UPDATE";
         cleanup(pane_id);
-        let id = record_task(pane_id, "Ship it").unwrap();
+        let id = record_task(pane_id, "Ship it").unwrap().unwrap();
 
-        assert!(update_task_status(pane_id, &id, TaskItemStatus::Completed));
+        assert!(update_task_status(pane_id, &id, TaskItemStatus::Completed).unwrap());
 
         let items = read_tasks(pane_id);
         assert_eq!(items[0].status, TaskItemStatus::Completed);
@@ -318,14 +328,10 @@ mod tests {
     fn update_unknown_id_changes_nothing() {
         let pane_id = "%TASK_UPDATE_MISS";
         cleanup(pane_id);
-        record_task(pane_id, "real item");
+        record_task(pane_id, "real item").unwrap();
         let before = store_mtime(pane_id);
 
-        assert!(!update_task_status(
-            pane_id,
-            "999",
-            TaskItemStatus::Completed
-        ));
+        assert!(!update_task_status(pane_id, "999", TaskItemStatus::Completed).unwrap());
 
         assert_eq!(store_mtime(pane_id), before, "a miss must not rewrite");
         assert_eq!(read_tasks(pane_id)[0].status, TaskItemStatus::Pending);
@@ -335,7 +341,7 @@ mod tests {
 
     #[test]
     fn update_missing_pane_env_is_noop() {
-        assert!(!update_task_status("", "1", TaskItemStatus::Completed));
+        assert!(!update_task_status("", "1", TaskItemStatus::Completed).unwrap());
     }
 
     #[test]
@@ -344,18 +350,16 @@ mod tests {
         cleanup(pane_id);
 
         for i in 1..=MAX_ITEMS {
-            record_task(pane_id, &format!("task {i}"));
+            record_task(pane_id, &format!("task {i}")).unwrap();
         }
         // Complete the ten oldest items, then push five more past the cap.
         for id in 1..=10 {
-            assert!(update_task_status(
-                pane_id,
-                &id.to_string(),
-                TaskItemStatus::Completed
-            ));
+            assert!(
+                update_task_status(pane_id, &id.to_string(), TaskItemStatus::Completed).unwrap()
+            );
         }
         for i in 0..5 {
-            record_task(pane_id, &format!("late {i}"));
+            record_task(pane_id, &format!("late {i}")).unwrap();
         }
 
         let items = read_tasks(pane_id);
@@ -375,7 +379,7 @@ mod tests {
         cleanup(pane_id);
 
         for i in 1..=MAX_ITEMS + 3 {
-            record_task(pane_id, &format!("task {i}"));
+            record_task(pane_id, &format!("task {i}")).unwrap();
         }
 
         let items = read_tasks(pane_id);
@@ -393,7 +397,7 @@ mod tests {
         let pane_id = "%TASK_FREE_TEXT";
         cleanup(pane_id);
 
-        record_task(pane_id, "a|b\nc");
+        record_task(pane_id, "a|b\nc").unwrap();
 
         let items = read_tasks(pane_id);
         assert_eq!(items[0].subject, "a|b\nc");
@@ -417,10 +421,10 @@ mod tests {
         let pane_id = "%TASK_DESC";
         cleanup(pane_id);
 
-        assert!(set_description(pane_id, "Ship the tasks tab"));
+        assert!(set_description(pane_id, "Ship the tasks tab").unwrap());
         assert_eq!(read_task_list(pane_id).description, "Ship the tasks tab");
 
-        assert!(set_description(pane_id, "Do something else"));
+        assert!(set_description(pane_id, "Do something else").unwrap());
         assert_eq!(read_task_list(pane_id).description, "Do something else");
 
         cleanup(pane_id);
@@ -431,15 +435,15 @@ mod tests {
         let pane_id = "%TASK_DESC_ITEMS";
         cleanup(pane_id);
 
-        record_task(pane_id, "an item").unwrap();
-        set_description(pane_id, "the goal");
+        record_task(pane_id, "an item").unwrap().unwrap();
+        set_description(pane_id, "the goal").unwrap();
         // A later task-set keeps the stored description.
-        record_task(pane_id, "another item").unwrap();
+        record_task(pane_id, "another item").unwrap().unwrap();
         let list = read_task_list(pane_id);
         assert_eq!(list.description, "the goal");
         assert_eq!(list.items.len(), 2);
 
-        set_description(pane_id, "   ");
+        set_description(pane_id, "   ").unwrap();
         assert_eq!(read_task_list(pane_id).description, "");
 
         cleanup(pane_id);
@@ -447,7 +451,7 @@ mod tests {
 
     #[test]
     fn description_missing_pane_is_noop() {
-        assert!(!set_description("", "orphan description"));
+        assert!(!set_description("", "orphan description").unwrap());
     }
 
     #[test]
@@ -552,7 +556,7 @@ mod tests {
     #[test]
     fn clear_removes_the_store() {
         let pane_id = "%TASK_CLEAR";
-        record_task(pane_id, "doomed").unwrap();
+        record_task(pane_id, "doomed").unwrap().unwrap();
         assert!(store_file_path(pane_id).exists());
 
         clear_tasks(pane_id);

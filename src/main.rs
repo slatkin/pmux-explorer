@@ -19,6 +19,8 @@ impl TuiSession {
     fn enter(stdout: &mut io::Stdout) -> io::Result<Self> {
         enable_raw_mode()?;
         if let Err(err) = execute!(stdout, EnterAlternateScreen, EnableMouseCapture) {
+            // Best effort: the terminal setup error is the one to report, and
+            // a raw mode that survives it is reset by the next run or shell.
             let _ = disable_raw_mode();
             return Err(err);
         }
@@ -30,6 +32,8 @@ impl TuiSession {
 
 impl Drop for TuiSession {
     fn drop(&mut self) {
+        // Best effort in Drop: there is no caller to report to, and leaving
+        // the terminal usable outranks surfacing a reset error on exit.
         let _ = disable_raw_mode();
         if self.entered_alt_screen {
             let mut stdout = io::stdout();

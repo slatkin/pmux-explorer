@@ -422,9 +422,12 @@ fn snapshot_tasks_tab_after_finished_list_closes() {
     // whose store has been quiet for more than the 90-second close
     // window, measured against the state's fixed `now`.
     let pane_id = "%1";
-    let item_id = task_store::record_task(pane_id, "Ship it").unwrap();
-    task_store::update_task_status(pane_id, &item_id, task_store::TaskItemStatus::Completed);
-    task_store::set_description(pane_id, "a goal nobody sees anymore");
+    let item_id = task_store::record_task(pane_id, "Ship it")
+        .unwrap()
+        .unwrap();
+    task_store::update_task_status(pane_id, &item_id, task_store::TaskItemStatus::Completed)
+        .unwrap();
+    task_store::set_description(pane_id, "a goal nobody sees anymore").unwrap();
     let backdated = std::time::UNIX_EPOCH
         + std::time::Duration::from_secs(state.now - task_store::TASK_CLOSE_SECS - 30);
     std::fs::File::options()

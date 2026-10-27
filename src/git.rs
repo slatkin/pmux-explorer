@@ -113,6 +113,8 @@ pub fn fetch_pr_number(path: &str) -> Option<String> {
             }
             Ok(None) => {
                 if Instant::now() >= deadline {
+                    // Best effort: the query already timed out, and an orphan
+                    // that survives the kill must not fail the lookup too.
                     let _ = child.kill();
                     let _ = child.wait();
                     return None;

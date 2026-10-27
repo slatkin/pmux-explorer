@@ -83,7 +83,13 @@ pub(in crate::cli::hook) fn mark_task_reset(pane: &str) {
     if !pane_writes_allowed(pane) {
         return;
     }
-    crate::cli::hook::activity::write_activity_entry(pane, crate::activity::TASK_RESET_MARKER, "");
+    if let Err(error) = crate::cli::hook::activity::write_activity_entry(
+        pane,
+        crate::activity::TASK_RESET_MARKER,
+        "",
+    ) {
+        crate::cli::hook::activity::report_write_error(&error);
+    }
 }
 
 #[cfg(test)]

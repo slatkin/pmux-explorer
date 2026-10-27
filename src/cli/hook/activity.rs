@@ -7,33 +7,57 @@ use super::super::{local_time_hhmm, sanitize_tmux_value, set_status};
 use super::context::pane_writes_allowed;
 
 /// Write a single activity entry to the log file and trim if needed.
-pub(super) fn write_activity_entry(pane: &str, tool_name: &str, label: &str) {
+/// The io error is returned because the hook command's whole job for an
+/// `activity-log` event is this append: a swallowed failure leaves the
+/// sidebar showing nothing.
+pub(super) fn write_activity_entry(
+    pane: &str,
+    tool_name: &str,
+    label: &str,
+) -> std::io::Result<()> {
     let log_path = crate::activity::log_file_path(pane);
     let label = sanitize_tmux_value(label);
     let timestamp = local_time_hhmm();
     let line = format!("{}|{}|{}\n", timestamp, tool_name, label);
 
     use std::io::Write;
-    if let Ok(mut f) = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&log_path)
     {
-        let _ = f.write_all(line.as_bytes());
+        let mut f = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&log_path)?;
+        f.write_all(line.as_bytes())?;
     }
 
-    trim_log_file(&log_path, 200, 210);
+    trim_log_file(&log_path, 200, 210)
 }
 
-/// Trim a log file to `keep` lines when it exceeds `threshold` lines.
-pub(super) fn trim_log_file(path: &std::path::Path, keep: usize, threshold: usize) {
-    if let Ok(content) = std::fs::read_to_string(path) {
-        let lines: Vec<&str> = content.lines().collect();
-        if lines.len() > threshold {
-            let start = lines.len() - keep;
-            let _ = std::fs::write(path, lines[start..].join("\n") + "\n");
-        }
+/// Report a failed activity-log write on stderr. The hook command exits 0
+/// on every path by its protocol contract, so stderr is the only channel
+/// that tells the producer the entry never landed.
+pub(super) fn report_write_error(error: &std::io::Error) {
+    eprintln!("hook: the activity log entry was not written ({error})");
+}
+
+/// Trim a log file to `keep` lines when it exceeds `threshold` lines. A
+/// missing file has nothing to trim and is not a failure; every other io
+/// error is returned so the caller can report it.
+pub(super) fn trim_log_file(
+    path: &std::path::Path,
+    keep: usize,
+    threshold: usize,
+) -> std::io::Result<()> {
+    let content = match std::fs::read_to_string(path) {
+        Ok(content) => content,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(error),
+    };
+    let lines: Vec<&str> = content.lines().collect();
+    if lines.len() <= threshold {
+        return Ok(());
     }
+    let start = lines.len() - keep;
+    std::fs::write(path, lines[start..].join("\n") + "\n")
 }
 
 /// Activity-log handler, called from `hook <agent> activity-log` event.
@@ -81,7 +105,9 @@ pub(super) fn handle_activity_log(
         }
     }
 
-    write_activity_entry(pane, tool_name, &label);
+    if let Err(error) = write_activity_entry(pane, tool_name, &label) {
+        report_write_error(&error);
+    }
     0
 }
 
@@ -107,7 +133,7 @@ mod tests {
         let path = dir.join("trim_test_under.log");
         fs::write(&path, "line1\nline2\nline3\n").unwrap();
 
-        trim_log_file(&path, 2, 5);
+        trim_log_file(&path, 2, 5).unwrap();
 
         let content = fs::read_to_string(&path).unwrap();
         assert_eq!(content.lines().count(), 3);
@@ -121,7 +147,7 @@ mod tests {
         let lines: Vec<String> = (1..=15).map(|i| format!("line{}", i)).collect();
         fs::write(&path, lines.join("\n") + "\n").unwrap();
 
-        trim_log_file(&path, 5, 10);
+        trim_log_file(&path, 5, 10).unwrap();
 
         let content = fs::read_to_string(&path).unwrap();
         let remaining: Vec<&str> = content.lines().collect();
@@ -138,7 +164,7 @@ mod tests {
         let lines: Vec<String> = (1..=10).map(|i| format!("line{}", i)).collect();
         fs::write(&path, lines.join("\n") + "\n").unwrap();
 
-        trim_log_file(&path, 5, 10);
+        trim_log_file(&path, 5, 10).unwrap();
 
         let content = fs::read_to_string(&path).unwrap();
         assert_eq!(content.lines().count(), 10);
@@ -150,7 +176,7 @@ mod tests {
         let dir = std::env::temp_dir();
         let path = dir.join("trim_test_nonexistent.log");
         let _ = fs::remove_file(&path);
-        trim_log_file(&path, 5, 10);
+        trim_log_file(&path, 5, 10).unwrap();
     }
 
     // ─── write_activity_entry tests ─────────────────────────────────
@@ -161,8 +187,8 @@ mod tests {
         let path = crate::activity::log_file_path(pane_id);
         let _ = fs::remove_file(&path);
 
-        write_activity_entry(pane_id, "Read", "main.rs");
-        write_activity_entry(pane_id, "Edit", "lib.rs");
+        write_activity_entry(pane_id, "Read", "main.rs").unwrap();
+        write_activity_entry(pane_id, "Edit", "lib.rs").unwrap();
 
         let content = fs::read_to_string(&path).unwrap();
         let lines: Vec<&str> = content.lines().collect();
@@ -179,7 +205,7 @@ mod tests {
         let path = crate::activity::log_file_path(pane_id);
         let _ = fs::remove_file(&path);
 
-        write_activity_entry(pane_id, "Bash", "cat file | grep foo\nbar");
+        write_activity_entry(pane_id, "Bash", "cat file | grep foo\nbar").unwrap();
 
         let content = fs::read_to_string(&path).unwrap();
         let lines: Vec<&str> = content.lines().collect();
@@ -201,7 +227,7 @@ mod tests {
         let _ = fs::remove_file(&path);
 
         for i in 1..=215 {
-            write_activity_entry(pane_id, "Read", &format!("file{}.rs", i));
+            write_activity_entry(pane_id, "Read", &format!("file{}.rs", i)).unwrap();
         }
 
         let content = fs::read_to_string(&path).unwrap();

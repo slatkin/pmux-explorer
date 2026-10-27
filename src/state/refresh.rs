@@ -115,6 +115,8 @@ impl AppState {
             tmux::unset_pane_option(pane_id, key);
         }
 
+        // Best effort: a log that outlives its agent pane keeps stale rows
+        // until the pane is reused, and a poll-side sweep must not fail on it.
         let _ = std::fs::remove_file(activity::log_file_path(pane_id));
     }
 
@@ -994,9 +996,13 @@ mod tests {
         let mut state = AppState::new("%99".into());
         let pane_id = "%TASK_FRESH";
         state.focus_state.focused_pane_id = Some(pane_id.into());
-        crate::task_store::record_task(pane_id, "first").unwrap();
-        crate::task_store::record_task(pane_id, "second").unwrap();
-        crate::task_store::set_description(pane_id, "the goal");
+        crate::task_store::record_task(pane_id, "first")
+            .unwrap()
+            .unwrap();
+        crate::task_store::record_task(pane_id, "second")
+            .unwrap()
+            .unwrap();
+        crate::task_store::set_description(pane_id, "the goal").unwrap();
 
         state.refresh_pane_tasks();
 
@@ -1291,13 +1297,16 @@ mod tests {
     /// plus a pane description, so a close must take both with it.
     fn finished_store(pane_id: &str) {
         cleanup_task_store(pane_id);
-        let id = crate::task_store::record_task(pane_id, "done item").unwrap();
+        let id = crate::task_store::record_task(pane_id, "done item")
+            .unwrap()
+            .unwrap();
         crate::task_store::update_task_status(
             pane_id,
             &id,
             crate::task_store::TaskItemStatus::Completed,
-        );
-        crate::task_store::set_description(pane_id, "the goal");
+        )
+        .unwrap();
+        crate::task_store::set_description(pane_id, "the goal").unwrap();
     }
 
     /// Pin the store file's mtime `secs_ago` into the past, the way a
@@ -1361,7 +1370,9 @@ mod tests {
         state.focus_state.focused_pane_id = Some(focused.into());
         finished_store(unfocused);
         backdate_store(unfocused, task_store::TASK_CLOSE_SECS + 1);
-        crate::task_store::record_task(focused, "still open").unwrap();
+        crate::task_store::record_task(focused, "still open")
+            .unwrap()
+            .unwrap();
 
         state.refresh_task_close();
 
@@ -1389,7 +1400,8 @@ mod tests {
             pane_id,
             "1",
             crate::task_store::TaskItemStatus::Pending,
-        );
+        )
+        .unwrap();
         backdate_store(pane_id, task_store::TASK_CLOSE_SECS + 1);
         state.refresh_task_close();
 
@@ -1415,12 +1427,14 @@ mod tests {
             pane_id,
             "1",
             crate::task_store::TaskItemStatus::Pending,
-        );
+        )
+        .unwrap();
         crate::task_store::update_task_status(
             pane_id,
             "1",
             crate::task_store::TaskItemStatus::Completed,
-        );
+        )
+        .unwrap();
         state.refresh_task_close();
         assert!(crate::task_store::store_file_path(pane_id).exists());
 
@@ -1445,12 +1459,14 @@ mod tests {
         let mut state = sweep_state(&[unfinished, empty]);
 
         cleanup_task_store(unfinished);
-        crate::task_store::record_task(unfinished, "still pending").unwrap();
+        crate::task_store::record_task(unfinished, "still pending")
+            .unwrap()
+            .unwrap();
         backdate_store(unfinished, task_store::TASK_CLOSE_SECS + 1);
 
         // A description-only store: described, then the agent died.
         cleanup_task_store(empty);
-        crate::task_store::set_description(empty, "orphan description");
+        crate::task_store::set_description(empty, "orphan description").unwrap();
         backdate_store(empty, task_store::TASK_CLOSE_SECS + 1);
 
         state.refresh_task_close();

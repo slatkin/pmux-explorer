@@ -57,6 +57,8 @@ pub(in crate::cli::hook) fn run_session_end_teardown(
     clear_all_meta(pane);
     set_status(pane, "clear");
     let log_path = crate::activity::log_file_path(pane);
+    // Best effort: a log that survives teardown keeps stale tool rows until
+    // the next SessionStart clears it, and teardown must not fail on it.
     let _ = std::fs::remove_file(log_path);
 }
 
