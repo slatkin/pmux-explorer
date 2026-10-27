@@ -44,6 +44,7 @@ fn test_all_color_theme_defaults() {
     assert_eq!(theme.session_header, Color::Indexed(39));
     assert_eq!(theme.port, Color::Indexed(246));
     assert_eq!(theme.wait_reason, Color::Indexed(221));
+    assert_eq!(theme.wait_reason_action, Color::Indexed(167));
     assert_eq!(theme.branch, Color::Indexed(109));
 
     // New theme fields

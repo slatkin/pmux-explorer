@@ -67,7 +67,8 @@ Setting `@sidebar_min_width` to `0` disables the width floor entirely.
 | `@sidebar_color_text_muted`    | `252`&nbsp;(light gray) | Secondary text — tree branches, empty-state messages, inactive bottom tabs, activity log labels |
 | `@sidebar_color_text_inactive` | `244`&nbsp;(mid gray) | Body text of unfocused pane rows — prompt / response, idle hint                                  |
 | `@sidebar_color_port`          | `246`&nbsp;(light gray) | Port numbers                                                                                   |
-| `@sidebar_color_wait_reason`   | `221`&nbsp;(yellow)   | Wait reason text                                                                                 |
+| `@sidebar_color_wait_reason`   | `221`&nbsp;(yellow)   | Wait reason text for a reason that does not demand the user                                                     |
+| `@sidebar_color_wait_reason_action` | `167`&nbsp;(red) | Wait reason text for a permission dialog or a blocking prompt, which need the user |
 | `@sidebar_color_response_arrow`| `81`&nbsp;(bright cyan) | Response arrow                                                                                 |
 
 ## Task and sub-agent colors

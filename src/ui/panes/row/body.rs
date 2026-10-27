@@ -5,7 +5,9 @@ use ratatui::{
 
 use super::ctx::RowCtx;
 use crate::tmux::{PaneStatus, SubagentInfo, SubagentParent};
-use crate::ui::text::{display_width, truncate_to_width, wait_reason_label, wrap_text};
+use crate::ui::text::{
+    display_width, truncate_to_width, wait_reason_entry, wait_reason_label, wrap_text,
+};
 
 /// Renders the pmux identity row of a subagent pane: the response-row arrow,
 /// then the parent label (or `ORPHANED`). The pane's own name is shown in the
@@ -151,8 +153,13 @@ pub(super) fn wait_reason_row(
     let reason = wait_reason_label(wait_reason);
     let text = format!("  {}", reason);
     let text_dw = display_width(&text);
+    // A reason that demands the user is painted red, so it does not blend
+    // into the agent title on the status row above it.
+    let action_required = wait_reason_entry(wait_reason).is_some_and(|entry| entry.action_required);
     let reason_color = if matches!(status, PaneStatus::Error) {
         ctx.theme.status_error
+    } else if action_required {
+        ctx.theme.wait_reason_action
     } else {
         ctx.theme.wait_reason
     };

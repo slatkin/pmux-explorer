@@ -1022,6 +1022,32 @@ mod tests {
     }
 
     #[test]
+    fn wait_reason_row_paints_action_required_reasons_apart_from_the_agent_title() {
+        let theme = ColorTheme::default();
+        let ctx = test_ctx(&theme, 40, false);
+        let color_of = |reason: &str| -> Option<Color> {
+            let line = wait_reason_row(reason, &PaneStatus::Waiting, &ctx)
+                .expect("should render reason line");
+            // The marker and padding spans carry no foreground, so the first
+            // one that does is the reason text.
+            line.spans.iter().find_map(|span| span.style.fg)
+        };
+
+        for reason in ["custom", "select", "confirm", "input", "editor"] {
+            assert_eq!(
+                color_of(reason),
+                Some(theme.wait_reason_action),
+                "{reason} demands the user and should use the action colour"
+            );
+        }
+        assert_eq!(
+            color_of("auth_success"),
+            Some(theme.wait_reason),
+            "a soft reason keeps the ordinary wait colour"
+        );
+    }
+
+    #[test]
     fn render_pane_lines_selected_applies_background_to_spans() {
         let theme = ColorTheme::default();
         let pane = pane(PermissionMode::Auto, PaneStatus::Running, "do work");

@@ -32,6 +32,10 @@ pub struct ColorTheme {
     pub session_header: Color,
     pub port: Color,
     pub wait_reason: Color,
+    /// Wait-reason text for a reason that demands the user. Default
+    /// Indexed(167) is red, so it does not blend into the yellow agent
+    /// title on the row above.
+    pub wait_reason_action: Color,
     pub selection_bg: Color,
     /// Base focus background over the whole sidebar while its tmux pane
     /// is the active one. Default Indexed(234) sits below selection_bg
@@ -92,6 +96,7 @@ impl Default for ColorTheme {
             session_header: Color::Indexed(39),
             port: Color::Indexed(246),
             wait_reason: Color::Indexed(221),
+            wait_reason_action: Color::Indexed(167),
             selection_bg: Color::Indexed(239),
             focus_bg: Color::Indexed(234),
             focus_active_bg: Color::Indexed(236),
@@ -155,6 +160,10 @@ impl ColorTheme {
         theme.session_header = read(tmux::SIDEBAR_COLOR_SESSION, theme.session_header);
         theme.port = read(tmux::SIDEBAR_COLOR_PORT, theme.port);
         theme.wait_reason = read(tmux::SIDEBAR_COLOR_WAIT_REASON, theme.wait_reason);
+        theme.wait_reason_action = read(
+            tmux::SIDEBAR_COLOR_WAIT_REASON_ACTION,
+            theme.wait_reason_action,
+        );
         theme.selection_bg = read(tmux::SIDEBAR_COLOR_SELECTION, theme.selection_bg);
         theme.focus_bg = read(tmux::SIDEBAR_COLOR_FOCUS_BG, theme.focus_bg);
         theme.focus_active_bg = read(tmux::SIDEBAR_COLOR_FOCUS_ACTIVE_BG, theme.focus_active_bg);

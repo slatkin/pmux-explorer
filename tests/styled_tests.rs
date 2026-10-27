@@ -416,4 +416,5 @@ fn test_theme_default_matches_shell_colors() {
     assert_eq!(theme.text_muted, Color::Indexed(252));
     assert_eq!(theme.session_header, Color::Indexed(39));
     assert_eq!(theme.wait_reason, Color::Indexed(221));
+    assert_eq!(theme.wait_reason_action, Color::Indexed(167));
 }

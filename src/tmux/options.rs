@@ -175,6 +175,9 @@ pub const SIDEBAR_COLOR_TEXT_INACTIVE: &str = "@sidebar_color_text_inactive";
 pub const SIDEBAR_COLOR_SESSION: &str = "@sidebar_color_session";
 pub const SIDEBAR_COLOR_PORT: &str = "@sidebar_color_port";
 pub const SIDEBAR_COLOR_WAIT_REASON: &str = "@sidebar_color_wait_reason";
+/// Wait-reason text for a reason that demands the user (the permission
+/// class, or a blocking prompt), so it stands apart from the agent title.
+pub const SIDEBAR_COLOR_WAIT_REASON_ACTION: &str = "@sidebar_color_wait_reason_action";
 pub const SIDEBAR_COLOR_SELECTION: &str = "@sidebar_color_selection";
 /// Base focus background, painted over the whole sidebar while its tmux
 /// pane is the active one.
