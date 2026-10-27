@@ -233,8 +233,10 @@ impl ThinkingFeedReader {
             return LastThought::default();
         };
 
-        // An unchanged feed costs no read at all.
-        if cache.mtime.is_some() && mtime == cache.mtime && len >= cache.offset {
+        // An unchanged feed costs no read at all. The length must equal
+        // the consumed offset too: a feed that grew while its mtime stayed
+        // equal (coarse timestamp granularity) is not unchanged.
+        if cache.mtime.is_some() && mtime == cache.mtime && len == cache.offset {
             let state = cache.state.clone();
             self.cache = Some(cache);
             return state;
@@ -709,5 +711,32 @@ mod tests {
         let second = reader.read("s", Some(&path));
         assert_eq!(first, second);
         assert_eq!(second.text, "settled");
+    }
+
+    #[test]
+    fn growth_under_an_unchanged_mtime_is_still_read() {
+        let dir = TempDir::new().unwrap();
+        let path = feed_in(&dir, "coarse");
+        fs::write(&path, line("start", "t1", None) + "\n").unwrap();
+
+        let mut reader = ThinkingFeedReader::new();
+        assert!(reader.read("s", Some(&path)).is_empty());
+
+        // Coarse timestamp granularity: the appended record leaves the
+        // file's mtime as it was, so only the grown length betrays it.
+        let old_mtime = fs::metadata(&path).unwrap().modified().unwrap();
+        mtime_step();
+        let mut file = fs::OpenOptions::new().append(true).open(&path).unwrap();
+        writeln!(file, "{}", line("delta", "t2", Some("sneaky"))).unwrap();
+        drop(file);
+        fs::File::options()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_modified(old_mtime)
+            .unwrap();
+
+        let thought = reader.read("s", Some(&path));
+        assert_eq!(thought.text, "sneaky");
     }
 }
