@@ -32,28 +32,61 @@ pub fn elapsed_label(started_at: Option<u64>, now: u64) -> String {
     }
 }
 
+/// One entry of the shared wait-reason vocabulary. A single table answers
+/// both questions the sidebar asks about a raw reason: the label to show,
+/// and whether the reason demands the user (so a live background shell does
+/// not lower the pane's status).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WaitReasonEntry {
+    /// The label the pane row and the desktop notification body show.
+    pub label: &'static str,
+    /// The reason names a blocking user prompt or permission dialog.
+    pub action_required: bool,
+}
+
+/// Look up a raw producer token in the shared wait-reason table.
+///
+/// `None` means the table does not name the reason. The caller then shows
+/// the token unchanged, so a producer's new vocabulary still surfaces.
+pub fn wait_reason_entry(reason: &str) -> Option<WaitReasonEntry> {
+    let (label, action_required) = match reason {
+        // Claude's notification vocabulary.
+        "permission" => ("permission", true),
+        "permission_prompt" => ("permission required", true),
+        "permission_denied" => ("permission denied", true),
+        "elicitation_dialog" => ("waiting for selection", true),
+        "idle_prompt" => ("waiting for input", false),
+        "auth_success" => ("auth success", false),
+        "rate_limit" => ("rate limit", false),
+        "session_resumed" => ("resumed", false),
+        "session_resumed_compact" => ("resumed (compact)", false),
+        // pi's `ui_prompt` kinds: each one blocks on a human.
+        "select" => ("waiting for selection", true),
+        "confirm" => ("confirmation", true),
+        "input" => ("waiting for input", true),
+        "editor" => ("editor", true),
+        "custom" => ("prompt", true),
+        _ => return None,
+    };
+    Some(WaitReasonEntry {
+        label,
+        action_required,
+    })
+}
+
 pub fn wait_reason_label(reason: &str) -> String {
-    match reason {
-        "permission_prompt" => "permission required".into(),
-        "idle_prompt" => "waiting for input".into(),
-        "auth_success" => "auth success".into(),
-        "elicitation_dialog" => "waiting for selection".into(),
-        "rate_limit" => "rate limit".into(),
-        "permission_denied" => "permission denied".into(),
-        "session_resumed" => "resumed".into(),
-        "session_resumed_compact" => "resumed (compact)".into(),
-        _ => {
-            if reason.is_empty() {
-                String::new()
-            } else if let Some(rest) = reason.strip_prefix("teammate_idle:") {
-                match rest.split_once(':') {
-                    Some((name, why)) if !why.is_empty() => format!("{name} idle ({why})"),
-                    _ => format!("{rest} idle"),
-                }
-            } else {
-                reason.to_string()
-            }
+    if let Some(entry) = wait_reason_entry(reason) {
+        return entry.label.into();
+    }
+    if reason.is_empty() {
+        String::new()
+    } else if let Some(rest) = reason.strip_prefix("teammate_idle:") {
+        match rest.split_once(':') {
+            Some((name, why)) if !why.is_empty() => format!("{name} idle ({why})"),
+            _ => format!("{rest} idle"),
         }
+    } else {
+        reason.to_string()
     }
 }
 
@@ -419,6 +452,29 @@ mod tests {
     #[test]
     fn wait_reason_unknown() {
         assert_eq!(wait_reason_label("something_else"), "something_else");
+        assert!(wait_reason_entry("something_else").is_none());
+    }
+
+    // ─── wait_reason_label: pi's ui_prompt kinds ───────────────────
+
+    #[test]
+    fn wait_reason_pi_prompt_kinds_are_labelled() {
+        assert_eq!(wait_reason_label("select"), "waiting for selection");
+        assert_eq!(wait_reason_label("confirm"), "confirmation");
+        assert_eq!(wait_reason_label("input"), "waiting for input");
+        assert_eq!(wait_reason_label("editor"), "editor");
+        assert_eq!(wait_reason_label("custom"), "prompt");
+    }
+
+    #[test]
+    fn wait_reason_pi_prompt_kinds_are_action_required() {
+        for reason in ["select", "confirm", "input", "editor", "custom"] {
+            assert_eq!(
+                wait_reason_entry(reason).map(|entry| entry.action_required),
+                Some(true),
+                "{reason} should be action-required"
+            );
+        }
     }
 
     #[test]

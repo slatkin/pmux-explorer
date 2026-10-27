@@ -116,10 +116,15 @@ attention flag and raises a desktop notification.
 
 | Field | Meaning |
 | --- | --- |
-| `notification_type` | Why the agent waits. Claude sends `permission`; pi sends the kind of prompt it is showing. The value is shown next to the pane. |
+| `notification_type` | Why the agent waits. Claude sends `permission`; pi sends the kind of prompt it is showing (`select`, `confirm`, `input`, `editor`, `custom`). The value is a raw producer token: it is stored as it arrives and shown through the sidebar's label table, so a reason the table names reads as prose and an unnamed one is shown unchanged. |
 
 `wait_reason` is accepted as an alias for `notification_type`, because that is
 the name the OpenCode producer already uses.
+
+A reason that names a blocking user prompt — Claude's permission class, or one
+of pi's prompt kinds — keeps the pane status at `waiting` even while a
+background command is live on that pane. Any other reason lets a live
+background command keep the pane at `background`.
 
 ### `stop`
 
@@ -467,7 +472,7 @@ writes a tmux option itself.
 | `@pane_agent` | The first event of a session. |
 | `@pane_status` | Every event. One of `running`, `background`, `waiting`, `idle`, `error`. |
 | `@pane_attention` | Set when the agent waits for a human, cleared when the turn moves on. |
-| `@pane_wait_reason` | The reason the agent waits. |
+| `@pane_wait_reason` | The reason the agent waits, stored raw. The sidebar shows it through its label table. |
 | `@pane_prompt` | The prompt, then the response preview. |
 | `@pane_prompt_source` | `user` or `response`, so the sidebar knows which of the two it shows. |
 | `@pane_cwd` | The working directory. |

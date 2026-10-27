@@ -1011,6 +1011,17 @@ mod tests {
     }
 
     #[test]
+    fn wait_reason_row_labels_a_pi_prompt_kind() {
+        let theme = ColorTheme::default();
+        let ctx = test_ctx(&theme, 40, false);
+        let line = wait_reason_row("custom", &PaneStatus::Waiting, &ctx)
+            .expect("should render reason line");
+        // Snapshot the visible text; the row padding that follows it is
+        // covered by `pad_to`.
+        insta::assert_snapshot!(line_text(&line).trim_end(), @"    prompt");
+    }
+
+    #[test]
     fn render_pane_lines_selected_applies_background_to_spans() {
         let theme = ColorTheme::default();
         let pane = pane(PermissionMode::Auto, PaneStatus::Running, "do work");
