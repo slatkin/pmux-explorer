@@ -27,4 +27,4 @@
 
 ## 5. Integration
 
-- [ ] 5.1 Run `cargo fmt`, `cargo clippy`, `cargo test` and `cargo build --release`; verify all pass, then, with the pmux `thinking-feed` change installed, focus a pi pane in tmux and verify the Thought label shows, the thought appears within a second of the model thinking, focusing a Claude pane hides the label and shows Activity, and exiting the pi process removes its feed file
+- [x] 5.1 Run `cargo fmt`, `cargo clippy`, `cargo test` and `cargo build --release`; verify all pass, then, with the pmux `thinking-feed` change installed, focus a pi pane in tmux and verify the Thought label shows, the thought appears within a second of the model thinking, focusing a Claude pane hides the label and shows Activity, and exiting the pi process removes its feed file
