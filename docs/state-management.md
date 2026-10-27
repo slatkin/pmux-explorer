@@ -15,7 +15,7 @@ read from tmux on every refresh tick.
 | `status_filter` | `@sidebar_filter` | User input (left/right key) | Active status filter (All/Busy/Waiting/Idle/Error) |
 | `selected_pane_row` | `@sidebar_cursor` | User input (j/k key); tmux write flushed after a short debounce | Cursor position in agent list |
 | `repo_filter` | `@sidebar_repo_filter` | User input (repo popup) | Repository filter (All or specific repo) |
-| `bottom_tab` | `@sidebar_bottom_tab` | On user tab switch (cycle key / tab-title click); tmux write retried when rejected | Selected bottom tab (Activity/Tasks/Git), shared server-wide; each instance adopts a peer's selection on its next refresh tick |
+| `bottom_tab` | `@sidebar_bottom_tab` | On user tab switch (cycle key / tab-title click); tmux write retried when rejected | Selected bottom tab (Activity/Tasks/Git/Thought), shared server-wide; each instance adopts a peer's selection on its next refresh tick. `thought` is drawn only while the focused pane runs pi — a stored Thought falls back to Activity for any other agent, without a write, so the panel returns to Thought when the focus comes back to a pi pane |
 | `bottom_percent` | `@sidebar_bottom_height` | User input (rule drag release); tmux write retried when rejected | Bottom panel height as a percent of the sidebar height (0 hides the panel; unset, empty, or an out-of-range value gives 30); shared server-wide, each instance adopts a peer's value on its next refresh tick (the percent's `SaveLatch` instance follows the same pattern) |
 
 Each synced field is guarded so a failed write never loses the user's
@@ -111,6 +111,7 @@ Per-pane file-based state:
 |------|---------------|----------------|-------------|
 | `/tmp/pmux-explorer-activity_{pane_id}.log` | Each ActivityLog event | Every 1s | Tool usage log (`HH:MM\|tool\|label`), max 200 lines |
 | `/tmp/pmux-explorer-tasks{pane_id}.json` | `task-set` / `task-update` / `task-describe` CLI writes; SessionStart and the close sweep remove it | Every 1s (stat), re-read on mtime change | Per-pane Tasks-tab store (`description` + `tasks` array, max 50 items). A store whose items are all `completed` and whose mtime is 90 s old is removed by `refresh_task_close` — focused pane or not — so a finished list returns to the empty state; any store write (add, reopen, describe) restarts the 90-second window |
+| `<feed dir>/<session id>.jsonl` — `$XDG_RUNTIME_DIR/pmux-thinking`, or `/tmp/pmux-thinking-<uid>` | The pmux pi extension writes it; the sidebar removes it when it clears the state of a pi pane | Every 1s, only while the Thought tab is drawn, and only from the offset already read | The thinking feed of one pi session (keyed by `@pane_session_id`, not by pane id), reduced to the last thought the Thought tab draws. The first read begins at the newest `start` record; the three teardown paths — `clear_agent_pane_state`, `clear_dead_agent_metadata` and `run_session_end_teardown` — remove it through `thinking_feed::remove_pi_feed` before the pane's options are wiped |
 
 ### Local State (single sidebar process only)
 
@@ -123,6 +124,8 @@ Per-pane file-based state:
 | `now` | Every 1s | Current Unix epoch |
 | `scrolls.panes` | On user input / render | Agent list scroll position |
 | `scrolls.git` | On user input / render | Git status scroll position |
+| `scrolls.thought` | On user input / render | Thought tab scroll position; `thought.follow` keeps the view at the last rows while the user has not scrolled up, and a new `start` block resets it |
+| `thought.reader` / `thought.last` | Every 1s while the Thought tab is drawn | Incremental reader of the focused pi pane's feed and the last thought its most recent read reduced. A tick that reads no feed (another tab drawn, no focused pane or no session id) leaves the previous thought standing. The reader's cache is `(session id, offset, mtime)`; `thought.xdg_runtime_dir` and `thought.uid` are captured once at startup |
 | `activity.scroll` | On user input / render | Activity log scroll position |
 | `activity.entries` | Every 1s | Focused pane's activity entries (max 50) |
 | `activity.max_entries` | Once at startup | Max activity log entries to display |
@@ -215,8 +218,11 @@ TUI main loop (app::run in app.rs; submodules app/{setup,workers,input,render,pa
     → refresh_activity_data()        ← reads /tmp activity logs
       → refresh_task_close()         ← stats every pane's task store; removes a store
                                        all-completed for 90 s (any write restarts the window)
+      → refresh_thought_feed()       ← reads the focused pi pane's thinking feed, only
+                                       while the Thought tab is drawn; new bytes only
     → refresh_task_progress()        ← updates PaneRuntimeState.task_progress
-    → refresh_port_data()            ← updates PaneRuntimeState.ports
+    → refresh_port_data()            ← updates PaneRuntimeState.ports; clears dead pane state
+                                       and its thinking feed
     → scan_session_process_snapshot() ← detects dead panes and clears stale tmux metadata
                         ↓
   → git_rx.try_recv()                ← receives GitData from background thread
@@ -234,7 +240,7 @@ TUI main loop (app::run in app.rs; submodules app/{setup,workers,input,render,pa
 enum Focus { Filter, Panes, ActivityLog }
 enum StatusFilter { All, Busy, Waiting, Idle, Error }
 enum RepoFilter { All, Repo(String) }
-enum BottomTab { Activity, Tasks, GitStatus }
+enum BottomTab { Activity, Tasks, GitStatus, Thought }
 enum PaneStatus { Running, Background, Waiting, Idle, Error, Unknown }
 enum AgentType { Claude, Codex, OpenCode, Unknown }
 enum PermissionMode { Default, Plan, AcceptEdits, Auto, DontAsk, BypassPermissions, Defer }
@@ -306,12 +312,13 @@ struct FocusState {
     focused_pane_id: Option<String>,
 }
 
-/// Non-activity scrolls (the agent list and the git bottom panel).
-/// Activity's scroll lives inside `ActivityState` because it pairs
-/// with the activity entries buffer.
+/// Non-activity scrolls (the agent list, the git bottom panel and the
+/// Thought tab). Activity's scroll lives inside `ActivityState`
+/// because it pairs with the activity entries buffer.
 struct ScrollStates {
     panes: ScrollState,
     git: ScrollState,
+    thought: ScrollState,
 }
 
 /// Activity-log snapshot for the focused pane plus cache metadata so
@@ -321,6 +328,21 @@ struct ActivityState {
     scroll: ScrollState,
     max_entries: usize,
     log_cache: Option<(String, SystemTime)>,
+}
+
+/// The Thought tab's feed reader state, filled by `refresh_thought_feed`
+/// on the refresh tick while the tab is drawn. The reader holds one
+/// cache (`session id`, byte offset, mtime) and the reduced last
+/// thought; `follow` and `seen_start_ts` drive follow-the-end, and the
+/// feed environment is captured once at startup so the path helper
+/// takes it as an argument instead of reading the process env.
+struct ThoughtState {
+    reader: ThinkingFeedReader,
+    last: LastThought,
+    follow: bool,
+    seen_start_ts: Option<String>,
+    xdg_runtime_dir: Option<String>,
+    uid: u32,
 }
 
 /// Frame-scoped render output cached for click hit-testing. Rewritten
@@ -360,11 +382,11 @@ struct NoticesState {
 
 1. `selected_pane_row` is always < `layout.pane_row_targets.len()` — clamped in `rebuild_row_targets()`
 2. `activity.entries` contains only the focused pane's entries — cleared on focus change
-3. The bottom tab is shared server-wide through `@sidebar_bottom_tab` and changes only on an explicit user selection (cycle key / tab-title click) or the per-tick adoption of a peer's selection — never on focus change, and relaunching an agent does not change it
+3. The bottom tab is shared server-wide through `@sidebar_bottom_tab` and changes only on an explicit user selection (cycle key / tab-title click) or the per-tick adoption of a peer's selection — never on focus change, and relaunching an agent does not change it. A stored `thought` is displayed as Activity while the focused pane is not pi, again without a write
 4. Git fetching respects the `git_tab_active` flag — stops when tab is hidden
 5. Task progress has a 3-second debounce — prevents flicker when agent briefly pauses
 6. Global state syncs via tmux variables — enables coordination across sidebar instances
-7. Scroll positions are independent per panel — agents, activity, git each have their own `ScrollState`
+7. Scroll positions are independent per panel — agents, activity, git and thought each have their own `ScrollState`
 8. `layout.line_to_row` is rebuilt every frame — ensures accurate click routing
 9. Pane runtime state is pruned when the pane disappears — prevents stale per-pane ports and task progress from surviving after the agent is gone
 10. At most one popup is open at a time — enforced structurally by the `PopupState` enum, not by parallel boolean flags

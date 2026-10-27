@@ -70,9 +70,11 @@ A small function returns `<dir>/<session id>.jsonl` with `<dir>` = `$XDG_RUNTIME
 
 `src/ui/bottom/thought.rs` draws one muted `HH:mm:ss` line (local time of the `start` record), then the wrapped thought in the normal text color. The scroll uses a `ScrollState` like the other tabs. "Follow the end" is kept as a flag: while the user has not scrolled up, each draw sets the offset to the last page; a scroll up clears the flag and a scroll back to the bottom sets it again. A new `start` resets the scroll to follow. The empty notice uses the existing `render_centered`.
 
-### D7. The dead-pane sweep removes the feed
+### D7. Every teardown path removes the feed
 
-`clear_agent_pane_state` (`src/tmux/query.rs`) already wipes the pane's `@pane_*` options and removes its activity log when a Codex/OpenCode/pi pane's process is gone. It gains the feed: for a pi pane it resolves the D5 path from the pane's `@pane_session_id` — read before the options are wiped — and removes the file. A rejected session id removes nothing, and a missing file is not an error, the same treatment the activity log's `remove_file` gets. Feed files of sessions that died while no sidebar ran stay until the directory is cleared (logout for `XDG_RUNTIME_DIR`, reboot for the `/tmp` fallback); a feed holds only one session's thinking, so the leftover is cheap.
+Three paths clear the state of a pi pane, and each gains the feed: `clear_agent_pane_state` (`src/tmux/query.rs`), which already wipes the pane's `@pane_*` options and removes its activity log when a Codex/OpenCode/pi pane's process is gone; `clear_dead_agent_metadata` on the port scan (`src/state/refresh.rs`), when the scanned process tree no longer holds the agent; and `run_session_end_teardown` (`src/cli/hook/context/pending.rs`), on a pi `session-end`. All three call `thinking_feed::remove_pi_feed`, which resolves the D5 path from the pane's `@pane_session_id` — read before the options are wiped — and removes the file for a pi pane. A rejected session id removes nothing, and a missing file is not an error, the same treatment the activity log's `remove_file` gets. Feed files of sessions that died while no sidebar ran stay until the directory is cleared (logout for `XDG_RUNTIME_DIR`, reboot for the `/tmp` fallback); a feed holds only one session's thinking, so the leftover is cheap.
+
+The `clear_all_meta` caller list was checked: `run_session_end_teardown` is its only production caller, so the hook side needs one feed removal and no second sweep. `run_worktree_remove_teardown` is not a feed teardown — the pane keeps running, so its session may keep writing.
 
 ## Risks / Trade-offs
 
