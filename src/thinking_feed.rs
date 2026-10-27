@@ -56,10 +56,13 @@ pub fn feed_path(xdg_runtime_dir: Option<&str>, uid: u32, session_id: &str) -> O
 
 /// Remove the thinking feed of one session, when the pane's agent is pi.
 ///
-/// Both teardown paths that clear a dead pi pane's state — the
-/// shell-fallback sweep in `tmux/query.rs` and the port-scan dead-pane
-/// sweep in `state/refresh.rs` — call this before the pane's options are
-/// wiped, with the session id read while it was still in hand. A session
+/// The three teardown paths that clear a dead pi pane's state —
+/// the shell-fallback sweep's `clear_agent_pane_state` in
+/// `tmux/query.rs`, the port-scan dead-pane sweep's
+/// `clear_dead_agent_metadata` in `state/refresh.rs`, and
+/// `run_session_end_teardown` in `cli/hook/context/pending.rs` —
+/// call this before the pane's options are wiped, with the session
+/// id read while it was still in hand. A session
 /// id [`feed_path`] rejects removes nothing, and a missing file is not
 /// an error — the same treatment the activity log's `remove_file` gets.
 pub(crate) fn remove_pi_feed(

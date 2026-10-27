@@ -254,7 +254,7 @@ mod tests {
         // (`<dir>/pmux-thinking/../x.jsonl` = `<dir>/x.jsonl`).
         let _guard = tmux::test_mock::install();
         let dir = tempfile::TempDir::new().unwrap();
-        pi_end_setup("%PI_END_UNSAFE", &dir, "x");
+        pi_end_setup("%PI_END_UNSAFE", &dir, "../x");
         let outside = dir.path().join("x.jsonl");
         std::fs::write(&outside, "{}").unwrap();
 

@@ -12,8 +12,9 @@ pub struct ThoughtState {
     pub reader: ThinkingFeedReader,
     /// The last thought the reader's most recent read produced — what
     /// the tab draws. Held between ticks, so a tick that reads no feed
-    /// (another tab displayed, no focused pane) leaves the previous
-    /// thought standing.
+    /// because another tab is displayed leaves the previous thought
+    /// standing; a tick with no focused pane, or one whose pane has
+    /// no session id, resets to the empty state.
     pub last: LastThought,
     /// Whether the view follows the end of the thought (design D6).
     /// True until the user scrolls up; a scroll back to the bottom
