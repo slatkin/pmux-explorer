@@ -297,7 +297,7 @@ mod tests {
         assert!(!state.sidebar_pane.pane_active);
 
         // A click on the busy chip, while the sidebar is not the active pane.
-        state.handle_filter_click(4);
+        state.handle_filter_click(5);
 
         assert_eq!(
             state.global.status_filter,
@@ -1762,9 +1762,9 @@ mod tests {
         state.handle_mouse_click(0, 1);
         assert_eq!(state.global.status_filter, StatusFilter::All);
 
-        // Click on the busy icon area (x=4..) should switch to Busy
+        // Click on the busy icon area (x=5..) should switch to Busy
         reset_filter_debounce(&mut state);
-        state.handle_mouse_click(0, 4);
+        state.handle_mouse_click(0, 5);
         assert_eq!(state.global.status_filter, StatusFilter::Busy);
 
         // agent selection unchanged
@@ -1953,37 +1953,37 @@ mod tests {
     fn filter_click_all_positions() {
         let mut state = AppState::new("%99".into());
         state.layout.filter_bar_width = 30;
-        // With 0 agents, counts are all 0, so layout: " ≡0 ●0 ◐0 ○0 ✕0"
+        // With 0 agents, counts are all 0, so layout: " 󱓯 0  0 󰥔 0 󰒲 0  0"
         //                                              0123456789...
 
-        // "≡0" at x=1..2
+        // "󱓯 0" at x=1..3
         state.global.status_filter = StatusFilter::Busy;
         reset_filter_debounce(&mut state);
         state.handle_filter_click(1);
         assert_eq!(state.global.status_filter, StatusFilter::All);
 
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(2);
+        state.handle_filter_click(3);
         assert_eq!(state.global.status_filter, StatusFilter::All);
 
-        // "●0" at x=4..5
+        // " 0" at x=5..7
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(4);
+        state.handle_filter_click(5);
         assert_eq!(state.global.status_filter, StatusFilter::Busy);
 
-        // "◐0" at x=7..8
+        // "󰥔 0" at x=9..11
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(7);
+        state.handle_filter_click(9);
         assert_eq!(state.global.status_filter, StatusFilter::Waiting);
 
-        // "○0" at x=10..11
-        reset_filter_debounce(&mut state);
-        state.handle_filter_click(10);
-        assert_eq!(state.global.status_filter, StatusFilter::Idle);
-
-        // "✕0" at x=13..14
+        // "󰒲 0" at x=13..15
         reset_filter_debounce(&mut state);
         state.handle_filter_click(13);
+        assert_eq!(state.global.status_filter, StatusFilter::Idle);
+
+        // " 0" at x=17..19
+        reset_filter_debounce(&mut state);
+        state.handle_filter_click(17);
         assert_eq!(state.global.status_filter, StatusFilter::Error);
     }
 
@@ -1993,14 +1993,14 @@ mod tests {
         state.layout.filter_bar_width = 30;
         state.global.status_filter = StatusFilter::All;
 
-        // x=0 is leading space, x=3/6/9/12 are separators
+        // x=0 is leading space, x=4/8/12/16 are separators
         state.handle_filter_click(0);
         assert_eq!(state.global.status_filter, StatusFilter::All);
 
-        state.handle_filter_click(3);
+        state.handle_filter_click(4);
         assert_eq!(state.global.status_filter, StatusFilter::All);
 
-        state.handle_filter_click(6);
+        state.handle_filter_click(8);
         assert_eq!(state.global.status_filter, StatusFilter::All);
     }
 
@@ -2012,12 +2012,12 @@ mod tests {
 
         // First click within debounce window should be ignored
         // (AppState::new sets last_filter_click to now)
-        state.handle_filter_click(4); // would be Busy
+        state.handle_filter_click(5); // would be Busy
         assert_eq!(state.global.status_filter, StatusFilter::All); // unchanged due to debounce
 
         // After resetting debounce, click should work
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(4);
+        state.handle_filter_click(5);
         assert_eq!(state.global.status_filter, StatusFilter::Busy);
 
         // Immediate second click should be debounced
@@ -2042,19 +2042,19 @@ mod tests {
             has_focus: true,
             panes,
         }];
-        // Layout: " ≡10 ●10 ◐0 ○0 ✕0"
+        // Layout: " 󱓯 10  10 󰥔 0 󰒲 0  0"
         //          0123456789...
-        // "●10" at x=5..7 (icon + "10")
+        // " 10" at x=6..9 (icon + "10")
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(5);
+        state.handle_filter_click(6);
         assert_eq!(state.global.status_filter, StatusFilter::Busy);
-        reset_filter_debounce(&mut state);
-        state.handle_filter_click(7);
-        assert_eq!(state.global.status_filter, StatusFilter::Busy);
-
-        // "◐0" shifts to x=9..10
         reset_filter_debounce(&mut state);
         state.handle_filter_click(9);
+        assert_eq!(state.global.status_filter, StatusFilter::Busy);
+
+        // "󰥔 0" shifts to x=11..13
+        reset_filter_debounce(&mut state);
+        state.handle_filter_click(11);
         assert_eq!(state.global.status_filter, StatusFilter::Waiting);
     }
 
@@ -2082,18 +2082,18 @@ mod tests {
         assert_eq!(state.layout.pane_row_targets.len(), 3);
 
         // Click Busy filter — row_targets should update immediately
-        // Layout: " ≡3 ●2 ◐0 ○1 ✕0" → Busy at x=4
+        // Layout: " 󱓯 3  2 󰥔 0 󰒲 1  0" → Busy at x=5
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(4);
+        state.handle_filter_click(5);
         assert_eq!(state.global.status_filter, StatusFilter::Busy);
         assert_eq!(state.layout.pane_row_targets.len(), 2);
         assert_eq!(state.layout.pane_row_targets[0].pane_id, "%1");
         assert_eq!(state.layout.pane_row_targets[1].pane_id, "%3");
 
         // Click Idle filter — row_targets should update again
-        // Layout: " ≡3 ●2 ◐0 ○1 ✕0" → Idle at x=10
+        // Layout: " 󱓯 3  2 󰥔 0 󰒲 1  0" → Idle at x=13
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(10);
+        state.handle_filter_click(13);
         assert_eq!(state.global.status_filter, StatusFilter::Idle);
         assert_eq!(state.layout.pane_row_targets.len(), 1);
         assert_eq!(state.layout.pane_row_targets[0].pane_id, "%2");
@@ -2127,7 +2127,7 @@ mod tests {
         // it must not pop out.
         state.flash = None;
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(4); // "●" busy chip
+        state.handle_filter_click(5); // busy chip
         assert_eq!(state.global.status_filter, StatusFilter::Busy);
         assert!(state.flash.is_none(), "a chip click must not pop out");
     }

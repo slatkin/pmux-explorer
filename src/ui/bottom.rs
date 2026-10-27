@@ -8,10 +8,10 @@ use ratatui::{
     layout::{Alignment, Rect},
     style::{Color, Style},
     text::{Line, Span},
-    widgets::Paragraph,
+    widgets::{Block, Paragraph},
 };
 
-use crate::state::{AppState, BottomTab, BottomTabTarget, Focus};
+use crate::state::{AppState, BottomTab, BottomTabTarget};
 
 use super::text::{display_width, truncate_to_width};
 
@@ -35,8 +35,9 @@ pub(crate) struct TitleSpan {
     tab: Option<BottomTab>,
 }
 
-/// The rule row that tops the bottom panel: a `─ ` prefix, the tab run,
-/// one separating space, and `─` fill to the right edge. No left, right
+/// The rule row that tops the bottom panel: a two-space prefix, the tab
+/// run, one separating space, and space fill to the right edge — a
+/// solid band [`draw_bottom`] paints in `filter_bar_bg`. No left, right
 /// or bottom border character exists around it. The prefix plus that
 /// space need 3 display columns; when `width` is smaller (the floor is
 /// the same 20 columns the filter bar treats as its minimum), each title
@@ -52,11 +53,11 @@ pub(crate) fn top_line_border(
     rule_style: Style,
     width: u16,
 ) -> (Line<'static>, Vec<BottomTabTarget>) {
-    let fixed = 3usize; // "─ " + the space before the fill
+    let fixed = 3usize; // the two-space prefix + the space before the fill
     let mut remaining = (width as usize).saturating_sub(fixed);
-    let mut spans = vec![Span::styled("─ ", rule_style)];
+    let mut spans = vec![Span::styled("  ", rule_style)];
     let mut targets = Vec::new();
-    let mut col = 2u16; // the first span starts right after "─ "
+    let mut col = 2u16; // the first span starts right after the prefix
     for title in title_spans {
         let text = truncate_to_width(&title.span.content, remaining);
         let cols = display_width(&text);
@@ -71,20 +72,12 @@ pub(crate) fn top_line_border(
         col += cols as u16;
         spans.push(Span::styled(text, title.span.style));
     }
-    spans.push(Span::styled(
-        format!(" {}", "─".repeat(remaining)),
-        rule_style,
-    ));
+    spans.push(Span::styled(" ".repeat(remaining + 1), rule_style));
     (Line::from(spans), targets)
 }
 
 pub fn draw_bottom(frame: &mut Frame, state: &mut AppState, area: Rect) {
     let theme = &state.theme;
-    let rule_color = if state.focus_state.focus == Focus::ActivityLog {
-        theme.accent
-    } else {
-        theme.border_inactive
-    };
 
     // No block: the rule is the panel's first row and the tab renderers
     // take the rows under it with the full sidebar width and no padding,
@@ -97,11 +90,16 @@ pub fn draw_bottom(frame: &mut Frame, state: &mut AppState, area: Rect) {
         height: area.height.saturating_sub(1),
     };
 
-    let (top_line, targets) = top_line_border(
-        &build_tab_title(state),
-        Style::default().fg(rule_color),
-        area.width,
+    // The tab bar is a solid band in the filter bar's colour, painted
+    // at all times — it renders after the focus fill, so it wins over
+    // it; the tab spans keep the colour underneath them.
+    frame.render_widget(
+        Block::default().style(Style::default().bg(theme.filter_bar_bg)),
+        rule_rect,
     );
+
+    let (top_line, targets) =
+        top_line_border(&build_tab_title(state), Style::default(), area.width);
     // Publish the label columns this frame actually drew so the click
     // handler hit-tests the drawn rule, never a recomputed one.
     state.layout.bottom_tab_targets = targets;
@@ -212,7 +210,7 @@ mod tests {
         let mut pi = state_with_focused_agent(AgentType::Pi);
         pi.global.bottom_tab = BottomTab::Thought;
         let (rule_line, _) = top_line_border(&build_tab_title(&pi), rule, 40);
-        insta::assert_snapshot!(rule_text(rule_line), @"─ Tools│Thought│Tasks│Git ──────────────");
+        insta::assert_snapshot!(rule_text(rule_line), @"  Tools│Thought│Tasks│Git");
         let title = build_tab_title(&pi);
         let thought = title.iter().find(|t| t.span.content == "Thought").unwrap();
         assert_eq!(thought.span.style.fg, Some(pi.theme.accent));
@@ -223,7 +221,7 @@ mod tests {
         // the Activity fallback.
         let claude = state_with_focused_agent(AgentType::Claude);
         let (rule_line, _) = top_line_border(&build_tab_title(&claude), rule, 30);
-        insta::assert_snapshot!(rule_text(rule_line), @"─ Tools│Tasks│Git ────────────");
+        insta::assert_snapshot!(rule_text(rule_line), @"  Tools│Tasks│Git");
 
         // 22 and 18 leave the full 15-cell tab run plus fill dashes;
         // 20 — the supported minimum — truncates the tail of the run
@@ -231,11 +229,11 @@ mod tests {
         // the rule stays exactly the width. The `─ ` prefix is 2
         // columns, so the label columns never move.
         let (rule_line, _) = top_line_border(&build_tab_title(&claude), rule, 22);
-        insta::assert_snapshot!(rule_text(rule_line), @"─ Tools│Tasks│Git ────");
+        insta::assert_snapshot!(rule_text(rule_line), @"  Tools│Tasks│Git");
         let (rule_line, _) = top_line_border(&build_tab_title(&pi), rule, 20);
-        insta::assert_snapshot!(rule_text(rule_line), @"─ Tools│Thought│Ta… ");
+        insta::assert_snapshot!(rule_text(rule_line), @"  Tools│Thought│Ta…");
         let (rule_line, _) = top_line_border(&build_tab_title(&claude), rule, 18);
-        insta::assert_snapshot!(rule_text(rule_line), @"─ Tools│Tasks│Git ");
+        insta::assert_snapshot!(rule_text(rule_line), @"  Tools│Tasks│Git");
     }
 
     #[test]

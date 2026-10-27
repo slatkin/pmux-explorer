@@ -60,10 +60,10 @@ pub(super) fn render_filter_bar<'a>(state: &AppState, width: u16) -> (Line<'a>, 
         spans.push(Span::raw(" "));
     }
 
-    // The busy chip always wears the running colour — running and
-    // background panes are both busy, so its icon carries no selection
-    // cue. The active chip is instead marked by its count, which is
-    // drawn in the accent colour.
+    // A chip's icon is grey when its count is zero and lit in its
+    // status colour otherwise. Selection plays no part in the icon —
+    // the active chip is marked only by its count, which is drawn in
+    // the accent colour.
     for (i, chip) in chips.iter().enumerate() {
         if i > 0 {
             spans.push(Span::raw(" "));
@@ -73,12 +73,15 @@ pub(super) fn render_filter_bar<'a>(state: &AppState, width: u16) -> (Line<'a>, 
         let (icon, icon_color) = icon_for(filter);
 
         let is_selected = state.global.status_filter == filter;
-        let icon_style = if is_selected || filter == StatusFilter::Busy {
-            Style::default().fg(icon_color)
-        } else {
+        let icon_style = if count == 0 {
             Style::default().fg(theme.filter_inactive)
+        } else {
+            Style::default().fg(icon_color)
         };
         spans.push(Span::styled(icon, icon_style));
+        // One space inside the chip between the icon and its count —
+        // the layout counts it in the chip's width, so it is clickable.
+        spans.push(Span::raw(" "));
 
         let count_str = format!("{count}");
         let count_style = if is_selected {
@@ -288,7 +291,7 @@ mod tests {
     }
 
     #[test]
-    fn render_filter_bar_uses_selected_and_inactive_icon_colors() {
+    fn render_filter_bar_lights_icons_by_count_and_marks_active_by_count() {
         let pane1 = crate::tmux::PaneInfo {
             pane_id: "%2".into(),
             pane_active: true,
@@ -344,7 +347,8 @@ mod tests {
         state.global.status_filter = StatusFilter::Busy;
         let theme = &state.theme;
 
-        let (line, _) = render_filter_bar(&state, 20);
+        // Width 24 so every chip fits — at 20 the last one drops.
+        let (line, _) = render_filter_bar(&state, 24);
         let cells: Vec<_> = line
             .spans
             .iter()
@@ -353,35 +357,36 @@ mod tests {
 
         assert_eq!(cells.len(), 11);
 
-        assert_eq!(cells[0].content.as_ref(), "≡");
-        assert_eq!(cells[0].style.fg, Some(theme.filter_inactive));
+        // A lit icon wears its status colour; a zero count greys it.
+        // Selection never touches the icon — only the count, which
+        // carries the accent on the active chip.
+        assert_eq!(cells[0].content.as_ref(), "\u{f14ef}");
+        assert_eq!(cells[0].style.fg, Some(theme.status_all));
         assert!(!cells[0].style.add_modifier.contains(Modifier::UNDERLINED));
 
         assert_eq!(cells[1].content.as_ref(), "2");
         assert_eq!(cells[1].style.fg, Some(theme.text_active));
 
-        // The busy chip icon wears the running colour even while busy is
-        // the active category, and its count carries the accent colour.
-        assert_eq!(cells[2].content.as_ref(), "●");
+        assert_eq!(cells[2].content.as_ref(), "\u{ef0c}");
         assert_eq!(cells[2].style.fg, Some(theme.status_running));
         assert!(!cells[2].style.add_modifier.contains(Modifier::UNDERLINED));
 
         assert_eq!(cells[3].content.as_ref(), "1");
         assert_eq!(cells[3].style.fg, Some(theme.accent));
 
-        assert_eq!(cells[4].content.as_ref(), "◐");
+        assert_eq!(cells[4].content.as_ref(), "\u{f0954}");
         assert_eq!(cells[4].style.fg, Some(theme.filter_inactive));
 
         assert_eq!(cells[5].content.as_ref(), "0");
         assert_eq!(cells[5].style.fg, Some(theme.filter_inactive));
 
-        assert_eq!(cells[6].content.as_ref(), "○");
-        assert_eq!(cells[6].style.fg, Some(theme.filter_inactive));
+        assert_eq!(cells[6].content.as_ref(), "\u{f04b2}");
+        assert_eq!(cells[6].style.fg, Some(theme.status_idle));
 
         assert_eq!(cells[7].content.as_ref(), "1");
         assert_eq!(cells[7].style.fg, Some(theme.text_active));
 
-        assert_eq!(cells[8].content.as_ref(), "✕");
+        assert_eq!(cells[8].content.as_ref(), "\u{f071}");
         assert_eq!(cells[8].style.fg, Some(theme.filter_inactive));
 
         assert_eq!(cells[9].content.as_ref(), "0");
@@ -389,7 +394,7 @@ mod tests {
     }
 
     #[test]
-    fn render_filter_bar_busy_icon_keeps_running_colour_when_inactive() {
+    fn render_filter_bar_greys_zero_count_icons_even_when_selected() {
         let mut pane = test_filter_pane("%2", PaneStatus::Idle);
         pane.agent = crate::tmux::AgentType::Codex;
         let mut state = make_state_with_groups(vec![crate::group::RepoGroup {
@@ -397,28 +402,32 @@ mod tests {
             has_focus: true,
             panes: vec![(pane, PaneGitInfo::default())],
         }]);
-        state.global.status_filter = StatusFilter::Idle;
+        // The waiting chip is selected but has a zero count: its icon
+        // greys anyway — selection never relights an empty chip.
+        state.global.status_filter = StatusFilter::Waiting;
         let theme = &state.theme;
 
-        let (line, _) = render_filter_bar(&state, 20);
+        let (line, _) = render_filter_bar(&state, 24);
         let cells: Vec<_> = line
             .spans
             .iter()
             .filter(|span| !span.content.as_ref().trim().is_empty())
             .collect();
 
-        // Busy is not active: its icon still wears the running colour,
-        // its count drops back to the ordinary text colour, and the
-        // active chip's count wears the accent colour.
-        assert_eq!(cells[2].content.as_ref(), "●");
-        assert_eq!(cells[2].style.fg, Some(theme.status_running));
+        assert_eq!(cells[2].content.as_ref(), "\u{ef0c}");
+        assert_eq!(cells[2].style.fg, Some(theme.filter_inactive));
         assert_eq!(cells[3].content.as_ref(), "0");
         assert_eq!(cells[3].style.fg, Some(theme.filter_inactive));
 
-        assert_eq!(cells[6].content.as_ref(), "○");
+        assert_eq!(cells[4].content.as_ref(), "\u{f0954}");
+        assert_eq!(cells[4].style.fg, Some(theme.filter_inactive));
+        assert_eq!(cells[5].content.as_ref(), "0");
+        assert_eq!(cells[5].style.fg, Some(theme.accent));
+
+        assert_eq!(cells[6].content.as_ref(), "\u{f04b2}");
         assert_eq!(cells[6].style.fg, Some(theme.status_idle));
         assert_eq!(cells[7].content.as_ref(), "1");
-        assert_eq!(cells[7].style.fg, Some(theme.accent));
+        assert_eq!(cells[7].style.fg, Some(theme.text_active));
     }
 
     #[test]
@@ -440,7 +449,7 @@ mod tests {
         state.global.status_filter = StatusFilter::Busy;
 
         let text = filter_bar_text(&state);
-        insta::assert_snapshot!(text, @" ≡2 ●2 ◐0 ○0 ✕0   ⤢ ");
+        insta::assert_snapshot!(text, @" 󱓯 2  2 󰥔 0 󰒲 0  ⤢");
     }
 
     // ─── the pop-out control ─────────────────────────────────
@@ -470,7 +479,7 @@ mod tests {
             );
         }
         let (line, _) = render_filter_bar(&state, 20);
-        insta::assert_snapshot!(line_text(&line), @" ≡0 ●0 ◐0 ○0 ✕0   ⤢ ");
+        insta::assert_snapshot!(line_text(&line), @" 󱓯 0  0 󰥔 0 󰒲 0  ⤢");
         // The trailing spacer spans the row's last column, so the glyph
         // is the second-to-last span.
         let glyph = &line.spans[line.spans.len() - 2];
@@ -485,7 +494,7 @@ mod tests {
         let mut state = make_state_with_groups(vec![]);
         state.sidebar_pane.floating = true;
         let text = filter_bar_text(&state);
-        insta::assert_snapshot!(text, @" ≡0 ●0 ◐0 ○0 ✕0   ⤡ ");
+        insta::assert_snapshot!(text, @" 󱓯 0  0 󰥔 0 󰒲 0  ⤡");
     }
 
     // ─── the row with multi-digit counts (the 20 column minimum) ───

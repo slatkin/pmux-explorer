@@ -17,12 +17,12 @@ pub struct StatusIcons {
 impl Default for StatusIcons {
     fn default() -> Self {
         Self {
-            all: "≡".into(),
-            running: "●".into(),
+            all: "\u{f14ef}".into(),
+            running: "\u{ef0c}".into(),
             background: "◎".into(),
-            waiting: "◐".into(),
-            idle: "○".into(),
-            error: "✕".into(),
+            waiting: "\u{f0954}".into(),
+            idle: "\u{f04b2}".into(),
+            error: "\u{f071}".into(),
             unknown: "·".into(),
         }
     }
@@ -81,12 +81,12 @@ mod tests {
     #[test]
     fn default_icons_match_current_glyphs() {
         let icons = StatusIcons::default();
-        assert_eq!(icons.all_icon(), "≡");
-        assert_eq!(icons.status_icon(&PaneStatus::Running), "●");
+        assert_eq!(icons.all_icon(), "\u{f14ef}");
+        assert_eq!(icons.status_icon(&PaneStatus::Running), "\u{ef0c}");
         assert_eq!(icons.status_icon(&PaneStatus::Background), "◎");
-        assert_eq!(icons.status_icon(&PaneStatus::Waiting), "◐");
-        assert_eq!(icons.status_icon(&PaneStatus::Idle), "○");
-        assert_eq!(icons.status_icon(&PaneStatus::Error), "✕");
+        assert_eq!(icons.status_icon(&PaneStatus::Waiting), "\u{f0954}");
+        assert_eq!(icons.status_icon(&PaneStatus::Idle), "\u{f04b2}");
+        assert_eq!(icons.status_icon(&PaneStatus::Error), "\u{f071}");
         assert_eq!(icons.status_icon(&PaneStatus::Unknown), "·");
     }
 
@@ -103,6 +103,6 @@ mod tests {
         assert_eq!(icons.status_icon(&PaneStatus::Running), "◉");
         assert_eq!(icons.status_icon(&PaneStatus::Background), "⊙");
         assert_eq!(icons.status_icon(&PaneStatus::Unknown), "∎");
-        assert_eq!(icons.status_icon(&PaneStatus::Waiting), "◐");
+        assert_eq!(icons.status_icon(&PaneStatus::Waiting), "\u{f0954}");
     }
 }

@@ -20,6 +20,10 @@ pub struct ColorTheme {
     pub status_error: Color,
     pub status_unknown: Color,
     pub filter_inactive: Color,
+    /// Filter bar row background. Painted at all times, so it sits over
+    /// the focus fill while the sidebar pane is the active one.
+    /// Default Tokyo Night line highlight (`#414868`).
+    pub filter_bar_bg: Color,
     pub agent_claude: Color,
     pub agent_codex: Color,
     pub agent_opencode: Color,
@@ -84,6 +88,7 @@ impl Default for ColorTheme {
             status_error: Color::Rgb(0xf7, 0x76, 0x8e),
             status_unknown: Color::Rgb(0x56, 0x5f, 0x89),
             filter_inactive: Color::Rgb(0x9a, 0xa5, 0xce),
+            filter_bar_bg: Color::Rgb(0x41, 0x48, 0x68),
             agent_claude: Color::Rgb(0xff, 0x9e, 0x64),
             agent_codex: Color::Rgb(0xbb, 0x9a, 0xf7),
             agent_opencode: Color::Rgb(0x7d, 0xcf, 0xff),
@@ -148,6 +153,7 @@ impl ColorTheme {
         theme.status_idle = read(tmux::SIDEBAR_COLOR_IDLE, theme.status_idle);
         theme.status_error = read(tmux::SIDEBAR_COLOR_ERROR, theme.status_error);
         theme.filter_inactive = read(tmux::SIDEBAR_COLOR_FILTER_INACTIVE, theme.filter_inactive);
+        theme.filter_bar_bg = read(tmux::SIDEBAR_COLOR_FILTER_BAR_BG, theme.filter_bar_bg);
         theme.agent_claude = read(tmux::SIDEBAR_COLOR_AGENT_CLAUDE, theme.agent_claude);
         theme.agent_codex = read(tmux::SIDEBAR_COLOR_AGENT_CODEX, theme.agent_codex);
         theme.agent_opencode = read(tmux::SIDEBAR_COLOR_AGENT_OPENCODE, theme.agent_opencode);

@@ -19,6 +19,7 @@ use test_helpers::*;
 const TOP_FILL: Color = Color::Rgb(0x24, 0x28, 0x3b); // focus_active_bg default
 const BASE_FILL: Color = Color::Rgb(0x1a, 0x1b, 0x26); // focus_bg default
 const SELECTION: Color = Color::Rgb(0x41, 0x48, 0x68); // selection_bg default
+const FILTER_BAR_BG: Color = Color::Rgb(0x41, 0x48, 0x68); // filter_bar_bg default
 
 /// Bottom panel row count for the standard 30×20 / 30% geometry.
 const BOT_H: u16 = 6;
@@ -81,10 +82,12 @@ fn focus_fill_panes_top_active_bottom_base() {
 
     let buf = render_to_buffer(&mut state, 30, 20);
 
-    // The filter bar row (row 0) carries the active fill.
-    assert_eq!(buf[(0, 0)].bg, TOP_FILL);
-    // The bottom panel's rule row and last row carry the base fill.
-    assert_eq!(buf[(0, 20 - BOT_H)].bg, BASE_FILL);
+    // The filter bar row (row 0) wears its own colour, painted over the
+    // active fill the rest of the section carries.
+    assert_eq!(buf[(0, 0)].bg, FILTER_BAR_BG);
+    // The bottom panel's rule row wears the solid tab-bar band; the
+    // panel's last row carries the base fill.
+    assert_eq!(buf[(0, 20 - BOT_H)].bg, FILTER_BAR_BG);
     assert_eq!(buf[(0, 19)].bg, BASE_FILL);
     // No section carries the other section's fill.
     assert!(
@@ -101,10 +104,10 @@ fn focus_fill_panes_top_active_bottom_base() {
     assert_eq!(buf[(0, 20 - BOT_H - 1)].bg, TOP_FILL);
 
     insta::assert_snapshot!(render_to_styled_string(&mut state, 30, 20), @"
-     [bg:#24283b]≡[fg:#7aa2f7,bg:#24283b]1[fg:#7aa2f7,bg:#24283b] [bg:#24283b]●[fg:#9ece6a,bg:#24283b]0[fg:#9aa5ce,bg:#24283b] [bg:#24283b]◐[fg:#9aa5ce,bg:#24283b]0[fg:#9aa5ce,bg:#24283b] [bg:#24283b]○[fg:#9aa5ce,bg:#24283b]1[fg:#c0caf5,bg:#24283b] [bg:#24283b]✕[fg:#9aa5ce,bg:#24283b]0[fg:#9aa5ce,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]⤢[fg:#9ece6a,bg:#24283b] [bg:#24283b]
+     [bg:#414868]󱓯[fg:#7aa2f7,bg:#414868] [bg:#414868]1[fg:#7aa2f7,bg:#414868] [bg:#414868][fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868]󰥔[fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868]󰒲[fg:#7dcfff,bg:#414868] [bg:#414868]1[fg:#c0caf5,bg:#414868] [bg:#414868][fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]⤢[fg:#9ece6a,bg:#414868] [bg:#414868]
     ⓘ[fg:#e0af68,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]—[fg:#a9b1d6,bg:#24283b] [bg:#24283b]▾[fg:#a9b1d6,bg:#24283b]
     p[fg:#7aa2f7,bg:#24283b]r[fg:#7aa2f7,bg:#24283b]o[fg:#7aa2f7,bg:#24283b]j[fg:#7aa2f7,bg:#24283b]e[fg:#7aa2f7,bg:#24283b]c[fg:#7aa2f7,bg:#24283b]t[fg:#7aa2f7,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
-    ┃[fg:#7aa2f7,bg:#414868] [bg:#414868]○[fg:#7dcfff,bg:#414868] [fg:#ff9e64,bg:#414868][fg:#ff9e64,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]
+    ┃[fg:#7aa2f7,bg:#414868] [bg:#414868]󰒲[fg:#7dcfff,bg:#414868] [fg:#ff9e64,bg:#414868][fg:#ff9e64,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]
      [bg:#24283b] [bg:#24283b] [fg:#c0caf5,bg:#24283b] [fg:#c0caf5,bg:#24283b]W[fg:#c0caf5,bg:#24283b]a[fg:#c0caf5,bg:#24283b]i[fg:#c0caf5,bg:#24283b]t[fg:#c0caf5,bg:#24283b]i[fg:#c0caf5,bg:#24283b]n[fg:#c0caf5,bg:#24283b]g[fg:#c0caf5,bg:#24283b] [fg:#c0caf5,bg:#24283b]f[fg:#c0caf5,bg:#24283b]o[fg:#c0caf5,bg:#24283b]r[fg:#c0caf5,bg:#24283b] [fg:#c0caf5,bg:#24283b]p[fg:#c0caf5,bg:#24283b]r[fg:#c0caf5,bg:#24283b]o[fg:#c0caf5,bg:#24283b]m[fg:#c0caf5,bg:#24283b]p[fg:#c0caf5,bg:#24283b]t[fg:#c0caf5,bg:#24283b]…[fg:#c0caf5,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
      [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
      [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
@@ -115,7 +118,7 @@ fn focus_fill_panes_top_active_bottom_base() {
      [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
      [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
      [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
-    ─[fg:240,bg:#1a1b26] [fg:240,bg:#1a1b26]T[fg:#7aa2f7,bg:#1a1b26]o[fg:#7aa2f7,bg:#1a1b26]o[fg:#7aa2f7,bg:#1a1b26]l[fg:#7aa2f7,bg:#1a1b26]s[fg:#7aa2f7,bg:#1a1b26]│[fg:240,bg:#1a1b26]T[fg:#a9b1d6,bg:#1a1b26]a[fg:#a9b1d6,bg:#1a1b26]s[fg:#a9b1d6,bg:#1a1b26]k[fg:#a9b1d6,bg:#1a1b26]s[fg:#a9b1d6,bg:#1a1b26]│[fg:240,bg:#1a1b26]G[fg:#a9b1d6,bg:#1a1b26]i[fg:#a9b1d6,bg:#1a1b26]t[fg:#a9b1d6,bg:#1a1b26] [fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]
+     [bg:#414868] [bg:#414868]T[fg:#7aa2f7,bg:#414868]o[fg:#7aa2f7,bg:#414868]o[fg:#7aa2f7,bg:#414868]l[fg:#7aa2f7,bg:#414868]s[fg:#7aa2f7,bg:#414868]│[fg:240,bg:#414868]T[fg:#a9b1d6,bg:#414868]a[fg:#a9b1d6,bg:#414868]s[fg:#a9b1d6,bg:#414868]k[fg:#a9b1d6,bg:#414868]s[fg:#a9b1d6,bg:#414868]│[fg:240,bg:#414868]G[fg:#a9b1d6,bg:#414868]i[fg:#a9b1d6,bg:#414868]t[fg:#a9b1d6,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]
      [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
      [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
      [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]N[fg:#a9b1d6,bg:#1a1b26]o[fg:#a9b1d6,bg:#1a1b26] [fg:#a9b1d6,bg:#1a1b26]t[fg:#a9b1d6,bg:#1a1b26]o[fg:#a9b1d6,bg:#1a1b26]o[fg:#a9b1d6,bg:#1a1b26]l[fg:#a9b1d6,bg:#1a1b26]s[fg:#a9b1d6,bg:#1a1b26] [fg:#a9b1d6,bg:#1a1b26]y[fg:#a9b1d6,bg:#1a1b26]e[fg:#a9b1d6,bg:#1a1b26]t[fg:#a9b1d6,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
@@ -133,10 +136,11 @@ fn focus_fill_activity_log_bottom_active_top_base() {
 
     let buf = render_to_buffer(&mut state, 30, 20);
 
-    // The bottom panel's rule row carries the active fill; the top
-    // section's filter bar row carries the base fill.
-    assert_eq!(buf[(0, 20 - BOT_H)].bg, TOP_FILL);
-    assert_eq!(buf[(0, 0)].bg, BASE_FILL);
+    // The bottom panel's rule row wears the solid tab-bar band; the
+    // top section's filter bar row still wears its own colour over the
+    // base fill the rest of the section carries.
+    assert_eq!(buf[(0, 20 - BOT_H)].bg, FILTER_BAR_BG);
+    assert_eq!(buf[(0, 0)].bg, FILTER_BAR_BG);
     // No section carries the other section's fill.
     assert!(
         !(0..20 - BOT_H).any(|y| row_bgs(&buf, y).contains(&TOP_FILL)),
@@ -148,10 +152,10 @@ fn focus_fill_activity_log_bottom_active_top_base() {
     );
 
     insta::assert_snapshot!(render_to_styled_string(&mut state, 30, 20), @"
-     [bg:#1a1b26]≡[fg:#7aa2f7,bg:#1a1b26]1[fg:#7aa2f7,bg:#1a1b26] [bg:#1a1b26]●[fg:#9ece6a,bg:#1a1b26]0[fg:#9aa5ce,bg:#1a1b26] [bg:#1a1b26]◐[fg:#9aa5ce,bg:#1a1b26]0[fg:#9aa5ce,bg:#1a1b26] [bg:#1a1b26]○[fg:#9aa5ce,bg:#1a1b26]1[fg:#c0caf5,bg:#1a1b26] [bg:#1a1b26]✕[fg:#9aa5ce,bg:#1a1b26]0[fg:#9aa5ce,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]⤢[fg:#9ece6a,bg:#1a1b26] [bg:#1a1b26]
+     [bg:#414868]󱓯[fg:#7aa2f7,bg:#414868] [bg:#414868]1[fg:#7aa2f7,bg:#414868] [bg:#414868][fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868]󰥔[fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868]󰒲[fg:#7dcfff,bg:#414868] [bg:#414868]1[fg:#c0caf5,bg:#414868] [bg:#414868][fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]⤢[fg:#9ece6a,bg:#414868] [bg:#414868]
     ⓘ[fg:#e0af68,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]—[fg:#a9b1d6,bg:#1a1b26] [bg:#1a1b26]▾[fg:#a9b1d6,bg:#1a1b26]
     p[fg:#7aa2f7,bg:#1a1b26]r[fg:#7aa2f7,bg:#1a1b26]o[fg:#7aa2f7,bg:#1a1b26]j[fg:#7aa2f7,bg:#1a1b26]e[fg:#7aa2f7,bg:#1a1b26]c[fg:#7aa2f7,bg:#1a1b26]t[fg:#7aa2f7,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
-    ┃[fg:#7aa2f7,bg:#1a1b26] [bg:#1a1b26]○[fg:#7dcfff,bg:#1a1b26] [fg:#ff9e64,bg:#1a1b26][fg:#ff9e64,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+    ┃[fg:#7aa2f7,bg:#1a1b26] [bg:#1a1b26]󰒲[fg:#7dcfff,bg:#1a1b26] [fg:#ff9e64,bg:#1a1b26][fg:#ff9e64,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
      [bg:#1a1b26] [bg:#1a1b26] [fg:#c0caf5,bg:#1a1b26] [fg:#c0caf5,bg:#1a1b26]W[fg:#c0caf5,bg:#1a1b26]a[fg:#c0caf5,bg:#1a1b26]i[fg:#c0caf5,bg:#1a1b26]t[fg:#c0caf5,bg:#1a1b26]i[fg:#c0caf5,bg:#1a1b26]n[fg:#c0caf5,bg:#1a1b26]g[fg:#c0caf5,bg:#1a1b26] [fg:#c0caf5,bg:#1a1b26]f[fg:#c0caf5,bg:#1a1b26]o[fg:#c0caf5,bg:#1a1b26]r[fg:#c0caf5,bg:#1a1b26] [fg:#c0caf5,bg:#1a1b26]p[fg:#c0caf5,bg:#1a1b26]r[fg:#c0caf5,bg:#1a1b26]o[fg:#c0caf5,bg:#1a1b26]m[fg:#c0caf5,bg:#1a1b26]p[fg:#c0caf5,bg:#1a1b26]t[fg:#c0caf5,bg:#1a1b26]…[fg:#c0caf5,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
      [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
      [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
@@ -162,7 +166,7 @@ fn focus_fill_activity_log_bottom_active_top_base() {
      [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
      [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
      [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
-    ─[fg:#7aa2f7,bg:#24283b] [fg:#7aa2f7,bg:#24283b]T[fg:#7aa2f7,bg:#24283b]o[fg:#7aa2f7,bg:#24283b]o[fg:#7aa2f7,bg:#24283b]l[fg:#7aa2f7,bg:#24283b]s[fg:#7aa2f7,bg:#24283b]│[fg:240,bg:#24283b]T[fg:#a9b1d6,bg:#24283b]a[fg:#a9b1d6,bg:#24283b]s[fg:#a9b1d6,bg:#24283b]k[fg:#a9b1d6,bg:#24283b]s[fg:#a9b1d6,bg:#24283b]│[fg:240,bg:#24283b]G[fg:#a9b1d6,bg:#24283b]i[fg:#a9b1d6,bg:#24283b]t[fg:#a9b1d6,bg:#24283b] [fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]
+     [bg:#414868] [bg:#414868]T[fg:#7aa2f7,bg:#414868]o[fg:#7aa2f7,bg:#414868]o[fg:#7aa2f7,bg:#414868]l[fg:#7aa2f7,bg:#414868]s[fg:#7aa2f7,bg:#414868]│[fg:240,bg:#414868]T[fg:#a9b1d6,bg:#414868]a[fg:#a9b1d6,bg:#414868]s[fg:#a9b1d6,bg:#414868]k[fg:#a9b1d6,bg:#414868]s[fg:#a9b1d6,bg:#414868]│[fg:240,bg:#414868]G[fg:#a9b1d6,bg:#414868]i[fg:#a9b1d6,bg:#414868]t[fg:#a9b1d6,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]
      [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
      [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
      [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]N[fg:#a9b1d6,bg:#24283b]o[fg:#a9b1d6,bg:#24283b] [fg:#a9b1d6,bg:#24283b]t[fg:#a9b1d6,bg:#24283b]o[fg:#a9b1d6,bg:#24283b]o[fg:#a9b1d6,bg:#24283b]l[fg:#a9b1d6,bg:#24283b]s[fg:#a9b1d6,bg:#24283b] [fg:#a9b1d6,bg:#24283b]y[fg:#a9b1d6,bg:#24283b]e[fg:#a9b1d6,bg:#24283b]t[fg:#a9b1d6,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
@@ -171,34 +175,30 @@ fn focus_fill_activity_log_bottom_active_top_base() {
     ");
 }
 
-// ─── Unfocused: no fill anywhere ─────────────────────────────────────
+// ─── Unfocused: the fills stay — there is no focus/unfocus look ─────
 
 #[test]
-fn focus_fill_unfocused_paints_nothing() {
+fn focus_fill_unfocused_paints_the_same() {
     let mut state = focused_panes_state();
     state.focus_state.sidebar_focused = false;
 
     let buf = render_to_buffer(&mut state, 30, 20);
 
-    assert!(
-        !(0..20).any(|y| {
-            row_bgs(&buf, y).iter().any(|bg| {
-                matches!(
-                    bg,
-                    Color::Rgb(0x1a, 0x1b, 0x26) | Color::Rgb(0x24, 0x28, 0x3b)
-                )
-            })
-        }),
-        "no cell may carry a focus fill when the sidebar is unfocused"
-    );
+    // The sidebar paints its fills at all times: unfocused looks
+    // exactly like Panes focus — top active, bottom base.
+    assert_eq!(buf[(0, 20 - BOT_H - 1)].bg, TOP_FILL);
+    assert_eq!(buf[(0, 19)].bg, BASE_FILL);
+    // The filter bar row and the tab-bar rule row wear their band.
+    assert_eq!(buf[(0, 0)].bg, FILTER_BAR_BG);
+    assert_eq!(buf[(0, 20 - BOT_H)].bg, FILTER_BAR_BG);
 
     insta::assert_snapshot!(render_to_string(&mut state, 30, 20), @"
-     ≡1 ●0 ◐0 ○1 ✕0             ⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0        ⤢
     ⓘ                          — ▾
     project
-    ┃ ○ 
+    ┃ 󰒲 
         Waiting for prompt…
-    ─ Tools│Tasks│Git ────────────
+      Tools│Tasks│Git
              No tools yet
     ");
 }
@@ -215,7 +215,7 @@ fn focus_fill_bottom_hidden_top_gets_active_fill() {
 
     let buf = render_to_buffer(&mut state, 30, 20);
 
-    assert_eq!(buf[(0, 0)].bg, TOP_FILL);
+    assert_eq!(buf[(0, 0)].bg, FILTER_BAR_BG);
     assert_eq!(buf[(0, 19)].bg, TOP_FILL);
     assert!(
         !(0..20).any(|y| row_bgs(&buf, y).contains(&BASE_FILL)),
@@ -223,10 +223,10 @@ fn focus_fill_bottom_hidden_top_gets_active_fill() {
     );
 
     insta::assert_snapshot!(render_to_string(&mut state, 30, 20), @"
-     ≡1 ●0 ◐0 ○1 ✕0             ⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0        ⤢
     ⓘ                          — ▾
     project
-    ┃ ○ 
+    ┃ 󰒲 
         Waiting for prompt…
     ");
 }
@@ -321,15 +321,15 @@ fn focus_fill_pet_band_carries_top_fill() {
     assert!(blank_filled > 0, "the pet band must have blank cells");
 
     insta::assert_snapshot!(render_to_string(&mut state, 30, 20), @"
-     ≡1 ●0 ◐0 ○1 ✕0             ⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0        ⤢
     ⓘ                          — ▾
     project
-    ┃ ○ 
+    ┃ 󰒲 
         Waiting for prompt…
       ▄ ▄
      ▄▀▀▀▄                   ████
       ▀ ▀                 ██ █  █
-    ─ Tools│Tasks│Git ────────────
+      Tools│Tasks│Git
              No tools yet
     ");
 }

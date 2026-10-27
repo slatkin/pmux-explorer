@@ -117,11 +117,11 @@ fn snapshot_git_status_tab_ui() {
 
     let output = render_to_string(&mut state, 28, 24);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0           ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
     ⓘ                        — ▾
     project
-    ┃ ● 
-    ─ Tools│Tasks│Git ──────────
+    ┃  
+      Tools│Tasks│Git
     feature/sidebar         ↑2↓1
     +42/-15              3 files
     ────────────────────────────
@@ -153,11 +153,11 @@ fn snapshot_git_clean_ui() {
 
     let output = render_to_string(&mut state, 28, 24);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0           ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
     ⓘ                        — ▾
     project
-    ┃ ● 
-    ─ Tools│Tasks│Git ──────────
+    ┃  
+      Tools│Tasks│Git
          Working tree clean
     ");
 }
@@ -189,11 +189,11 @@ fn snapshot_activity_tab_active_ui() {
 
     let output = render_to_string(&mut state, 28, 24);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0           ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
     ⓘ                        — ▾
     project
-    ┃ ● 
-    ─ Tools│Tasks│Git ──────────
+    ┃  
+      Tools│Tasks│Git
     10:32                   Edit
       src/main.rs
     ");
@@ -228,11 +228,11 @@ fn activity_tab_leaves_one_blank_row_above_entries() {
     // row, the first row must be empty and the timestamp/tool row must
     // appear one row further down.
     insta::assert_snapshot!(render_to_string(&mut state, 28, 24), @"
-     ≡1 ●1 ◐0 ○0 ✕0           ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
     ⓘ                        — ▾
     project
-    ┃ ● 
-    ─ Tools│Tasks│Git ──────────
+    ┃  
+      Tools│Tasks│Git
     10:32                   Edit
       src/main.rs
     ");
@@ -269,11 +269,11 @@ fn snapshot_activity_long_tool_keeps_one_space_gap() {
 
     let output = render_to_string(&mut state, 28, 14);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0           ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
     ⓘ                        — ▾
     project
-    ┃ ● 
-    ─ Tools│Tasks│Git ──────────
+    ┃  
+      Tools│Tasks│Git
     10:32 mcp__context7__query-d
       rust
     ");
@@ -303,12 +303,12 @@ fn snapshot_tab_bar_renders_both_labels() {
 
     let output = render_to_string(&mut state, 28, 14);
     insta::assert_snapshot!(output, @"
-     ≡1 ●0 ◐0 ○1 ✕0           ⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0      ⤢
     ⓘ                        — ▾
     project
-    ┃ ○ 
+    ┃ 󰒲 
         Waiting for prompt…
-    ─ Tools│Tasks│Git ──────────
+      Tools│Tasks│Git
     10:32                   Edit
       test
     ");
@@ -354,11 +354,11 @@ fn snapshot_tasks_empty_tab_ui() {
 
     let output = render_to_string(&mut state, 28, 24);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0           ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
     ⓘ                        — ▾
     project
-    ┃ ● 
-    ─ Tools│Tasks│Git ──────────
+    ┃  
+      Tools│Tasks│Git
      Build the Tasks tab
      ✔ Record the task path
      ◼ Render the list
@@ -389,11 +389,11 @@ fn snapshot_tasks_tab_ui() {
 
     let output = render_to_string(&mut state, 28, 24);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0           ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
     ⓘ                        — ▾
     project
-    ┃ ● 
-    ─ Tools│Tasks│Git ──────────
+    ┃  
+      Tools│Tasks│Git
           No tasks recorded
     ");
 }
@@ -440,11 +440,11 @@ fn snapshot_tasks_tab_after_finished_list_closes() {
 
     let output = render_to_string(&mut state, 28, 24);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0           ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
     ⓘ                        — ▾
     project
-    ┃ ● 
-    ─ Tools│Tasks│Git ──────────
+    ┃  
+      Tools│Tasks│Git
           No tasks recorded
     ");
 
@@ -494,10 +494,10 @@ fn snapshot_tasks_status_colors_styled() {
     // the task-progress color (223), pending takes task_pending blue
     // (111); all three sit one column in from the panel edge.
     insta::assert_snapshot!(render_to_styled_string(&mut state, 28, 24), @"
-     [bg:#24283b]≡[fg:#7aa2f7,bg:#24283b]1[fg:#7aa2f7,bg:#24283b] [bg:#24283b]●[fg:#9ece6a,bg:#24283b]1[fg:#c0caf5,bg:#24283b] [bg:#24283b]◐[fg:#9aa5ce,bg:#24283b]0[fg:#9aa5ce,bg:#24283b] [bg:#24283b]○[fg:#9aa5ce,bg:#24283b]0[fg:#9aa5ce,bg:#24283b] [bg:#24283b]✕[fg:#9aa5ce,bg:#24283b]0[fg:#9aa5ce,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]⤢[fg:#9ece6a,bg:#24283b] [bg:#24283b]
+     [bg:#414868]󱓯[fg:#7aa2f7,bg:#414868] [bg:#414868]1[fg:#7aa2f7,bg:#414868] [bg:#414868][fg:#9ece6a,bg:#414868] [bg:#414868]1[fg:#c0caf5,bg:#414868] [bg:#414868]󰥔[fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868]󰒲[fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868][fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]⤢[fg:#9ece6a,bg:#414868] [bg:#414868]
     ⓘ[fg:#e0af68,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]—[fg:#a9b1d6,bg:#24283b] [bg:#24283b]▾[fg:#a9b1d6,bg:#24283b]
     p[fg:#7aa2f7,bg:#24283b]r[fg:#7aa2f7,bg:#24283b]o[fg:#7aa2f7,bg:#24283b]j[fg:#7aa2f7,bg:#24283b]e[fg:#7aa2f7,bg:#24283b]c[fg:#7aa2f7,bg:#24283b]t[fg:#7aa2f7,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
-    ┃[fg:#7aa2f7,bg:#414868] [bg:#414868]●[fg:82,bg:#414868] [fg:#ff9e64,bg:#414868][fg:#ff9e64,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]
+    ┃[fg:#7aa2f7,bg:#414868] [bg:#414868][fg:82,bg:#414868] [fg:#ff9e64,bg:#414868][fg:#ff9e64,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]
      [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
      [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
      [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
@@ -511,7 +511,7 @@ fn snapshot_tasks_status_colors_styled() {
      [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
      [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
      [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
-    ─[fg:240,bg:#1a1b26] [fg:240,bg:#1a1b26]T[fg:#a9b1d6,bg:#1a1b26]o[fg:#a9b1d6,bg:#1a1b26]o[fg:#a9b1d6,bg:#1a1b26]l[fg:#a9b1d6,bg:#1a1b26]s[fg:#a9b1d6,bg:#1a1b26]│[fg:240,bg:#1a1b26]T[fg:#7aa2f7,bg:#1a1b26]a[fg:#7aa2f7,bg:#1a1b26]s[fg:#7aa2f7,bg:#1a1b26]k[fg:#7aa2f7,bg:#1a1b26]s[fg:#7aa2f7,bg:#1a1b26]│[fg:240,bg:#1a1b26]G[fg:#a9b1d6,bg:#1a1b26]i[fg:#a9b1d6,bg:#1a1b26]t[fg:#a9b1d6,bg:#1a1b26] [fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]
+     [bg:#414868] [bg:#414868]T[fg:#a9b1d6,bg:#414868]o[fg:#a9b1d6,bg:#414868]o[fg:#a9b1d6,bg:#414868]l[fg:#a9b1d6,bg:#414868]s[fg:#a9b1d6,bg:#414868]│[fg:240,bg:#414868]T[fg:#7aa2f7,bg:#414868]a[fg:#7aa2f7,bg:#414868]s[fg:#7aa2f7,bg:#414868]k[fg:#7aa2f7,bg:#414868]s[fg:#7aa2f7,bg:#414868]│[fg:240,bg:#414868]G[fg:#a9b1d6,bg:#414868]i[fg:#a9b1d6,bg:#414868]t[fg:#a9b1d6,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]
      [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
      [bg:#1a1b26]✔[fg:#9ece6a,bg:#1a1b26] [fg:#9ece6a,bg:#1a1b26]d[fg:#9ece6a,bg:#1a1b26]o[fg:#9ece6a,bg:#1a1b26]n[fg:#9ece6a,bg:#1a1b26]e[fg:#9ece6a,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
      [bg:#1a1b26]◼[fg:#ff9e64,bg:#1a1b26] [fg:#ff9e64,bg:#1a1b26]w[fg:#ff9e64,bg:#1a1b26]i[fg:#ff9e64,bg:#1a1b26]p[fg:#ff9e64,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
@@ -596,11 +596,11 @@ fn snapshot_tasks_description_stays_pinned_while_items_scroll() {
     let _ = render_to_string(&mut state, 28, 24);
     state.tasks.scroll.scroll(3);
     insta::assert_snapshot!(render_to_string(&mut state, 28, 24), @"
-     ≡1 ●1 ◐0 ○0 ✕0           ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
     ⓘ                        — ▾
     project
-    ┃ ● 
-    ─ Tools│Tasks│Git ──────────
+    ┃  
+      Tools│Tasks│Git
      Overhaul the sidebar task
      board
      ◻ task 3
@@ -643,9 +643,12 @@ fn tasks_description_leaves_one_blank_row_before_items() {
         .unwrap();
     let buf = terminal.backend().buffer().clone();
 
-    // The bottom-panel rule row: column 0 is the `─` prefix.
+    // The bottom-panel rule row is the solid band: the last row whose
+    // cells carry the filter_bar_bg background (the filter bar at row 0
+    // wears the same colour).
     let rule_y = (0..buf.area.height)
-        .find(|&y| buf[(0, y)].symbol() == "─")
+        .rev()
+        .find(|&y| buf[(0, y)].bg == ratatui::style::Color::Rgb(0x41, 0x48, 0x68))
         .expect("the tab rule must render");
     let row_text = |y: u16| -> String {
         (0..buf.area.width)
@@ -687,11 +690,11 @@ fn snapshot_tasks_subject_wraps_at_narrow_width() {
     }];
 
     insta::assert_snapshot!(render_to_string(&mut state, 24, 24), @"
-     ≡1 ●1 ◐0 ○0 ✕0       ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0  ⤢
     ⓘ                    — ▾
     project
-    ┃ ● 
-    ─ Tools│Tasks│Git ──────
+    ┃  
+      Tools│Tasks│Git
      ◻ a-very-long-task-sub
        ject-that-runs-out-o
        f-columns
@@ -724,11 +727,11 @@ fn snapshot_tasks_multiline_subject_shows_every_line() {
     }];
 
     insta::assert_snapshot!(render_to_string(&mut state, 28, 24), @"
-     ≡1 ●1 ◐0 ○0 ✕0           ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
     ⓘ                        — ▾
     project
-    ┃ ● 
-    ─ Tools│Tasks│Git ──────────
+    ┃  
+      Tools│Tasks│Git
      ◻ first line
        second line
     ");
@@ -779,11 +782,11 @@ fn snapshot_git_full_info_ui() {
     // Use plain render since elapsed time varies
     let output = render_to_string(&mut state, 28, 24);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0           ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
     ⓘ                        — ▾
     project
-    ┃ ● 
-    ─ Tools│Tasks│Git ──────────
+    ┃  
+      Tools│Tasks│Git
     main
     +120/-30             3 files
     ────────────────────────────
@@ -816,11 +819,11 @@ fn snapshot_git_diff_summary_tight_ui() {
 
     let plain = render_to_string(&mut state, 28, 14);
     insta::assert_snapshot!(plain, @"
-     ≡1 ●1 ◐0 ○0 ✕0           ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
     ⓘ                        — ▾
     project
-    ┃ ● 
-    ─ Tools│Tasks│Git ──────────
+    ┃  
+      Tools│Tasks│Git
     main
     +10/-3               0 files
     ");
@@ -857,11 +860,11 @@ fn snapshot_git_staged_file_diff_right_ui() {
 
     let plain = render_to_string(&mut state, 28, 18);
     insta::assert_snapshot!(plain, @"
-     ≡1 ●1 ◐0 ○0 ✕0           ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
     ⓘ                        — ▾
     project
-    ┃ ● 
-    ─ Tools│Tasks│Git ──────────
+    ┃  
+      Tools│Tasks│Git
     main
     +10/-2               1 files
     ────────────────────────────
@@ -899,11 +902,11 @@ fn snapshot_git_unstaged_long_name_diff_right_ui() {
 
     let plain = render_to_string(&mut state, 28, 18);
     insta::assert_snapshot!(plain, @"
-     ≡1 ●1 ◐0 ○0 ✕0           ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
     ⓘ                        — ▾
     project
-    ┃ ● 
-    ─ Tools│Tasks│Git ──────────
+    ┃  
+      Tools│Tasks│Git
     main
     +150/-50             1 files
     ────────────────────────────
@@ -950,11 +953,11 @@ fn snapshot_git_long_filename_truncated_ui() {
     // Verify the long filename is truncated (contains ellipsis)
     let plain = render_to_string(&mut state, 28, 24);
     insta::assert_snapshot!(plain, @"
-     ≡1 ●1 ◐0 ○0 ✕0           ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
     ⓘ                        — ▾
     project
-    ┃ ● 
-    ─ Tools│Tasks│Git ──────────
+    ┃  
+      Tools│Tasks│Git
     main
                          2 files
     ────────────────────────────
@@ -1038,11 +1041,11 @@ fn snapshot_git_more_than_5_files() {
     // Verify file list rendering (scroll to see overflow)
     let plain = render_to_string(&mut state, 28, 40);
     insta::assert_snapshot!(plain, @"
-     ≡1 ●1 ◐0 ○0 ✕0           ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
     ⓘ                        — ▾
     project
-    ┃ ● 
-    ─ Tools│Tasks│Git ──────────
+    ┃  
+      Tools│Tasks│Git
     main
                          7 files
     ────────────────────────────
@@ -1065,11 +1068,11 @@ fn snapshot_git_more_than_5_files() {
     state.scrolls.git.offset = 5;
     let scrolled = render_to_string(&mut state, 28, 40);
     insta::assert_snapshot!(scrolled, @"
-     ≡1 ●1 ◐0 ○0 ✕0           ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
     ⓘ                        — ▾
     project
-    ┃ ● 
-    ─ Tools│Tasks│Git ──────────
+    ┃  
+      Tools│Tasks│Git
     main
                          7 files
     ────────────────────────────
@@ -1107,11 +1110,11 @@ fn snapshot_git_branch_only_no_changes() {
 
     let plain = render_to_string(&mut state, 38, 20);
     insta::assert_snapshot!(plain, @"
-     ≡1 ●1 ◐0 ○0 ✕0                     ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0                ⤢
     ⓘ                                  — ▾
     project
-    ┃ ● 
-    ─ Tools│Tasks│Git ────────────────────
+    ┃  
+      Tools│Tasks│Git
     feature/long-branch-name            ↑5
     ──────────────────────────────────────
               Working tree clean
@@ -1144,28 +1147,28 @@ fn snapshot_git_pr_number_ui() {
 
     let plain = render_to_string(&mut state, 28, 14);
     insta::assert_snapshot!(plain, @"
-     ≡1 ●1 ◐0 ○0 ✕0           ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
     ⓘ                        — ▾
     project
-    ┃ ● 
-    ─ Tools│Tasks│Git ──────────
+    ┃  
+      Tools│Tasks│Git
     feature/fix              #42
     +10/-3               0 files
     ");
     // Styled snapshot locks in the PR link's underline + pr_link color (fg:117)
     // so future style regressions surface as a diff rather than a missed grep.
     insta::assert_snapshot!(render_to_styled_string(&mut state, 28, 14), @"
-     [bg:#1a1b26]≡[fg:#7aa2f7,bg:#1a1b26]1[fg:#7aa2f7,bg:#1a1b26] [bg:#1a1b26]●[fg:#9ece6a,bg:#1a1b26]1[fg:#c0caf5,bg:#1a1b26] [bg:#1a1b26]◐[fg:#9aa5ce,bg:#1a1b26]0[fg:#9aa5ce,bg:#1a1b26] [bg:#1a1b26]○[fg:#9aa5ce,bg:#1a1b26]0[fg:#9aa5ce,bg:#1a1b26] [bg:#1a1b26]✕[fg:#9aa5ce,bg:#1a1b26]0[fg:#9aa5ce,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]⤢[fg:#9ece6a,bg:#1a1b26] [bg:#1a1b26]
+     [bg:#414868]󱓯[fg:#7aa2f7,bg:#414868] [bg:#414868]1[fg:#7aa2f7,bg:#414868] [bg:#414868][fg:#9ece6a,bg:#414868] [bg:#414868]1[fg:#c0caf5,bg:#414868] [bg:#414868]󰥔[fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868]󰒲[fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868][fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]⤢[fg:#9ece6a,bg:#414868] [bg:#414868]
     ⓘ[fg:#e0af68,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]—[fg:#a9b1d6,bg:#1a1b26] [bg:#1a1b26]▾[fg:#a9b1d6,bg:#1a1b26]
     p[fg:#7aa2f7,bg:#1a1b26]r[fg:#7aa2f7,bg:#1a1b26]o[fg:#7aa2f7,bg:#1a1b26]j[fg:#7aa2f7,bg:#1a1b26]e[fg:#7aa2f7,bg:#1a1b26]c[fg:#7aa2f7,bg:#1a1b26]t[fg:#7aa2f7,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
-    ┃[fg:#7aa2f7,bg:#1a1b26] [bg:#1a1b26]●[fg:82,bg:#1a1b26] [fg:#ff9e64,bg:#1a1b26][fg:#ff9e64,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+    ┃[fg:#7aa2f7,bg:#1a1b26] [bg:#1a1b26][fg:82,bg:#1a1b26] [fg:#ff9e64,bg:#1a1b26][fg:#ff9e64,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
      [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
      [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
      [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
      [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
      [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
      [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
-    ─[fg:#7aa2f7,bg:#24283b] [fg:#7aa2f7,bg:#24283b]T[fg:#a9b1d6,bg:#24283b]o[fg:#a9b1d6,bg:#24283b]o[fg:#a9b1d6,bg:#24283b]l[fg:#a9b1d6,bg:#24283b]s[fg:#a9b1d6,bg:#24283b]│[fg:240,bg:#24283b]T[fg:#a9b1d6,bg:#24283b]a[fg:#a9b1d6,bg:#24283b]s[fg:#a9b1d6,bg:#24283b]k[fg:#a9b1d6,bg:#24283b]s[fg:#a9b1d6,bg:#24283b]│[fg:240,bg:#24283b]G[fg:#7aa2f7,bg:#24283b]i[fg:#7aa2f7,bg:#24283b]t[fg:#7aa2f7,bg:#24283b] [fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]
+     [bg:#414868] [bg:#414868]T[fg:#a9b1d6,bg:#414868]o[fg:#a9b1d6,bg:#414868]o[fg:#a9b1d6,bg:#414868]l[fg:#a9b1d6,bg:#414868]s[fg:#a9b1d6,bg:#414868]│[fg:240,bg:#414868]T[fg:#a9b1d6,bg:#414868]a[fg:#a9b1d6,bg:#414868]s[fg:#a9b1d6,bg:#414868]k[fg:#a9b1d6,bg:#414868]s[fg:#a9b1d6,bg:#414868]│[fg:240,bg:#414868]G[fg:#7aa2f7,bg:#414868]i[fg:#7aa2f7,bg:#414868]t[fg:#7aa2f7,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]
      [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
     f[fg:#c0caf5,bg:#24283b]e[fg:#c0caf5,bg:#24283b]a[fg:#c0caf5,bg:#24283b]t[fg:#c0caf5,bg:#24283b]u[fg:#c0caf5,bg:#24283b]r[fg:#c0caf5,bg:#24283b]e[fg:#c0caf5,bg:#24283b]/[fg:#c0caf5,bg:#24283b]f[fg:#c0caf5,bg:#24283b]i[fg:#c0caf5,bg:#24283b]x[fg:#c0caf5,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]#[fg:#7dcfff,bg:#24283b,underline]4[fg:#7dcfff,bg:#24283b,underline]2[fg:#7dcfff,bg:#24283b,underline]
     +[fg:#9ece6a,bg:#24283b]1[fg:#9ece6a,bg:#24283b]0[fg:#9ece6a,bg:#24283b]/[fg:#a9b1d6,bg:#24283b]-[fg:#f7768e,bg:#24283b]3[fg:#f7768e,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]0[fg:#a9b1d6,bg:#24283b] [fg:#a9b1d6,bg:#24283b]f[fg:#a9b1d6,bg:#24283b]i[fg:#a9b1d6,bg:#24283b]l[fg:#a9b1d6,bg:#24283b]e[fg:#a9b1d6,bg:#24283b]s[fg:#a9b1d6,bg:#24283b]
@@ -1206,11 +1209,11 @@ fn snapshot_git_pr_with_diff_ui() {
 
     let plain = render_to_string(&mut state, 28, 14);
     insta::assert_snapshot!(plain, @"
-     ≡1 ●1 ◐0 ○0 ✕0           ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
     ⓘ                        — ▾
     project
-    ┃ ● 
-    ─ Tools│Tasks│Git ──────────
+    ┃  
+      Tools│Tasks│Git
     main                    #123
     +55/-20              0 files
     ");
@@ -1236,14 +1239,14 @@ fn snapshot_subagents_tree_ui() {
 
     let output = render_to_string(&mut state, 40, 28);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0                       ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0                  ⤢
     ⓘ                                    — ▾
     project
-    ┃ ● 
+    ┃  
         ├ Explore #1
         ├ Plan #2
         └ Explore #2
-    ─ Tools│Tasks│Git ──────────────────────
+      Tools│Tasks│Git
                   No tools yet
     ");
 }
@@ -1272,13 +1275,13 @@ fn snapshot_subagent_long_name_truncated_ui() {
     // Narrow width (28) to force truncation of long subagent names
     let output = render_to_string(&mut state, 28, 27);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0           ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
     ⓘ                        — ▾
     project
-    ┃ ● 
+    ┃  
         ├ superpowers:code-revi…
         └ claude-code-guide #2
-    ─ Tools│Tasks│Git ──────────
+      Tools│Tasks│Git
             No tools yet
     ");
 
@@ -1307,12 +1310,12 @@ fn snapshot_activity_empty_centered_ui() {
 
     let output = render_to_string(&mut state, 28, 26);
     insta::assert_snapshot!(output, @"
-     ≡1 ●0 ◐0 ○1 ✕0           ⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0      ⤢
     ⓘ                        — ▾
     project
-    ┃ ○ 
+    ┃ 󰒲 
         Waiting for prompt…
-    ─ Tools│Tasks│Git ──────────
+      Tools│Tasks│Git
             No tools yet
     ");
 }
@@ -1337,12 +1340,12 @@ fn snapshot_git_clean_centered_ui() {
 
     let output = render_to_string(&mut state, 28, 26);
     insta::assert_snapshot!(output, @"
-     ≡1 ●0 ◐0 ○1 ✕0           ⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0      ⤢
     ⓘ                        — ▾
     project
-    ┃ ○ 
+    ┃ 󰒲 
         Waiting for prompt…
-    ─ Tools│Tasks│Git ──────────
+      Tools│Tasks│Git
          Working tree clean
     ");
 }
@@ -1376,11 +1379,11 @@ fn snapshot_git_branch_loaded_no_changes_shows_inline_clean() {
 
     let plain = render_to_string(&mut state, 28, 24);
     insta::assert_snapshot!(plain, @"
-     ≡1 ●1 ◐0 ○0 ✕0           ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
     ⓘ                        — ▾
     project
-    ┃ ● 
-    ─ Tools│Tasks│Git ──────────
+    ┃  
+      Tools│Tasks│Git
     main
     ────────────────────────────
          Working tree clean
@@ -1411,11 +1414,11 @@ fn snapshot_git_no_data_shows_centered_clean() {
 
     let output = render_to_string(&mut state, 28, 24);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0           ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
     ⓘ                        — ▾
     project
-    ┃ ● 
-    ─ Tools│Tasks│Git ──────────
+    ┃  
+      Tools│Tasks│Git
          Working tree clean
     ");
 }
@@ -1446,11 +1449,11 @@ fn test_git_behind_only() {
 
     let plain = render_to_string(&mut state, 28, 14);
     insta::assert_snapshot!(plain, @"
-     ≡1 ●1 ◐0 ○0 ✕0           ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
     ⓘ                        — ▾
     project
-    ┃ ● 
-    ─ Tools│Tasks│Git ──────────
+    ┃  
+      Tools│Tasks│Git
     main                      ↓3
     ────────────────────────────
     ");
@@ -1480,11 +1483,11 @@ fn test_git_ahead_and_behind() {
 
     let plain = render_to_string(&mut state, 38, 14);
     insta::assert_snapshot!(plain, @"
-     ≡1 ●1 ◐0 ○0 ✕0                     ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0                ⤢
     ⓘ                                  — ▾
     project
-    ┃ ● 
-    ─ Tools│Tasks│Git ────────────────────
+    ┃  
+      Tools│Tasks│Git
     main                              ↑2↓3
     ──────────────────────────────────────
     ");
@@ -1516,11 +1519,11 @@ fn test_git_diff_insertions_only() {
 
     let plain = render_to_string(&mut state, 28, 14);
     insta::assert_snapshot!(plain, @"
-     ≡1 ●1 ◐0 ○0 ✕0           ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
     ⓘ                        — ▾
     project
-    ┃ ● 
-    ─ Tools│Tasks│Git ──────────
+    ┃  
+      Tools│Tasks│Git
     main
     +25/-0               0 files
     ");
@@ -1550,11 +1553,11 @@ fn test_git_diff_deletions_only() {
 
     let plain = render_to_string(&mut state, 28, 14);
     insta::assert_snapshot!(plain, @"
-     ≡1 ●1 ◐0 ○0 ✕0           ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
     ⓘ                        — ▾
     project
-    ┃ ● 
-    ─ Tools│Tasks│Git ──────────
+    ┃  
+      Tools│Tasks│Git
     main
     +0/-15               0 files
     ");
@@ -1591,12 +1594,12 @@ fn snapshot_branch_truncated_ui() {
 
     let plain = render_to_string(&mut state, 28, 30);
     insta::assert_snapshot!(plain, @"
-     ≡1 ●1 ◐0 ○0 ✕0           ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
     ⓘ                        — ▾
     dotfiles                   +
-    ┃ ● 
+    ┃  
     ┃    feature/tmux-sidebar-…
-    ─ Tools│Tasks│Git ──────────
+      Tools│Tasks│Git
             No tools yet
     ");
 }
@@ -1650,11 +1653,11 @@ fn snapshot_git_staged_unstaged_untracked_ui() {
 
     let output = render_to_string(&mut state, 28, 30);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0           ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
     ⓘ                        — ▾
     project
-    ┃ ● 
-    ─ Tools│Tasks│Git ──────────
+    ┃  
+      Tools│Tasks│Git
     main                      #5
     +12/-3               4 files
     ────────────────────────────
@@ -1696,11 +1699,11 @@ fn snapshot_git_long_branch_with_pr_ui() {
 
     let output = render_to_string(&mut state, 28, 24);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0           ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
     ⓘ                        — ▾
     project
-    ┃ ● 
-    ─ Tools│Tasks│Git ──────────
+    ┃  
+      Tools│Tasks│Git
     feature/very-long-bran… #123
     +5/-2                1 files
     ────────────────────────────
@@ -1741,11 +1744,11 @@ fn snapshot_git_staged_only_ui() {
 
     let output = render_to_string(&mut state, 28, 24);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0           ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
     ⓘ                        — ▾
     project
-    ┃ ● 
-    ─ Tools│Tasks│Git ──────────
+    ┃  
+      Tools│Tasks│Git
     main
     +20/-0               1 files
     ────────────────────────────
@@ -1786,11 +1789,11 @@ fn snapshot_git_many_files_more_indicator_ui() {
 
     let output = render_to_string(&mut state, 28, 30);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0           ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
     ⓘ                        — ▾
     project
-    ┃ ● 
-    ─ Tools│Tasks│Git ──────────
+    ┃  
+      Tools│Tasks│Git
     dev
                          7 files
     ────────────────────────────
@@ -1834,11 +1837,11 @@ fn snapshot_git_more_than_10_files_ui() {
 
     let output = render_to_string(&mut state, 28, 30);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0           ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
     ⓘ                        — ▾
     project
-    ┃ ● 
-    ─ Tools│Tasks│Git ──────────
+    ┃  
+      Tools│Tasks│Git
     dev
                         12 files
     ────────────────────────────
@@ -1887,13 +1890,13 @@ fn snapshot_focused_group_active_border_styled() {
     // on the active pane marker; the unfocused panel's rule stays
     // border_inactive (fg:240) with the selected Activity label in accent.
     insta::assert_snapshot!(render_to_styled_string(&mut state, 28, 30), @"
-     [bg:#24283b]≡[fg:#7aa2f7,bg:#24283b]2[fg:#7aa2f7,bg:#24283b] [bg:#24283b]●[fg:#9ece6a,bg:#24283b]1[fg:#c0caf5,bg:#24283b] [bg:#24283b]◐[fg:#9aa5ce,bg:#24283b]0[fg:#9aa5ce,bg:#24283b] [bg:#24283b]○[fg:#9aa5ce,bg:#24283b]1[fg:#c0caf5,bg:#24283b] [bg:#24283b]✕[fg:#9aa5ce,bg:#24283b]0[fg:#9aa5ce,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]⤢[fg:#9ece6a,bg:#24283b] [bg:#24283b]
+     [bg:#414868]󱓯[fg:#7aa2f7,bg:#414868] [bg:#414868]2[fg:#7aa2f7,bg:#414868] [bg:#414868][fg:#9ece6a,bg:#414868] [bg:#414868]1[fg:#c0caf5,bg:#414868] [bg:#414868]󰥔[fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868]󰒲[fg:#7dcfff,bg:#414868] [bg:#414868]1[fg:#c0caf5,bg:#414868] [bg:#414868][fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]⤢[fg:#9ece6a,bg:#414868] [bg:#414868]
     ⓘ[fg:#e0af68,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]—[fg:#a9b1d6,bg:#24283b] [bg:#24283b]▾[fg:#a9b1d6,bg:#24283b]
     d[fg:#7aa2f7,bg:#24283b]o[fg:#7aa2f7,bg:#24283b]t[fg:#7aa2f7,bg:#24283b]f[fg:#7aa2f7,bg:#24283b]i[fg:#7aa2f7,bg:#24283b]l[fg:#7aa2f7,bg:#24283b]e[fg:#7aa2f7,bg:#24283b]s[fg:#7aa2f7,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
-    ┃[fg:#7aa2f7,bg:#414868] [bg:#414868]●[fg:82,bg:#414868] [fg:#ff9e64,bg:#414868][fg:#ff9e64,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]
+    ┃[fg:#7aa2f7,bg:#414868] [bg:#414868][fg:82,bg:#414868] [fg:#ff9e64,bg:#414868][fg:#ff9e64,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]
      [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
     m[fg:#c0caf5,bg:#24283b]y[fg:#c0caf5,bg:#24283b]-[fg:#c0caf5,bg:#24283b]a[fg:#c0caf5,bg:#24283b]p[fg:#c0caf5,bg:#24283b]p[fg:#c0caf5,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
-     [bg:#24283b] [bg:#24283b]○[fg:#7dcfff,bg:#24283b] [fg:#bb9af7,bg:#24283b]c[fg:#bb9af7,bg:#24283b]o[fg:#bb9af7,bg:#24283b]d[fg:#bb9af7,bg:#24283b]e[fg:#bb9af7,bg:#24283b]x[fg:#bb9af7,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+     [bg:#24283b] [bg:#24283b]󰒲[fg:#7dcfff,bg:#24283b] [fg:#bb9af7,bg:#24283b]c[fg:#bb9af7,bg:#24283b]o[fg:#bb9af7,bg:#24283b]d[fg:#bb9af7,bg:#24283b]e[fg:#bb9af7,bg:#24283b]x[fg:#bb9af7,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
      [bg:#24283b] [bg:#24283b] [fg:#565f89,bg:#24283b] [fg:#565f89,bg:#24283b]W[fg:#565f89,bg:#24283b]a[fg:#565f89,bg:#24283b]i[fg:#565f89,bg:#24283b]t[fg:#565f89,bg:#24283b]i[fg:#565f89,bg:#24283b]n[fg:#565f89,bg:#24283b]g[fg:#565f89,bg:#24283b] [fg:#565f89,bg:#24283b]f[fg:#565f89,bg:#24283b]o[fg:#565f89,bg:#24283b]r[fg:#565f89,bg:#24283b] [fg:#565f89,bg:#24283b]p[fg:#565f89,bg:#24283b]r[fg:#565f89,bg:#24283b]o[fg:#565f89,bg:#24283b]m[fg:#565f89,bg:#24283b]p[fg:#565f89,bg:#24283b]t[fg:#565f89,bg:#24283b]…[fg:#565f89,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
      [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
      [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
@@ -1908,7 +1911,7 @@ fn snapshot_focused_group_active_border_styled() {
      [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
      [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
      [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
-    ─[fg:240,bg:#1a1b26] [fg:240,bg:#1a1b26]T[fg:#7aa2f7,bg:#1a1b26]o[fg:#7aa2f7,bg:#1a1b26]o[fg:#7aa2f7,bg:#1a1b26]l[fg:#7aa2f7,bg:#1a1b26]s[fg:#7aa2f7,bg:#1a1b26]│[fg:240,bg:#1a1b26]T[fg:#a9b1d6,bg:#1a1b26]a[fg:#a9b1d6,bg:#1a1b26]s[fg:#a9b1d6,bg:#1a1b26]k[fg:#a9b1d6,bg:#1a1b26]s[fg:#a9b1d6,bg:#1a1b26]│[fg:240,bg:#1a1b26]G[fg:#a9b1d6,bg:#1a1b26]i[fg:#a9b1d6,bg:#1a1b26]t[fg:#a9b1d6,bg:#1a1b26] [fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]
+     [bg:#414868] [bg:#414868]T[fg:#7aa2f7,bg:#414868]o[fg:#7aa2f7,bg:#414868]o[fg:#7aa2f7,bg:#414868]l[fg:#7aa2f7,bg:#414868]s[fg:#7aa2f7,bg:#414868]│[fg:240,bg:#414868]T[fg:#a9b1d6,bg:#414868]a[fg:#a9b1d6,bg:#414868]s[fg:#a9b1d6,bg:#414868]k[fg:#a9b1d6,bg:#414868]s[fg:#a9b1d6,bg:#414868]│[fg:240,bg:#414868]G[fg:#a9b1d6,bg:#414868]i[fg:#a9b1d6,bg:#414868]t[fg:#a9b1d6,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]
      [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
      [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
      [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
@@ -1949,22 +1952,24 @@ fn snapshot_rule_with_full_width_content() {
     }];
 
     insta::assert_snapshot!(render_to_string(&mut state, 40, 14), @"
-     ≡1 ●0 ◐0 ○1 ✕0                       ⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0                  ⤢
     ⓘ                                    — ▾
     project
-    ┃ ○ 
+    ┃ 󰒲 
         Waiting for prompt…
-    ─ Tools│Tasks│Git ──────────────────────
+      Tools│Tasks│Git
     10:32                               Edit
       src/main.rs
     ");
 }
 
 #[test]
-fn snapshot_rule_follows_focus() {
-    // When the bottom panel has focus the rule (prefix, separators are
-    // unchanged: tab separators stay inactive) takes the accent color;
-    // unfocused it would be border_inactive (fg:240).
+fn snapshot_rule_is_a_solid_band() {
+    // The rule row is a solid band in filter_bar_bg at all times —
+    // focused or not — and the tab labels sit on it: the displayed tab
+    // keeps the accent foreground, the rest stay muted. The ActivityLog
+    // focus here exercises the focused case; the band must not change.
+    // (No `─` characters: the band is the background, not a drawn line.)
     let pane = make_pane(AgentType::Claude, PaneStatus::Idle);
     let mut state = make_state(vec![SessionInfo {
         session_name: "main".into(),
@@ -1983,17 +1988,17 @@ fn snapshot_rule_follows_focus() {
     state.global.bottom_percent = 30;
 
     insta::assert_snapshot!(render_to_styled_string(&mut state, 40, 14), @"
-     [bg:#1a1b26]≡[fg:#7aa2f7,bg:#1a1b26]1[fg:#7aa2f7,bg:#1a1b26] [bg:#1a1b26]●[fg:#9ece6a,bg:#1a1b26]0[fg:#9aa5ce,bg:#1a1b26] [bg:#1a1b26]◐[fg:#9aa5ce,bg:#1a1b26]0[fg:#9aa5ce,bg:#1a1b26] [bg:#1a1b26]○[fg:#9aa5ce,bg:#1a1b26]1[fg:#c0caf5,bg:#1a1b26] [bg:#1a1b26]✕[fg:#9aa5ce,bg:#1a1b26]0[fg:#9aa5ce,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]⤢[fg:#9ece6a,bg:#1a1b26] [bg:#1a1b26]
+     [bg:#414868]󱓯[fg:#7aa2f7,bg:#414868] [bg:#414868]1[fg:#7aa2f7,bg:#414868] [bg:#414868][fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868]󰥔[fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868]󰒲[fg:#7dcfff,bg:#414868] [bg:#414868]1[fg:#c0caf5,bg:#414868] [bg:#414868][fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]⤢[fg:#9ece6a,bg:#414868] [bg:#414868]
     ⓘ[fg:#e0af68,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]—[fg:#a9b1d6,bg:#1a1b26] [bg:#1a1b26]▾[fg:#a9b1d6,bg:#1a1b26]
     p[fg:#7aa2f7,bg:#1a1b26]r[fg:#7aa2f7,bg:#1a1b26]o[fg:#7aa2f7,bg:#1a1b26]j[fg:#7aa2f7,bg:#1a1b26]e[fg:#7aa2f7,bg:#1a1b26]c[fg:#7aa2f7,bg:#1a1b26]t[fg:#7aa2f7,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
-    ┃[fg:#7aa2f7,bg:#1a1b26] [bg:#1a1b26]○[fg:#7dcfff,bg:#1a1b26] [fg:#ff9e64,bg:#1a1b26][fg:#ff9e64,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+    ┃[fg:#7aa2f7,bg:#1a1b26] [bg:#1a1b26]󰒲[fg:#7dcfff,bg:#1a1b26] [fg:#ff9e64,bg:#1a1b26][fg:#ff9e64,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
      [bg:#1a1b26] [bg:#1a1b26] [fg:#c0caf5,bg:#1a1b26] [fg:#c0caf5,bg:#1a1b26]W[fg:#c0caf5,bg:#1a1b26]a[fg:#c0caf5,bg:#1a1b26]i[fg:#c0caf5,bg:#1a1b26]t[fg:#c0caf5,bg:#1a1b26]i[fg:#c0caf5,bg:#1a1b26]n[fg:#c0caf5,bg:#1a1b26]g[fg:#c0caf5,bg:#1a1b26] [fg:#c0caf5,bg:#1a1b26]f[fg:#c0caf5,bg:#1a1b26]o[fg:#c0caf5,bg:#1a1b26]r[fg:#c0caf5,bg:#1a1b26] [fg:#c0caf5,bg:#1a1b26]p[fg:#c0caf5,bg:#1a1b26]r[fg:#c0caf5,bg:#1a1b26]o[fg:#c0caf5,bg:#1a1b26]m[fg:#c0caf5,bg:#1a1b26]p[fg:#c0caf5,bg:#1a1b26]t[fg:#c0caf5,bg:#1a1b26]…[fg:#c0caf5,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
      [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
      [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
      [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
      [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
      [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
-    ─[fg:#7aa2f7,bg:#24283b] [fg:#7aa2f7,bg:#24283b]T[fg:#7aa2f7,bg:#24283b]o[fg:#7aa2f7,bg:#24283b]o[fg:#7aa2f7,bg:#24283b]l[fg:#7aa2f7,bg:#24283b]s[fg:#7aa2f7,bg:#24283b]│[fg:240,bg:#24283b]T[fg:#a9b1d6,bg:#24283b]a[fg:#a9b1d6,bg:#24283b]s[fg:#a9b1d6,bg:#24283b]k[fg:#a9b1d6,bg:#24283b]s[fg:#a9b1d6,bg:#24283b]│[fg:240,bg:#24283b]G[fg:#a9b1d6,bg:#24283b]i[fg:#a9b1d6,bg:#24283b]t[fg:#a9b1d6,bg:#24283b] [fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]
+     [bg:#414868] [bg:#414868]T[fg:#7aa2f7,bg:#414868]o[fg:#7aa2f7,bg:#414868]o[fg:#7aa2f7,bg:#414868]l[fg:#7aa2f7,bg:#414868]s[fg:#7aa2f7,bg:#414868]│[fg:240,bg:#414868]T[fg:#a9b1d6,bg:#414868]a[fg:#a9b1d6,bg:#414868]s[fg:#a9b1d6,bg:#414868]k[fg:#a9b1d6,bg:#414868]s[fg:#a9b1d6,bg:#414868]│[fg:240,bg:#414868]G[fg:#a9b1d6,bg:#414868]i[fg:#a9b1d6,bg:#414868]t[fg:#a9b1d6,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]
      [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
      [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]N[fg:#a9b1d6,bg:#24283b]o[fg:#a9b1d6,bg:#24283b] [fg:#a9b1d6,bg:#24283b]t[fg:#a9b1d6,bg:#24283b]o[fg:#a9b1d6,bg:#24283b]o[fg:#a9b1d6,bg:#24283b]l[fg:#a9b1d6,bg:#24283b]s[fg:#a9b1d6,bg:#24283b] [fg:#a9b1d6,bg:#24283b]y[fg:#a9b1d6,bg:#24283b]e[fg:#a9b1d6,bg:#24283b]t[fg:#a9b1d6,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
      [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
@@ -2021,10 +2026,10 @@ fn snapshot_bottom_percent_zero_hides_panel() {
     state.global.bottom_percent = 0;
 
     insta::assert_snapshot!(render_to_string(&mut state, 28, 20), @"
-     ≡1 ●0 ◐0 ○1 ✕0           ⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0      ⤢
     ⓘ                        — ▾
     project
-    ┃ ○ 
+    ┃ 󰒲 
         Waiting for prompt…
     ");
 }
@@ -2073,11 +2078,11 @@ fn snapshot_thought_short_ui() {
     ));
 
     insta::assert_snapshot!(render_to_string(&mut state, 28, 24), @"
-     ≡1 ●1 ◐0 ○0 ✕0           ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
     ⓘ                        — ▾
     project
-    ┃ ● 
-    ─ Tools│Thought│Tasks│Git ──
+    ┃  
+      Tools│Thought│Tasks│Git
      08:00:07
      I should read the file
      first.
@@ -2095,11 +2100,11 @@ fn snapshot_thought_tall_follows_the_end_ui() {
     state.global.bottom_percent = 60;
 
     insta::assert_snapshot!(render_to_string(&mut state, 40, 30), @"
-     ≡1 ●1 ◐0 ○0 ✕0                       ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0                  ⤢
     ⓘ                                    — ▾
     project
-    ┃ ● 
-    ─ Tools│Thought│Tasks│Git ──────────────
+    ┃  
+      Tools│Thought│Tasks│Git
      thought row 14
      thought row 15
      thought row 16
@@ -2136,11 +2141,11 @@ fn snapshot_thought_scrolled_up_ui() {
     state.scrolls.thought.offset = 0;
 
     insta::assert_snapshot!(render_to_string(&mut state, 40, 30), @"
-     ≡1 ●1 ◐0 ○0 ✕0                       ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0                  ⤢
     ⓘ                                    — ▾
     project
-    ┃ ● 
-    ─ Tools│Thought│Tasks│Git ──────────────
+    ┃  
+      Tools│Thought│Tasks│Git
      08:00:07
      thought row 01
      thought row 02
@@ -2166,11 +2171,11 @@ fn snapshot_thought_empty_notice_ui() {
     let mut state = thought_state_with(thought("", None));
 
     insta::assert_snapshot!(render_to_string(&mut state, 28, 24), @"
-     ≡1 ●1 ◐0 ○0 ✕0           ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
     ⓘ                        — ▾
     project
-    ┃ ● 
-    ─ Tools│Thought│Tasks│Git ──
+    ┃  
+      Tools│Thought│Tasks│Git
            No thinking yet
     ");
 }

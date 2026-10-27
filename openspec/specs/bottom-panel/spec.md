@@ -17,7 +17,7 @@ the sidebar.
 
 #### Scenario: the panel has only the rule
 - **WHEN** the sidebar shows the bottom panel
-- **THEN** the row directly above the panel content is a horizontal rule across the full sidebar width
+- **THEN** the row directly above the panel content is a solid band across the full sidebar width, in the filter bar's background colour (`@sidebar_color_filter_bar_bg`)
 - **AND** no border character is drawn at the left edge, the right edge, or the bottom row of the panel
 
 #### Scenario: the content uses the full width
@@ -30,37 +30,39 @@ The rule SHALL show the `Tools` label first, then `Thought` while the
 focused pane runs pi, then `Tasks` and `Git`, with the displayed tab in
 the accent color. The tabs keep their code names — the `Tools` label is
 the `Activity` variant, and the shared value stays `activity` — so only
-the drawn label changed. The rule SHALL use the accent color when the
-bottom panel has focus, and the inactive border color when it does not.
-When the sidebar is too narrow for all labels, the labels SHALL truncate
-and the rule SHALL stay exactly as wide as the sidebar.
+the drawn label changed. The rule row SHALL be a solid band in the
+filter bar's background colour (`@sidebar_color_filter_bar_bg`), painted
+at all times — whether the bottom panel has focus or not — and SHALL
+draw no `─` characters. When the sidebar is too narrow for all labels,
+the labels SHALL truncate and the rule SHALL stay exactly as wide as the
+sidebar.
 
 #### Scenario: the rule shows the tabs
 - **WHEN** the sidebar is 30 columns wide and the Activity tab is selected
 - **AND** the focused pane does not run pi
-- **THEN** the rule reads `─ Tools│Tasks│Git ` followed by `─` to the right edge
+- **THEN** the rule reads `  Tools│Tasks│Git ` followed by spaces to the right edge on the band's background colour
 - **AND** `Tools` is in the accent color
 
 #### Scenario: the rule shows the Thought label for a pi pane
 - **WHEN** the sidebar is 40 columns wide and the focused pane runs pi
-- **THEN** the rule reads `─ Tools│Thought│Tasks│Git ` followed by `─` to the right edge
+- **THEN** the rule reads `  Tools│Thought│Tasks│Git ` followed by spaces to the right edge on the band's background colour
 
 #### Scenario: the labels sit at their columns
 - **WHEN** the focused pane does not run pi
-- **THEN** `─ ` occupies columns 0-1, `Tools` 2-6, `Tasks` 8-12 and `Git` 14-16
+- **THEN** columns 0-1 are padding, `Tools` 2-6, `Tasks` 8-12 and `Git` 14-16
 - **AND** one separator column sits between two labels
 
 #### Scenario: the pi labels sit at their columns
 - **WHEN** the focused pane runs pi
-- **THEN** `─ ` occupies columns 0-1, `Tools` 2-6, `Thought` 8-14, `Tasks` 16-20 and `Git` 22-24
+- **THEN** columns 0-1 are padding, `Tools` 2-6, `Thought` 8-14, `Tasks` 16-20 and `Git` 22-24
 
 #### Scenario: the Thought label hides for another agent
 - **WHEN** the focused pane runs Claude
 - **THEN** the rule shows no `Thought` label, and `Tasks` and `Git` follow `Tools` directly
 
-#### Scenario: the rule follows the focus
+#### Scenario: the rule keeps its band on focus
 - **WHEN** the user moves the focus to the bottom panel
-- **THEN** the rule changes to the accent color
+- **THEN** the rule keeps the filter bar's background colour, and only the displayed tab's label shows the accent color
 
 #### Scenario: a narrow sidebar
 - **WHEN** the sidebar is 20 columns wide
@@ -173,11 +175,11 @@ hitbox.
 - **AND** the user presses and releases on columns 8-14, where the `Thought` label sits for a pi pane
 - **THEN** the click lands on the `Tasks` label and the tab and the split height do not change
 
-#### Scenario: a click on the dashes
-- **WHEN** the user presses and releases on the `─` fill to the right of the labels (columns 18 and later for a pane that does not run pi)
+#### Scenario: a click on the fill
+- **WHEN** the user presses and releases on the band to the right of the labels (columns 18 and later for a pane that does not run pi)
 - **THEN** the tab and the split height do not change
 
 #### Scenario: a click on the left end of the rule
 - **WHEN** the Tasks tab is selected
-- **AND** the user presses and releases on the `─ ` to the left of the `Tools` label
+- **AND** the user presses and releases on the padding to the left of the `Tools` label
 - **THEN** the Tasks tab stays selected

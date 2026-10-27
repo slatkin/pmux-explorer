@@ -242,7 +242,7 @@ mod tests {
         let status = line_text(&lines[0]);
         // The elapsed counter stays fully visible, the agent label leads
         // the row untruncated, and the pane name is cut with an ellipsis.
-        insta::assert_snapshot!(status, @"  ● codex this-is-a-ridi… 1m5s");
+        insta::assert_snapshot!(status, @"   codex this-is-a-ridi… 1m5s");
         // Each rendered cell should fit inside the 30-column width.
         let visible_width = display_width(&status);
         assert!(
@@ -345,12 +345,18 @@ mod tests {
     #[test]
     fn running_icon_for_all_statuses() {
         let icons = StatusIcons::default();
-        assert_eq!(running_icon_for(&PaneStatus::Idle, 0, &icons), ("○", None));
+        assert_eq!(
+            running_icon_for(&PaneStatus::Idle, 0, &icons),
+            ("\u{f04b2}", None)
+        );
         assert_eq!(
             running_icon_for(&PaneStatus::Waiting, 0, &icons),
-            ("◐", None)
+            ("\u{f0954}", None)
         );
-        assert_eq!(running_icon_for(&PaneStatus::Error, 0, &icons), ("✕", None));
+        assert_eq!(
+            running_icon_for(&PaneStatus::Error, 0, &icons),
+            ("\u{f071}", None)
+        );
         assert_eq!(
             running_icon_for(&PaneStatus::Unknown, 0, &icons),
             ("·", None)
@@ -361,7 +367,7 @@ mod tests {
         );
 
         let (icon, color) = running_icon_for(&PaneStatus::Running, 0, &icons);
-        assert_eq!(icon, "●");
+        assert_eq!(icon, "\u{ef0c}");
         assert_eq!(color, Some(Color::Indexed(82)));
     }
 
@@ -1205,7 +1211,7 @@ mod tests {
         let ctx = test_ctx(&theme, 40, false);
         let p = pi_subagent(PmuxTaskKind::Spawned, SubagentParent::Orphaned, None);
         let line = status_row(&p, &ctx, &StatusIcons::default(), 0, 0);
-        insta::assert_snapshot!(line_text(&line), @"  ●  ♟");
+        insta::assert_snapshot!(line_text(&line), @"    ♟");
     }
 
     #[test]
@@ -1214,7 +1220,7 @@ mod tests {
         let ctx = test_ctx(&theme, 40, false);
         let p = pi_subagent(PmuxTaskKind::Resumed, SubagentParent::Orphaned, None);
         let line = status_row(&p, &ctx, &StatusIcons::default(), 0, 0);
-        insta::assert_snapshot!(line_text(&line), @"  ●  ↻");
+        insta::assert_snapshot!(line_text(&line), @"    ↻");
     }
 
     #[test]
@@ -1223,7 +1229,7 @@ mod tests {
         let ctx = test_ctx(&theme, 40, false);
         let p = pi_pane();
         let line = status_row(&p, &ctx, &StatusIcons::default(), 0, 0);
-        insta::assert_snapshot!(line_text(&line), @"  ● ");
+        insta::assert_snapshot!(line_text(&line), @"   ");
     }
 
     #[test]
@@ -1233,7 +1239,7 @@ mod tests {
         let mut p = pi_pane();
         p.pane_name = Some("my-task".into());
         let line = status_row(&p, &ctx, &StatusIcons::default(), 0, 0);
-        insta::assert_snapshot!(line_text(&line), @"  ●  my-task");
+        insta::assert_snapshot!(line_text(&line), @"    my-task");
     }
 
     #[test]
@@ -1243,7 +1249,7 @@ mod tests {
         let mut p = pi_subagent(PmuxTaskKind::Spawned, SubagentParent::Orphaned, None);
         p.pane_name = Some("my-task".into());
         let line = status_row(&p, &ctx, &StatusIcons::default(), 0, 0);
-        insta::assert_snapshot!(line_text(&line), @"  ●  ♟ my-task");
+        insta::assert_snapshot!(line_text(&line), @"    ♟ my-task");
     }
 
     #[test]
@@ -1258,7 +1264,7 @@ mod tests {
         p.started_at = Some(1);
         let line = status_row(&p, &ctx, &StatusIcons::default(), 0, 66);
         let text = line_text(&line);
-        insta::assert_snapshot!(text, @"  ●  a-very-long-pane-nam… 1m5s");
+        insta::assert_snapshot!(text, @"    a-very-long-pane-nam… 1m5s");
     }
 
     #[test]
@@ -1275,7 +1281,7 @@ mod tests {
         let text = line_text(&line);
         insta::assert_snapshot!(
             text,
-            @"  ●  ♟ a-very-long-sessio… 1m5s"
+            @"    ♟ a-very-long-sessio… 1m5s"
         );
         assert!(
             display_width(text.trim_end()) <= ctx.inner_width + 2,
@@ -1374,7 +1380,7 @@ mod tests {
             .collect::<Vec<_>>()
             .join("\n");
         insta::assert_snapshot!(joined, @"
-        ●  ♟
+          ♟
            main
         ▷ orchestrator
         󰭹 Task completed
@@ -1408,7 +1414,7 @@ mod tests {
             .map(|l| line_text(l).trim_end().to_string())
             .collect::<Vec<_>>()
             .join("\n");
-        insta::assert_snapshot!(joined, @"  ● "
+        insta::assert_snapshot!(joined, @"   "
         );
     }
 }

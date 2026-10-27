@@ -417,6 +417,13 @@ fn render_filter_bar_into(frame: &mut Frame, state: &mut AppState, area: Rect) {
         control_col.is_some_and(|col| col < area.width),
         "the control column must sit inside the rendered row"
     );
+    // The filter bar wears its own background at all times — focused or
+    // not. It renders after the focus fill, so it wins over it; spans
+    // without an explicit `bg` keep this colour underneath them.
+    frame.render_widget(
+        Block::default().style(Style::default().bg(state.theme.filter_bar_bg)),
+        area,
+    );
     frame.render_widget(Paragraph::new(vec![line]), area);
 }
 
@@ -432,8 +439,9 @@ fn compute_scroll_offset(state: &mut AppState, total_lines: usize, list_area: Re
     state.scrolls.panes.total_lines = total_lines;
     state.scrolls.panes.visible_height = list_area.height as usize;
 
-    // Auto-scroll to keep selected agent visible
-    if state.focus_state.sidebar_focused && state.focus_state.focus == Focus::Panes {
+    // Auto-scroll to keep selected agent visible — the selection is
+    // drawn at all times, so the scroll follows it at all times.
+    if state.focus_state.focus == Focus::Panes {
         let mut first_line: Option<usize> = None;
         let mut last_line: Option<usize> = None;
         for (i, mapping) in state.layout.line_to_row.iter().enumerate() {

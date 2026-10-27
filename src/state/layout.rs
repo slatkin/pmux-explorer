@@ -147,7 +147,9 @@ pub(crate) fn filter_bar_layout(
     let mut chips = Vec::new();
     let mut start: u16 = 1; // leading gutter column
     for filter in StatusFilter::VARIANTS {
-        let chip_width = 1 + count_digits(counts.count(filter));
+        // A chip is its icon, one space, then the count digits; the
+        // space sits inside the chip so a click on it selects the chip.
+        let chip_width = 2 + count_digits(counts.count(filter));
         if start + chip_width > control_col {
             break;
         }

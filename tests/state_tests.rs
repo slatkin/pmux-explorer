@@ -1136,10 +1136,10 @@ fn rendered_filter_row_and_hit_test_agree_at_the_20_column_minimum() {
     // Ten panes of each of the four counted statuses put every chip
     // count at two digits, so at the 20 column minimum the chip run no
     // longer fits beside the pop-out control. The renderer drops the
-    // error chip whole, and the hit test must agree with what was
-    // drawn: every drawn chip's start column selects exactly that
-    // chip, the dropped chip's columns do nothing, and the control
-    // column toggles instead of filtering.
+    // idle and error chips whole, and the hit test must agree with
+    // what was drawn: every drawn chip's start column selects exactly
+    // that chip, the dropped chips' columns do nothing, and the
+    // control column toggles instead of filtering.
     let mut panes = Vec::new();
     let mut id = 0;
     for status in [
@@ -1173,15 +1173,15 @@ fn rendered_filter_row_and_hit_test_agree_at_the_20_column_minimum() {
     // pop-out control one column in from the row's right edge, its
     // spacer on the last column.
     insta::assert_snapshot!(output, @"
-     ≡40 ●10 ◐10 ○10  ⤢
+     󱓯 40  10 󰥔 10   ⤢
     ⓘ                — ▾
     project
-      ● 
-    ┃ ● 
-      ● 
-      ● 
-      ● 
-    ─ Tools│Tasks│Git ──
+       
+    ┃  
+       
+       
+       
+      Tools│Tasks│Git
         No tools yet
     ");
 
@@ -1200,9 +1200,8 @@ fn rendered_filter_row_and_hit_test_agree_at_the_20_column_minimum() {
     // Every drawn chip's start column selects exactly that chip.
     for (col, expected) in [
         (1, StatusFilter::All),
-        (5, StatusFilter::Busy),
-        (9, StatusFilter::Waiting),
-        (13, StatusFilter::Idle),
+        (6, StatusFilter::Busy),
+        (11, StatusFilter::Waiting),
     ] {
         click(&mut state, col);
         assert_eq!(
@@ -1217,7 +1216,7 @@ fn rendered_filter_row_and_hit_test_agree_at_the_20_column_minimum() {
         click(&mut state, col);
         assert_eq!(
             state.global.status_filter,
-            StatusFilter::Idle,
+            StatusFilter::Waiting,
             "click on undrawn column {col} must not change the filter: {row}"
         );
         assert!(
@@ -1230,7 +1229,7 @@ fn rendered_filter_row_and_hit_test_agree_at_the_20_column_minimum() {
     click(&mut state, 18);
     assert_eq!(
         state.global.status_filter,
-        StatusFilter::Idle,
+        StatusFilter::Waiting,
         "a click on the control must never change the filter"
     );
     // The probe for the bogus pane failed, and the pop-out reports the
@@ -1313,33 +1312,33 @@ fn floating_panel_clicks_hit_the_clamped_bottom_panel_geometry() {
     // bottom panel with its rule row, and the agent list running right
     // up to the rule.
     insta::assert_snapshot!(output, @"
-     ≡20 ●0 ◐0 ○20 ✕0                     ⤡
+     󱓯 20  0 󰥔 0 󰒲 20  0                ⤡
     ⓘ                                    — ▾
     project
-      ○ 
+      󰒲 
         Waiting for prompt…
-    ┃ ○ 
+    ┃ 󰒲 
         Waiting for prompt…
-      ○ 
+      󰒲 
         Waiting for prompt…
-      ○ 
+      󰒲 
         Waiting for prompt…
-      ○ 
+      󰒲 
         Waiting for prompt…
-      ○ 
+      󰒲 
         Waiting for prompt…
-      ○ 
+      󰒲 
         Waiting for prompt…
-      ○ 
+      󰒲 
         Waiting for prompt…
-      ○ 
+      󰒲 
         Waiting for prompt…
-      ○ 
+      󰒲 
         Waiting for prompt…
-      ○ 
+      󰒲 
         Waiting for prompt…
-      ○ 
-    ─ Tools│Tasks│Git ──────────────────────
+      󰒲 
+      Tools│Tasks│Git
                   No tools yet
     ");
 

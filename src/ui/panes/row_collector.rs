@@ -102,8 +102,7 @@ pub(super) fn collect(state: &AppState, width: u16) -> CollectedRows {
         collected.line_to_row.push(None);
 
         for (pane, git_info) in filtered_panes.iter() {
-            let is_selected = state.focus_state.sidebar_focused
-                && state.focus_state.focus == Focus::Panes
+            let is_selected = state.focus_state.focus == Focus::Panes
                 && row_index == state.global.selected_pane_row;
 
             let is_active = state.focus_state.focused_pane_id.as_ref() == Some(&pane.pane_id);
