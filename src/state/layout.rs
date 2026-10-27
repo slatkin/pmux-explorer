@@ -1,4 +1,4 @@
-use super::{AppState, RepoFilter, StatusCounts, StatusFilter, clamp_bottom_height};
+use super::{AppState, BottomTab, RepoFilter, StatusCounts, StatusFilter, clamp_bottom_height};
 
 #[derive(Debug, Clone)]
 pub struct RowTarget {
@@ -22,6 +22,21 @@ pub struct RepoSpawnTarget {
 pub struct SpawnRemoveTarget {
     pub rect: ratatui::layout::Rect,
     pub pane_id: String,
+}
+
+/// Click target for one tab label on the bottom panel's rule: the
+/// columns the label text occupies as the last frame drew them. The
+/// renderer truncates labels that do not fit, so a label pushed off
+/// the rule has a shrunken range — or none — and a click can only ever
+/// land on a label that is drawn.
+#[derive(Debug, Clone)]
+pub struct BottomTabTarget {
+    /// First column of the drawn label (0-based terminal column).
+    pub start: u16,
+    /// Column after the label's last drawn column.
+    pub end: u16,
+    /// The tab a click in the range selects.
+    pub tab: BottomTab,
 }
 
 /// Screen-positioned hyperlink overlay for OSC 8 terminal hyperlinks.
@@ -77,6 +92,12 @@ pub struct FrameLayout {
     /// OSC 8 hyperlink overlays the main loop writes after each frame so
     /// terminals can recognise PR numbers as clickable links.
     pub hyperlink_overlays: Vec<HyperlinkOverlay>,
+    /// The tab labels' drawn column ranges on the bottom panel's rule,
+    /// as the last frame computed them while truncating the run to the
+    /// rule's width. Rewritten every frame; empty before the first
+    /// frame and while the panel is hidden, when no label is
+    /// clickable.
+    pub bottom_tab_targets: Vec<BottomTabTarget>,
 }
 
 pub(super) fn point_in_rect(row: u16, col: u16, rect: ratatui::layout::Rect) -> bool {

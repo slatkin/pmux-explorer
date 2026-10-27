@@ -15,8 +15,9 @@ impl AppState {
 
     /// The tabs the rule shows for the focused pane: Tools, then
     /// Thought while the focused pane runs pi, then Tasks and Git.
-    /// The cycle and the click hitboxes are both derived from this
-    /// list, so a hidden tab has no cycle step and no hitbox.
+    /// The cycle steps this list and the rule's labels are built from
+    /// it, so a hidden tab has no cycle step and no drawn label to
+    /// click.
     pub fn shown_bottom_tabs(&self) -> Vec<BottomTab> {
         let mut tabs = vec![BottomTab::Activity];
         if self.focused_pane_is_pi() {
@@ -54,27 +55,21 @@ impl AppState {
     }
 
     /// Handle a click on the bottom panel's rule (its first drawn row).
-    /// Rule layout: "─ Tools│Tasks│Git ──────" — col is relative to
-    /// the terminal. The `─ ` prefix occupies cols 0-1, so the first
-    /// label starts at col 2; one `│` separator column follows each
-    /// label. The hitboxes are computed from the shown tabs and the
-    /// same label strings `build_tab_title` draws, so a label hidden
-    /// because its tab is not shown has no hitbox and the columns can
-    /// never drift from the drawing.
+    /// `col` is the terminal column. The hitboxes are the label columns
+    /// the last frame actually drew (`FrameLayout::bottom_tab_targets`),
+    /// so the `─ ` prefix, the dash fill, and a label the rule
+    /// truncated away are all dead — a click outside a drawn label must
+    /// not write the shared value at all (decision 3).
     pub fn handle_bottom_tab_click(&mut self, col: u16) {
-        // Only the drawn labels are clickable. The `─ ` prefix cols 0-1
-        // and the dash fill right of the last label change nothing — a
-        // click outside a label must not write the shared value at all
-        // (decision 3).
-        let x = col.saturating_sub(1) as usize;
-        let mut cursor = 1usize; // the first label starts right after "─ "
-        let selected = self.shown_bottom_tabs().into_iter().find(|tab| {
-            let width = tab.label().chars().count();
-            let hit = cursor..cursor + width;
-            cursor += width + 1; // label, then the separator column
-            hit.contains(&x)
-        });
-        let Some(tab) = selected else { return };
+        let Some(tab) = self
+            .layout
+            .bottom_tab_targets
+            .iter()
+            .find(|target| col >= target.start && col < target.end)
+            .map(|target| target.tab)
+        else {
+            return;
+        };
         self.global.set_bottom_tab(tab);
     }
 
@@ -375,10 +370,11 @@ mod tests {
 
     #[test]
     fn click_on_each_title_selects_its_tab() {
-        // Rule layout "─ Tools│Tasks│Git …─": x = clicked col − 1.
-        // One click into each of the three hitbox ranges, including
-        // the first label's leftmost column.
+        // Rule layout "─ Tools│Tasks│Git …─": one click into each of
+        // the three drawn hitbox ranges, including the first label's
+        // leftmost column.
         let mut state = AppState::new("%99".into());
+        crate::ui::bottom::draw_tab_targets(&mut state, 40);
 
         state.handle_bottom_tab_click(2); // left edge of "Tools"
         assert_eq!(state.global.bottom_tab, BottomTab::Activity);
@@ -399,6 +395,7 @@ mod tests {
         // not switch tabs — only the drawn titles are clickable.
         for col in [7u16, 13, 18, 26] {
             let mut state = AppState::new("%99".into());
+            crate::ui::bottom::draw_tab_targets(&mut state, 40);
             state.global.bottom_tab = BottomTab::Tasks;
             state.handle_bottom_tab_click(col);
             assert_eq!(
@@ -414,6 +411,7 @@ mod tests {
         // The `─ ` before the first label is rule, not label: a click
         // on the prefix column or a col-0 event changes nothing.
         let mut state = AppState::new("%99".into());
+        crate::ui::bottom::draw_tab_targets(&mut state, 40);
         state.global.bottom_tab = BottomTab::Tasks;
 
         for col in [0u16, 1] {
@@ -434,6 +432,7 @@ mod tests {
         // one separator each side).
         let pi = test_pane_with_agent("%1", AgentType::Pi);
         let mut state = state_with_groups(vec![group_with(vec![pi])], Some("%1"));
+        crate::ui::bottom::draw_tab_targets(&mut state, 40);
 
         state.handle_bottom_tab_click(8); // left edge of "Thought"
         assert_eq!(state.global.bottom_tab, BottomTab::Thought);
@@ -450,6 +449,7 @@ mod tests {
         // dash fill right of Git stays dead: neither the tab nor the
         // split may change there.
         let mut state = state_with_groups(vec![agent_group("%1")], Some("%1"));
+        crate::ui::bottom::draw_tab_targets(&mut state, 40);
         state.global.bottom_tab = BottomTab::Tasks;
         state.global.bottom_percent = 30;
 
@@ -465,6 +465,32 @@ mod tests {
             state.global.bottom_percent, 30,
             "a click outside every label must not resize the split"
         );
+    }
+
+    #[test]
+    fn a_click_on_the_fill_past_a_truncated_label_changes_nothing() {
+        // The hitboxes are the drawn columns: on a 20-column pi-pane
+        // rule ("─ Tools│Thought│Ta… ") Tasks draws as "Ta…" on cols
+        // 16-18 and Git has no drawn columns at all, so the pad after
+        // the ellipsis — where the full-width layout would still have
+        // claimed Tasks and Git — selects nothing.
+        let pi = test_pane_with_agent("%1", AgentType::Pi);
+        let mut state = state_with_groups(vec![group_with(vec![pi])], Some("%1"));
+        crate::ui::bottom::draw_tab_targets(&mut state, 20);
+        state.global.bottom_tab = BottomTab::Activity;
+
+        state.handle_bottom_tab_click(17); // "a…", still the drawn label
+        assert_eq!(state.global.bottom_tab, BottomTab::Tasks);
+
+        state.global.bottom_tab = BottomTab::Activity;
+        for col in [19u16, 20, 22] {
+            state.handle_bottom_tab_click(col);
+            assert_eq!(
+                state.global.bottom_tab,
+                BottomTab::Activity,
+                "col {col} is fill or a truncated-off label, not a hitbox"
+            );
+        }
     }
 
     #[test]

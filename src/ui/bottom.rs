@@ -11,7 +11,7 @@ use ratatui::{
     widgets::Paragraph,
 };
 
-use crate::state::{AppState, BottomTab, Focus};
+use crate::state::{AppState, BottomTab, BottomTabTarget, Focus};
 
 use super::text::{display_width, truncate_to_width};
 
@@ -27,6 +27,14 @@ fn render_centered(frame: &mut Frame, area: Rect, text: &str, color: Color) {
     frame.render_widget(paragraph, area);
 }
 
+/// One span of the tab run drawn on the bottom rule: the styled text
+/// and, for a label span, the tab it selects (a separator carries
+/// `None`).
+pub(crate) struct TitleSpan {
+    span: Span<'static>,
+    tab: Option<BottomTab>,
+}
+
 /// The rule row that tops the bottom panel: a `─ ` prefix, the tab run,
 /// one separating space, and `─` fill to the right edge. No left, right
 /// or bottom border character exists around it. The prefix plus that
@@ -34,20 +42,40 @@ fn render_centered(frame: &mut Frame, area: Rect, text: &str, color: Color) {
 /// the same 20 columns the filter bar treats as its minimum), each title
 /// span truncates against a shared displayed-width budget so the rule
 /// stays exactly `width` long.
-fn top_line_border(title_spans: &[Span<'static>], rule_style: Style, width: u16) -> Line<'static> {
+///
+/// The walk also produces each label's drawn column range — the click
+/// hitboxes are this layout read back, so a label the rule truncates
+/// away has a shrunken range or none and can never be clicked where it
+/// is not drawn.
+pub(crate) fn top_line_border(
+    title_spans: &[TitleSpan],
+    rule_style: Style,
+    width: u16,
+) -> (Line<'static>, Vec<BottomTabTarget>) {
     let fixed = 3usize; // "─ " + the space before the fill
     let mut remaining = (width as usize).saturating_sub(fixed);
     let mut spans = vec![Span::styled("─ ", rule_style)];
-    for span in title_spans {
-        let text = truncate_to_width(&span.content, remaining);
-        remaining = remaining.saturating_sub(display_width(&text));
-        spans.push(Span::styled(text, span.style));
+    let mut targets = Vec::new();
+    let mut col = 2u16; // the first span starts right after "─ "
+    for title in title_spans {
+        let text = truncate_to_width(&title.span.content, remaining);
+        let cols = display_width(&text);
+        remaining = remaining.saturating_sub(cols);
+        if let Some(tab) = title.tab {
+            targets.push(BottomTabTarget {
+                start: col,
+                end: col + cols as u16,
+                tab,
+            });
+        }
+        col += cols as u16;
+        spans.push(Span::styled(text, title.span.style));
     }
     spans.push(Span::styled(
         format!(" {}", "─".repeat(remaining)),
         rule_style,
     ));
-    Line::from(spans)
+    (Line::from(spans), targets)
 }
 
 pub fn draw_bottom(frame: &mut Frame, state: &mut AppState, area: Rect) {
@@ -69,11 +97,14 @@ pub fn draw_bottom(frame: &mut Frame, state: &mut AppState, area: Rect) {
         height: area.height.saturating_sub(1),
     };
 
-    let top_line = top_line_border(
-        &build_tab_title(state).spans,
+    let (top_line, targets) = top_line_border(
+        &build_tab_title(state),
         Style::default().fg(rule_color),
         area.width,
     );
+    // Publish the label columns this frame actually drew so the click
+    // handler hit-tests the drawn rule, never a recomputed one.
+    state.layout.bottom_tab_targets = targets;
     frame.render_widget(Paragraph::new(top_line), rule_rect);
 
     match state.displayed_bottom_tab() {
@@ -87,9 +118,10 @@ pub fn draw_bottom(frame: &mut Frame, state: &mut AppState, area: Rect) {
 /// The tab run drawn on the rule: one label span per shown tab, a
 /// separator span between labels, styled active/inactive against the
 /// displayed tab. The shown tabs come from [`AppState::shown_bottom_tabs`]
-/// and the label strings from [`BottomTab::label`] — the same sources the
-/// click hitboxes are computed from, so the two cannot drift.
-fn build_tab_title(state: &AppState) -> Line<'static> {
+/// and the label strings from [`BottomTab::label`]; each label span
+/// carries its tab so `top_line_border` can hand the drawn label
+/// columns to the click hitboxes — the two describe one layout.
+pub(crate) fn build_tab_title(state: &AppState) -> Vec<TitleSpan> {
     let theme = &state.theme;
     let active = Style::default().fg(theme.accent);
     let inactive = Style::default().fg(theme.text_muted);
@@ -99,14 +131,30 @@ fn build_tab_title(state: &AppState) -> Line<'static> {
     };
     let sep_style = Style::default().fg(theme.border_inactive);
 
-    let mut spans: Vec<Span<'static>> = Vec::new();
+    let mut spans: Vec<TitleSpan> = Vec::new();
     for (i, tab) in state.shown_bottom_tabs().into_iter().enumerate() {
         if i > 0 {
-            spans.push(Span::styled("\u{2502}", sep_style));
+            spans.push(TitleSpan {
+                span: Span::styled("\u{2502}", sep_style),
+                tab: None,
+            });
         }
-        spans.push(Span::styled(tab.label(), is(&tab)));
+        spans.push(TitleSpan {
+            span: Span::styled(tab.label(), is(&tab)),
+            tab: Some(tab),
+        });
     }
-    Line::from(spans)
+    spans
+}
+
+/// Publish the rule's tab hitboxes the way `draw_bottom` does: run the
+/// rule's own layout over the state's shown tabs at `width` columns and
+/// store the drawn ranges. Tests use it instead of a rendered frame so
+/// clicks hit-test the drawn columns, not a re-implemented walk.
+#[cfg(test)]
+pub(crate) fn draw_tab_targets(state: &mut AppState, width: u16) {
+    let (_, targets) = top_line_border(&build_tab_title(state), Style::default(), width);
+    state.layout.bottom_tab_targets = targets;
 }
 
 #[cfg(test)]
@@ -163,40 +211,65 @@ mod tests {
         // (Thought here) is styled with the accent, the rest muted.
         let mut pi = state_with_focused_agent(AgentType::Pi);
         pi.global.bottom_tab = BottomTab::Thought;
-        insta::assert_snapshot!(
-            rule_text(top_line_border(&build_tab_title(&pi).spans, rule, 40)),
-            @"─ Tools│Thought│Tasks│Git ──────────────"
-        );
+        let (rule_line, _) = top_line_border(&build_tab_title(&pi), rule, 40);
+        insta::assert_snapshot!(rule_text(rule_line), @"─ Tools│Thought│Tasks│Git ──────────────");
         let title = build_tab_title(&pi);
-        let thought = title.spans.iter().find(|s| s.content == "Thought").unwrap();
-        assert_eq!(thought.style.fg, Some(pi.theme.accent));
-        let tools = title.spans.iter().find(|s| s.content == "Tools").unwrap();
-        assert_eq!(tools.style.fg, Some(pi.theme.text_muted));
+        let thought = title.iter().find(|t| t.span.content == "Thought").unwrap();
+        assert_eq!(thought.span.style.fg, Some(pi.theme.accent));
+        let tools = title.iter().find(|t| t.span.content == "Tools").unwrap();
+        assert_eq!(tools.span.style.fg, Some(pi.theme.text_muted));
 
         // A non-pi pane hides the Thought label; the displayed tab is
         // the Activity fallback.
         let claude = state_with_focused_agent(AgentType::Claude);
-        insta::assert_snapshot!(
-            rule_text(top_line_border(&build_tab_title(&claude).spans, rule, 30)),
-            @"─ Tools│Tasks│Git ────────────"
-        );
+        let (rule_line, _) = top_line_border(&build_tab_title(&claude), rule, 30);
+        insta::assert_snapshot!(rule_text(rule_line), @"─ Tools│Tasks│Git ────────────");
 
         // 22 and 18 leave the full 15-cell tab run plus fill dashes;
         // 20 — the supported minimum — truncates the tail of the run
         // (Tasks closes with an ellipsis, Git is gone entirely) but
         // the rule stays exactly the width. The `─ ` prefix is 2
         // columns, so the label columns never move.
-        insta::assert_snapshot!(
-            rule_text(top_line_border(&build_tab_title(&claude).spans, rule, 22)),
-            @"─ Tools│Tasks│Git ────"
+        let (rule_line, _) = top_line_border(&build_tab_title(&claude), rule, 22);
+        insta::assert_snapshot!(rule_text(rule_line), @"─ Tools│Tasks│Git ────");
+        let (rule_line, _) = top_line_border(&build_tab_title(&pi), rule, 20);
+        insta::assert_snapshot!(rule_text(rule_line), @"─ Tools│Thought│Ta… ");
+        let (rule_line, _) = top_line_border(&build_tab_title(&claude), rule, 18);
+        insta::assert_snapshot!(rule_text(rule_line), @"─ Tools│Tasks│Git ");
+    }
+
+    #[test]
+    fn the_drawn_label_columns_are_the_click_targets() {
+        let rule = Style::default().fg(Color::Indexed(240));
+        let pi = state_with_focused_agent(AgentType::Pi);
+
+        // At a wide width the labels sit at their full columns; at 20
+        // the truncated run gives Tasks only the columns it draws and
+        // Git none, so a click can only ever land on drawn text.
+        let (_, wide) = top_line_border(&build_tab_title(&pi), rule, 40);
+        let ranges: Vec<(u16, u16, BottomTab)> =
+            wide.iter().map(|t| (t.start, t.end, t.tab)).collect();
+        assert_eq!(
+            ranges,
+            vec![
+                (2, 7, BottomTab::Activity),
+                (8, 15, BottomTab::Thought),
+                (16, 21, BottomTab::Tasks),
+                (22, 25, BottomTab::GitStatus),
+            ]
         );
-        insta::assert_snapshot!(
-            rule_text(top_line_border(&build_tab_title(&pi).spans, rule, 20)),
-            @"─ Tools│Thought│Ta… "
-        );
-        insta::assert_snapshot!(
-            rule_text(top_line_border(&build_tab_title(&claude).spans, rule, 18)),
-            @"─ Tools│Tasks│Git "
+
+        let (_, narrow) = top_line_border(&build_tab_title(&pi), rule, 20);
+        let ranges: Vec<(u16, u16, BottomTab)> =
+            narrow.iter().map(|t| (t.start, t.end, t.tab)).collect();
+        assert_eq!(
+            ranges,
+            vec![
+                (2, 7, BottomTab::Activity),
+                (8, 15, BottomTab::Thought),
+                (16, 19, BottomTab::Tasks),
+                (19, 19, BottomTab::GitStatus),
+            ]
         );
     }
 

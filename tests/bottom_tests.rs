@@ -2024,21 +2024,11 @@ fn snapshot_bottom_percent_zero_hides_panel() {
 
 // ─── Thought tab ───────────────────────────────────────────────────
 
-/// Pin the local-time rendering to UTC, so the `HH:mm:ss` snapshots
-/// hold on any machine. No other test in this binary reads the local
-/// time; `tzset` makes glibc pick the new `TZ` up mid-process.
-fn force_utc_time() {
-    unsafe { std::env::set_var("TZ", "UTC0") };
-    // `libc` does not re-export `tzset`; declare it the way glibc names it.
-    unsafe extern "C" {
-        fn tzset();
-    }
-    unsafe { tzset() };
-}
-
 /// A pi-pane state with the Thought tab displayed, focused, and the
 /// given last thought in `state.thought.last` — the draw reads only
-/// that, so no feed file is needed.
+/// that, so no feed file is needed. The stamp formatter is fixed to
+/// UTC so the `HH:mm:ss` snapshots hold on any machine — the state's
+/// own seam, so no test mutates the process timezone.
 fn thought_state_with(last: pmux_explorer::thinking_feed::LastThought) -> AppState {
     let pane = make_pane(AgentType::Pi, PaneStatus::Running);
     let mut state = make_state(vec![SessionInfo {
@@ -2056,6 +2046,7 @@ fn thought_state_with(last: pmux_explorer::thinking_feed::LastThought) -> AppSta
     state.global.bottom_tab = BottomTab::Thought;
     state.focus_state.focus = Focus::ActivityLog;
     state.thought.last = last;
+    state.thought.hhmmss = pmux_explorer::time::utc_hhmmss_from_ts;
     state
 }
 
@@ -2069,7 +2060,6 @@ fn thought(text: &str, start_ts: Option<&str>) -> pmux_explorer::thinking_feed::
 
 #[test]
 fn snapshot_thought_short_ui() {
-    force_utc_time();
     let mut state = thought_state_with(thought(
         "I should read the file first.",
         Some("2026-10-27T08:00:07Z"),
@@ -2089,7 +2079,6 @@ fn snapshot_thought_short_ui() {
 
 #[test]
 fn snapshot_thought_tall_follows_the_end_ui() {
-    force_utc_time();
     // Thirty wrapped rows; the follow keeps the last rows on screen.
     let text: String = (1..=30)
         .map(|i| format!("thought row {i:02}"))
@@ -2126,7 +2115,6 @@ fn snapshot_thought_tall_follows_the_end_ui() {
 
 #[test]
 fn snapshot_thought_scrolled_up_ui() {
-    force_utc_time();
     let text: String = (1..=30)
         .map(|i| format!("thought row {i:02}"))
         .collect::<Vec<_>>()
@@ -2226,38 +2214,32 @@ fn a_new_start_resets_the_follow() {
 
 #[test]
 fn the_time_line_is_yellow_and_the_thought_text_is_not() {
-    force_utc_time();
     let mut state = thought_state_with(thought("some thinking", Some("2026-10-27T08:00:07Z")));
-    let backend = ratatui::backend::TestBackend::new(28, 24);
-    let mut terminal = ratatui::Terminal::new(backend).unwrap();
-    terminal
-        .draw(|frame| pmux_explorer::ui::draw(frame, &mut state))
-        .unwrap();
-    let buf = terminal.backend().buffer().clone();
 
-    let row_str = |y: u16| -> String {
-        (0..28u16)
-            .map(|x| buf[(x, y)].symbol().to_string())
-            .collect()
-    };
-    // The stamp row carries "08:00:07" (indented one column); the
-    // thought text sits on the row under it.
-    let stamp_y = (0..24u16)
-        .find(|&y| row_str(y).trim_end().ends_with("08:00:07"))
-        .expect("the time line is drawn");
-    let stamp_x = row_str(stamp_y).find("08:00:07").unwrap() as u16;
-    assert_eq!(
-        buf[(stamp_x, stamp_y)].fg,
-        state.theme.thought_timestamp,
-        "the time line draws in the yellow thought_timestamp"
-    );
+    // The styled snapshot locks in the stamp row in the yellow
+    // thought_timestamp (fg:220) and the thought text in the normal
+    // text color (fg:255) — position and color together, the way every
+    // other frame assertion in this file works.
+    insta::assert_snapshot!(render_to_styled_string(&mut state, 28, 24), @"
+     ≡[fg:111]1[fg:153] ●[fg:114]1[fg:255] ◐[fg:245]0[fg:245] ○[fg:245]0[fg:245] ✕[fg:245]0[fg:245]           ⤢[fg:114]
+    ⓘ[fg:221]                        —[fg:252] ▾[fg:252]
+    p[fg:153]r[fg:153]o[fg:153]j[fg:153]e[fg:153]c[fg:153]t[fg:153]
+    ┃[fg:153] ●[fg:82] [fg:222]p[fg:222]i[fg:222]
 
-    let text_y = stamp_y + 1;
-    let text_x = row_str(text_y).find("some").unwrap() as u16;
-    assert_eq!(buf[(text_x, text_y)].fg, state.theme.text_active);
-    assert_ne!(
-        buf[(text_x, text_y)].fg,
-        state.theme.thought_timestamp,
-        "the thought text keeps the normal text color"
-    );
+
+
+
+
+
+
+
+
+
+
+
+
+    ─[fg:153] [fg:153]T[fg:252]o[fg:252]o[fg:252]l[fg:252]s[fg:252]│[fg:240]T[fg:153]h[fg:153]o[fg:153]u[fg:153]g[fg:153]h[fg:153]t[fg:153]│[fg:240]T[fg:252]a[fg:252]s[fg:252]k[fg:252]s[fg:252]│[fg:240]G[fg:252]i[fg:252]t[fg:252] [fg:153]─[fg:153]─[fg:153]
+     0[fg:220]8[fg:220]:[fg:220]0[fg:220]0[fg:220]:[fg:220]0[fg:220]7[fg:220]
+     s[fg:255]o[fg:255]m[fg:255]e[fg:255] [fg:255]t[fg:255]h[fg:255]i[fg:255]n[fg:255]k[fg:255]i[fg:255]n[fg:255]g[fg:255]
+    ");
 }

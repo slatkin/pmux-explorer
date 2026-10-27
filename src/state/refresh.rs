@@ -96,13 +96,12 @@ impl AppState {
         pane_id: &str,
         agent: AgentType,
         session_id: &str,
-        xdg_runtime_dir: Option<&str>,
-        uid: u32,
+        env: &crate::thinking_feed::FeedEnv,
     ) {
         // The feed goes first: the session id is in hand from the pane
         // list, and a pi pane's thinking feed dies with its state the
         // same way the shell-fallback sweep clears it (design D7).
-        crate::thinking_feed::remove_pi_feed(agent, session_id, xdg_runtime_dir, uid);
+        crate::thinking_feed::remove_pi_feed(agent, session_id, env);
         // The lifecycle set from `tmux::AGENT_SESSION_PANE_OPTIONS`, minus
         // the pending-teardown markers: the hook-side drain owns those,
         // and a fresh SessionStart clears both on the next run.
@@ -145,8 +144,10 @@ impl AppState {
     /// One tick of the file-backed refresh pass: the task-store close
     /// sweep, then the activity log, the focused pane's task list,
     /// every pane's task progress, and — while the Thought tab is
-    /// displayed — the focused pane's thinking feed. Touches only `/tmp`
-    /// files and `AppState` — no tmux I/O — so tests drive it directly.
+    /// displayed — the focused pane's thinking feed. Touches only local
+    /// files (the `/tmp` stores plus the feed under `$XDG_RUNTIME_DIR`
+    /// or `/tmp`) and `AppState` — no tmux I/O — so tests drive it
+    /// directly.
     /// The close sweep runs first so a focused list that closes renders
     /// the empty state in the same frame.
     pub fn refresh_activity_data(&mut self) {
@@ -244,8 +245,7 @@ impl AppState {
                     &dead.pane_id,
                     dead.agent,
                     dead.session_id.as_deref().unwrap_or(""),
-                    self.thought.xdg_runtime_dir.as_deref(),
-                    self.thought.uid,
+                    &self.thought.env,
                 );
                 self.clear_pane_state(&dead.pane_id);
             }
@@ -474,13 +474,15 @@ impl AppState {
     }
 
     /// Read the focused pi pane's thinking feed into `thought.last`
-    /// (design D4) — only while the Thought tab is displayed: another
-    /// displayed tab reads no feed and leaves the last thought as the
-    /// previous read left it. The feed environment was resolved once at
-    /// startup into `ThoughtState`, so the path helper takes the env
-    /// values as arguments.
+    /// (design D4) — only while the Thought tab is drawn: a hidden
+    /// bottom panel (a percent of 0, a sidebar too short, the floating
+    /// clamp) draws no tab and reads no feed, and another displayed
+    /// tab leaves the last thought as the previous read left it. The
+    /// feed environment was resolved once at startup into
+    /// `ThoughtState`, so the path helper takes the env as an argument.
     pub(crate) fn refresh_thought_feed(&mut self) {
-        if self.displayed_bottom_tab() != BottomTab::Thought {
+        if self.layout.bottom_panel_height == 0 || self.displayed_bottom_tab() != BottomTab::Thought
+        {
             return;
         }
         let session_id = self
@@ -494,11 +496,7 @@ impl AppState {
             self.thought.last = self.thought.reader.read("", None);
             return;
         };
-        let path = crate::thinking_feed::feed_path(
-            self.thought.xdg_runtime_dir.as_deref(),
-            self.thought.uid,
-            &session_id,
-        );
+        let path = self.thought.env.feed_path(&session_id);
         self.thought.last = self.thought.reader.read(&session_id, path.as_deref());
     }
 }
@@ -944,7 +942,8 @@ mod tests {
             tmux::test_mock::set(pane, key, "x");
         }
 
-        AppState::clear_dead_agent_metadata(pane, AgentType::Pi, "", None, 1000);
+        let env = crate::thinking_feed::FeedEnv::default();
+        AppState::clear_dead_agent_metadata(pane, AgentType::Pi, "", &env);
 
         for key in tmux::AGENT_SESSION_PANE_OPTIONS {
             let preserved = matches!(
@@ -961,24 +960,27 @@ mod tests {
     }
 
     // ─── the port-scan sweep removes a dead pi pane's feed ────────
+    //
+    // The removal's own rules (missing file, unsafe id, non-pi agent)
+    // are `remove_pi_feed`'s, pinned once in `thinking_feed` — what is
+    // pinned here is only that this sweep routes a dead pane's feed
+    // through it while it clears the pane's state.
 
-    /// Mock options for `pane` plus a feed file for `session_id` under
-    /// the scratch dir, ready for a teardown-sweep call.
-    fn dead_pane_setup(
-        pane: &str,
-        dir: &tempfile::TempDir,
-        session_id: &str,
-    ) -> std::path::PathBuf {
+    #[test]
+    fn clear_dead_agent_metadata_removes_a_dead_pi_pane_feed() {
+        let _guard = tmux::test_mock::install();
+        let pane = "%PORT_PI_FEED";
         for key in tmux::AGENT_SESSION_PANE_OPTIONS {
             tmux::test_mock::set(pane, key, "x");
         }
-        let feed = feed_in(dir.path(), session_id);
+        let dir = tempfile::TempDir::new().unwrap();
+        let env = crate::thinking_feed::scratch_env(dir.path());
+        let feed = env.feed_path("sess").unwrap();
         std::fs::create_dir_all(feed.parent().unwrap()).unwrap();
         std::fs::write(&feed, "{}").unwrap();
-        feed
-    }
 
-    fn expect_options_cleared(pane: &str) {
+        AppState::clear_dead_agent_metadata(pane, AgentType::Pi, "sess", &env);
+
         for key in tmux::AGENT_SESSION_PANE_OPTIONS {
             // The pending-teardown markers are preserved: the hook-side
             // drain owns those (see `clear_dead_agent_metadata`).
@@ -993,93 +995,10 @@ mod tests {
                 if preserved { "preserved" } else { "cleared" }
             );
         }
-    }
-
-    #[test]
-    fn clear_dead_agent_metadata_removes_a_dead_pi_pane_feed() {
-        let _guard = tmux::test_mock::install();
-        let dir = tempfile::TempDir::new().unwrap();
-        let feed = dead_pane_setup("%PORT_PI_FEED", &dir, "sess");
-
-        AppState::clear_dead_agent_metadata(
-            "%PORT_PI_FEED",
-            AgentType::Pi,
-            "sess",
-            Some(dir.path().to_str().unwrap()),
-            1000,
-        );
-
-        expect_options_cleared("%PORT_PI_FEED");
         assert!(
             !feed.exists(),
             "the port-scan sweep must remove the pi pane's feed with its state"
         );
-    }
-
-    #[test]
-    fn clear_dead_agent_metadata_clears_state_without_a_feed_file() {
-        // No feed was ever written: the absent file must not fail or
-        // delay the clearing of the pane's state.
-        let _guard = tmux::test_mock::install();
-        let dir = tempfile::TempDir::new().unwrap();
-        let feed = dead_pane_setup("%PORT_PI_NOFEED", &dir, "absent");
-        std::fs::remove_file(&feed).unwrap();
-
-        AppState::clear_dead_agent_metadata(
-            "%PORT_PI_NOFEED",
-            AgentType::Pi,
-            "absent",
-            Some(dir.path().to_str().unwrap()),
-            1000,
-        );
-
-        expect_options_cleared("%PORT_PI_NOFEED");
-    }
-
-    #[test]
-    fn clear_dead_agent_metadata_removes_nothing_for_an_unsafe_session_id() {
-        // `../x` is rejected by the path helper, so nothing may be
-        // removed — not even a file the unsanitized join would land on
-        // (`<dir>/pmux-thinking/../x.jsonl` = `<dir>/x.jsonl`).
-        let _guard = tmux::test_mock::install();
-        let dir = tempfile::TempDir::new().unwrap();
-        dead_pane_setup("%PORT_PI_UNSAFE", &dir, "x");
-        let outside = dir.path().join("x.jsonl");
-        std::fs::write(&outside, "{}").unwrap();
-
-        AppState::clear_dead_agent_metadata(
-            "%PORT_PI_UNSAFE",
-            AgentType::Pi,
-            "../x",
-            Some(dir.path().to_str().unwrap()),
-            1000,
-        );
-
-        expect_options_cleared("%PORT_PI_UNSAFE");
-        assert!(
-            outside.exists(),
-            "an unsafe session id must remove no file, however it would resolve"
-        );
-    }
-
-    #[test]
-    fn clear_dead_agent_metadata_removes_no_feed_for_a_non_pi_pane() {
-        // Only a pi pane removes a feed: a Codex pane's session id must
-        // leave the feed of that name untouched (its options still go).
-        let _guard = tmux::test_mock::install();
-        let dir = tempfile::TempDir::new().unwrap();
-        let feed = dead_pane_setup("%PORT_CODEX", &dir, "sess");
-
-        AppState::clear_dead_agent_metadata(
-            "%PORT_CODEX",
-            AgentType::Codex,
-            "sess",
-            Some(dir.path().to_str().unwrap()),
-            1000,
-        );
-
-        expect_options_cleared("%PORT_CODEX");
-        assert!(feed.exists(), "a non-pi pane must not have a feed removed");
     }
 
     #[test]
@@ -1228,15 +1147,13 @@ mod tests {
 
     // ─── refresh_thought_feed ───────────────────────────────────
 
-    /// The feed file `session_id` maps to under a scratch feed dir.
-    fn feed_in(dir: &std::path::Path, session_id: &str) -> std::path::PathBuf {
-        dir.join("pmux-thinking")
-            .join(format!("{session_id}.jsonl"))
-    }
+    use crate::thinking_feed::scratch_env;
 
     /// An AppState focused on a pi pane carrying `session_id`, whose
     /// feed lives under the scratch `dir` (the captured startup env is
-    /// overwritten, so no process env is touched).
+    /// overwritten, so no process env is touched). The bottom panel is
+    /// marked drawn — the feed read runs only while the tab is on
+    /// screen.
     fn pi_feed_state(dir: &tempfile::TempDir, session_id: &str) -> AppState {
         let mut pane = test_pane("%PI_FEED");
         pane.agent = AgentType::Pi;
@@ -1248,14 +1165,46 @@ mod tests {
             panes: vec![(pane, crate::group::PaneGitInfo::default())],
         }];
         state.focus_state.focused_pane_id = Some("%PI_FEED".into());
-        state.thought.xdg_runtime_dir = Some(dir.path().to_string_lossy().into_owned());
+        state.thought.env = scratch_env(dir.path());
+        state.layout.bottom_panel_height = 10;
         state
+    }
+
+    #[test]
+    fn a_hidden_bottom_panel_reads_no_feed() {
+        // The spec gates the read on the tab being drawn: a stored
+        // Thought with the panel hidden (a percent of 0 drew no panel
+        // last frame) must not stat or read the feed.
+        let dir = tempfile::TempDir::new().unwrap();
+        let env = scratch_env(dir.path());
+        let feed = env.feed_path("sess").unwrap();
+        std::fs::create_dir_all(feed.parent().unwrap()).unwrap();
+        std::fs::write(
+            &feed,
+            format!(
+                "{}\n{}\n",
+                r#"{"kind":"start","ts":"t1","producer":"pmux"}"#,
+                r#"{"kind":"delta","ts":"t2","producer":"pmux","text":"unseen"}"#
+            ),
+        )
+        .unwrap();
+        let mut state = pi_feed_state(&dir, "sess");
+        state.global.bottom_tab = BottomTab::Thought;
+        state.layout.bottom_panel_height = 0;
+
+        state.refresh_activity_data();
+
+        assert!(
+            state.thought.last.is_empty(),
+            "a hidden bottom panel draws no tab and must read no feed"
+        );
     }
 
     #[test]
     fn another_displayed_tab_reads_no_feed() {
         let dir = tempfile::TempDir::new().unwrap();
-        let feed = feed_in(dir.path(), "sess");
+        let env = scratch_env(dir.path());
+        let feed = env.feed_path("sess").unwrap();
         std::fs::create_dir_all(feed.parent().unwrap()).unwrap();
         std::fs::write(
             &feed,
@@ -1295,7 +1244,8 @@ mod tests {
     #[test]
     fn a_new_delta_shows_on_the_next_refresh() {
         let dir = tempfile::TempDir::new().unwrap();
-        let feed = feed_in(dir.path(), "sess");
+        let env = scratch_env(dir.path());
+        let feed = env.feed_path("sess").unwrap();
         std::fs::create_dir_all(feed.parent().unwrap()).unwrap();
         std::fs::write(
             &feed,
@@ -1334,7 +1284,8 @@ mod tests {
         // No focused pane at all: the read is the empty state, and a
         // later focus with a session id picks its feed up.
         let dir = tempfile::TempDir::new().unwrap();
-        let feed = feed_in(dir.path(), "sess");
+        let env = scratch_env(dir.path());
+        let feed = env.feed_path("sess").unwrap();
         std::fs::create_dir_all(feed.parent().unwrap()).unwrap();
         std::fs::write(
             &feed,

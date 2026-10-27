@@ -48,7 +48,9 @@ pub(super) fn draw_thought_content(frame: &mut Frame, state: &mut AppState, inne
     if let Some(ts) = &state.thought.last.start_ts {
         // An unparsable `ts` draws no time line: the stamp is a
         // nicety, and a wrong-looking stamp would be worse than none.
-        if let Some(hhmmss) = crate::time::local_hhmmss_from_ts(ts) {
+        // The formatter is the state's seam — the local-time read in
+        // production, a fixed-zone one in snapshot tests.
+        if let Some(hhmmss) = (state.thought.hhmmss)(ts) {
             block.push(Line::from(Span::styled(
                 hhmmss,
                 Style::default().fg(theme.thought_timestamp),

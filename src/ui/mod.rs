@@ -78,8 +78,12 @@ pub fn draw(frame: &mut Frame, state: &mut AppState) {
     };
     // Publish the height this frame actually drew so the mouse handlers
     // hit-test the drawn geometry (`FrameLayout::bottom_panel_height`),
-    // never the configured percent.
+    // never the configured percent. A hidden panel draws no rule, so
+    // its tab labels are not clickable either.
     state.layout.bottom_panel_height = bot_h;
+    if bot_h == 0 {
+        state.layout.bottom_tab_targets.clear();
+    }
 
     let chunks = Layout::default()
         .direction(Direction::Vertical)

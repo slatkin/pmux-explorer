@@ -100,14 +100,11 @@ pub(in crate::cli::hook) fn on_session_end(
             },
         );
     }
-    // The thinking feed env is resolved here, at the hook's edge, the
-    // way the polling-side sweeps resolve it, so the teardown body
-    // takes the values as arguments and tests inject a scratch dir.
-    run_session_end_teardown(
-        pane,
-        std::env::var("XDG_RUNTIME_DIR").ok().as_deref(),
-        crate::mcp::current_uid(),
-    );
+    // The thinking feed environment is resolved here, at the hook's
+    // edge, the way the polling-side sweeps resolve it, so the
+    // teardown body takes it as an argument and tests inject a
+    // scratch env.
+    run_session_end_teardown(pane, &crate::thinking_feed::FeedEnv::from_process());
     0
 }
 
@@ -191,104 +188,29 @@ mod tests {
 
     // ─── the SessionEnd teardown removes a pi pane's feed ──────────
 
-    /// The feed file `session_id` maps to under a scratch feed dir.
-    fn feed_in(dir: &std::path::Path, session_id: &str) -> std::path::PathBuf {
-        dir.join("pmux-thinking")
-            .join(format!("{session_id}.jsonl"))
-    }
-
-    /// Mock options for a pi pane carrying `session_id`, plus a feed
-    /// file for it under the scratch dir, ready for a teardown call.
-    fn pi_end_setup(pane: &str, dir: &tempfile::TempDir, session_id: &str) -> std::path::PathBuf {
-        tmux::test_mock::set(pane, tmux::PANE_AGENT, "pi");
-        tmux::test_mock::set(pane, tmux::PANE_SESSION_ID, session_id);
-        let feed = feed_in(dir.path(), session_id);
-        std::fs::create_dir_all(feed.parent().unwrap()).unwrap();
-        std::fs::write(&feed, "{}").unwrap();
-        feed
-    }
-
     #[test]
     fn a_pi_session_end_removes_the_feed() {
         let _guard = tmux::test_mock::install();
+        let pane = "%PI_END_FEED";
+        tmux::test_mock::set(pane, tmux::PANE_AGENT, "pi");
+        tmux::test_mock::set(pane, tmux::PANE_SESSION_ID, "sess");
         let dir = tempfile::TempDir::new().unwrap();
-        let feed = pi_end_setup("%PI_END_FEED", &dir, "sess");
+        let env = crate::thinking_feed::scratch_env(dir.path());
+        let feed = env.feed_path("sess").unwrap();
+        std::fs::create_dir_all(feed.parent().unwrap()).unwrap();
+        fs::write(&feed, "{}").unwrap();
 
-        run_session_end_teardown("%PI_END_FEED", Some(dir.path().to_str().unwrap()), 1000);
+        run_session_end_teardown(pane, &env);
 
         assert!(
             !feed.exists(),
             "a pi SessionEnd must remove the pane's thinking feed with its state"
         );
         assert!(
-            !tmux::test_mock::contains("%PI_END_FEED", tmux::PANE_AGENT),
+            !tmux::test_mock::contains(pane, tmux::PANE_AGENT),
             "the teardown must still clear the agent options"
         );
-        assert!(!tmux::test_mock::contains(
-            "%PI_END_FEED",
-            tmux::PANE_SESSION_ID
-        ));
-    }
-
-    #[test]
-    fn a_session_end_clears_state_without_a_feed_file() {
-        // No feed was ever written: the absent file must not fail or
-        // delay the clearing of the pane's state.
-        let _guard = tmux::test_mock::install();
-        let dir = tempfile::TempDir::new().unwrap();
-        let feed = pi_end_setup("%PI_END_NOFEED", &dir, "absent");
-        std::fs::remove_file(&feed).unwrap();
-
-        run_session_end_teardown("%PI_END_NOFEED", Some(dir.path().to_str().unwrap()), 1000);
-
-        assert!(
-            !tmux::test_mock::contains("%PI_END_NOFEED", tmux::PANE_AGENT),
-            "the clearing must happen even with no feed file"
-        );
-    }
-
-    #[test]
-    fn a_session_end_removes_nothing_for_an_unsafe_session_id() {
-        // `../x` is rejected by the path helper, so nothing may be
-        // removed — not even a file the unsanitized join would land on
-        // (`<dir>/pmux-thinking/../x.jsonl` = `<dir>/x.jsonl`).
-        let _guard = tmux::test_mock::install();
-        let dir = tempfile::TempDir::new().unwrap();
-        pi_end_setup("%PI_END_UNSAFE", &dir, "../x");
-        let outside = dir.path().join("x.jsonl");
-        std::fs::write(&outside, "{}").unwrap();
-
-        run_session_end_teardown("%PI_END_UNSAFE", Some(dir.path().to_str().unwrap()), 1000);
-
-        assert!(
-            !tmux::test_mock::contains("%PI_END_UNSAFE", tmux::PANE_AGENT),
-            "the clearing must happen even for an unsafe session id"
-        );
-        assert!(
-            outside.exists(),
-            "an unsafe session id must remove no file, however it would resolve"
-        );
-    }
-
-    #[test]
-    fn a_non_pi_session_end_removes_no_feed() {
-        // Only a pi pane removes a feed: a Claude pane's session id must
-        // leave the feed of that name untouched (its state still clears).
-        let _guard = tmux::test_mock::install();
-        let dir = tempfile::TempDir::new().unwrap();
-        tmux::test_mock::set("%CLAUDE_END_FEED", tmux::PANE_AGENT, "claude");
-        tmux::test_mock::set("%CLAUDE_END_FEED", tmux::PANE_SESSION_ID, "sess");
-        let feed = feed_in(dir.path(), "sess");
-        std::fs::create_dir_all(feed.parent().unwrap()).unwrap();
-        std::fs::write(&feed, "{}").unwrap();
-
-        run_session_end_teardown("%CLAUDE_END_FEED", Some(dir.path().to_str().unwrap()), 1000);
-
-        assert!(
-            !tmux::test_mock::contains("%CLAUDE_END_FEED", tmux::PANE_AGENT),
-            "the clearing must happen for a non-pi pane"
-        );
-        assert!(feed.exists(), "a non-pi pane must not have a feed removed");
+        assert!(!tmux::test_mock::contains(pane, tmux::PANE_SESSION_ID));
     }
 
     #[test]

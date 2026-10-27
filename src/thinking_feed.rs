@@ -23,7 +23,8 @@ const RUNTIME_SUBDIR: &str = "pmux-thinking";
 /// The feed directory prefix under `/tmp`, followed by `-<uid>`.
 const TMP_SUBDIR_PREFIX: &str = "/tmp/pmux-thinking-";
 
-/// While a thinking block is open, text longer than this many characters
+/// While a thought grows — an open block's deltas, or orphan deltas
+/// with no `start` before them — text longer than this many characters
 /// is trimmed ...
 const STREAM_TRIM_LIMIT: usize = 16_000;
 /// ... down to its last this many characters. The half-drop keeps a block
@@ -34,24 +35,54 @@ const STREAM_TRIM_KEEP: usize = 8_000;
 /// The size of one backward-scan chunk, in bytes.
 const SCAN_CHUNK: u64 = 64 * 1024;
 
-/// The thinking feed path of one session, or `None` for an unsafe id.
-///
-/// The path is `<dir>/<session id>.jsonl`: `<dir>` is
-/// `$XDG_RUNTIME_DIR/pmux-thinking`, or `/tmp/pmux-thinking-<uid>` when
-/// `XDG_RUNTIME_DIR` is unset or empty. The env values are arguments, not
-/// process env, so tests set no process env. `None` means no feed: an
-/// empty session id, `.` or `..`, or an id holding a `/` (which would
-/// escape the feed directory).
-pub fn feed_path(xdg_runtime_dir: Option<&str>, uid: u32, session_id: &str) -> Option<PathBuf> {
-    if session_id.is_empty() || session_id == "." || session_id == ".." || session_id.contains('/')
-    {
-        return None;
+/// The feed environment: the `$XDG_RUNTIME_DIR` value and the uid the
+/// `/tmp` fallback directory names. Built once at a process's edge —
+/// [`FeedEnv::from_process`] — and passed whole, so no caller resolves
+/// the pair itself.
+#[derive(Debug, Clone, Default)]
+pub struct FeedEnv {
+    /// The `$XDG_RUNTIME_DIR` value; an empty string is the unset case.
+    pub xdg_runtime_dir: Option<String>,
+    /// The uid the `/tmp/pmux-thinking-<uid>` fallback directory names.
+    pub uid: u32,
+}
+
+impl FeedEnv {
+    /// This process's feed environment: `XDG_RUNTIME_DIR` plus the
+    /// current uid.
+    pub fn from_process() -> Self {
+        FeedEnv {
+            xdg_runtime_dir: std::env::var("XDG_RUNTIME_DIR").ok(),
+            uid: crate::mcp::current_uid(),
+        }
     }
-    let dir = match xdg_runtime_dir.filter(|dir| !dir.is_empty()) {
-        Some(runtime_dir) => PathBuf::from(runtime_dir).join(RUNTIME_SUBDIR),
-        None => PathBuf::from(format!("{TMP_SUBDIR_PREFIX}{uid}")),
-    };
-    Some(dir.join(format!("{session_id}.jsonl")))
+
+    /// The thinking feed path of one session, or `None` for an unsafe
+    /// id.
+    ///
+    /// The path is `<dir>/<session id>.jsonl`: `<dir>` is
+    /// `$XDG_RUNTIME_DIR/pmux-thinking`, or `/tmp/pmux-thinking-<uid>`
+    /// when `XDG_RUNTIME_DIR` is unset or empty. `None` means no feed:
+    /// an empty session id, `.` or `..`, or an id holding a `/` (which
+    /// would escape the feed directory).
+    pub fn feed_path(&self, session_id: &str) -> Option<PathBuf> {
+        if session_id.is_empty()
+            || session_id == "."
+            || session_id == ".."
+            || session_id.contains('/')
+        {
+            return None;
+        }
+        let dir = match self
+            .xdg_runtime_dir
+            .as_deref()
+            .filter(|dir| !dir.is_empty())
+        {
+            Some(runtime_dir) => PathBuf::from(runtime_dir).join(RUNTIME_SUBDIR),
+            None => PathBuf::from(format!("{TMP_SUBDIR_PREFIX}{}", self.uid)),
+        };
+        Some(dir.join(format!("{session_id}.jsonl")))
+    }
 }
 
 /// Remove the thinking feed of one session, when the pane's agent is pi.
@@ -62,17 +93,13 @@ pub fn feed_path(xdg_runtime_dir: Option<&str>, uid: u32, session_id: &str) -> O
 /// `clear_dead_agent_metadata` in `state/refresh.rs`, and
 /// `run_session_end_teardown` in `cli/hook/context/pending.rs` —
 /// call this before the pane's options are wiped, with the session
-/// id read while it was still in hand. A session
-/// id [`feed_path`] rejects removes nothing, and a missing file is not
-/// an error — the same treatment the activity log's `remove_file` gets.
-pub(crate) fn remove_pi_feed(
-    agent: AgentType,
-    session_id: &str,
-    xdg_runtime_dir: Option<&str>,
-    uid: u32,
-) {
+/// id read while it was still in hand. A session id
+/// [`FeedEnv::feed_path`] rejects removes nothing, and a missing file
+/// is not an error — the same treatment the activity log's
+/// `remove_file` gets.
+pub(crate) fn remove_pi_feed(agent: AgentType, session_id: &str, env: &FeedEnv) {
     if agent == AgentType::Pi
-        && let Some(feed) = feed_path(xdg_runtime_dir, uid, session_id)
+        && let Some(feed) = env.feed_path(session_id)
     {
         let _ = std::fs::remove_file(feed);
     }
@@ -125,11 +152,13 @@ fn apply_line(state: &mut LastThought, line: &str) {
         "delta" => {
             if let Some(text) = record.text {
                 state.text.push_str(&terminal_safe(&text));
-                if state.open {
-                    let count = state.text.chars().count();
-                    if count > STREAM_TRIM_LIMIT {
-                        state.text = state.text.chars().skip(count - STREAM_TRIM_KEEP).collect();
-                    }
+                // Every delta is bounded, `open` or not: a feed whose
+                // newest records are orphans (no `start` before them)
+                // is still a growing thought the spec caps at the
+                // limit.
+                let count = state.text.chars().count();
+                if count > STREAM_TRIM_LIMIT {
+                    state.text = state.text.chars().skip(count - STREAM_TRIM_KEEP).collect();
                 }
             }
         }
@@ -379,6 +408,17 @@ fn is_start_record(line: &[u8]) -> bool {
             .is_some_and(|record| record.kind == "start")
 }
 
+/// A feed environment whose runtime dir is a scratch directory — the
+/// one env every feed test shares, so no test re-resolves the pair
+/// `FeedEnv` exists to carry.
+#[cfg(test)]
+pub(crate) fn scratch_env(dir: &std::path::Path) -> FeedEnv {
+    FeedEnv {
+        xdg_runtime_dir: Some(dir.to_string_lossy().into_owned()),
+        uid: 1000,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -414,31 +454,45 @@ mod tests {
     fn the_shared_path_vector_holds() {
         // The vector the pmux `thinking-feed` change pins: session `abc`,
         // uid 1000, runtime dir `/run/user/1000`.
+        let env = FeedEnv {
+            xdg_runtime_dir: Some("/run/user/1000".into()),
+            uid: 1000,
+        };
         assert_eq!(
-            feed_path(Some("/run/user/1000"), 1000, "abc")
-                .unwrap()
-                .to_string_lossy(),
+            env.feed_path("abc").unwrap().to_string_lossy(),
             "/run/user/1000/pmux-thinking/abc.jsonl"
         );
+        let env = FeedEnv {
+            xdg_runtime_dir: None,
+            uid: 1000,
+        };
         assert_eq!(
-            feed_path(None, 1000, "abc").unwrap().to_string_lossy(),
+            env.feed_path("abc").unwrap().to_string_lossy(),
             "/tmp/pmux-thinking-1000/abc.jsonl"
         );
     }
 
     #[test]
     fn an_empty_runtime_dir_falls_back_to_the_tmp_directory() {
+        let env = FeedEnv {
+            xdg_runtime_dir: Some(String::new()),
+            uid: 1000,
+        };
         assert_eq!(
-            feed_path(Some(""), 1000, "abc").unwrap().to_string_lossy(),
+            env.feed_path("abc").unwrap().to_string_lossy(),
             "/tmp/pmux-thinking-1000/abc.jsonl"
         );
     }
 
     #[test]
     fn an_unsafe_session_id_gives_no_feed() {
+        let env = FeedEnv {
+            xdg_runtime_dir: Some("/run/user/1000".into()),
+            uid: 1000,
+        };
         for id in ["", ".", "..", "/", "a/b", "../x", "./x"] {
             assert!(
-                feed_path(Some("/run/user/1000"), 1000, id).is_none(),
+                env.feed_path(id).is_none(),
                 "session id {id:?} must be rejected"
             );
         }
@@ -545,6 +599,68 @@ mod tests {
         let long = "x".repeat(20_000);
         let state = reduced(&[&line("start", "t1", None), &line("end", "t", Some(&long))]);
         assert_eq!(state.text.chars().count(), 20_000);
+    }
+
+    #[test]
+    fn orphan_deltas_stay_bounded() {
+        // Deltas with no `start` before them are a valid thought (the
+        // spec's "a delta without a start" scenario) and would grow
+        // without bound unless the same tail trim applies: 30 deltas
+        // of 1000 characters trim at the 17th and 26th, leaving the
+        // last 12000 (deltas 18 to 29).
+        let deltas: Vec<String> = (0..30).map(|i| format!("{i:0>1000}")).collect();
+        let lines: Vec<String> = deltas.iter().map(|d| line("delta", "t", Some(d))).collect();
+        let line_refs: Vec<&str> = lines.iter().map(String::as_str).collect();
+        let state = reduced(&line_refs);
+        assert_eq!(state.text.chars().count(), 12_000);
+        let expected: String = deltas[18..].concat();
+        assert_eq!(state.text, expected);
+        assert_eq!(state.start_ts, None);
+    }
+
+    // The feed dies with the pane's state: `remove_pi_feed`'s own
+    // rules, pinned once here — the teardown call sites each keep one
+    // "the feed goes with the state" test.
+
+    #[test]
+    fn a_pi_feed_is_removed_and_a_missing_one_is_no_error() {
+        let dir = TempDir::new().unwrap();
+        let env = scratch_env(dir.path());
+        let feed = env.feed_path("sess").unwrap();
+        std::fs::create_dir_all(feed.parent().unwrap()).unwrap();
+        fs::write(&feed, "{}").unwrap();
+
+        remove_pi_feed(AgentType::Pi, "sess", &env);
+        assert!(!feed.exists());
+
+        // Removing again (the file is gone) must not fail or panic.
+        remove_pi_feed(AgentType::Pi, "sess", &env);
+    }
+
+    #[test]
+    fn an_unsafe_session_id_removes_nothing() {
+        // `../x` is rejected by the path rule, so nothing may be
+        // removed — not even a file the unsanitized join would land on
+        // (`<dir>/pmux-thinking/../x.jsonl` = `<dir>/x.jsonl`).
+        let dir = TempDir::new().unwrap();
+        let env = scratch_env(dir.path());
+        let outside = dir.path().join("x.jsonl");
+        fs::write(&outside, "{}").unwrap();
+
+        remove_pi_feed(AgentType::Pi, "../x", &env);
+        assert!(outside.exists());
+    }
+
+    #[test]
+    fn a_non_pi_agent_removes_no_feed() {
+        let dir = TempDir::new().unwrap();
+        let env = scratch_env(dir.path());
+        let feed = env.feed_path("sess").unwrap();
+        std::fs::create_dir_all(feed.parent().unwrap()).unwrap();
+        fs::write(&feed, "{}").unwrap();
+
+        remove_pi_feed(AgentType::Claude, "sess", &env);
+        assert!(feed.exists());
     }
 
     // Row 1.2: the thought is shown as plain text.

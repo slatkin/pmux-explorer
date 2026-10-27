@@ -125,7 +125,7 @@ Per-pane file-based state:
 | `scrolls.panes` | On user input / render | Agent list scroll position |
 | `scrolls.git` | On user input / render | Git status scroll position |
 | `scrolls.thought` | On user input / render | Thought tab scroll position; `thought.follow` keeps the view at the last rows while the user has not scrolled up, and a new `start` block resets it |
-| `thought.reader` / `thought.last` | Every 1s while the Thought tab is drawn | Incremental reader of the focused pi pane's feed and the last thought its most recent read reduced. A tick that draws another tab reads no feed and leaves the previous thought standing, while no focused pane — or a focused pane with no session id — reads an empty state. The reader's cache is `(session id, offset, mtime)`; `thought.xdg_runtime_dir` and `thought.uid` are captured once at startup |
+| `thought.reader` / `thought.last` | Every 1s while the Thought tab is drawn | Incremental reader of the focused pi pane's feed and the last thought its most recent read reduced. A tick that draws another tab reads no feed and leaves the previous thought standing, while no focused pane — or a focused pane with no session id — reads an empty state. The reader's cache is `(session id, offset, mtime)`; `thought.env` (a `FeedEnv`) is captured once at startup |
 | `activity.scroll` | On user input / render | Activity log scroll position |
 | `activity.entries` | Every 1s | Focused pane's activity entries (max 50) |
 | `activity.max_entries` | Once at startup | Max activity log entries to display |
@@ -341,8 +341,8 @@ struct ThoughtState {
     last: LastThought,
     follow: bool,
     seen_start_ts: Option<String>,
-    xdg_runtime_dir: Option<String>,
-    uid: u32,
+    env: FeedEnv,
+    hhmmss: fn(&str) -> Option<String>,
 }
 
 /// Frame-scoped render output cached for click hit-testing. Rewritten

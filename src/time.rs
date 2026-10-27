@@ -44,6 +44,21 @@ pub fn local_hhmmss_from_ts(ts: &str) -> Option<String> {
     ))
 }
 
+/// The `HH:mm:ss` of an ISO-8601 UTC timestamp in UTC itself — the
+/// fixed-zone variant of [`local_hhmmss_from_ts`] and the seam snapshot
+/// tests fix instead of touching the process timezone. `None` on the
+/// same unparsable input.
+pub fn utc_hhmmss_from_ts(ts: &str) -> Option<String> {
+    let secs = parse_iso_utc_secs(ts)?;
+    let day = secs.rem_euclid(86_400);
+    Some(format!(
+        "{:02}:{:02}:{:02}",
+        day / 3600,
+        day % 3600 / 60,
+        day % 60
+    ))
+}
+
 /// Seconds since the Unix epoch of an ISO-8601 UTC timestamp:
 /// `YYYY-MM-DD[T ]HH:MM:SS`, an optional `.fff…` fraction, then `Z` —
 /// the shape `Date.toISOString()` (with the fraction) and the spec

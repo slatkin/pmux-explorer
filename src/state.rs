@@ -26,7 +26,8 @@ pub use filter::{RepoFilter, StatusCounts, StatusFilter};
 pub use focus::{Focus, FocusState};
 pub use global::GlobalState;
 pub use layout::{
-    FrameLayout, HyperlinkOverlay, RepoSpawnTarget, RowTarget, SpawnRemoveTarget, SplitDrag,
+    BottomTabTarget, FrameLayout, HyperlinkOverlay, RepoSpawnTarget, RowTarget, SpawnRemoveTarget,
+    SplitDrag,
 };
 pub(crate) use layout::{filter_bar_layout, split_rows};
 pub(crate) use notices::debug_forced_display;
@@ -130,7 +131,7 @@ pub struct AppState {
     /// `refresh_pane_tasks` with the activity log's mtime check).
     pub tasks: TasksState,
     /// The Thought tab's feed reader state (refreshed by
-    /// `refresh_thought_feed` only while the tab is displayed).
+    /// `refresh_thought_feed` only while the tab is drawn).
     pub thought: ThoughtState,
     pub tmux_pane: String,
     /// The sidebar's own pane state as tmux reported it on the last
@@ -1227,6 +1228,7 @@ mod tests {
     fn terminal_click_on_the_tab_row_switches_the_tab() {
         let mut state = AppState::new("%99".into());
         state.layout.bottom_panel_height = 20;
+        crate::ui::bottom::draw_tab_targets(&mut state, 40);
         state.global.bottom_tab = BottomTab::GitStatus;
         // term_height=50, bottom panel 20 → rule at row 30. The press
         // starts a split drag (any press column resizes — decision 4);
@@ -1296,6 +1298,7 @@ mod tests {
         // clamped panel (rows 18..25) is clickable agent list.
         state.layout.line_to_row = vec![Some(1); 24];
         state.global.selected_pane_row = 0;
+        crate::ui::bottom::draw_tab_targets(&mut state, 40);
         state.global.bottom_tab = BottomTab::GitStatus;
 
         // Row 26 is the drawn tab row (38 - 12); the unclamped height
@@ -1392,6 +1395,7 @@ mod tests {
         let mut state = AppState::new("%99".into());
         state.layout.bottom_panel_height = 12;
         state.global.bottom_percent = 30;
+        crate::ui::bottom::draw_tab_targets(&mut state, 40);
 
         // Press on col 14, inside the Git label.
         assert!(state.handle_terminal_click(28, 14, 40));
@@ -1423,6 +1427,7 @@ mod tests {
         state.layout.bottom_panel_height = 12;
         state.global.bottom_percent = 30;
         state.global.bottom_tab = BottomTab::Tasks;
+        crate::ui::bottom::draw_tab_targets(&mut state, 40);
 
         state.handle_terminal_click(28, 30, 40);
         state.end_split_drag(40);
@@ -1443,6 +1448,7 @@ mod tests {
         state.layout.bottom_panel_height = 12;
         state.global.bottom_percent = 30;
         state.global.bottom_tab = BottomTab::Tasks;
+        crate::ui::bottom::draw_tab_targets(&mut state, 40);
 
         // Press on col 12, inside the Tasks label, then drag.
         state.handle_terminal_click(28, 12, 40);
@@ -1535,6 +1541,7 @@ mod tests {
         let mut state = AppState::new("%99".into());
         state.layout.bottom_panel_height = 3;
         state.global.bottom_percent = 1;
+        crate::ui::bottom::draw_tab_targets(&mut state, 40);
         state.global.bottom_tab = BottomTab::Activity;
 
         // An unmoved press on the Tasks label, then a second press on
