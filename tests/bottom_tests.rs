@@ -2082,9 +2082,9 @@ fn snapshot_thought_short_ui() {
     project
     ┃ ● pi
     ─ Activity│Tasks│Git│Thoug…
-    08:00:07
-    I should read the file
-    first.
+     08:00:07
+     I should read the file
+     first.
     ");
 }
 
@@ -2105,23 +2105,23 @@ fn snapshot_thought_tall_follows_the_end_ui() {
     project
     ┃ ● pi
     ─ Activity│Tasks│Git│Thought ───────────
-    thought row 14
-    thought row 15
-    thought row 16
-    thought row 17
-    thought row 18
-    thought row 19
-    thought row 20
-    thought row 21
-    thought row 22
-    thought row 23
-    thought row 24
-    thought row 25
-    thought row 26
-    thought row 27
-    thought row 28
-    thought row 29
-    thought row 30
+     thought row 14
+     thought row 15
+     thought row 16
+     thought row 17
+     thought row 18
+     thought row 19
+     thought row 20
+     thought row 21
+     thought row 22
+     thought row 23
+     thought row 24
+     thought row 25
+     thought row 26
+     thought row 27
+     thought row 28
+     thought row 29
+     thought row 30
     ");
 }
 
@@ -2147,23 +2147,23 @@ fn snapshot_thought_scrolled_up_ui() {
     project
     ┃ ● pi
     ─ Activity│Tasks│Git│Thought ───────────
-    08:00:07
-    thought row 01
-    thought row 02
-    thought row 03
-    thought row 04
-    thought row 05
-    thought row 06
-    thought row 07
-    thought row 08
-    thought row 09
-    thought row 10
-    thought row 11
-    thought row 12
-    thought row 13
-    thought row 14
-    thought row 15
-    thought row 16
+     08:00:07
+     thought row 01
+     thought row 02
+     thought row 03
+     thought row 04
+     thought row 05
+     thought row 06
+     thought row 07
+     thought row 08
+     thought row 09
+     thought row 10
+     thought row 11
+     thought row 12
+     thought row 13
+     thought row 14
+     thought row 15
+     thought row 16
     ");
 }
 
@@ -2223,4 +2223,91 @@ fn a_new_start_resets_the_follow() {
     assert!(state.thought.follow, "a new start resets to follow");
     assert_eq!(state.thought.seen_start_ts.as_deref(), Some("t2"));
     assert_eq!(state.scrolls.thought.offset, 0); // content fits, max 0
+}
+
+/// Render and return the bottom panel's rows with blank rows kept —
+/// `buffer_to_string` drops blank rows, which would hide the vertical
+/// centering these snapshots pin. A full-width `▔` marker row closes
+/// the output, because insta trims trailing blank lines and the
+/// below-the-block padding rows are the panel's last rows.
+fn bottom_panel_rows(state: &mut AppState, width: u16, height: u16) -> String {
+    use ratatui::{Terminal, backend::TestBackend};
+    let backend = TestBackend::new(width, height);
+    let mut terminal = Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| pmux_explorer::ui::draw(frame, state))
+        .unwrap();
+    let buf = terminal.backend().buffer().clone();
+    let bot_h = state.layout.bottom_panel_height;
+    let mut rows: Vec<String> = Vec::new();
+    for y in height.saturating_sub(bot_h)..height {
+        let mut row = String::new();
+        for x in 0..width {
+            row.push_str(buf[(x, y)].symbol());
+        }
+        rows.push(row.trim_end().to_string());
+    }
+    rows.push("▔".repeat(width as usize));
+    rows.join("\n")
+}
+
+#[test]
+fn snapshot_thought_centered_with_an_even_remainder_ui() {
+    force_utc_time();
+    // The 28x24 default panel shows 6 content rows; the block is 4
+    // rows (the stamp plus three thought rows): one blank row above,
+    // one below.
+    let mut state = thought_state_with(thought("one\ntwo\nthree", Some("2026-10-27T08:00:07Z")));
+
+    insta::assert_snapshot!(bottom_panel_rows(&mut state, 28, 24), @"
+    ─ Activity│Tasks│Git│Thoug…
+
+     08:00:07
+     one
+     two
+     three
+
+    ▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔
+    ");
+}
+
+#[test]
+fn snapshot_thought_centered_with_an_odd_remainder_ui() {
+    force_utc_time();
+    // The block is 3 rows in 6 content rows: one blank row above, the
+    // extra one of the odd remainder below.
+    let mut state = thought_state_with(thought("one\ntwo", Some("2026-10-27T08:00:07Z")));
+
+    insta::assert_snapshot!(bottom_panel_rows(&mut state, 28, 24), @"
+    ─ Activity│Tasks│Git│Thoug…
+
+     08:00:07
+     one
+     two
+
+
+    ▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔
+    ");
+}
+
+#[test]
+fn snapshot_thought_exactly_the_panel_height_ui() {
+    force_utc_time();
+    // Six rows in six content rows: no padding above or below, and no
+    // scrolling — the block fills the panel.
+    let mut state = thought_state_with(thought(
+        "row one\nrow two\nrow three\nrow four\nrow five",
+        Some("2026-10-27T08:00:07Z"),
+    ));
+
+    insta::assert_snapshot!(bottom_panel_rows(&mut state, 28, 24), @"
+    ─ Activity│Tasks│Git│Thoug…
+     08:00:07
+     row one
+     row two
+     row three
+     row four
+     row five
+    ▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔
+    ");
 }
