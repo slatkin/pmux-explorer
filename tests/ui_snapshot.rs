@@ -768,9 +768,9 @@ fn snapshot_worktree_branch_ui() {
     insta::assert_snapshot!(output, @"
      ≡1 ●1 ◐0 ○0 ✕0           ⤢
     ⓘ                        — ▾
-     project                  +
+    project                    +
     ┃ ● 
-    ┃   + feature/sidebar
+    ┃    + feature/sidebar
         fix bug
     ─ Tools│Tasks│Git ──────────
             No tools yet
@@ -796,9 +796,9 @@ fn snapshot_worktree_long_branch_truncated_ui() {
     insta::assert_snapshot!(output, @"
      ≡1 ●0 ◐0 ○1 ✕0           ⤢
     ⓘ                        — ▾
-     project                  +
+    project                    +
     ┃ ○ 
-    ┃   + feature/very-long-bra…
+    ┃    + feature/very-long-b…
         Waiting for prompt…
     ─ Tools│Tasks│Git ──────────
             No tools yet
@@ -825,9 +825,9 @@ fn snapshot_long_branch_with_ports_ui() {
     insta::assert_snapshot!(output, @"
      ≡1 ●1 ◐0 ○0 ✕0                       ⤢
     ⓘ                                    — ▾
-     project                              +
+    project                                +
     ┃ ● 
-    ┃   feature/sidebar/really…  :3000, 5173
+    ┃    feature/sidebar/real…  :3000, 5173
     ─ Tools│Tasks│Git ──────────────────────
                   No tools yet
     ");
@@ -953,9 +953,9 @@ fn snapshot_all_elements_combined_ui() {
     insta::assert_snapshot!(output, @"
      ≡1 ●0 ◐1 ○0 ✕0             ⤢
     ⓘ                          — ▾
-     project                    +
+    project                      +
     ┃ ◐  auto
-    ┃   main
+    ┃    main
         ✔◼ 1/2
         ├ Explore #1
         └ Plan #2
@@ -1121,9 +1121,9 @@ fn snapshot_response_with_branch_ui() {
     insta::assert_snapshot!(output, @"
      ≡1 ●0 ◐0 ○1 ✕0                 ⤢
     ⓘ                              — ▾
-     project                        +
+    project                          +
     ┃ ○ 
-    ┃   feature/ui-v2
+    ┃    feature/ui-v2
       ▷ Done. All tests are green.
     ─ Tools│Tasks│Git ────────────────
                No tools yet
@@ -1212,9 +1212,9 @@ fn snapshot_worktree_with_name_ui() {
     insta::assert_snapshot!(output, @"
      ≡1 ●1 ◐0 ○0 ✕0           ⤢
     ⓘ                        — ▾
-     project                  +
+    project                    +
     ┃ ● 
-    ┃   + auth-wt: feat/auth
+    ┃    + auth-wt: feat/auth
     ─ Tools│Tasks│Git ──────────
             No tools yet
     ");
@@ -1239,9 +1239,9 @@ fn snapshot_worktree_name_same_as_branch_ui() {
     insta::assert_snapshot!(output, @"
      ≡1 ●1 ◐0 ○0 ✕0           ⤢
     ⓘ                        — ▾
-     project                  +
+    project                    +
     ┃ ● 
-    ┃   + feat/auth
+    ┃    + feat/auth
     ─ Tools│Tasks│Git ──────────
             No tools yet
     ");
@@ -1782,9 +1782,9 @@ fn snapshot_repo_header_shows_spawn_plus_button() {
     insta::assert_snapshot!(output, @"
      ≡1 ●0 ◐0 ○1 ✕0             ⤢
     ⓘ                          — ▾
-     proj                       +
+    proj                         +
     ┃ ○ 
-    ┃   main
+    ┃    main
         Waiting for prompt…
     ─ Tools│Tasks│Git ────────────
              No tools yet
@@ -1800,7 +1800,7 @@ fn snapshot_spawn_modal_default_state() {
     insta::assert_snapshot!(output, @"
      ≡1 ●0 ◐0 ○1 ✕0                 ⤢
     ⓘ╭ Spawn worktree ──────────────╮▾
-    │                              │+
+    p│                              │+
     ┃│ NAME                         │
     ┃│ █                            │
      │ AGENT                        │
@@ -1828,7 +1828,7 @@ fn snapshot_spawn_modal_anchors_directly_below_repo_header() {
     insta::assert_snapshot!(output, @"
      ≡1 ●0 ◐0 ○1 ✕0                 ⤢
     ⓘ                              — ▾
-     proj                           +
+    proj                             +
     ╭ Spawn worktree ──────────────╮
     │ NAME                         │
     │ █                            │
@@ -1858,7 +1858,7 @@ fn snapshot_spawn_modal_advance_fields_cycles_agent_and_mode() {
     insta::assert_snapshot!(output, @"
      ≡1 ●0 ◐0 ○1 ✕0                 ⤢
     ⓘ╭ Spawn worktree ──────────────╮▾
-    │                              │+
+    p│                              │+
     ┃│ NAME                         │
     ┃│ add login                    │
      │ AGENT                        │
@@ -1883,7 +1883,7 @@ fn snapshot_spawn_modal_tail_fits_long_task_name() {
     insta::assert_snapshot!(output, @"
      ≡1 ●0 ◐0 ○1 ✕0                 ⤢
     ⓘ╭ Spawn worktree ──────────────╮▾
-    │                              │+
+    p│                              │+
     ┃│ NAME                         │
     ┃│ …re-authentication-pipeline█ │
      │ AGENT                        │
@@ -1936,7 +1936,7 @@ fn snapshot_spawn_modal_compact_layout_in_short_agent_area() {
     insta::assert_snapshot!(output, @"
      ≡1 ●0 ◐0 ○1 ✕0                       ⤢
     ⓘ                                    — ▾
-     pr╭ Spawn worktree ──────────────╮   +
+    proj╭ Spawn worktree ──────────────╮   +
     ┃ ○ │ hi█                          │
     ┃   │ claude                       │
         │ default                      │
@@ -1956,7 +1956,7 @@ fn snapshot_spawn_modal_compact_layout_shows_inline_error() {
     insta::assert_snapshot!(output, @"
      ≡1 ●0 ◐0 ○1 ✕0                       ⤢
     ⓘ                                    — ▾
-     pr╭ Spawn worktree ──────────────╮   +
+    proj╭ Spawn worktree ──────────────╮   +
     ┃ ○ │ █                            │
     ┃   │ claude                       │
         │ default                      │
@@ -2006,12 +2006,12 @@ fn snapshot_sidebar_spawned_pane_appends_trailing_remove_marker() {
     insta::assert_snapshot!(output, @"
      ≡2 ●0 ◐0 ○2 ✕0             ⤢
     ⓘ                          — ▾
-     proj                       +
+    proj                         +
     ┃ ○ 
-    ┃   + main
+    ┃    + main
         Waiting for prompt…
       ○ 
-        + feat/x                 ×
+         + feat/x               ×
         Waiting for prompt…
     ─ Tools│Tasks│Git ────────────
              No tools yet
@@ -2146,9 +2146,9 @@ fn snapshot_sidebar_spawned_long_branch_truncates_and_keeps_x() {
     insta::assert_snapshot!(output, @"
      ≡1 ●0 ◐0 ○1 ✕0       ⤢
     ⓘ                    — ▾
-     proj                 +
+    proj                   +
       ○ 
-        + feature/really-l…×
+         + feature/really…×
         Waiting for prompt…
     ─ Tools│Tasks│Git ──────
           No tools yet
@@ -2189,9 +2189,9 @@ fn snapshot_sidebar_spawned_coexists_with_port_display() {
     insta::assert_snapshot!(output, @"
      ≡1 ●0 ◐0 ○1 ✕0             ⤢
     ⓘ                          — ▾
-     proj                       +
+    proj                         +
       ○ 
-        + feat/srv         :3000 ×
+         + feat/srv       :3000 ×
         Waiting for prompt…
     ─ Tools│Tasks│Git ────────────
              No tools yet
@@ -2212,9 +2212,9 @@ fn snapshot_remove_confirm_modal_shows_three_options() {
     insta::assert_snapshot!(output, @"
      ≡1 ●0 ◐0 ○1 ✕0                                 ⤢
     ⓘ                                              — ▾
-     proj                                           +
+    proj                                             +
     ┃ ○ 
-    ┃   main   ╭ add-login ───────────────╮
+    ┃    main ╭ add-login ───────────────╮
         Waiting│[y] remove worktree       │
                │[c] close window only     │
                │[n] cancel                │
@@ -2237,7 +2237,7 @@ fn snapshot_spawn_modal_shows_inline_error_when_task_empty() {
     insta::assert_snapshot!(output, @"
      ≡1 ●0 ◐0 ○1 ✕0                 ⤢
     ⓘ╭ Spawn worktree ──────────────╮▾
-    │                              │+
+    p│                              │+
     ┃│ NAME                         │
     ┃│ █                            │
      │ AGENT                        │
@@ -2282,9 +2282,9 @@ fn snapshot_remove_confirm_modal_shows_inline_error() {
     insta::assert_snapshot!(output, @"
      ≡1 ●0 ◐0 ○1 ✕0                                 ⤢
     ⓘ                                              — ▾
-     proj                                           +
+    proj                                             +
     ┃ ○ 
-    ┃   main   ╭ add-login ───────────────╮
+    ┃    main ╭ add-login ───────────────╮
         Waiting│[y] remove worktree       │
                │[c] close window only     │
                │[n] cancel                │

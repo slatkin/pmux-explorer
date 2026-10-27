@@ -6,8 +6,9 @@ use ratatui::{
 use super::ctx::RowCtx;
 use crate::ui::text::{display_width, truncate_to_width};
 
-/// Left indent before the branch label inside [`branch_ports_row`].
-const BRANCH_ROW_LEFT_PREFIX: &str = "  ";
+/// Left indent before the git glyph and branch label inside
+/// [`branch_ports_row`]. The glyph marks the row as a git branch.
+const BRANCH_ROW_LEFT_PREFIX: &str = "  \u{f418} ";
 
 /// Port-info prefix placed between the branch text and the port list
 /// when both are shown on the same row.

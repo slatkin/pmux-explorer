@@ -8,16 +8,11 @@ use super::row;
 use crate::state::{AppState, Focus};
 use crate::ui::text::display_width;
 
-/// Git glyph drawn before a repo header's name, so the header reads as a
-/// repository rather than a plain label. A group with no resolved
-/// `repo_root` keeps its bare name.
-const GIT_GLYPH: &str = "\u{e702}";
-
-/// Build a repo group's header: the git glyph and repo name at column 0,
-/// with the spawn button right-aligned on the same row. A group with no
-/// resolved `repo_root` is not a git repository, so it gets neither the
-/// glyph nor the button. The recorded spawn target keeps the bare repo
-/// name, because the button acts on the repository, not on the heading.
+/// Build a repo group's header: the repo name at column 0, with the spawn
+/// button right-aligned on the same row. A group with no resolved
+/// `repo_root` is not a git repository, so it gets no button. The recorded
+/// spawn target keeps the bare repo name, because the button acts on the
+/// repository, not on the heading.
 fn repo_header_line(
     collected: &mut CollectedRows,
     group_name: &str,
@@ -31,9 +26,8 @@ fn repo_header_line(
             Style::default().fg(color),
         ));
     };
-    let heading = format!("{GIT_GLYPH} {group_name}");
     let pad_width = width
-        .saturating_sub(display_width(&heading))
+        .saturating_sub(display_width(group_name))
         .saturating_sub(SPAWN_BUTTON.len());
     collected.pending_spawn.push((
         collected.lines.len(),
@@ -41,7 +35,7 @@ fn repo_header_line(
         root.to_string(),
     ));
     Line::from(vec![
-        Span::styled(heading, Style::default().fg(color)),
+        Span::styled(group_name.to_string(), Style::default().fg(color)),
         Span::raw(" ".repeat(pad_width)),
         Span::styled(SPAWN_BUTTON, Style::default().fg(color)),
     ])
@@ -93,8 +87,7 @@ pub(super) fn collect(state: &AppState, width: u16) -> CollectedRows {
 
         // Plain repo header at column 0, with a `[+]` spawn button
         // right-aligned on the same row. Only a group with a resolved
-        // repo_root is a git repository, so only that one gets the git
-        // glyph and the button.
+        // repo_root is a git repository, so only that one gets the button.
         let color = if group_has_focused_pane {
             theme.accent
         } else {

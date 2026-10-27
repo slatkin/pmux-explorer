@@ -1374,7 +1374,7 @@ mod tests {
             .join("\n");
         insta::assert_snapshot!(joined, @"
         ●  ♟
-          main
+           main
         ▷ orchestrator
         ▷ Task completed
         "

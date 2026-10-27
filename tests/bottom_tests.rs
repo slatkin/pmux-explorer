@@ -1593,9 +1593,9 @@ fn snapshot_branch_truncated_ui() {
     insta::assert_snapshot!(plain, @"
      ≡1 ●1 ◐0 ○0 ✕0           ⤢
     ⓘ                        — ▾
-     dotfiles                 +
+    dotfiles                   +
     ┃ ● 
-    ┃   feature/tmux-sidebar-da…
+    ┃    feature/tmux-sidebar-…
     ─ Tools│Tasks│Git ──────────
             No tools yet
     ");
