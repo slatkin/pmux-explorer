@@ -34,7 +34,12 @@ pub fn now_epoch_millis() -> u64 {
 pub fn local_hhmmss_from_ts(ts: &str) -> Option<String> {
     let secs = parse_iso_utc_secs(ts)?;
     let t = secs as libc::time_t;
+    // SAFETY: `zeroed` is the valid initial state for `libc::tm` — a plain
+    // C struct of integers — and every field `localtime_r` does not write
+    // stays zero.
     let mut tm: libc::tm = unsafe { std::mem::zeroed() };
+    // SAFETY: `localtime_r` reads `t` and writes only `tm`; both are valid
+    // for the call. It reports failure by returning null, checked here.
     if unsafe { libc::localtime_r(&t, &mut tm) }.is_null() {
         return None;
     }

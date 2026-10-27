@@ -54,6 +54,11 @@ fn main() -> io::Result<()> {
         std::process::exit(1);
     }
 
+    // SAFETY: `zeroed` is the valid initial state for `libc::sigaction` (a
+    // plain C struct whose zero is "no flags, default mask, no handler"),
+    // every field read by the call is written below, `sa_sigaction` holds a
+    // valid `extern "C" fn(c_int)` cast per the libc convention, and the
+    // call runs once at startup before any thread exists.
     unsafe {
         let mut sa: libc::sigaction = std::mem::zeroed();
         sa.sa_sigaction = sigusr1_handler as *const () as libc::sighandler_t;

@@ -50,6 +50,8 @@ pub fn run(args: &[String]) -> Option<i32> {
 // ─── Shared helpers ──────────────────────────────────────────────────────────
 
 fn read_stdin_json() -> serde_json::Value {
+    // SAFETY: `isatty` reads the descriptor only and writes nothing; it
+    // accepts any fd value and reports an unusable one as 0.
     let is_tty = unsafe { libc::isatty(libc::STDIN_FILENO) != 0 };
     if is_tty {
         return serde_json::Value::Null;
@@ -64,12 +66,21 @@ fn tmux_pane() -> String {
 }
 
 fn local_time_hhmm() -> String {
-    unsafe {
-        let now = libc::time(std::ptr::null_mut());
-        let mut tm: libc::tm = std::mem::zeroed();
-        libc::localtime_r(&now, &mut tm);
-        format!("{:02}:{:02}", tm.tm_hour, tm.tm_min)
+    // SAFETY: `time` writes only through its pointer argument; a null
+    // pointer asks for the current time and the return value carries it.
+    let now = unsafe { libc::time(std::ptr::null_mut()) };
+    // SAFETY: `zeroed` is the valid initial state for `libc::tm` — a plain
+    // C struct of integers — and every field `localtime_r` does not write
+    // stays zero.
+    let mut tm: libc::tm = unsafe { std::mem::zeroed() };
+    // SAFETY: `localtime_r` reads `now` and writes only `tm`; both are valid
+    // for the call. It reports failure by returning null, checked here.
+    if unsafe { libc::localtime_r(&now, &mut tm) }.is_null() {
+        // The zeroed `tm` would otherwise format as a plausible "00:00" and
+        // hide the failure; this sentinel keeps it greppable in the log.
+        return "??:??".to_string();
     }
+    format!("{:02}:{:02}", tm.tm_hour, tm.tm_min)
 }
 
 fn set_status(pane: &str, status: &str) {
