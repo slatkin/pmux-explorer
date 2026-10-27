@@ -5,20 +5,20 @@ description: Every shortcut in the sidebar, the worktree spawn modal, and the cl
 
 ## Sidebar
 
-| Key            | Action                                                        |
-| -------------- | ------------------------------------------------------------- |
-| `prefix + e`   | Toggle sidebar                                                |
-| `prefix + E`   | Toggle sidebar in all windows                                 |
-| `j` / `Down`   | Move selection down                                           |
-| `k` / `Up`     | Move selection up                                             |
-| `h` / `Left`   | Previous status filter                                        |
-| `l` / `Right`  | Next status filter                                            |
-| `r`            | Open repo filter popup                                        |
-| `Enter`        | Jump to the selected pane                                     |
-| `Tab`          | Cycle status filter                                           |
-| `Shift+Tab`    | Cycle bottom panel tab (Activity, Tasks, Git)                 |
-| `p`            | Pop the sidebar out of the window / back in                   |
-| `Esc`          | Return focus or close the popup                               |
+| Key            | Action                                                              |
+| -------------- | ------------------------------------------------------------------- |
+| `prefix + e`   | Toggle sidebar                                                      |
+| `prefix + E`   | Toggle sidebar in all windows                                       |
+| `j` / `Down`   | Move selection down                                                 |
+| `k` / `Up`     | Move selection up                                                   |
+| `h` / `Left`   | Previous status filter                                              |
+| `l` / `Right`  | Next status filter                                                  |
+| `r`            | Open repo filter popup                                              |
+| `Enter`        | Jump to the selected pane                                           |
+| `Tab`          | Cycle status filter                                                 |
+| `Shift+Tab`    | Cycle bottom panel tab (Tools, Thought (pi panes only), Tasks, Git) |
+| `p`            | Pop the sidebar out of the window / back in                         |
+| `Esc`          | Return focus or close the popup                                     |
 
 ## Repo filter popup
 
