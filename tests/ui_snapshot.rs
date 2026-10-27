@@ -1638,7 +1638,7 @@ fn snapshot_filter_bar_icons_use_selected_and_inactive_colors() {
 
     let styled = render_to_styled_string(&mut state, 30, 25);
     let line = styled.lines().next().unwrap();
-    insta::assert_snapshot!(line, @" ≡[fg:111]2[fg:153] ●[fg:114]1[fg:255] ◐[fg:245]0[fg:245] ○[fg:245]1[fg:255] ✕[fg:245]0[fg:245]             ⤢[fg:114]");
+    insta::assert_snapshot!(line, @" [bg:236]≡[fg:111,bg:236]2[fg:153,bg:236] [bg:236]●[fg:114,bg:236]1[fg:255,bg:236] [bg:236]◐[fg:245,bg:236]0[fg:245,bg:236] [bg:236]○[fg:245,bg:236]1[fg:255,bg:236] [bg:236]✕[fg:245,bg:236]0[fg:245,bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]⤢[fg:114,bg:236] [bg:236]");
 }
 
 #[test]
@@ -1688,7 +1688,7 @@ fn snapshot_filter_selected_icon_has_color_without_underline() {
     // modifier on the selected filter would surface in the snapshot diff.
     let styled = render_to_styled_string(&mut state, 30, 25);
     let line = styled.lines().next().unwrap();
-    insta::assert_snapshot!(line, @" ≡[fg:245]2[fg:255] ●[fg:114]1[fg:153] ◐[fg:245]0[fg:245] ○[fg:245]1[fg:255] ✕[fg:245]0[fg:245]             ⤢[fg:114]");
+    insta::assert_snapshot!(line, @" [bg:236]≡[fg:245,bg:236]2[fg:255,bg:236] [bg:236]●[fg:114,bg:236]1[fg:153,bg:236] [bg:236]◐[fg:245,bg:236]0[fg:245,bg:236] [bg:236]○[fg:245,bg:236]1[fg:255,bg:236] [bg:236]✕[fg:245,bg:236]0[fg:245,bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]⤢[fg:114,bg:236] [bg:236]");
 }
 
 #[test]

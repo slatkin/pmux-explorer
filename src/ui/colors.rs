@@ -33,6 +33,14 @@ pub struct ColorTheme {
     pub port: Color,
     pub wait_reason: Color,
     pub selection_bg: Color,
+    /// Base focus background over the whole sidebar while its tmux pane
+    /// is the active one. Default Indexed(234) sits below selection_bg
+    /// (Indexed 239) so the cursor still pops.
+    pub focus_bg: Color,
+    /// Active focus background over the keyboard-owning section.
+    /// Default Indexed(236) stays distinct from focus_bg on a dark
+    /// terminal.
+    pub focus_active_bg: Color,
     pub branch: Color,
     pub badge_danger: Color,
     pub badge_auto: Color,
@@ -80,6 +88,8 @@ impl Default for ColorTheme {
             port: Color::Indexed(246),
             wait_reason: Color::Indexed(221),
             selection_bg: Color::Indexed(239),
+            focus_bg: Color::Indexed(234),
+            focus_active_bg: Color::Indexed(236),
             branch: Color::Indexed(109),
             badge_danger: Color::Indexed(167),
             badge_auto: Color::Indexed(221),
@@ -140,6 +150,8 @@ impl ColorTheme {
         theme.port = read(tmux::SIDEBAR_COLOR_PORT, theme.port);
         theme.wait_reason = read(tmux::SIDEBAR_COLOR_WAIT_REASON, theme.wait_reason);
         theme.selection_bg = read(tmux::SIDEBAR_COLOR_SELECTION, theme.selection_bg);
+        theme.focus_bg = read(tmux::SIDEBAR_COLOR_FOCUS_BG, theme.focus_bg);
+        theme.focus_active_bg = read(tmux::SIDEBAR_COLOR_FOCUS_ACTIVE_BG, theme.focus_active_bg);
         theme.branch = read(tmux::SIDEBAR_COLOR_BRANCH, theme.branch);
         theme.task_progress = read(tmux::SIDEBAR_COLOR_TASK_PROGRESS, theme.task_progress);
         theme.task_pending = read(tmux::SIDEBAR_COLOR_TASK_PENDING, theme.task_pending);
@@ -291,6 +303,43 @@ mod tests {
         assert_eq!(theme.accent, Color::Rgb(0x1a, 0x2b, 0x3c));
         assert_eq!(theme.agent_codex, Color::Rgb(0xd0, 0xe7, 0xff));
         assert_eq!(theme.border_inactive, Color::Indexed(42));
+    }
+
+    #[test]
+    fn from_options_accepts_focus_fill_overrides() {
+        let mut options = std::collections::HashMap::new();
+        options.insert(
+            tmux::SIDEBAR_COLOR_FOCUS_BG.to_string(),
+            "#0a0b0c".to_string(),
+        );
+        options.insert(
+            tmux::SIDEBAR_COLOR_FOCUS_ACTIVE_BG.to_string(),
+            "50".to_string(),
+        );
+
+        let theme = ColorTheme::from_options(&options);
+
+        assert_eq!(theme.focus_bg, Color::Rgb(0x0a, 0x0b, 0x0c));
+        assert_eq!(theme.focus_active_bg, Color::Indexed(50));
+    }
+
+    #[test]
+    fn from_options_falls_back_for_invalid_focus_fills() {
+        let mut options = std::collections::HashMap::new();
+        options.insert(
+            tmux::SIDEBAR_COLOR_FOCUS_BG.to_string(),
+            "not-a-color".to_string(),
+        );
+        options.insert(
+            tmux::SIDEBAR_COLOR_FOCUS_ACTIVE_BG.to_string(),
+            "256".to_string(),
+        );
+
+        let theme = ColorTheme::from_options(&options);
+        let default_theme = ColorTheme::default();
+
+        assert_eq!(theme.focus_bg, default_theme.focus_bg);
+        assert_eq!(theme.focus_active_bg, default_theme.focus_active_bg);
     }
 
     #[test]

@@ -11,9 +11,11 @@ use std::collections::HashMap;
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout},
+    style::Style,
+    widgets::Block,
 };
 
-use crate::state::{AppState, clamp_bottom_height, split_rows};
+use crate::state::{AppState, Focus, clamp_bottom_height, split_rows};
 use crate::tmux;
 
 /// The bottom panel height used when `@sidebar_bottom_height` is unset,
@@ -93,6 +95,34 @@ pub fn draw(frame: &mut Frame, state: &mut AppState) {
             vec![Constraint::Min(1)]
         })
         .split(area);
+
+    // While the sidebar pane is the active tmux pane, both sections get
+    // a base focus fill and the keyboard-owning section gets the active
+    // fill on top of it: ActivityLog focus owns the bottom panel,
+    // Filter/Panes focus own the agent list. With the bottom panel
+    // hidden the top is the only place input can land, so it takes the
+    // active fill regardless of focus. Ratatui styles patch: later
+    // spans keep their own `bg` (selection rows, popups), and cells
+    // nothing draws on keep the fill.
+    if state.focus_state.sidebar_focused {
+        let theme = &state.theme;
+        let top_owns_keyboard = bot_h == 0 || state.focus_state.focus != Focus::ActivityLog;
+        let (top_bg, bottom_bg) = if top_owns_keyboard {
+            (theme.focus_active_bg, theme.focus_bg)
+        } else {
+            (theme.focus_bg, theme.focus_active_bg)
+        };
+        frame.render_widget(
+            Block::default().style(Style::default().bg(top_bg)),
+            chunks[0],
+        );
+        if let Some(bottom) = chunks.get(1) {
+            frame.render_widget(
+                Block::default().style(Style::default().bg(bottom_bg)),
+                *bottom,
+            );
+        }
+    }
 
     // When the pet is on, its band is taken from the bottom of the agent
     // part, directly above the rule — only when that still leaves the

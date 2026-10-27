@@ -176,6 +176,12 @@ pub const SIDEBAR_COLOR_SESSION: &str = "@sidebar_color_session";
 pub const SIDEBAR_COLOR_PORT: &str = "@sidebar_color_port";
 pub const SIDEBAR_COLOR_WAIT_REASON: &str = "@sidebar_color_wait_reason";
 pub const SIDEBAR_COLOR_SELECTION: &str = "@sidebar_color_selection";
+/// Base focus background, painted over the whole sidebar while its tmux
+/// pane is the active one.
+pub const SIDEBAR_COLOR_FOCUS_BG: &str = "@sidebar_color_focus_bg";
+/// Active focus background, painted over the keyboard-owning section on
+/// top of the base focus background.
+pub const SIDEBAR_COLOR_FOCUS_ACTIVE_BG: &str = "@sidebar_color_focus_active_bg";
 pub const SIDEBAR_COLOR_BRANCH: &str = "@sidebar_color_branch";
 pub const SIDEBAR_COLOR_TASK_PROGRESS: &str = "@sidebar_color_task_progress";
 /// Tasks tab `◻` icon + subject color for pending items.

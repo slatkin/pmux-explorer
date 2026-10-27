@@ -85,6 +85,13 @@ pub fn buffer_to_styled_string(buf: &Buffer) -> String {
     lines.join("\n")
 }
 
+pub fn render_to_buffer(state: &mut AppState, width: u16, height: u16) -> Buffer {
+    let backend = TestBackend::new(width, height);
+    let mut terminal = Terminal::new(backend).unwrap();
+    terminal.draw(|frame| ui::draw(frame, state)).unwrap();
+    terminal.backend().buffer().clone()
+}
+
 pub fn render_to_string(state: &mut AppState, width: u16, height: u16) -> String {
     let backend = TestBackend::new(width, height);
     let mut terminal = Terminal::new(backend).unwrap();
