@@ -95,7 +95,7 @@ impl BottomTab {
     /// hitbox cannot drift apart.
     pub fn label(&self) -> &'static str {
         match self {
-            Self::Activity => "Activity",
+            Self::Activity => "Tools",
             Self::Tasks => "Tasks",
             Self::GitStatus => "Git",
             Self::Thought => "Thought",
@@ -1393,8 +1393,8 @@ mod tests {
         state.layout.bottom_panel_height = 12;
         state.global.bottom_percent = 30;
 
-        // Press on col 18, inside the Git label.
-        assert!(state.handle_terminal_click(28, 18, 40));
+        // Press on col 14, inside the Git label.
+        assert!(state.handle_terminal_click(28, 14, 40));
         assert_eq!(
             state.global.bottom_tab,
             BottomTab::Activity,
@@ -1406,7 +1406,7 @@ mod tests {
         assert_eq!(
             state.global.bottom_tab,
             BottomTab::GitStatus,
-            "col 18 is inside the Git label"
+            "col 14 is inside the Git label"
         );
         assert_eq!(
             state.global.bottom_percent, 30,
@@ -1540,7 +1540,7 @@ mod tests {
         // An unmoved press on the Tasks label, then a second press on
         // the Git label (both on the drawn rule row 37 = 40 - 3).
         state.handle_terminal_click(37, 12, 40);
-        state.handle_terminal_click(37, 18, 40);
+        state.handle_terminal_click(37, 14, 40);
 
         assert_eq!(
             state.global.bottom_percent, 1,
@@ -1558,7 +1558,7 @@ mod tests {
         let drag = state
             .split_drag
             .expect("the new press started a fresh drag");
-        assert_eq!(drag.press_col, 18);
+        assert_eq!(drag.press_col, 14);
 
         state.end_split_drag(40);
         assert_eq!(

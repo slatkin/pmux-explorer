@@ -121,7 +121,7 @@ fn snapshot_git_status_tab_ui() {
     ⓘ                        — ▾
     project
     ┃ ● claude
-    ─ Activity│Tasks│Git ───────
+    ─ Tools│Tasks│Git ──────────
     feature/sidebar         ↑2↓1
     +42/-15              3 files
     ────────────────────────────
@@ -157,7 +157,7 @@ fn snapshot_git_clean_ui() {
     ⓘ                        — ▾
     project
     ┃ ● claude
-    ─ Activity│Tasks│Git ───────
+    ─ Tools│Tasks│Git ──────────
          Working tree clean
     ");
 }
@@ -193,7 +193,7 @@ fn snapshot_activity_tab_active_ui() {
     ⓘ                        — ▾
     project
     ┃ ● claude
-    ─ Activity│Tasks│Git ───────
+    ─ Tools│Tasks│Git ──────────
     10:32                   Edit
       src/main.rs
     ");
@@ -232,7 +232,7 @@ fn activity_tab_leaves_one_blank_row_above_entries() {
     ⓘ                        — ▾
     project
     ┃ ● claude
-    ─ Activity│Tasks│Git ───────
+    ─ Tools│Tasks│Git ──────────
     10:32                   Edit
       src/main.rs
     ");
@@ -273,7 +273,7 @@ fn snapshot_activity_long_tool_keeps_one_space_gap() {
     ⓘ                        — ▾
     project
     ┃ ● claude
-    ─ Activity│Tasks│Git ───────
+    ─ Tools│Tasks│Git ──────────
     10:32 mcp__context7__query-d
       rust
     ");
@@ -308,7 +308,7 @@ fn snapshot_tab_bar_renders_both_labels() {
     project
     ┃ ○ claude
         Waiting for prompt…
-    ─ Activity│Tasks│Git ───────
+    ─ Tools│Tasks│Git ──────────
     10:32                   Edit
       test
     ");
@@ -358,7 +358,7 @@ fn snapshot_tasks_empty_tab_ui() {
     ⓘ                        — ▾
     project
     ┃ ● claude
-    ─ Activity│Tasks│Git ───────
+    ─ Tools│Tasks│Git ──────────
      Build the Tasks tab
      ✔ Record the task path
      ◼ Render the list
@@ -393,7 +393,7 @@ fn snapshot_tasks_tab_ui() {
     ⓘ                        — ▾
     project
     ┃ ● claude
-    ─ Activity│Tasks│Git ───────
+    ─ Tools│Tasks│Git ──────────
           No tasks recorded
     ");
 }
@@ -444,7 +444,7 @@ fn snapshot_tasks_tab_after_finished_list_closes() {
     ⓘ                        — ▾
     project
     ┃ ● claude
-    ─ Activity│Tasks│Git ───────
+    ─ Tools│Tasks│Git ──────────
           No tasks recorded
     ");
 
@@ -511,7 +511,7 @@ fn snapshot_tasks_status_colors_styled() {
 
 
 
-    ─[fg:240] [fg:240]A[fg:252]c[fg:252]t[fg:252]i[fg:252]v[fg:252]i[fg:252]t[fg:252]y[fg:252]│[fg:240]T[fg:153]a[fg:153]s[fg:153]k[fg:153]s[fg:153]│[fg:240]G[fg:252]i[fg:252]t[fg:252] [fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]
+    ─[fg:240] [fg:240]T[fg:252]o[fg:252]o[fg:252]l[fg:252]s[fg:252]│[fg:240]T[fg:153]a[fg:153]s[fg:153]k[fg:153]s[fg:153]│[fg:240]G[fg:252]i[fg:252]t[fg:252] [fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]
 
      ✔[fg:114] [fg:114]d[fg:114]o[fg:114]n[fg:114]e[fg:114]
      ◼[fg:223] [fg:223]w[fg:223]i[fg:223]p[fg:223]
@@ -598,7 +598,7 @@ fn snapshot_tasks_description_stays_pinned_while_items_scroll() {
     ⓘ                        — ▾
     project
     ┃ ● claude
-    ─ Activity│Tasks│Git ───────
+    ─ Tools│Tasks│Git ──────────
      Overhaul the sidebar task
      board
      ◻ task 3
@@ -689,7 +689,7 @@ fn snapshot_tasks_subject_wraps_at_narrow_width() {
     ⓘ                    — ▾
     project
     ┃ ● claude
-    ─ Activity│Tasks│Git ───
+    ─ Tools│Tasks│Git ──────
      ◻ a-very-long-task-sub
        ject-that-runs-out-o
        f-columns
@@ -726,7 +726,7 @@ fn snapshot_tasks_multiline_subject_shows_every_line() {
     ⓘ                        — ▾
     project
     ┃ ● claude
-    ─ Activity│Tasks│Git ───────
+    ─ Tools│Tasks│Git ──────────
      ◻ first line
        second line
     ");
@@ -781,7 +781,7 @@ fn snapshot_git_full_info_ui() {
     ⓘ                        — ▾
     project
     ┃ ● claude
-    ─ Activity│Tasks│Git ───────
+    ─ Tools│Tasks│Git ──────────
     main
     +120/-30             3 files
     ────────────────────────────
@@ -818,7 +818,7 @@ fn snapshot_git_diff_summary_tight_ui() {
     ⓘ                        — ▾
     project
     ┃ ● claude
-    ─ Activity│Tasks│Git ───────
+    ─ Tools│Tasks│Git ──────────
     main
     +10/-3               0 files
     ");
@@ -859,7 +859,7 @@ fn snapshot_git_staged_file_diff_right_ui() {
     ⓘ                        — ▾
     project
     ┃ ● claude
-    ─ Activity│Tasks│Git ───────
+    ─ Tools│Tasks│Git ──────────
     main
     +10/-2               1 files
     ────────────────────────────
@@ -901,7 +901,7 @@ fn snapshot_git_unstaged_long_name_diff_right_ui() {
     ⓘ                        — ▾
     project
     ┃ ● claude
-    ─ Activity│Tasks│Git ───────
+    ─ Tools│Tasks│Git ──────────
     main
     +150/-50             1 files
     ────────────────────────────
@@ -952,7 +952,7 @@ fn snapshot_git_long_filename_truncated_ui() {
     ⓘ                        — ▾
     project
     ┃ ● claude
-    ─ Activity│Tasks│Git ───────
+    ─ Tools│Tasks│Git ──────────
     main
                          2 files
     ────────────────────────────
@@ -1040,7 +1040,7 @@ fn snapshot_git_more_than_5_files() {
     ⓘ                        — ▾
     project
     ┃ ● claude
-    ─ Activity│Tasks│Git ───────
+    ─ Tools│Tasks│Git ──────────
     main
                          7 files
     ────────────────────────────
@@ -1067,7 +1067,7 @@ fn snapshot_git_more_than_5_files() {
     ⓘ                        — ▾
     project
     ┃ ● claude
-    ─ Activity│Tasks│Git ───────
+    ─ Tools│Tasks│Git ──────────
     main
                          7 files
     ────────────────────────────
@@ -1109,7 +1109,7 @@ fn snapshot_git_branch_only_no_changes() {
     ⓘ                                  — ▾
     project
     ┃ ● claude
-    ─ Activity│Tasks│Git ─────────────────
+    ─ Tools│Tasks│Git ────────────────────
     feature/long-branch-name            ↑5
     ──────────────────────────────────────
               Working tree clean
@@ -1146,7 +1146,7 @@ fn snapshot_git_pr_number_ui() {
     ⓘ                        — ▾
     project
     ┃ ● claude
-    ─ Activity│Tasks│Git ───────
+    ─ Tools│Tasks│Git ──────────
     feature/fix              #42
     +10/-3               0 files
     ");
@@ -1163,7 +1163,7 @@ fn snapshot_git_pr_number_ui() {
 
 
 
-    ─[fg:153] [fg:153]A[fg:252]c[fg:252]t[fg:252]i[fg:252]v[fg:252]i[fg:252]t[fg:252]y[fg:252]│[fg:240]T[fg:252]a[fg:252]s[fg:252]k[fg:252]s[fg:252]│[fg:240]G[fg:153]i[fg:153]t[fg:153] [fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]
+    ─[fg:153] [fg:153]T[fg:252]o[fg:252]o[fg:252]l[fg:252]s[fg:252]│[fg:240]T[fg:252]a[fg:252]s[fg:252]k[fg:252]s[fg:252]│[fg:240]G[fg:153]i[fg:153]t[fg:153] [fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]
 
     f[fg:255]e[fg:255]a[fg:255]t[fg:255]u[fg:255]r[fg:255]e[fg:255]/[fg:255]f[fg:255]i[fg:255]x[fg:255]              #[fg:117,underline]4[fg:117,underline]2[fg:117,underline]
     +[fg:114]1[fg:114]0[fg:114]/[fg:252]-[fg:174]3[fg:174]               0[fg:252] [fg:252]f[fg:252]i[fg:252]l[fg:252]e[fg:252]s[fg:252]
@@ -1208,7 +1208,7 @@ fn snapshot_git_pr_with_diff_ui() {
     ⓘ                        — ▾
     project
     ┃ ● claude
-    ─ Activity│Tasks│Git ───────
+    ─ Tools│Tasks│Git ──────────
     main                    #123
     +55/-20              0 files
     ");
@@ -1241,8 +1241,8 @@ fn snapshot_subagents_tree_ui() {
         ├ Explore #1
         ├ Plan #2
         └ Explore #2
-    ─ Activity│Tasks│Git ───────────────────
-                 No activity yet
+    ─ Tools│Tasks│Git ──────────────────────
+                  No tools yet
     ");
 }
 
@@ -1276,8 +1276,8 @@ fn snapshot_subagent_long_name_truncated_ui() {
     ┃ ● claude
         ├ superpowers:code-revi…
         └ claude-code-guide #2
-    ─ Activity│Tasks│Git ───────
-           No activity yet
+    ─ Tools│Tasks│Git ──────────
+            No tools yet
     ");
 
     assert_right_border_intact(&output);
@@ -1310,8 +1310,8 @@ fn snapshot_activity_empty_centered_ui() {
     project
     ┃ ○ claude
         Waiting for prompt…
-    ─ Activity│Tasks│Git ───────
-           No activity yet
+    ─ Tools│Tasks│Git ──────────
+            No tools yet
     ");
 }
 
@@ -1340,7 +1340,7 @@ fn snapshot_git_clean_centered_ui() {
     project
     ┃ ○ claude
         Waiting for prompt…
-    ─ Activity│Tasks│Git ───────
+    ─ Tools│Tasks│Git ──────────
          Working tree clean
     ");
 }
@@ -1378,7 +1378,7 @@ fn snapshot_git_branch_loaded_no_changes_shows_inline_clean() {
     ⓘ                        — ▾
     project
     ┃ ● claude
-    ─ Activity│Tasks│Git ───────
+    ─ Tools│Tasks│Git ──────────
     main
     ────────────────────────────
          Working tree clean
@@ -1413,7 +1413,7 @@ fn snapshot_git_no_data_shows_centered_clean() {
     ⓘ                        — ▾
     project
     ┃ ● claude
-    ─ Activity│Tasks│Git ───────
+    ─ Tools│Tasks│Git ──────────
          Working tree clean
     ");
 }
@@ -1448,7 +1448,7 @@ fn test_git_behind_only() {
     ⓘ                        — ▾
     project
     ┃ ● claude
-    ─ Activity│Tasks│Git ───────
+    ─ Tools│Tasks│Git ──────────
     main                      ↓3
     ────────────────────────────
     ");
@@ -1482,7 +1482,7 @@ fn test_git_ahead_and_behind() {
     ⓘ                                  — ▾
     project
     ┃ ● claude
-    ─ Activity│Tasks│Git ─────────────────
+    ─ Tools│Tasks│Git ────────────────────
     main                              ↑2↓3
     ──────────────────────────────────────
     ");
@@ -1518,7 +1518,7 @@ fn test_git_diff_insertions_only() {
     ⓘ                        — ▾
     project
     ┃ ● claude
-    ─ Activity│Tasks│Git ───────
+    ─ Tools│Tasks│Git ──────────
     main
     +25/-0               0 files
     ");
@@ -1552,7 +1552,7 @@ fn test_git_diff_deletions_only() {
     ⓘ                        — ▾
     project
     ┃ ● claude
-    ─ Activity│Tasks│Git ───────
+    ─ Tools│Tasks│Git ──────────
     main
     +0/-15               0 files
     ");
@@ -1594,8 +1594,8 @@ fn snapshot_branch_truncated_ui() {
     dotfiles                   +
     ┃ ● claude
     ┃   feature/tmux-sidebar-da…
-    ─ Activity│Tasks│Git ───────
-           No activity yet
+    ─ Tools│Tasks│Git ──────────
+            No tools yet
     ");
 }
 
@@ -1652,7 +1652,7 @@ fn snapshot_git_staged_unstaged_untracked_ui() {
     ⓘ                        — ▾
     project
     ┃ ● claude
-    ─ Activity│Tasks│Git ───────
+    ─ Tools│Tasks│Git ──────────
     main                      #5
     +12/-3               4 files
     ────────────────────────────
@@ -1698,7 +1698,7 @@ fn snapshot_git_long_branch_with_pr_ui() {
     ⓘ                        — ▾
     project
     ┃ ● claude
-    ─ Activity│Tasks│Git ───────
+    ─ Tools│Tasks│Git ──────────
     feature/very-long-bran… #123
     +5/-2                1 files
     ────────────────────────────
@@ -1743,7 +1743,7 @@ fn snapshot_git_staged_only_ui() {
     ⓘ                        — ▾
     project
     ┃ ● claude
-    ─ Activity│Tasks│Git ───────
+    ─ Tools│Tasks│Git ──────────
     main
     +20/-0               1 files
     ────────────────────────────
@@ -1788,7 +1788,7 @@ fn snapshot_git_many_files_more_indicator_ui() {
     ⓘ                        — ▾
     project
     ┃ ● claude
-    ─ Activity│Tasks│Git ───────
+    ─ Tools│Tasks│Git ──────────
     dev
                          7 files
     ────────────────────────────
@@ -1836,7 +1836,7 @@ fn snapshot_git_more_than_10_files_ui() {
     ⓘ                        — ▾
     project
     ┃ ● claude
-    ─ Activity│Tasks│Git ───────
+    ─ Tools│Tasks│Git ──────────
     dev
                         12 files
     ────────────────────────────
@@ -1906,11 +1906,11 @@ fn snapshot_focused_group_active_border_styled() {
 
 
 
-    ─[fg:240] [fg:240]A[fg:153]c[fg:153]t[fg:153]i[fg:153]v[fg:153]i[fg:153]t[fg:153]y[fg:153]│[fg:240]T[fg:252]a[fg:252]s[fg:252]k[fg:252]s[fg:252]│[fg:240]G[fg:252]i[fg:252]t[fg:252] [fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]
+    ─[fg:240] [fg:240]T[fg:153]o[fg:153]o[fg:153]l[fg:153]s[fg:153]│[fg:240]T[fg:252]a[fg:252]s[fg:252]k[fg:252]s[fg:252]│[fg:240]G[fg:252]i[fg:252]t[fg:252] [fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]
 
 
 
-           N[fg:252]o[fg:252] [fg:252]a[fg:252]c[fg:252]t[fg:252]i[fg:252]v[fg:252]i[fg:252]t[fg:252]y[fg:252] [fg:252]y[fg:252]e[fg:252]t[fg:252]
+            N[fg:252]o[fg:252] [fg:252]t[fg:252]o[fg:252]o[fg:252]l[fg:252]s[fg:252] [fg:252]y[fg:252]e[fg:252]t[fg:252]
     ");
 }
 
@@ -1948,7 +1948,7 @@ fn snapshot_rule_with_full_width_content() {
     project
     ┃ ○ claude
         Waiting for prompt…
-    ─ Activity│Tasks│Git ───────────────────
+    ─ Tools│Tasks│Git ──────────────────────
     10:32                               Edit
       src/main.rs
     ");
@@ -1987,10 +1987,9 @@ fn snapshot_rule_follows_focus() {
 
 
 
-    ─[fg:153] [fg:153]A[fg:153]c[fg:153]t[fg:153]i[fg:153]v[fg:153]i[fg:153]t[fg:153]y[fg:153]│[fg:240]T[fg:252]a[fg:252]s[fg:252]k[fg:252]s[fg:252]│[fg:240]G[fg:252]i[fg:252]t[fg:252] [fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]
+    ─[fg:153] [fg:153]T[fg:153]o[fg:153]o[fg:153]l[fg:153]s[fg:153]│[fg:240]T[fg:252]a[fg:252]s[fg:252]k[fg:252]s[fg:252]│[fg:240]G[fg:252]i[fg:252]t[fg:252] [fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]
 
-                 N[fg:252]o[fg:252] [fg:252]a[fg:252]c[fg:252]t[fg:252]i[fg:252]v[fg:252]i[fg:252]t[fg:252]y[fg:252] [fg:252]y[fg:252]e[fg:252]t[fg:252]
-
+                  N[fg:252]o[fg:252] [fg:252]t[fg:252]o[fg:252]o[fg:252]l[fg:252]s[fg:252] [fg:252]y[fg:252]e[fg:252]t[fg:252]
     ");
 }
 
@@ -2081,7 +2080,7 @@ fn snapshot_thought_short_ui() {
     ⓘ                        — ▾
     project
     ┃ ● pi
-    ─ Activity│Tasks│Git│Thoug…
+    ─ Tools│Thought│Tasks│Git ──
      08:00:07
      I should read the file
      first.
@@ -2104,7 +2103,7 @@ fn snapshot_thought_tall_follows_the_end_ui() {
     ⓘ                                    — ▾
     project
     ┃ ● pi
-    ─ Activity│Tasks│Git│Thought ───────────
+    ─ Tools│Thought│Tasks│Git ──────────────
      thought row 14
      thought row 15
      thought row 16
@@ -2146,7 +2145,7 @@ fn snapshot_thought_scrolled_up_ui() {
     ⓘ                                    — ▾
     project
     ┃ ● pi
-    ─ Activity│Tasks│Git│Thought ───────────
+    ─ Tools│Thought│Tasks│Git ──────────────
      08:00:07
      thought row 01
      thought row 02
@@ -2176,7 +2175,7 @@ fn snapshot_thought_empty_notice_ui() {
     ⓘ                        — ▾
     project
     ┃ ● pi
-    ─ Activity│Tasks│Git│Thoug…
+    ─ Tools│Thought│Tasks│Git ──
            No thinking yet
     ");
 }

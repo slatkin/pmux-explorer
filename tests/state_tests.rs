@@ -1181,8 +1181,8 @@ fn rendered_filter_row_and_hit_test_agree_at_the_20_column_minimum() {
       ● claude
       ● claude
       ● claude
-    ─ Activity│Tasks│G…
-       No activity yet
+    ─ Tools│Tasks│Git ──
+        No tools yet
     ");
 
     // The hit test runs on the width the frame actually rendered with.
@@ -1339,8 +1339,8 @@ fn floating_panel_clicks_hit_the_clamped_bottom_panel_geometry() {
       ○ claude
         Waiting for prompt…
       ○ claude
-    ─ Activity│Tasks│Git ───────────────────
-                 No activity yet
+    ─ Tools│Tasks│Git ──────────────────────
+                  No tools yet
     ");
 
     // The frame published the height it drew: 38/3 clamps 20 → 12.

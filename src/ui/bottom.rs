@@ -159,48 +159,44 @@ mod tests {
     fn top_line_border_fits_the_width_and_truncates_the_tab_run() {
         let rule = Style::default().fg(Color::Indexed(240));
 
-        // A pi pane shows the fourth label; the displayed tab (Thought
-        // here) is styled with the accent, the rest muted.
+        // A pi pane shows the Thought label second; the displayed tab
+        // (Thought here) is styled with the accent, the rest muted.
         let mut pi = state_with_focused_agent(AgentType::Pi);
         pi.global.bottom_tab = BottomTab::Thought;
         insta::assert_snapshot!(
             rule_text(top_line_border(&build_tab_title(&pi).spans, rule, 40)),
-            @"─ Activity│Tasks│Git│Thought ───────────"
+            @"─ Tools│Thought│Tasks│Git ──────────────"
         );
         let title = build_tab_title(&pi);
         let thought = title.spans.iter().find(|s| s.content == "Thought").unwrap();
         assert_eq!(thought.style.fg, Some(pi.theme.accent));
-        let activity = title
-            .spans
-            .iter()
-            .find(|s| s.content == "Activity")
-            .unwrap();
-        assert_eq!(activity.style.fg, Some(pi.theme.text_muted));
+        let tools = title.spans.iter().find(|s| s.content == "Tools").unwrap();
+        assert_eq!(tools.style.fg, Some(pi.theme.text_muted));
 
         // A non-pi pane hides the Thought label; the displayed tab is
         // the Activity fallback.
         let claude = state_with_focused_agent(AgentType::Claude);
         insta::assert_snapshot!(
             rule_text(top_line_border(&build_tab_title(&claude).spans, rule, 30)),
-            @"─ Activity│Tasks│Git ─────────"
+            @"─ Tools│Tasks│Git ────────────"
         );
 
-        // 22 and 18 leave the full 18-cell tab run plus fill dashes;
+        // 22 and 18 leave the full 15-cell tab run plus fill dashes;
         // 20 — the supported minimum — truncates the tail of the run
-        // (Git closes with an ellipsis, Thought is gone entirely) but
+        // (Tasks closes with an ellipsis, Git is gone entirely) but
         // the rule stays exactly the width. The `─ ` prefix is 2
         // columns, so the label columns never move.
         insta::assert_snapshot!(
             rule_text(top_line_border(&build_tab_title(&claude).spans, rule, 22)),
-            @"─ Activity│Tasks│Git ─"
+            @"─ Tools│Tasks│Git ────"
         );
         insta::assert_snapshot!(
             rule_text(top_line_border(&build_tab_title(&pi).spans, rule, 20)),
-            @"─ Activity│Tasks│G… "
+            @"─ Tools│Thought│Ta… "
         );
         insta::assert_snapshot!(
             rule_text(top_line_border(&build_tab_title(&claude).spans, rule, 18)),
-            @"─ Activity│Tasks│ "
+            @"─ Tools│Tasks│Git "
         );
     }
 

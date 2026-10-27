@@ -13,15 +13,17 @@ impl AppState {
             .is_some_and(|pane| pane.agent == AgentType::Pi)
     }
 
-    /// The tabs the rule shows for the focused pane: Activity, Tasks
-    /// and Git always, plus Thought while the focused pane runs pi.
+    /// The tabs the rule shows for the focused pane: Tools, then
+    /// Thought while the focused pane runs pi, then Tasks and Git.
     /// The cycle and the click hitboxes are both derived from this
     /// list, so a hidden tab has no cycle step and no hitbox.
     pub fn shown_bottom_tabs(&self) -> Vec<BottomTab> {
-        let mut tabs = vec![BottomTab::Activity, BottomTab::Tasks, BottomTab::GitStatus];
+        let mut tabs = vec![BottomTab::Activity];
         if self.focused_pane_is_pi() {
             tabs.push(BottomTab::Thought);
         }
+        tabs.push(BottomTab::Tasks);
+        tabs.push(BottomTab::GitStatus);
         tabs
     }
 
@@ -52,7 +54,7 @@ impl AppState {
     }
 
     /// Handle a click on the bottom panel's rule (its first drawn row).
-    /// Rule layout: "─ Activity│Tasks│Git ──────" — col is relative to
+    /// Rule layout: "─ Tools│Tasks│Git ──────" — col is relative to
     /// the terminal. The `─ ` prefix occupies cols 0-1, so the first
     /// label starts at col 2; one `│` separator column follows each
     /// label. The hitboxes are computed from the shown tabs and the
@@ -270,9 +272,9 @@ mod tests {
             state.shown_bottom_tabs(),
             vec![
                 BottomTab::Activity,
+                BottomTab::Thought,
                 BottomTab::Tasks,
-                BottomTab::GitStatus,
-                BottomTab::Thought
+                BottomTab::GitStatus
             ]
         );
     }
@@ -337,17 +339,18 @@ mod tests {
 
     #[test]
     fn the_cycle_covers_four_tabs_for_a_pi_pane() {
-        // Spec "Keyboard cycles four tabs for a pi pane": Thought takes
-        // its place after Git and wraps back to Activity.
+        // Spec "Keyboard cycles four tabs for a pi pane": Thought sits
+        // second, between Tools and Tasks, and Git wraps back to
+        // Tools.
         let pi = test_pane_with_agent("%1", AgentType::Pi);
         let mut state = state_with_groups(vec![group_with(vec![pi])], Some("%1"));
 
         state.next_bottom_tab();
+        assert_eq!(state.global.bottom_tab, BottomTab::Thought);
+        state.next_bottom_tab();
         assert_eq!(state.global.bottom_tab, BottomTab::Tasks);
         state.next_bottom_tab();
         assert_eq!(state.global.bottom_tab, BottomTab::GitStatus);
-        state.next_bottom_tab();
-        assert_eq!(state.global.bottom_tab, BottomTab::Thought);
         state.next_bottom_tab();
         assert_eq!(state.global.bottom_tab, BottomTab::Activity);
     }
@@ -372,21 +375,21 @@ mod tests {
 
     #[test]
     fn click_on_each_title_selects_its_tab() {
-        // Rule layout "─ Activity│Tasks│Git …─": x = clicked col − 1.
+        // Rule layout "─ Tools│Tasks│Git …─": x = clicked col − 1.
         // One click into each of the three hitbox ranges, including
         // the first label's leftmost column.
         let mut state = AppState::new("%99".into());
 
-        state.handle_bottom_tab_click(2); // left edge of "Activity"
+        state.handle_bottom_tab_click(2); // left edge of "Tools"
         assert_eq!(state.global.bottom_tab, BottomTab::Activity);
 
-        state.handle_bottom_tab_click(3); // middle of "Activity"
+        state.handle_bottom_tab_click(3); // middle of "Tools"
         assert_eq!(state.global.bottom_tab, BottomTab::Activity);
 
-        state.handle_bottom_tab_click(13); // "Tasks"
+        state.handle_bottom_tab_click(10); // "Tasks"
         assert_eq!(state.global.bottom_tab, BottomTab::Tasks);
 
-        state.handle_bottom_tab_click(18); // "Git"
+        state.handle_bottom_tab_click(15); // "Git"
         assert_eq!(state.global.bottom_tab, BottomTab::GitStatus);
     }
 
@@ -394,7 +397,7 @@ mod tests {
     fn click_between_or_after_the_titles_changes_nothing() {
         // A click on a separator column or beyond the title text must
         // not switch tabs — only the drawn titles are clickable.
-        for col in [10u16, 16, 20, 26] {
+        for col in [7u16, 13, 18, 26] {
             let mut state = AppState::new("%99".into());
             state.global.bottom_tab = BottomTab::Tasks;
             state.handle_bottom_tab_click(col);
@@ -426,33 +429,36 @@ mod tests {
     #[test]
     fn a_click_on_the_thought_label_selects_it_for_a_pi_pane() {
         // Spec "a click on the Thought label": with Thought shown the
-        // rule reads "─ Activity│Tasks│Git│Thought …", so the Thought
-        // label starts at col 21 (8+1+5+1+3+1+1 for the prefix).
+        // rule reads "─ Tools│Thought│Tasks│Git …", so the Thought
+        // label spans cols 8-14 (2 for the prefix, 5 for Tools and
+        // one separator each side).
         let pi = test_pane_with_agent("%1", AgentType::Pi);
         let mut state = state_with_groups(vec![group_with(vec![pi])], Some("%1"));
 
-        state.handle_bottom_tab_click(21); // left edge of "Thought"
+        state.handle_bottom_tab_click(8); // left edge of "Thought"
         assert_eq!(state.global.bottom_tab, BottomTab::Thought);
 
-        state.handle_bottom_tab_click(24); // middle of "Thought"
+        state.handle_bottom_tab_click(11); // middle of "Thought"
         assert_eq!(state.global.bottom_tab, BottomTab::Thought);
     }
 
     #[test]
     fn a_click_where_a_hidden_thought_label_would_be_changes_nothing() {
         // Spec "a click where a hidden label would be": for a non-pi
-        // pane the columns right of `Git` are dash fill, not a label —
-        // neither the tab nor the split may change.
+        // pane the Thought label is not drawn — where it sits for a pi
+        // pane (cols 8-14) the non-pi rule draws Tasks, so only the
+        // dash fill right of Git stays dead: neither the tab nor the
+        // split may change there.
         let mut state = state_with_groups(vec![agent_group("%1")], Some("%1"));
         state.global.bottom_tab = BottomTab::Tasks;
         state.global.bottom_percent = 30;
 
-        for col in [21u16, 24] {
+        for col in [18u16, 24] {
             state.handle_bottom_tab_click(col);
             assert_eq!(
                 state.global.bottom_tab,
                 BottomTab::Tasks,
-                "col {col} holds no Thought label for a non-pi pane"
+                "col {col} holds no label for a non-pi pane"
             );
         }
         assert_eq!(
