@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{self, Receiver};
+use std::sync::mpsc::{self, Receiver, SyncSender};
 use std::time::Duration;
 
 use crate::git::{self, GitData};
@@ -16,19 +16,37 @@ pub(super) struct Workers {
     pub git_tab_active: Arc<AtomicBool>,
 }
 
-/// Spawn the background threads (git polling, version
-/// notice fetch) that feed the event loop.
+/// Spawn the background threads (git polling, version notice fetch) that
+/// feed the event loop.
+///
+/// Lifecycle: neither join handle is kept. The git poll thread is a detached
+/// loop that returns only when a `send` reports the receiver is gone — which
+/// happens when the event loop drops `git_rx` at teardown — and otherwise runs
+/// until the process exits. The version thread is one-shot (fetch, send,
+/// exit), so there is nothing to join.
+///
+/// Overload policy: both channels are `sync_channel(1)`. The event loop only
+/// ever wants the newest git data, so a full buffer makes the poll thread wait
+/// for the next drain instead of letting a stalled event loop grow one
+/// `GitData` per two-second tick without bound. That wait cannot deadlock:
+/// `app::run` drains the receiver with `try_recv` at least once per ~16 ms. A
+/// blocked `send` still returns `Err` when the receiver is dropped, so the
+/// thread's exit path is preserved. The version channel is bounded the same way
+/// for consistency; a single send can never fill its buffer.
 pub(super) fn spawn(state: &AppState) -> Workers {
-    let (git_tx, git_rx) = mpsc::channel::<GitData>();
-    let (version_tx, version_rx) = mpsc::channel::<UpdateNotice>();
+    let (git_tx, git_rx) = mpsc::sync_channel::<GitData>(1);
+    let (version_tx, version_rx) = mpsc::sync_channel::<UpdateNotice>(1);
     let tmux_pane_clone = state.tmux_pane.clone();
     let git_tab_active = Arc::new(AtomicBool::new(
         state.displayed_bottom_tab().is_git_status(),
     ));
     let git_tab_flag = Arc::clone(&git_tab_active);
+    // Detached on purpose: the loop ends when `git_tx.send` fails after the
+    // event loop has dropped the receiver, so there is no join handle to keep.
     std::thread::spawn(move || {
         git_poll_loop(&tmux_pane_clone, &git_tx, &git_tab_flag);
     });
+    // One-shot: fetch, send, exit. Nothing to join and no backlog to bound.
     std::thread::spawn(move || {
         if let Some(notice) = version::fetch_update_notice() {
             let _ = version_tx.send(notice);
@@ -47,7 +65,10 @@ pub(super) fn spawn(state: &AppState) -> Workers {
 /// through an in-memory `(path, branch)`-keyed cache so `gh pr view` (the only
 /// hop that costs GitHub API quota) runs at most once per `PR_CACHE_TTL`
 /// instead of every tick.
-pub(super) fn git_poll_loop(tmux_pane: &str, git_tx: &mpsc::Sender<GitData>, active: &AtomicBool) {
+///
+/// Returns once `git_tx.send` fails, i.e. when the event loop has dropped the
+/// receiver during teardown; otherwise it loops until the process exits.
+pub(super) fn git_poll_loop(tmux_pane: &str, git_tx: &SyncSender<GitData>, active: &AtomicBool) {
     let mut last_path: Option<String> = None;
     let mut pr_cache = git::PrCache::new();
     loop {
@@ -84,7 +105,7 @@ mod tests {
     #[test]
     fn test_git_poll_skips_when_inactive() {
         let active = Arc::new(AtomicBool::new(false));
-        let (tx, rx) = mpsc::channel::<GitData>();
+        let (tx, rx) = mpsc::sync_channel::<GitData>(1);
 
         let flag = Arc::clone(&active);
         let handle = std::thread::spawn(move || {
@@ -108,7 +129,7 @@ mod tests {
     #[test]
     fn test_git_poll_sends_when_active() {
         let active = Arc::new(AtomicBool::new(true));
-        let (tx, rx) = mpsc::channel::<GitData>();
+        let (tx, rx) = mpsc::sync_channel::<GitData>(1);
 
         let flag = Arc::clone(&active);
         let handle = std::thread::spawn(move || {
@@ -125,7 +146,7 @@ mod tests {
     #[test]
     fn test_git_poll_reacts_to_flag_change() {
         let active = Arc::new(AtomicBool::new(false));
-        let (tx, rx) = mpsc::channel::<GitData>();
+        let (tx, rx) = mpsc::sync_channel::<GitData>(1);
 
         // Initially inactive
         assert!(!active.load(Ordering::Relaxed));
@@ -150,7 +171,7 @@ mod tests {
     #[test]
     fn test_git_poll_stops_on_sender_closed() {
         let active = AtomicBool::new(true);
-        let (tx, rx) = mpsc::channel::<GitData>();
+        let (tx, rx) = mpsc::sync_channel::<GitData>(1);
         drop(rx); // Close receiver
 
         let result = tx.send(GitData::default());
@@ -158,5 +179,24 @@ mod tests {
 
         // Verify the flag check pattern used in git_poll_loop
         assert!(active.load(Ordering::Relaxed));
+    }
+
+    #[test]
+    fn test_git_poll_blocked_send_unblocks_when_receiver_dropped() {
+        let (tx, rx) = mpsc::sync_channel::<GitData>(1);
+        // Fill the buffer so the next send has to wait for a drain.
+        tx.send(GitData::default())
+            .expect("the empty channel accepts one item");
+
+        let handle = std::thread::spawn(move || tx.send(GitData::default()).is_err());
+        // Give the thread time to block in `send`, then close the receiver the
+        // way the event loop does at teardown.
+        std::thread::sleep(Duration::from_millis(50));
+        drop(rx);
+
+        assert!(
+            handle.join().expect("the send thread must not panic"),
+            "a blocked send must return Err once the receiver is dropped"
+        );
     }
 }
