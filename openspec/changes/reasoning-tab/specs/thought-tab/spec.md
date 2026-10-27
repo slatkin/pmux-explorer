@@ -60,7 +60,7 @@ While a thought grows, the sidebar SHALL keep at most its last 16000 characters.
 
 ### Requirement: the thought is shown as plain text
 
-The tab SHALL remove control characters and terminal escape sequences from the thought before it draws it, and SHALL keep line breaks. The tab SHALL wrap the text to the panel width. Above the text, the tab SHALL show the `HH:mm:ss` local time of the record that began the thought.
+The tab SHALL remove control characters and terminal escape sequences from the thought before it draws it, and SHALL keep line breaks. The tab SHALL wrap the text to the width of the block it draws. Above the text, the tab SHALL show the `HH:mm:ss` local time of the record that began the thought.
 
 #### Scenario: an escape sequence in the thought
 - **WHEN** a delta holds `\x1b[31mred`
@@ -69,6 +69,34 @@ The tab SHALL remove control characters and terminal escape sequences from the t
 #### Scenario: the start time
 - **WHEN** the newest `start` record has `ts` `2026-10-27T08:00:07Z` and the local time zone is UTC
 - **THEN** the tab shows `08:00:07` above the thought
+
+### Requirement: the thinking block is indented one column on each side
+
+The thinking block — the `HH:mm:ss` line when drawn plus the wrapped thought rows — SHALL be drawn one column in from each edge of the panel's content area, and the thought SHALL wrap at the panel width less those two columns, so the last column stays blank.
+
+#### Scenario: the block is indented
+- **WHEN** the panel content area is 28 columns wide and the thought does not fit one row
+- **THEN** the block draws starting at the second column, each row holds at most 26 characters, and the last column is blank
+
+### Requirement: a block that fits the panel is centered vertically
+
+When the block fits the panel's content rows, the tab SHALL leave `(content rows - block rows) / 2` blank rows above the block and the rest below it, by integer division, so an odd remainder puts its extra row below. A block that is as tall as or taller than the content rows SHALL NOT be padded: it starts at the first content row and keeps the follow-the-end behaviour of the next requirement. The empty notice SHALL keep its centering.
+
+#### Scenario: a short block is centered with an even remainder
+- **WHEN** the panel shows 6 content rows and the block is 4 rows
+- **THEN** one blank row is above the block and one below
+
+#### Scenario: a short block is centered with an odd remainder
+- **WHEN** the panel shows 6 content rows and the block is 3 rows
+- **THEN** one blank row is above the block and two below
+
+#### Scenario: the block fills the panel
+- **WHEN** the block is as tall as the panel's content rows
+- **THEN** the block starts at the first content row with no blank row above or below
+
+#### Scenario: the block is taller than the panel
+- **WHEN** the block is 31 rows and the panel shows 10 content rows
+- **THEN** no blank row is added above or below, and the tab shows the block's last 10 rows — thought rows 21 to 30
 
 ### Requirement: the tab shows the end of a long thought
 

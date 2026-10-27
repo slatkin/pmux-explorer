@@ -68,7 +68,7 @@ A small function returns `<dir>/<session id>.jsonl` with `<dir>` = `$XDG_RUNTIME
 
 ### D6. Drawing
 
-`src/ui/bottom/thought.rs` draws one muted `HH:mm:ss` line (local time of the `start` record), then the wrapped thought in the normal text color. The scroll uses a `ScrollState` like the other tabs. "Follow the end" is kept as a flag: while the user has not scrolled up, each draw sets the offset to the last page; a scroll up clears the flag and a scroll back to the bottom sets it again. A new `start` resets the scroll to follow. The empty notice uses the existing `render_centered`.
+`src/ui/bottom/thought.rs` draws one muted `HH:mm:ss` line (local time of the `start` record), then the wrapped thought in the normal text color. The block draws in a padded rect — one column in from each panel edge, the text wrapped to the panel width less two, so a blank column stays on the right and the block is not flush against the border. The scroll uses a `ScrollState` like the other tabs. A block that fits the content rows is centered vertically: `(content rows - block rows) / 2` blank rows above, the integer-division remainder below, and the offset rests at 0 because nothing scrolls. A taller block gets no padding and fills the panel. "Follow the end" is kept as a flag: while the user has not scrolled up, each draw sets the offset to the last page; a scroll up clears the flag and a scroll back to the bottom sets it again. A new `start` resets the scroll to follow. The stamp is a row of the block, so a tall thought scrolls it away with the rows above the last page. The empty notice uses the existing `render_centered`.
 
 ### D7. Every teardown path removes the feed
 
