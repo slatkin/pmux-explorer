@@ -35,57 +35,31 @@ The `initialize` reply SHALL declare `capabilities.experimental["claude/channel"
 - **WHEN** the server answers `initialize`
 - **THEN** the reply's capabilities hold only `experimental["claude/channel"]`, and the reply has no `instructions` key
 
-### Requirement: Arm probe
-After `notifications/initialized`, the server SHALL emit one probe event: `notifications/claude/channel` with `meta` `{"kind":"probe","nonce":<32hex>}` and one-line content that asks Claude to run `<exe> channel-ready --nonce <nonce>` and do nothing else. `<exe>` is the shell-quoted absolute path of the running binary, so the command works when `pmux-explorer` is not on `PATH`.
+### Requirement: Channel arming
+A request `{"v":1,"kind":"arm"}` SHALL arm the server for the rest of the process and reply `{"ok":true,"armed":true}`. The request carries no credential: the peer-uid gate is the access control. Fields the handler does not read — a `nonce` sent by an older caller — SHALL be ignored, so an older `arm` request still arms.
 
-#### Scenario: Probe after initialized
-- **WHEN** the client sends `notifications/initialized`
-- **THEN** the next stdout line is the probe notification with a fresh nonce
-
-#### Scenario: Probe names the running binary
-- **WHEN** the server runs from `/opt/px/pmux-explorer` and is not on `PATH`
-- **THEN** the probe content holds `'/opt/px/pmux-explorer' channel-ready --nonce <nonce>`
-
-### Requirement: Arm request
-A request `{"v":1,"kind":"arm","nonce":<string>}` SHALL arm the server for the rest of the process when the nonce equals the probe's nonce, and reply `{"ok":true,"armed":true}`. A different nonce MUST NOT arm it, and SHALL get `{"ok":false,"reason":"nonce"}`. An arm request on an armed server with the correct nonce SHALL reply `{"ok":true,"armed":true}` again.
-
-#### Scenario: Correct nonce arms
-- **WHEN** an arm request carries the probe's nonce
+#### Scenario: Arm request
+- **WHEN** an arm request arrives on an unarmed server
 - **THEN** the reply is `{"ok":true,"armed":true}` and a `status` request reports `armed:true`
 
-#### Scenario: Wrong nonce
-- **WHEN** an arm request carries a different nonce
-- **THEN** the reply is `{"ok":false,"reason":"nonce"}` and the server stays unarmed
+#### Scenario: Arm with a stale nonce
+- **WHEN** an arm request carries a `nonce` field
+- **THEN** it arms like any other arm request
 
-### Requirement: Channel-ready command
-`pmux-explorer channel-ready --nonce <n>` SHALL send an arm request to the endpoint of its own pane (`TMUX` and `TMUX_PANE`, by the endpoint path rule), print the reply line on stdout, and exit 0 when the reply has `armed:true`. Otherwise it SHALL exit 1: on a `nonce` reply, on a missing `--nonce`, and when the endpoint is missing or does not answer within 2 seconds, with a message on stderr.
+#### Scenario: Re-arm
+- **WHEN** an arm request arrives on an armed server
+- **THEN** the reply is `{"ok":true,"armed":true}` again
+
+### Requirement: The channel-ready command
+`pmux-explorer channel-ready` SHALL send an arm request to the endpoint of its own pane (`TMUX` and `TMUX_PANE`, by the endpoint path rule), print the reply line on stdout, and exit 0 when the reply has `armed:true`. The command takes no arguments; arguments an older prompt may still pass, such as `--nonce <n>`, SHALL be ignored. Otherwise it SHALL exit 1 with a message on stderr: on a reply that is not armed, and when the endpoint is missing or does not answer within 2 seconds.
 
 #### Scenario: Armed
-- **WHEN** Claude runs the probe's command in its pane and the nonce matches
+- **WHEN** Claude runs `channel-ready` in its pane
 - **THEN** stdout is `{"ok":true,"armed":true}` and the exit code is 0
 
 #### Scenario: No endpoint
 - **WHEN** the command runs in a pane with no endpoint socket
 - **THEN** it exits 1 with a message on stderr that names the endpoint path
-
-#### Scenario: Missing nonce
-- **WHEN** the command runs without `--nonce`
-- **THEN** it exits 1 with a message on stderr naming `--nonce`, and sends no request
-
-### Requirement: Probe repeat
-While the server is not armed, a `report` request SHALL cause a new probe with the same nonce, at most once per 60 seconds and at most 3 repeats in the life of the process. An armed server MUST NOT emit a probe.
-
-#### Scenario: Report while unarmed
-- **WHEN** the server is unarmed, the last probe was 90 seconds ago, and a `report` request arrives
-- **THEN** the server emits one probe and replies `unarmed`
-
-#### Scenario: Probe limit
-- **WHEN** two `report` requests arrive 10 seconds apart while the server is unarmed
-- **THEN** at most one probe is emitted for the two
-
-#### Scenario: Lifetime cap
-- **WHEN** the server has sent the first probe and 3 repeats, stays unarmed, and a report arrives 10 minutes later
-- **THEN** no probe is emitted, and the reply is `unarmed`
 
 ### Requirement: Endpoint path
 The endpoint path SHALL be `<dir>/<h>-<n>.sock`. `<dir>` is `$XDG_RUNTIME_DIR/pmux-channel`, or `/tmp/pmux-channel-<uid>` when `XDG_RUNTIME_DIR` is unset or empty. `<h>` is the 16-digit lowercase hex FNV-1a 64-bit hash of the tmux socket path (the first comma field of `TMUX`). `<n>` is `TMUX_PANE` without its `%`. This rule SHALL match pmux `report-channel`.
@@ -162,11 +136,11 @@ The `token` and `bytes` fields of a report request SHALL be opaque: the server M
 - **WHEN** an armed server gets a valid report request with `token` `abc`
 - **THEN** the emitted `meta` has no `token` key
 
-### Requirement: Status request
+### Requirement: Endpoint status
 A request `{"v":1,"kind":"status"}` SHALL get `{"ok":true,"armed":<bool>,"pane":<TMUX_PANE>}` and MUST NOT emit anything to Claude.
 
-#### Scenario: Status before the probe answer
-- **WHEN** a status request arrives before an arm request with the correct nonce
+#### Scenario: Status before the arm request
+- **WHEN** a status request arrives before any arm request
 - **THEN** the reply has `armed:false` and the pane id, and stdout gets no line
 
 ### Requirement: Claude plugin registration
