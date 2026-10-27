@@ -2,7 +2,7 @@
 mod test_helpers;
 
 use pmux_explorer::activity::ActivityEntry;
-use pmux_explorer::state::{BottomTab, Focus};
+use pmux_explorer::state::{AppState, BottomTab, Focus};
 use pmux_explorer::task_store;
 use pmux_explorer::tmux::{AgentType, PaneStatus, SessionInfo, WindowInfo};
 use test_helpers::*;
@@ -2021,4 +2021,206 @@ fn snapshot_bottom_percent_zero_hides_panel() {
     ┃ ○ claude
         Waiting for prompt…
     ");
+}
+
+// ─── Thought tab ───────────────────────────────────────────────────
+
+/// Pin the local-time rendering to UTC, so the `HH:mm:ss` snapshots
+/// hold on any machine. No other test in this binary reads the local
+/// time; `tzset` makes glibc pick the new `TZ` up mid-process.
+fn force_utc_time() {
+    unsafe { std::env::set_var("TZ", "UTC0") };
+    // `libc` does not re-export `tzset`; declare it the way glibc names it.
+    unsafe extern "C" {
+        fn tzset();
+    }
+    unsafe { tzset() };
+}
+
+/// A pi-pane state with the Thought tab displayed, focused, and the
+/// given last thought in `state.thought.last` — the draw reads only
+/// that, so no feed file is needed.
+fn thought_state_with(last: pmux_explorer::thinking_feed::LastThought) -> AppState {
+    let pane = make_pane(AgentType::Pi, PaneStatus::Running);
+    let mut state = make_state(vec![SessionInfo {
+        session_name: "main".into(),
+        windows: vec![WindowInfo {
+            window_id: "@1".into(),
+            window_name: "project".into(),
+            window_active: true,
+            auto_rename: false,
+            panes: vec![pane.clone()],
+        }],
+    }]);
+    state.repo_groups = vec![make_repo_group("project", vec![pane])];
+    state.rebuild_row_targets();
+    state.global.bottom_tab = BottomTab::Thought;
+    state.focus_state.focus = Focus::ActivityLog;
+    state.thought.last = last;
+    state
+}
+
+fn thought(text: &str, start_ts: Option<&str>) -> pmux_explorer::thinking_feed::LastThought {
+    pmux_explorer::thinking_feed::LastThought {
+        text: text.into(),
+        start_ts: start_ts.map(str::to_string),
+        open: true,
+    }
+}
+
+#[test]
+fn snapshot_thought_short_ui() {
+    force_utc_time();
+    let mut state = thought_state_with(thought(
+        "I should read the file first.",
+        Some("2026-10-27T08:00:07Z"),
+    ));
+
+    insta::assert_snapshot!(render_to_string(&mut state, 28, 24), @"
+     ≡1 ●1 ◐0 ○0 ✕0           ⤢
+    ⓘ                        — ▾
+    project
+    ┃ ● pi
+    ─ Activity│Tasks│Git│Thoug…
+    08:00:07
+    I should read the file
+    first.
+    ");
+}
+
+#[test]
+fn snapshot_thought_tall_follows_the_end_ui() {
+    force_utc_time();
+    // Thirty wrapped rows; the follow keeps the last rows on screen.
+    let text: String = (1..=30)
+        .map(|i| format!("thought row {i:02}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let mut state = thought_state_with(thought(&text, Some("2026-10-27T08:00:07Z")));
+    state.global.bottom_percent = 60;
+
+    insta::assert_snapshot!(render_to_string(&mut state, 40, 30), @"
+     ≡1 ●1 ◐0 ○0 ✕0                       ⤢
+    ⓘ                                    — ▾
+    project
+    ┃ ● pi
+    ─ Activity│Tasks│Git│Thought ───────────
+    thought row 14
+    thought row 15
+    thought row 16
+    thought row 17
+    thought row 18
+    thought row 19
+    thought row 20
+    thought row 21
+    thought row 22
+    thought row 23
+    thought row 24
+    thought row 25
+    thought row 26
+    thought row 27
+    thought row 28
+    thought row 29
+    thought row 30
+    ");
+}
+
+#[test]
+fn snapshot_thought_scrolled_up_ui() {
+    force_utc_time();
+    let text: String = (1..=30)
+        .map(|i| format!("thought row {i:02}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let mut state = thought_state_with(thought(&text, Some("2026-10-27T08:00:07Z")));
+    state.global.bottom_percent = 60;
+    // The user scrolled to the top: the follow is suspended and the
+    // view holds the first rows. The seen ts matches the thought, so
+    // the draw does not read this as a new `start`.
+    state.thought.follow = false;
+    state.thought.seen_start_ts = Some("2026-10-27T08:00:07Z".into());
+    state.scrolls.thought.offset = 0;
+
+    insta::assert_snapshot!(render_to_string(&mut state, 40, 30), @"
+     ≡1 ●1 ◐0 ○0 ✕0                       ⤢
+    ⓘ                                    — ▾
+    project
+    ┃ ● pi
+    ─ Activity│Tasks│Git│Thought ───────────
+    08:00:07
+    thought row 01
+    thought row 02
+    thought row 03
+    thought row 04
+    thought row 05
+    thought row 06
+    thought row 07
+    thought row 08
+    thought row 09
+    thought row 10
+    thought row 11
+    thought row 12
+    thought row 13
+    thought row 14
+    thought row 15
+    thought row 16
+    ");
+}
+
+#[test]
+fn snapshot_thought_empty_notice_ui() {
+    let mut state = thought_state_with(thought("", None));
+
+    insta::assert_snapshot!(render_to_string(&mut state, 28, 24), @"
+     ≡1 ●1 ◐0 ○0 ✕0           ⤢
+    ⓘ                        — ▾
+    project
+    ┃ ● pi
+    ─ Activity│Tasks│Git│Thoug…
+           No thinking yet
+    ");
+}
+
+#[test]
+fn a_scroll_up_suspends_the_follow_and_the_bottom_re_arms_it() {
+    let pane = make_pane(AgentType::Pi, PaneStatus::Running);
+    let mut state = make_state(vec![]);
+    state.repo_groups = vec![make_repo_group("project", vec![pane])];
+    state.global.bottom_tab = BottomTab::Thought;
+    state.scrolls.thought = pmux_explorer::state::ScrollState {
+        offset: 0,
+        total_lines: 30,
+        visible_height: 10,
+    };
+
+    state.scroll_bottom(-5);
+    assert!(!state.thought.follow, "a scroll up suspends the follow");
+    assert_eq!(state.scrolls.thought.offset, 0);
+
+    // Scrolling down but not reaching the bottom keeps the follow off.
+    state.scroll_bottom(5);
+    assert!(!state.thought.follow);
+
+    // Reaching the bottom re-arms it.
+    state.scroll_bottom(100);
+    assert!(state.thought.follow);
+}
+
+#[test]
+fn a_new_start_resets_the_follow() {
+    let pane = make_pane(AgentType::Pi, PaneStatus::Running);
+    let mut state = make_state(vec![]);
+    state.repo_groups = vec![make_repo_group("project", vec![pane])];
+    state.global.bottom_tab = BottomTab::Thought;
+    state.thought.last = thought("first block", Some("t1"));
+    state.thought.seen_start_ts = Some("t1".into());
+    state.thought.follow = false;
+    state.scrolls.thought.offset = 3;
+
+    // A later block carries a new start ts: the draw resets to follow.
+    state.thought.last = thought("second block", Some("t2"));
+    render_to_string(&mut state, 28, 24);
+    assert!(state.thought.follow, "a new start resets to follow");
+    assert_eq!(state.thought.seen_start_ts.as_deref(), Some("t2"));
+    assert_eq!(state.scrolls.thought.offset, 0); // content fits, max 0
 }

@@ -11,6 +11,13 @@ impl ScrollState {
         let next = self.offset as isize + delta;
         self.offset = next.max(0).min(max as isize) as usize;
     }
+
+    /// Whether the offset sits on the last page — the bottom of the
+    /// content. The Thought tab's follow-the-end scroll uses this to
+    /// re-arm the follow when the user scrolls back down.
+    pub fn at_end(&self) -> bool {
+        self.offset >= self.total_lines.saturating_sub(self.visible_height)
+    }
 }
 
 #[derive(Debug, Clone, Default)]

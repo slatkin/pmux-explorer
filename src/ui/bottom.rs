@@ -1,6 +1,7 @@
 mod activity;
 mod git;
 mod tasks;
+mod thought;
 
 use ratatui::{
     Frame,
@@ -79,9 +80,7 @@ pub fn draw_bottom(frame: &mut Frame, state: &mut AppState, area: Rect) {
         BottomTab::Activity => activity::draw_activity_content(frame, state, content_rect),
         BottomTab::Tasks => tasks::draw_tasks_content(frame, state, content_rect),
         BottomTab::GitStatus => git::draw_git_content(frame, state, content_rect),
-        // The Thought tab's own drawing arrives with the rendering
-        // unit; until then its body stays empty.
-        BottomTab::Thought => {}
+        BottomTab::Thought => thought::draw_thought_content(frame, state, content_rect),
     }
 }
 
@@ -113,37 +112,95 @@ fn build_tab_title(state: &AppState) -> Line<'static> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ui::text::truncate_to_width;
+    use crate::group::{PaneGitInfo, RepoGroup};
+    use crate::tmux::{AgentType, PaneInfo, PaneStatus, PermissionMode, WorktreeMetadata};
+
+    /// A state whose focused pane runs the given agent, the minimal
+    /// setup `build_tab_title` reads: the shown tabs come from the
+    /// focused pane's agent, the accent from the displayed tab.
+    fn state_with_focused_agent(agent: AgentType) -> AppState {
+        let pane = PaneInfo {
+            pane_id: "%1".into(),
+            pane_active: true,
+            status: PaneStatus::Running,
+            attention: false,
+            agent,
+            path: "/tmp".into(),
+            current_command: String::new(),
+            prompt: String::new(),
+            prompt_is_response: false,
+            started_at: None,
+            wait_reason: String::new(),
+            permission_mode: PermissionMode::Default,
+            subagents: vec![],
+            pane_pid: None,
+            worktree: WorktreeMetadata::default(),
+            session_id: None,
+            sidebar_spawned: false,
+            pane_name: None,
+            bg_shell_cmd: None,
+            subagent: None,
+        };
+        let mut state = AppState::new("%99".into());
+        state.repo_groups = vec![RepoGroup {
+            name: "project".into(),
+            has_focus: true,
+            panes: vec![(pane, PaneGitInfo::default())],
+        }];
+        state.focus_state.focused_pane_id = Some("%1".into());
+        state
+    }
+
+    fn rule_text(line: Line<'static>) -> String {
+        line.spans.iter().map(|s| s.content.as_ref()).collect()
+    }
 
     #[test]
     fn top_line_border_fits_the_width_and_truncates_the_tab_run() {
-        let state = AppState::new("%99".into());
-        let title = build_tab_title(&state);
         let rule = Style::default().fg(Color::Indexed(240));
-        let text = |line: Line<'static>| -> String {
-            line.spans.iter().map(|s| s.content.as_ref()).collect()
-        };
 
-        // 30 and 22 leave the full 18-cell tab run plus fill dashes;
-        // 20 — the supported minimum — and 18 truncate the tail of the
-        // run (Git goes to "G…", then to nothing) but the rule stays
-        // exactly the width. The `─ ` prefix is 2 columns, so the label
-        // columns never move.
-        assert_eq!(
-            text(top_line_border(&title.spans, rule, 30)),
-            "─ Activity│Tasks│Git ─────────"
+        // A pi pane shows the fourth label; the displayed tab (Thought
+        // here) is styled with the accent, the rest muted.
+        let mut pi = state_with_focused_agent(AgentType::Pi);
+        pi.global.bottom_tab = BottomTab::Thought;
+        insta::assert_snapshot!(
+            rule_text(top_line_border(&build_tab_title(&pi).spans, rule, 40)),
+            @"─ Activity│Tasks│Git│Thought ───────────"
         );
-        assert_eq!(
-            text(top_line_border(&title.spans, rule, 22)),
-            "─ Activity│Tasks│Git ─"
+        let title = build_tab_title(&pi);
+        let thought = title.spans.iter().find(|s| s.content == "Thought").unwrap();
+        assert_eq!(thought.style.fg, Some(pi.theme.accent));
+        let activity = title
+            .spans
+            .iter()
+            .find(|s| s.content == "Activity")
+            .unwrap();
+        assert_eq!(activity.style.fg, Some(pi.theme.text_muted));
+
+        // A non-pi pane hides the Thought label; the displayed tab is
+        // the Activity fallback.
+        let claude = state_with_focused_agent(AgentType::Claude);
+        insta::assert_snapshot!(
+            rule_text(top_line_border(&build_tab_title(&claude).spans, rule, 30)),
+            @"─ Activity│Tasks│Git ─────────"
         );
-        assert_eq!(
-            text(top_line_border(&title.spans, rule, 20)),
-            "─ Activity│Tasks│G\u{2026} "
+
+        // 22 and 18 leave the full 18-cell tab run plus fill dashes;
+        // 20 — the supported minimum — truncates the tail of the run
+        // (Git closes with an ellipsis, Thought is gone entirely) but
+        // the rule stays exactly the width. The `─ ` prefix is 2
+        // columns, so the label columns never move.
+        insta::assert_snapshot!(
+            rule_text(top_line_border(&build_tab_title(&claude).spans, rule, 22)),
+            @"─ Activity│Tasks│Git ─"
         );
-        assert_eq!(
-            text(top_line_border(&title.spans, rule, 18)),
-            "─ Activity│Tasks│ "
+        insta::assert_snapshot!(
+            rule_text(top_line_border(&build_tab_title(&pi).spans, rule, 20)),
+            @"─ Activity│Tasks│G… "
+        );
+        insta::assert_snapshot!(
+            rule_text(top_line_border(&build_tab_title(&claude).spans, rule, 18)),
+            @"─ Activity│Tasks│ "
         );
     }
 

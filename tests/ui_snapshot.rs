@@ -2434,7 +2434,7 @@ fn snapshot_subagent_identity_survives_repo_filter_hiding_parent() {
     project-sub
       ● pi ♟
       ▷ orchestrator
-    ─ Activity│Tasks│Git ───────────────────────────────────────
+    ─ Activity│Tasks│Git│Thought ───────────────────────────────
                            No activity yet
     ");
 }

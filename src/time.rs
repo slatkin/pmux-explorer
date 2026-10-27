@@ -27,6 +27,89 @@ pub fn now_epoch_millis() -> u64 {
         .unwrap_or(0)
 }
 
+/// The `HH:mm:ss` local time of an ISO-8601 UTC timestamp — the `ts`
+/// the thinking feed's records carry (`2026-10-27T08:00:07Z`, an
+/// optional fractional part allowed). `None` when the value does not
+/// parse as a UTC timestamp; the Thought tab draws no time line for it.
+pub fn local_hhmmss_from_ts(ts: &str) -> Option<String> {
+    let secs = parse_iso_utc_secs(ts)?;
+    let t = secs as libc::time_t;
+    let mut tm: libc::tm = unsafe { std::mem::zeroed() };
+    if unsafe { libc::localtime_r(&t, &mut tm) }.is_null() {
+        return None;
+    }
+    Some(format!(
+        "{:02}:{:02}:{:02}",
+        tm.tm_hour, tm.tm_min, tm.tm_sec
+    ))
+}
+
+/// Seconds since the Unix epoch of an ISO-8601 UTC timestamp:
+/// `YYYY-MM-DD[T ]HH:MM:SS`, an optional `.fff…` fraction, then `Z` —
+/// the shape `Date.toISOString()` (with the fraction) and the spec
+/// examples (without it) both write. A missing `Z` still reads as UTC;
+/// any other trailing text, a wrong separator or a non-UTC offset is
+/// unparsable.
+fn parse_iso_utc_secs(ts: &str) -> Option<i64> {
+    let b = ts.as_bytes();
+    let digits = |range: std::ops::Range<usize>| -> Option<i64> {
+        let field = ts.get(range)?;
+        field
+            .bytes()
+            .all(|c| c.is_ascii_digit())
+            .then_some(())
+            .and_then(|()| field.parse().ok())
+    };
+    let year = digits(0..4)?;
+    if b.get(4) != Some(&b'-') {
+        return None;
+    }
+    let month = digits(5..7)?;
+    if b.get(7) != Some(&b'-') {
+        return None;
+    }
+    let day = digits(8..10)?;
+    if !matches!(b.get(10), Some(b'T') | Some(b' ')) {
+        return None;
+    }
+    let hour = digits(11..13)?;
+    if b.get(13) != Some(&b':') {
+        return None;
+    }
+    let min = digits(14..16)?;
+    if b.get(16) != Some(&b':') {
+        return None;
+    }
+    let sec = digits(17..19)?;
+    let rest = &ts[19..];
+    let rest = rest.strip_prefix('.').map_or(rest, |frac| {
+        let end = frac
+            .bytes()
+            .position(|c| !c.is_ascii_digit())
+            .unwrap_or(frac.len());
+        &frac[end..]
+    });
+    if !rest.is_empty() && rest != "Z" {
+        return None;
+    }
+    if !(1..=12).contains(&month) || !(1..=31).contains(&day) {
+        return None;
+    }
+    Some(days_from_civil(year, month, day) * 86_400 + hour * 3600 + min * 60 + sec)
+}
+
+/// Days from 1970-01-01 to a civil date (Howard Hinnant's
+/// `days_from_civil`), valid for the whole `i64` year range.
+fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
+    let y = if month <= 2 { year - 1 } else { year };
+    let era = y.div_euclid(400);
+    let yoe = y - era * 400; // [0, 399]
+    let mp = if month > 2 { month - 3 } else { month + 9 }; // [0, 11]
+    let doy = (153 * mp + 2) / 5 + day - 1; // [0, 365]
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy; // [0, 146096]
+    era * 146_097 + doe - 719_468
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -42,5 +125,53 @@ mod tests {
             ms / 1000 >= secs && ms / 1000 <= secs + 2,
             "secs={secs}, ms={ms}"
         );
+    }
+
+    // ─── local_hhmmss_from_ts ──────────────────────────────────
+
+    #[test]
+    fn an_iso_utc_ts_parses_to_its_epoch() {
+        assert_eq!(
+            parse_iso_utc_secs("2026-10-27T08:00:07Z"),
+            Some(1_793_088_007)
+        );
+        // The fraction `Date.toISOString()` writes changes nothing.
+        assert_eq!(
+            parse_iso_utc_secs("2026-10-27T08:00:07.123Z"),
+            Some(1_793_088_007)
+        );
+        // A missing `Z` still reads as UTC.
+        assert_eq!(
+            parse_iso_utc_secs("2026-10-27T08:00:07"),
+            Some(1_793_088_007)
+        );
+        // A space separator is accepted beside `T`.
+        assert_eq!(
+            parse_iso_utc_secs("2026-10-27 08:00:07Z"),
+            Some(1_793_088_007)
+        );
+        assert_eq!(parse_iso_utc_secs("1970-01-01T00:00:00Z"), Some(0));
+        // A leap day lands on the right day.
+        assert_eq!(
+            parse_iso_utc_secs("2000-02-29T23:59:59Z"),
+            Some(951_868_799)
+        );
+    }
+
+    #[test]
+    fn an_unparsable_ts_gives_none() {
+        for ts in [
+            "",
+            "t1",
+            "2026-10-27",
+            "2026-10-27T08:00Z",
+            "2026-10-27T08:00:07+02:00",
+            "2026-13-27T08:00:07Z",
+            "2026-10-32T08:00:07Z",
+            "2026/10/27T08:00:07Z",
+            "not a timestamp at all",
+        ] {
+            assert!(parse_iso_utc_secs(ts).is_none(), "{ts:?} must not parse");
+        }
     }
 }

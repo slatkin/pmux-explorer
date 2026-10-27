@@ -81,7 +81,18 @@ impl AppState {
             BottomTab::Activity => self.activity.scroll.scroll(delta),
             BottomTab::Tasks => self.tasks.scroll.scroll(delta),
             BottomTab::GitStatus => self.scrolls.git.scroll(delta),
-            BottomTab::Thought => self.scrolls.thought.scroll(delta),
+            BottomTab::Thought => {
+                self.scrolls.thought.scroll(delta);
+                // Follow-the-end (design D6): a scroll up suspends the
+                // follow, a scroll that reaches the bottom re-arms it.
+                // While the flag stands the draw itself moves the offset
+                // to the last page.
+                if delta < 0 {
+                    self.thought.follow = false;
+                } else if self.scrolls.thought.at_end() {
+                    self.thought.follow = true;
+                }
+            }
         }
     }
 }

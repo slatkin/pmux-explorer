@@ -15,6 +15,15 @@ pub struct ThoughtState {
     /// (another tab displayed, no focused pane) leaves the previous
     /// thought standing.
     pub last: LastThought,
+    /// Whether the view follows the end of the thought (design D6).
+    /// True until the user scrolls up; a scroll back to the bottom
+    /// sets it again, and a new `start` resets it, so a growing thought
+    /// keeps its last rows on screen unless the user scrolled away.
+    pub follow: bool,
+    /// The `start_ts` the drawn thought carried when `follow` was last
+    /// decided: a different value on the next draw is a new `start`
+    /// block, which resets the scroll to follow.
+    pub seen_start_ts: Option<String>,
     /// The `$XDG_RUNTIME_DIR` value, resolved once at startup and held
     /// so [`crate::thinking_feed::feed_path`] takes the env values as
     /// arguments; tests overwrite the field instead of the process env.
@@ -30,6 +39,8 @@ impl ThoughtState {
         ThoughtState {
             reader: ThinkingFeedReader::new(),
             last: LastThought::default(),
+            follow: true,
+            seen_start_ts: None,
             xdg_runtime_dir: std::env::var("XDG_RUNTIME_DIR").ok(),
             uid: crate::mcp::current_uid(),
         }
