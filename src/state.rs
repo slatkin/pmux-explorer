@@ -18,6 +18,7 @@ mod refresh;
 mod scroll;
 mod tab;
 mod tasks;
+mod thought;
 mod timers;
 
 pub use activity::ActivityState;
@@ -37,6 +38,7 @@ pub use popup::{PopupState, SpawnField};
 pub(crate) use refresh::{TaskProgressDecision, classify_task_progress};
 pub use scroll::{ScrollState, ScrollStates};
 pub use tasks::TasksState;
+pub use thought::ThoughtState;
 pub use timers::RefreshTimers;
 
 /// Bottom-panel tabs. The selected tab is shared state: it lives in
@@ -127,6 +129,9 @@ pub struct AppState {
     /// Focused pane's task store for the Tasks tab (refreshed by
     /// `refresh_pane_tasks` with the activity log's mtime check).
     pub tasks: TasksState,
+    /// The Thought tab's feed reader state (refreshed by
+    /// `refresh_thought_feed` only while the tab is displayed).
+    pub thought: ThoughtState,
     pub tmux_pane: String,
     /// The sidebar's own pane state as tmux reported it on the last
     /// refresh: focus, size, window size and the floating flag. The
@@ -218,6 +223,7 @@ impl AppState {
             split_drag: None,
             activity: ActivityState::new(),
             tasks: TasksState::new(),
+            thought: ThoughtState::from_process(),
             tmux_pane,
             scrolls: ScrollStates::default(),
             theme: ColorTheme::default(),

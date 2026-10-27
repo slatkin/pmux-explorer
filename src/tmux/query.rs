@@ -365,7 +365,13 @@ fn parse_pane_fields_with_processes(
             })
             .unwrap_or(false);
         if !agent_still_alive {
-            clear_agent_pane_state(&parts[pane_line_field::PANE_ID]);
+            clear_agent_pane_state(
+                &parts[pane_line_field::PANE_ID],
+                agent,
+                &parts[pane_line_field::SESSION_ID],
+                std::env::var("XDG_RUNTIME_DIR").ok().as_deref(),
+                crate::mcp::current_uid(),
+            );
             return None;
         }
     }
@@ -497,12 +503,31 @@ fn parse_subagent_identity(
 /// full [`AGENT_SESSION_PANE_OPTIONS`] lifecycle list from
 /// `tmux/options.rs` — the single enumeration shared by every teardown
 /// sweep, each of which skips only the keys it deliberately keeps.
-fn clear_agent_pane_state(pane_id: &str) {
+///
+/// A pi pane's thinking feed dies with its state (design D7): the feed
+/// path is resolved from `session_id` — read from the pane line before
+/// any option is wiped — through [`crate::thinking_feed::feed_path`],
+/// whose env values arrive as arguments so tests inject a scratch
+/// directory. A rejected session id removes nothing, and a missing file
+/// is not an error, the same treatment the activity log's `remove_file`
+/// gets.
+fn clear_agent_pane_state(
+    pane_id: &str,
+    agent: AgentType,
+    session_id: &str,
+    xdg_runtime_dir: Option<&str>,
+    uid: u32,
+) {
     for key in AGENT_SESSION_PANE_OPTIONS {
         unset_pane_option(pane_id, key);
     }
     let log_path = crate::activity::log_file_path(pane_id);
     let _ = std::fs::remove_file(log_path);
+    if agent == AgentType::Pi
+        && let Some(feed) = crate::thinking_feed::feed_path(xdg_runtime_dir, uid, session_id)
+    {
+        let _ = std::fs::remove_file(feed);
+    }
 }
 
 fn is_shell_command(command: &str) -> bool {
@@ -1127,7 +1152,7 @@ mod tests {
             test_mock::set(pane, key, "x");
         }
 
-        clear_agent_pane_state(pane);
+        clear_agent_pane_state(pane, AgentType::Claude, "", None, 1000);
 
         for key in AGENT_SESSION_PANE_OPTIONS {
             assert!(
@@ -1135,6 +1160,107 @@ mod tests {
                 "{key} must be cleared by the shell-fallback sweep"
             );
         }
+    }
+
+    // ─── the sweep removes a dead pi pane's feed ──────────────────
+
+    /// The feed file `session_id` maps to under a scratch feed dir.
+    fn feed_in(dir: &std::path::Path, session_id: &str) -> std::path::PathBuf {
+        dir.join("pmux-thinking")
+            .join(format!("{session_id}.jsonl"))
+    }
+
+    #[test]
+    fn clear_agent_pane_state_removes_a_dead_pi_pane_feed() {
+        let _guard = test_mock::install();
+        let pane = "%PI_FEED";
+        for key in AGENT_SESSION_PANE_OPTIONS {
+            test_mock::set(pane, key, "x");
+        }
+        let dir = tempfile::TempDir::new().unwrap();
+        let feed = feed_in(dir.path(), "sess");
+        std::fs::create_dir_all(feed.parent().unwrap()).unwrap();
+        std::fs::write(&feed, "{}").unwrap();
+
+        clear_agent_pane_state(
+            pane,
+            AgentType::Pi,
+            "sess",
+            Some(dir.path().to_str().unwrap()),
+            1000,
+        );
+
+        for key in AGENT_SESSION_PANE_OPTIONS {
+            assert!(
+                !test_mock::contains(pane, key),
+                "{key} must still be cleared by the sweep"
+            );
+        }
+        assert!(
+            !feed.exists(),
+            "the pi pane's feed must be removed with its state"
+        );
+    }
+
+    #[test]
+    fn clear_agent_pane_state_clears_state_without_a_feed_file() {
+        // No feed was ever written for this session: the absent file
+        // must not fail or delay the clearing of the pane's state.
+        let _guard = test_mock::install();
+        let pane = "%PI_NO_FEED";
+        for key in AGENT_SESSION_PANE_OPTIONS {
+            test_mock::set(pane, key, "x");
+        }
+        let dir = tempfile::TempDir::new().unwrap();
+
+        clear_agent_pane_state(
+            pane,
+            AgentType::Pi,
+            "absent",
+            Some(dir.path().to_str().unwrap()),
+            1000,
+        );
+
+        for key in AGENT_SESSION_PANE_OPTIONS {
+            assert!(
+                !test_mock::contains(pane, key),
+                "{key} must be cleared even with no feed file"
+            );
+        }
+    }
+
+    #[test]
+    fn clear_agent_pane_state_removes_nothing_for_an_unsafe_session_id() {
+        // `../x` is rejected by the path helper, so nothing may be
+        // removed — not even a file the unsanitized join would land on
+        // (`<dir>/pmux-thinking/../x.jsonl` = `<dir>/x.jsonl`).
+        let _guard = test_mock::install();
+        let pane = "%PI_UNSAFE";
+        for key in AGENT_SESSION_PANE_OPTIONS {
+            test_mock::set(pane, key, "x");
+        }
+        let dir = tempfile::TempDir::new().unwrap();
+        let outside = dir.path().join("x.jsonl");
+        std::fs::write(&outside, "{}").unwrap();
+
+        clear_agent_pane_state(
+            pane,
+            AgentType::Pi,
+            "../x",
+            Some(dir.path().to_str().unwrap()),
+            1000,
+        );
+
+        for key in AGENT_SESSION_PANE_OPTIONS {
+            assert!(
+                !test_mock::contains(pane, key),
+                "{key} must be cleared even for an unsafe session id"
+            );
+        }
+        assert!(
+            outside.exists(),
+            "an unsafe session id must remove no file, however it would resolve"
+        );
     }
 
     #[test]

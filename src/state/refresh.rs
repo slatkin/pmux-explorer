@@ -7,7 +7,7 @@ use crate::process::ProcessSnapshot;
 use crate::task_store;
 use crate::tmux::{self, PaneStatus, SessionInfo};
 
-use super::AppState;
+use super::{AppState, BottomTab};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TaskProgressDecision {
@@ -124,16 +124,18 @@ impl AppState {
     }
 
     /// One tick of the file-backed refresh pass: the task-store close
-    /// sweep, then the activity log, the focused pane's task list, and
-    /// every pane's task progress. Touches only `/tmp` files and
-    /// `AppState` — no tmux I/O — so tests drive it directly. The close
-    /// sweep runs first so a focused list that closes renders the
-    /// empty state in the same frame.
+    /// sweep, then the activity log, the focused pane's task list,
+    /// every pane's task progress, and — while the Thought tab is
+    /// displayed — the focused pane's thinking feed. Touches only `/tmp`
+    /// files and `AppState` — no tmux I/O — so tests drive it directly.
+    /// The close sweep runs first so a focused list that closes renders
+    /// the empty state in the same frame.
     pub fn refresh_activity_data(&mut self) {
         self.refresh_task_close();
         self.refresh_activity_log();
         self.refresh_pane_tasks();
         self.refresh_task_progress();
+        self.refresh_thought_feed();
     }
 
     /// Fast refresh: tmux state + activity log (called every 1s).
@@ -440,6 +442,35 @@ impl AppState {
         entries.retain(|e| e.tool != activity::TASK_RESET_MARKER);
         self.activity.entries = entries;
         self.activity.log_cache = current_mtime.map(|m| (pane_id.clone(), m));
+    }
+
+    /// Read the focused pi pane's thinking feed into `thought.last`
+    /// (design D4) — only while the Thought tab is displayed: another
+    /// displayed tab reads no feed and leaves the last thought as the
+    /// previous read left it. The feed environment was resolved once at
+    /// startup into `ThoughtState`, so the path helper takes the env
+    /// values as arguments.
+    pub(crate) fn refresh_thought_feed(&mut self) {
+        if self.displayed_bottom_tab() != BottomTab::Thought {
+            return;
+        }
+        let session_id = self
+            .focus_state
+            .focused_pane_id
+            .as_deref()
+            .and_then(|id| self.pane_by_id(id))
+            .and_then(|pane| pane.session_id.clone());
+        let Some(session_id) = session_id else {
+            // No focused pane, or one without a session id: no feed.
+            self.thought.last = self.thought.reader.read("", None);
+            return;
+        };
+        let path = crate::thinking_feed::feed_path(
+            self.thought.xdg_runtime_dir.as_deref(),
+            self.thought.uid,
+            &session_id,
+        );
+        self.thought.last = self.thought.reader.read(&session_id, path.as_deref());
     }
 }
 
@@ -1042,6 +1073,137 @@ mod tests {
 
         cleanup_task_store(pane_a);
         cleanup_task_store(pane_b);
+    }
+
+    // ─── refresh_thought_feed ───────────────────────────────────
+
+    /// The feed file `session_id` maps to under a scratch feed dir.
+    fn feed_in(dir: &std::path::Path, session_id: &str) -> std::path::PathBuf {
+        dir.join("pmux-thinking")
+            .join(format!("{session_id}.jsonl"))
+    }
+
+    /// An AppState focused on a pi pane carrying `session_id`, whose
+    /// feed lives under the scratch `dir` (the captured startup env is
+    /// overwritten, so no process env is touched).
+    fn pi_feed_state(dir: &tempfile::TempDir, session_id: &str) -> AppState {
+        let mut pane = test_pane("%PI_FEED");
+        pane.agent = AgentType::Pi;
+        pane.session_id = Some(session_id.into());
+        let mut state = AppState::new("%99".into());
+        state.repo_groups = vec![crate::group::RepoGroup {
+            name: "test".into(),
+            has_focus: true,
+            panes: vec![(pane, crate::group::PaneGitInfo::default())],
+        }];
+        state.focus_state.focused_pane_id = Some("%PI_FEED".into());
+        state.thought.xdg_runtime_dir = Some(dir.path().to_string_lossy().into_owned());
+        state
+    }
+
+    #[test]
+    fn another_displayed_tab_reads_no_feed() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let feed = feed_in(dir.path(), "sess");
+        std::fs::create_dir_all(feed.parent().unwrap()).unwrap();
+        std::fs::write(
+            &feed,
+            format!(
+                "{}\n{}\n",
+                r#"{"kind":"start","ts":"t1","producer":"pmux"}"#,
+                r#"{"kind":"delta","ts":"t2","producer":"pmux","text":"thought"}"#
+            ),
+        )
+        .unwrap();
+        let mut state = pi_feed_state(&dir, "sess");
+        state.global.bottom_tab = BottomTab::Tasks;
+
+        state.refresh_activity_data();
+
+        assert!(
+            state.thought.last.is_empty(),
+            "the Tasks tab must read no thinking feed"
+        );
+
+        // A delta arriving while another tab is displayed stays unread.
+        std::fs::write(
+            &feed,
+            format!(
+                "{}\n{}\n{}\n",
+                r#"{"kind":"start","ts":"t1","producer":"pmux"}"#,
+                r#"{"kind":"delta","ts":"t2","producer":"pmux","text":"thought"}"#,
+                r#"{"kind":"delta","ts":"t3","producer":"pmux","text":" more"}"#
+            ),
+        )
+        .unwrap();
+        state.refresh_activity_data();
+
+        assert!(state.thought.last.is_empty());
+    }
+
+    #[test]
+    fn a_new_delta_shows_on_the_next_refresh() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let feed = feed_in(dir.path(), "sess");
+        std::fs::create_dir_all(feed.parent().unwrap()).unwrap();
+        std::fs::write(
+            &feed,
+            format!(
+                "{}\n{}\n",
+                r#"{"kind":"start","ts":"t1","producer":"pmux"}"#,
+                r#"{"kind":"delta","ts":"t2","producer":"pmux","text":"first read"}"#
+            ),
+        )
+        .unwrap();
+        let mut state = pi_feed_state(&dir, "sess");
+        state.global.bottom_tab = BottomTab::Thought;
+
+        state.refresh_activity_data();
+        assert_eq!(state.thought.last.text, "first read");
+
+        // The delta appended after this tick's read shows on the next
+        // one — within a second, per the spec's tick scenario.
+        std::fs::write(
+            &feed,
+            format!(
+                "{}\n{}\n{}\n",
+                r#"{"kind":"start","ts":"t1","producer":"pmux"}"#,
+                r#"{"kind":"delta","ts":"t2","producer":"pmux","text":"first read"}"#,
+                r#"{"kind":"delta","ts":"t3","producer":"pmux","text":" and more"}"#
+            ),
+        )
+        .unwrap();
+        state.refresh_activity_data();
+
+        assert_eq!(state.thought.last.text, "first read and more");
+    }
+
+    #[test]
+    fn a_displayed_thought_tab_without_a_session_id_shows_nothing() {
+        // No focused pane at all: the read is the empty state, and a
+        // later focus with a session id picks its feed up.
+        let dir = tempfile::TempDir::new().unwrap();
+        let feed = feed_in(dir.path(), "sess");
+        std::fs::create_dir_all(feed.parent().unwrap()).unwrap();
+        std::fs::write(
+            &feed,
+            format!(
+                "{}\n{}\n",
+                r#"{"kind":"start","ts":"t1","producer":"pmux"}"#,
+                r#"{"kind":"delta","ts":"t2","producer":"pmux","text":"late"}"#
+            ),
+        )
+        .unwrap();
+        let mut state = pi_feed_state(&dir, "sess");
+        state.global.bottom_tab = BottomTab::Thought;
+        state.focus_state.focused_pane_id = None;
+
+        state.refresh_activity_data();
+        assert!(state.thought.last.is_empty());
+
+        state.focus_state.focused_pane_id = Some("%PI_FEED".into());
+        state.refresh_activity_data();
+        assert_eq!(state.thought.last.text, "late");
     }
 
     // ─── refresh_task_close ───────────────────────────────────────
