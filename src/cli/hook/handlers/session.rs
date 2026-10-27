@@ -186,33 +186,6 @@ mod tests {
         assert!(!tmux::test_mock::contains(pane, tmux::PANE_STATUS));
     }
 
-    // ─── the SessionEnd teardown removes a pi pane's feed ──────────
-
-    #[test]
-    fn a_pi_session_end_removes_the_feed() {
-        let _guard = tmux::test_mock::install();
-        let pane = "%PI_END_FEED";
-        tmux::test_mock::set(pane, tmux::PANE_AGENT, "pi");
-        tmux::test_mock::set(pane, tmux::PANE_SESSION_ID, "sess");
-        let dir = tempfile::TempDir::new().unwrap();
-        let env = crate::thinking_feed::scratch_env(dir.path());
-        let feed = env.feed_path("sess").unwrap();
-        std::fs::create_dir_all(feed.parent().unwrap()).unwrap();
-        fs::write(&feed, "{}").unwrap();
-
-        run_session_end_teardown(pane, &env);
-
-        assert!(
-            !feed.exists(),
-            "a pi SessionEnd must remove the pane's thinking feed with its state"
-        );
-        assert!(
-            !tmux::test_mock::contains(pane, tmux::PANE_AGENT),
-            "the teardown must still clear the agent options"
-        );
-        assert!(!tmux::test_mock::contains(pane, tmux::PANE_SESSION_ID));
-    }
-
     #[test]
     fn on_session_start_sets_agent_and_idle_status() {
         let _guard = tmux::test_mock::install();

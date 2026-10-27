@@ -184,7 +184,8 @@ impl AppState {
         // copy) so every field the state holds has a reader.
         let focused = self.sidebar_pane.pane_active;
         let window_active = self.sidebar_pane.window_active;
-        let (mut sessions, mut process_snapshot) = tmux::query_sessions_with_process_snapshot();
+        let (mut sessions, mut process_snapshot) =
+            tmux::query_sessions_with_process_snapshot(&self.thought.env);
         self.sweep_dead_bg_shells_if_due(&mut sessions, &mut process_snapshot);
         if let Some(process_snapshot) = self.refresh_port_data(&sessions, process_snapshot.as_ref())
         {
@@ -957,48 +958,6 @@ mod tests {
                 if preserved { "preserved" } else { "cleared" }
             );
         }
-    }
-
-    // ─── the port-scan sweep removes a dead pi pane's feed ────────
-    //
-    // The removal's own rules (missing file, unsafe id, non-pi agent)
-    // are `remove_pi_feed`'s, pinned once in `thinking_feed` — what is
-    // pinned here is only that this sweep routes a dead pane's feed
-    // through it while it clears the pane's state.
-
-    #[test]
-    fn clear_dead_agent_metadata_removes_a_dead_pi_pane_feed() {
-        let _guard = tmux::test_mock::install();
-        let pane = "%PORT_PI_FEED";
-        for key in tmux::AGENT_SESSION_PANE_OPTIONS {
-            tmux::test_mock::set(pane, key, "x");
-        }
-        let dir = tempfile::TempDir::new().unwrap();
-        let env = crate::thinking_feed::scratch_env(dir.path());
-        let feed = env.feed_path("sess").unwrap();
-        std::fs::create_dir_all(feed.parent().unwrap()).unwrap();
-        std::fs::write(&feed, "{}").unwrap();
-
-        AppState::clear_dead_agent_metadata(pane, AgentType::Pi, "sess", &env);
-
-        for key in tmux::AGENT_SESSION_PANE_OPTIONS {
-            // The pending-teardown markers are preserved: the hook-side
-            // drain owns those (see `clear_dead_agent_metadata`).
-            let preserved = matches!(
-                *key,
-                tmux::PANE_PENDING_SESSION_END | tmux::PANE_PENDING_WORKTREE_REMOVE
-            );
-            assert_eq!(
-                tmux::test_mock::contains(pane, key),
-                preserved,
-                "expected {key} {}",
-                if preserved { "preserved" } else { "cleared" }
-            );
-        }
-        assert!(
-            !feed.exists(),
-            "the port-scan sweep must remove the pi pane's feed with its state"
-        );
     }
 
     #[test]

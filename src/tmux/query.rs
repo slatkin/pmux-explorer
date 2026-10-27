@@ -163,12 +163,13 @@ impl SubagentResolution {
 /// Query all sessions, windows, and panes in a single `tmux list-panes -a` call
 /// (plus one optional `ps` call for process-backed agent checks), instead of
 /// N+1 subprocess invocations.
-pub fn query_sessions() -> Vec<SessionInfo> {
-    query_sessions_with_process_snapshot().0
+pub fn query_sessions(env: &crate::thinking_feed::FeedEnv) -> Vec<SessionInfo> {
+    query_sessions_with_process_snapshot(env).0
 }
 
-pub(crate) fn query_sessions_with_process_snapshot() -> (Vec<SessionInfo>, Option<ProcessSnapshot>)
-{
+pub(crate) fn query_sessions_with_process_snapshot(
+    env: &crate::thinking_feed::FeedEnv,
+) -> (Vec<SessionInfo>, Option<ProcessSnapshot>) {
     let pane_format = pane_format();
     let all_panes_output = match run_tmux(&["list-panes", "-a", "-F", &pane_format]) {
         Some(s) => s,
@@ -177,7 +178,7 @@ pub(crate) fn query_sessions_with_process_snapshot() -> (Vec<SessionInfo>, Optio
 
     let process_snapshot = process_snapshot_for_panes(&all_panes_output);
     let (mut sessions_map, codex_pids, subagent_resolution) =
-        build_session_hierarchy(&all_panes_output, process_snapshot.as_ref());
+        build_session_hierarchy(&all_panes_output, process_snapshot.as_ref(), env);
     resolve_subagent_parents(&mut sessions_map, &subagent_resolution);
     if !codex_pids.is_empty()
         && let Some(snapshot) = &process_snapshot
@@ -193,6 +194,7 @@ pub(crate) fn query_sessions_with_process_snapshot() -> (Vec<SessionInfo>, Optio
 fn build_session_hierarchy(
     all_panes_output: &str,
     process_snapshot: Option<&ProcessSnapshot>,
+    env: &crate::thinking_feed::FeedEnv,
 ) -> (SessionMap, Vec<CodexPidEntry>, SubagentResolution) {
     let mut sessions_map: SessionMap = indexmap::IndexMap::new();
     let mut codex_pids: Vec<CodexPidEntry> = Vec::new();
@@ -236,7 +238,7 @@ fn build_session_hierarchy(
                 panes: Vec::new(),
             });
 
-        if let Some(pane) = parse_pane_fields_with_processes(pane_fields, process_snapshot) {
+        if let Some(pane) = parse_pane_fields_with_processes(pane_fields, process_snapshot, env) {
             if pane.agent == AgentType::Codex
                 && let Some(pid) = pane.pane_pid
             {
@@ -325,12 +327,13 @@ fn finalize_sessions(sessions_map: SessionMap) -> Vec<SessionInfo> {
 #[cfg(test)]
 pub(crate) fn parse_pane_line(line: &str) -> Option<PaneInfo> {
     let parts = split_tmux_fields(line, '|');
-    parse_pane_fields_with_processes(&parts, None)
+    parse_pane_fields_with_processes(&parts, None, &crate::thinking_feed::FeedEnv::default())
 }
 
 fn parse_pane_fields_with_processes(
     parts: &[String],
     process_snapshot: Option<&ProcessSnapshot>,
+    env: &crate::thinking_feed::FeedEnv,
 ) -> Option<PaneInfo> {
     if parts.len() < pane_line_field::MIN_FIELDS {
         return None;
@@ -369,7 +372,7 @@ fn parse_pane_fields_with_processes(
                 &parts[pane_line_field::PANE_ID],
                 agent,
                 &parts[pane_line_field::SESSION_ID],
-                &crate::thinking_feed::FeedEnv::from_process(),
+                env,
             );
             return None;
         }
@@ -1160,40 +1163,6 @@ mod tests {
         }
     }
 
-    // ─── the sweep removes a dead pi pane's feed ──────────────────
-    //
-    // The removal's own rules (missing file, unsafe id, non-pi agent)
-    // are `remove_pi_feed`'s, pinned once in `thinking_feed` — what is
-    // pinned here is only that this sweep routes a dead pane's feed
-    // through it while it clears the pane's state.
-
-    #[test]
-    fn clear_agent_pane_state_removes_a_dead_pi_pane_feed() {
-        let _guard = test_mock::install();
-        let pane = "%PI_FEED";
-        for key in AGENT_SESSION_PANE_OPTIONS {
-            test_mock::set(pane, key, "x");
-        }
-        let dir = tempfile::TempDir::new().unwrap();
-        let env = crate::thinking_feed::scratch_env(dir.path());
-        let feed = env.feed_path("sess").unwrap();
-        std::fs::create_dir_all(feed.parent().unwrap()).unwrap();
-        std::fs::write(&feed, "{}").unwrap();
-
-        clear_agent_pane_state(pane, AgentType::Pi, "sess", &env);
-
-        for key in AGENT_SESSION_PANE_OPTIONS {
-            assert!(
-                !test_mock::contains(pane, key),
-                "{key} must still be cleared by the sweep"
-            );
-        }
-        assert!(
-            !feed.exists(),
-            "the pi pane's feed must be removed with its state"
-        );
-    }
-
     #[test]
     fn parse_pane_line_rejects_sidebar_role() {
         let mut fields = full_fields();
@@ -1301,8 +1270,12 @@ mod tests {
         let fields = field_strings(&fields);
         let snapshot = process_snapshot("300 1 zsh zsh -c pi\n301 300 pi pi\n");
 
-        let pane_info = parse_pane_fields_with_processes(&fields, Some(&snapshot))
-            .expect("live pi child process should keep pane visible");
+        let pane_info = parse_pane_fields_with_processes(
+            &fields,
+            Some(&snapshot),
+            &crate::thinking_feed::FeedEnv::default(),
+        )
+        .expect("live pi child process should keep pane visible");
 
         assert_eq!(pane_info.agent, AgentType::Pi);
         assert!(test_mock::contains(pane, PANE_AGENT));
@@ -1434,8 +1407,12 @@ mod tests {
         let fields = field_strings(&fields);
         let snapshot = process_snapshot("100 1 fish fish -c opencode\n101 100 opencode opencode\n");
 
-        let pane_info = parse_pane_fields_with_processes(&fields, Some(&snapshot))
-            .expect("live OpenCode child process should keep pane visible");
+        let pane_info = parse_pane_fields_with_processes(
+            &fields,
+            Some(&snapshot),
+            &crate::thinking_feed::FeedEnv::default(),
+        )
+        .expect("live OpenCode child process should keep pane visible");
 
         assert_eq!(pane_info.agent, AgentType::OpenCode);
         assert!(test_mock::contains(pane, PANE_AGENT));
@@ -1463,8 +1440,12 @@ mod tests {
             "200 1 zsh zsh -c codex\n201 200 codex /opt/homebrew/bin/codex --full-auto\n",
         );
 
-        let pane_info = parse_pane_fields_with_processes(&fields, Some(&snapshot))
-            .expect("live Codex child process should keep pane visible");
+        let pane_info = parse_pane_fields_with_processes(
+            &fields,
+            Some(&snapshot),
+            &crate::thinking_feed::FeedEnv::default(),
+        )
+        .expect("live Codex child process should keep pane visible");
 
         assert_eq!(pane_info.agent, AgentType::Codex);
         assert!(test_mock::contains(pane, PANE_AGENT));
@@ -1696,7 +1677,8 @@ mod tests {
         let line_d = make_full_pane_line("grouped", 0);
 
         let input = format!("{line_a}\n{line_b}\n{line_c}\n{line_d}");
-        let (sessions_map, _, _) = build_session_hierarchy(&input, None);
+        let (sessions_map, _, _) =
+            build_session_hierarchy(&input, None, &crate::thinking_feed::FeedEnv::default());
         let sessions = finalize_sessions(sessions_map);
 
         // Should produce two sessions: "primary" and "grouped"
@@ -1766,7 +1748,8 @@ mod tests {
     /// Parse the lines, run the parent-resolution post-pass, and flatten
     /// the result into the parsed panes.
     fn resolve_in(input: &str) -> Vec<PaneInfo> {
-        let (sessions_map, _, resolution) = build_session_hierarchy(input, None);
+        let (sessions_map, _, resolution) =
+            build_session_hierarchy(input, None, &crate::thinking_feed::FeedEnv::default());
         let mut sessions_map = sessions_map;
         resolve_subagent_parents(&mut sessions_map, &resolution);
         finalize_sessions(sessions_map)

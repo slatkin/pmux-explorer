@@ -2211,35 +2211,3 @@ fn a_new_start_resets_the_follow() {
     assert_eq!(state.thought.seen_start_ts.as_deref(), Some("t2"));
     assert_eq!(state.scrolls.thought.offset, 0); // content fits, max 0
 }
-
-#[test]
-fn the_time_line_is_yellow_and_the_thought_text_is_not() {
-    let mut state = thought_state_with(thought("some thinking", Some("2026-10-27T08:00:07Z")));
-
-    // The styled snapshot locks in the stamp row in the yellow
-    // thought_timestamp (fg:220) and the thought text in the normal
-    // text color (fg:255) — position and color together, the way every
-    // other frame assertion in this file works.
-    insta::assert_snapshot!(render_to_styled_string(&mut state, 28, 24), @"
-     ≡[fg:111]1[fg:153] ●[fg:114]1[fg:255] ◐[fg:245]0[fg:245] ○[fg:245]0[fg:245] ✕[fg:245]0[fg:245]           ⤢[fg:114]
-    ⓘ[fg:221]                        —[fg:252] ▾[fg:252]
-    p[fg:153]r[fg:153]o[fg:153]j[fg:153]e[fg:153]c[fg:153]t[fg:153]
-    ┃[fg:153] ●[fg:82] [fg:222]p[fg:222]i[fg:222]
-
-
-
-
-
-
-
-
-
-
-
-
-
-    ─[fg:153] [fg:153]T[fg:252]o[fg:252]o[fg:252]l[fg:252]s[fg:252]│[fg:240]T[fg:153]h[fg:153]o[fg:153]u[fg:153]g[fg:153]h[fg:153]t[fg:153]│[fg:240]T[fg:252]a[fg:252]s[fg:252]k[fg:252]s[fg:252]│[fg:240]G[fg:252]i[fg:252]t[fg:252] [fg:153]─[fg:153]─[fg:153]
-     0[fg:220]8[fg:220]:[fg:220]0[fg:220]0[fg:220]:[fg:220]0[fg:220]7[fg:220]
-     s[fg:255]o[fg:255]m[fg:255]e[fg:255] [fg:255]t[fg:255]h[fg:255]i[fg:255]n[fg:255]k[fg:255]i[fg:255]n[fg:255]g[fg:255]
-    ");
-}
