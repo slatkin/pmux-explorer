@@ -15,7 +15,7 @@ read from tmux on every refresh tick.
 | `status_filter` | `@sidebar_filter` | User input (left/right key) | Active status filter (All/Busy/Waiting/Idle/Error) |
 | `selected_pane_row` | `@sidebar_cursor` | User input (j/k key); tmux write flushed after a short debounce | Cursor position in agent list |
 | `repo_filter` | `@sidebar_repo_filter` | User input (repo popup) | Repository filter (All or specific repo) |
-| `bottom_tab` | `@sidebar_bottom_tab` | On user tab switch (cycle key / tab-title click); tmux write retried when rejected | Selected bottom tab (Activity/Tasks/Git/Thought), shared server-wide; each instance adopts a peer's selection on its next refresh tick. `thought` is drawn only while the focused pane runs pi — a stored Thought falls back to Activity for any other agent, without a write, so the panel returns to Thought when the focus comes back to a pi pane |
+| `bottom_tab` | `@sidebar_bottom_tab` | On user tab switch (cycle key / tab-title click); tmux write retried when rejected | Selected bottom tab, shared server-wide; each instance adopts a peer's selection on its next refresh tick. The drawn labels run `Tools│Thought│Tasks│Git` for a pi pane and `Tools│Tasks│Git` otherwise; the stored values are `activity`, `thought`, `tasks` and `git`, and the Activity tab keeps that variant name while drawing as `Tools`. `thought` is drawn only while the focused pane runs pi — a stored Thought falls back to Activity for any other agent, without a write, so the panel returns to Thought when the focus comes back to a pi pane |
 | `bottom_percent` | `@sidebar_bottom_height` | User input (rule drag release); tmux write retried when rejected | Bottom panel height as a percent of the sidebar height (0 hides the panel; unset, empty, or an out-of-range value gives 30); shared server-wide, each instance adopts a peer's value on its next refresh tick (the percent's `SaveLatch` instance follows the same pattern) |
 
 Each synced field is guarded so a failed write never loses the user's
@@ -382,7 +382,7 @@ struct NoticesState {
 
 1. `selected_pane_row` is always < `layout.pane_row_targets.len()` — clamped in `rebuild_row_targets()`
 2. `activity.entries` contains only the focused pane's entries — cleared on focus change
-3. The bottom tab is shared server-wide through `@sidebar_bottom_tab` and changes only on an explicit user selection (cycle key / tab-title click) or the per-tick adoption of a peer's selection — never on focus change, and relaunching an agent does not change it. A stored `thought` is displayed as Activity while the focused pane is not pi, again without a write
+3. The bottom tab is shared server-wide through `@sidebar_bottom_tab` and changes only on an explicit user selection (cycle key / tab-title click) or the per-tick adoption of a peer's selection — never on focus change, and relaunching an agent does not change it. A stored `thought` is displayed as Activity (the `Tools` label) while the focused pane is not pi, again without a write
 4. Git fetching respects the `git_tab_active` flag — stops when tab is hidden
 5. Task progress has a 3-second debounce — prevents flicker when agent briefly pauses
 6. Global state syncs via tmux variables — enables coordination across sidebar instances

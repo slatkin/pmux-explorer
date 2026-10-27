@@ -217,7 +217,7 @@ A teammate of an agent team went idle.
 
 ## The task command
 
-The bottom panel carries a Tasks tab beside Activity and Git that shows the
+The bottom panel carries a Tasks tab beside Tools and Git that shows the
 todo list of the focused pane. The pane's agent writes that list through a
 shell subcommand rather than an event. This is the one write path every
 agent can use, because every agent can run a shell command, and it needs no
@@ -348,8 +348,10 @@ shows that. The whole reduction is these rules:
 
 The text is made terminal-safe as it is read: control characters other than
 `\n` and `\t` and every terminal escape sequence are removed, and line
-breaks stay. The tab shows the result as plain text, wrapped to the panel
-width, under the `HH:mm:ss` local time of the record that began the thought.
+breaks stay. The tab shows the result as plain text at the top of the panel,
+indented one column on each side and wrapped to the panel width less those
+two columns, under the yellow `HH:mm:ss` local time of the record that began
+the thought.
 
 A feed is read only while the Thought tab is drawn, once per refresh tick,
 and only through the bytes it grew by since the previous read. The first

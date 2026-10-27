@@ -94,6 +94,7 @@ Setting `@sidebar_min_width` to `0` disables the width floor entirely.
 | ------------------------------------- | ------------ | ------------------- |
 | `@sidebar_color_section_title`        | `109`&nbsp;(teal) | Section titles      |
 | `@sidebar_color_activity_timestamp`   | `109`&nbsp;(teal) | Activity timestamps |
+| `@sidebar_color_thought_timestamp`    | `220`&nbsp;(yellow) | Thought tab's `HH:mm:ss` time line |
 
 ## Status icons
 
