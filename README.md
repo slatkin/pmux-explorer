@@ -87,10 +87,11 @@ Channels are a research preview, and the flag needs all of:
 - **an interactive session** — the flag does nothing in a non-interactive
   (`-p`) run
 
-On start the session's channel server probes once: Claude is asked to run
-`pmux-explorer channel-ready --nonce <n>`, which arms the server. While it
-stays unarmed the sidebar works exactly as it does without the channel; the
-endpoint protocol is documented in
+The channel server never prompts the model itself: it stays unarmed until
+Claude runs `pmux-explorer channel-ready` in its pane — an instruction the
+user's orchestration prompt carries when the session should get reports on
+the channel. While it stays unarmed the sidebar works exactly as it does
+without the channel; the endpoint protocol is documented in
 [docs/agent-protocol.md](docs/agent-protocol.md#the-channel-endpoint).
 
 ## Documentation

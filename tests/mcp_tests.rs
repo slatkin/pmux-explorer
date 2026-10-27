@@ -1,6 +1,7 @@
 //! The MCP channel server mode, pinned through the compiled binary: the
-//! stdio protocol, the arm probe, the endpoint socket and the EOF teardown
-//! are child-process behavior the in-crate unit tests cannot observe.
+//! stdio protocol, the nonceless arm, the endpoint socket and the EOF
+//! teardown are child-process behavior the in-crate unit tests cannot
+//! observe.
 
 use serde_json::{Value, json};
 use std::io::{BufRead, BufReader, Write};
@@ -202,34 +203,27 @@ fn the_full_channel_path_runs_through_the_binary() {
         json!({}),
     );
 
-    // notifications/initialized: the probe, with a fresh 32-hex nonce.
+    // notifications/initialized emits nothing: the server never prompts
+    // the model — arming is the user's orchestration prompt's job. The
+    // next stdout line is the reply to the request that follows.
     send(
         &mut stdin,
         &json!({"jsonrpc": "2.0", "method": "notifications/initialized"}),
     );
-    let line = server.next_line();
-    let probe = json_rpc(&line);
-    seen.push(line);
-    assert_eq!(probe["method"], "notifications/claude/channel");
-    assert_eq!(probe["params"]["meta"]["kind"], "probe");
-    let nonce = probe["params"]["meta"]["nonce"]
-        .as_str()
-        .unwrap()
-        .to_string();
-    assert_eq!(nonce.len(), 32);
-    assert!(
-        probe["params"]["content"]
-            .as_str()
-            .unwrap()
-            .contains(&format!("channel-ready --nonce {nonce}")),
-        "content: {}",
-        probe["params"]["content"],
+    send(
+        &mut stdin,
+        &json!({"jsonrpc": "2.0", "id": 2, "method": "ping"}),
     );
+    let line = server.next_line();
+    let reply = json_rpc(&line);
+    seen.push(line);
+    assert_eq!(reply["id"], 2);
+    assert_eq!(reply["result"], json!({}));
 
-    // The probe's command, as Claude would run it in its pane: the arm
-    // request arms the server, and the exit code is 0.
+    // The command an orchestration prompt tells Claude to run in its
+    // pane: the arm request arms the server, and the exit code is 0.
     let mut ready = Command::new(BIN);
-    ready.args(["channel-ready", "--nonce", &nonce]);
+    ready.arg("channel-ready");
     env.apply(&mut ready, true);
     let ready = ready.output().expect("compiled binary must run");
     assert!(
@@ -289,7 +283,11 @@ fn the_full_channel_path_runs_through_the_binary() {
     assert_eq!(status.code(), Some(0), "exit code");
     assert!(extra.is_empty(), "no stdout beyond the protocol: {extra:?}");
     assert!(!socket.exists(), "the endpoint socket should be gone");
-    assert_eq!(seen.len(), 3, "three protocol lines: {seen:?}");
+    assert_eq!(
+        seen.len(),
+        3,
+        "three protocol lines: initialize, ping, report: {seen:?}"
+    );
 
     // Stdout held only protocol: every line was a JSON-RPC message, and
     // nothing was logged to stderr on the happy path.

@@ -25,7 +25,7 @@ pub const METHOD_NOT_FOUND: i64 = -32601;
 pub const PARSE_ERROR: i64 = -32700;
 
 /// The channel notification method: the one event kind the server emits,
-/// for a report and for the arm probe alike.
+/// and only for a report — the server never prompts the model itself.
 pub const CHANNEL_NOTIFICATION_METHOD: &str = "notifications/claude/channel";
 
 /// The protocol revisions the server echoes back when the client asks for

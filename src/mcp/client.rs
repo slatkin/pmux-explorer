@@ -1,11 +1,12 @@
 //! The `channel-ready` client side: one arm request to one endpoint.
 //!
-//! `pmux-explorer channel-ready --nonce <n>` sends the `arm` request the
-//! probe asks for: one line over the endpoint socket of its own pane, one
-//! reply line back. The server half — the same-user gate, the request
-//! shape, the arm state — lives in [`super::connection`]; this module owns
-//! the client half: the request line, the answer window, and the two
-//! failure classes the CLI turns into exit codes and stderr messages.
+//! `pmux-explorer channel-ready` sends the `arm` request the user's
+//! orchestration prompt asks Claude to run: one line over the endpoint
+//! socket of its own pane, one reply line back. The server half — the
+//! same-user gate, the request shape, the arm state — lives in
+//! [`super::connection`]; this module owns the client half: the request
+//! line, the answer window, and the two failure classes the CLI turns
+//! into exit codes and stderr messages.
 
 use serde_json::json;
 use std::io::{self, BufRead, BufReader, Write};
@@ -28,19 +29,19 @@ pub enum ArmError {
 /// Sends one `arm` request line to the endpoint at `path` and returns the
 /// reply line without its terminator.
 ///
-/// The request is one JSON line `{"v":1,"kind":"arm","nonce":<nonce>}`;
-/// the reply is one line read within `timeout`, after which the wait ends
-/// in [`ArmError::NoAnswer`]. A missing socket file, or a connect nothing
+/// The request is one JSON line `{"v":1,"kind":"arm"}`; the reply is
+/// one line read within `timeout`, after which the wait ends in
+/// [`ArmError::NoAnswer`]. A missing socket file, or a connect nothing
 /// answers, is [`ArmError::Unreachable`].
 ///
 /// # Errors
 /// [`ArmError`], as above.
-pub fn send_arm(path: &Path, nonce: &str, timeout: Duration) -> Result<String, ArmError> {
+pub fn send_arm(path: &Path, timeout: Duration) -> Result<String, ArmError> {
     let mut stream = UnixStream::connect(path).map_err(ArmError::Unreachable)?;
     stream
         .set_read_timeout(Some(timeout))
         .map_err(|_| ArmError::NoAnswer)?;
-    let request = json!({"v": 1, "kind": "arm", "nonce": nonce});
+    let request = json!({"v": 1, "kind": "arm"});
     writeln!(stream, "{request}").map_err(|_| ArmError::NoAnswer)?;
     stream.flush().map_err(|_| ArmError::NoAnswer)?;
     let mut line = String::new();
@@ -60,19 +61,12 @@ mod tests {
     use std::thread;
     use tempfile::tempdir;
 
-    const NONCE: &str = "00112233445566778899aabbccddeeff";
-
     /// Serves an unarmed endpoint state at a fresh socket path, returning
     /// the path. The accept loop runs detached with the short answer
     /// window this client's tests use.
     fn serve_unarmed(dir: &Path) -> PathBuf {
         let path = dir.join("79301cf9592f327a-12.sock");
-        crate::test_support::serve_unarmed_endpoint(
-            &path,
-            "%12",
-            NONCE,
-            Duration::from_millis(500),
-        );
+        crate::test_support::serve_unarmed_endpoint(&path, "%12", Duration::from_millis(500));
         path
     }
 
@@ -80,7 +74,7 @@ mod tests {
     fn send_arm_gets_the_armed_reply() {
         let tmp = tempdir().unwrap();
         let path = serve_unarmed(tmp.path());
-        let reply = send_arm(&path, NONCE, Duration::from_secs(2)).unwrap();
+        let reply = send_arm(&path, Duration::from_secs(2)).unwrap();
         let reply: serde_json::Value = serde_json::from_str(&reply).unwrap();
         assert_eq!(reply, serde_json::json!({"ok": true, "armed": true}));
     }
@@ -89,7 +83,7 @@ mod tests {
     fn a_missing_endpoint_is_unreachable() {
         let tmp = tempdir().unwrap();
         let path = tmp.path().join("79301cf9592f327a-12.sock");
-        let error = send_arm(&path, NONCE, Duration::from_secs(2)).unwrap_err();
+        let error = send_arm(&path, Duration::from_secs(2)).unwrap_err();
         assert!(matches!(error, ArmError::Unreachable(_)));
     }
 
@@ -107,7 +101,7 @@ mod tests {
             drop(stream);
         });
 
-        let error = send_arm(&path, NONCE, Duration::from_secs(2)).unwrap_err();
+        let error = send_arm(&path, Duration::from_secs(2)).unwrap_err();
         assert!(matches!(error, ArmError::NoAnswer));
     }
 
@@ -124,7 +118,7 @@ mod tests {
             drop(stream);
         });
 
-        let error = send_arm(&path, NONCE, Duration::from_millis(150)).unwrap_err();
+        let error = send_arm(&path, Duration::from_millis(150)).unwrap_err();
         assert!(matches!(error, ArmError::NoAnswer));
     }
 }

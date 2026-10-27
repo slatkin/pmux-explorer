@@ -410,31 +410,32 @@ answers on — a leftover from a crashed server. A socket a live owner listens
 on is left alone. With no `TMUX` or `TMUX_PANE`, or after a refusal, the
 server runs with no endpoint and logs the reason on stderr.
 
-### The arm probe
+### Arming the channel
 
-The server starts unarmed and arms only when the model proves the channel
-path. After `notifications/initialized`, it emits one probe event:
-`notifications/claude/channel` with `meta` `{"kind":"probe","nonce":<32hex>}`
-and one-line content that asks Claude to run
-`<exe> channel-ready --nonce <nonce>` and do nothing else. `<exe>` is the
-shell-quoted absolute path of the running binary, so the command works when
-`pmux-explorer` is not on `PATH`.
+The server starts unarmed and arms only when asked — never by a turn it
+spends itself. Whether a session wants channel delivery is the user's
+decision, so the instruction lives in the user's orchestration prompt,
+not in a server-emitted event: the prompt that launches an orchestrating
+Claude session tells it to run `pmux-explorer channel-ready` in its own
+pane. The server emits `notifications/claude/channel` only for reports.
 
-The answer to the probe is a shell command, not an MCP tool:
-`pmux-explorer channel-ready --nonce <n>` sends one `arm` request to the
-endpoint of its own pane — its own `TMUX` and `TMUX_PANE` pick the path —
-prints the reply line on stdout, and exits 0 when the reply has `armed:true`.
-Otherwise it exits 1 with a message on stderr: on a `nonce` reply, on a
-missing `--nonce`, and when the endpoint is missing or does not answer within
-2 seconds.
+The arm trigger is a shell command, not an MCP tool:
+`pmux-explorer channel-ready` sends one `arm` request to the endpoint of
+its own pane — its own `TMUX` and `TMUX_PANE` pick the path — prints the
+reply line on stdout, and exits 0 when the reply has `armed:true`.
+Otherwise it exits 1 with a message on stderr: on a reply that is not
+armed, and when the endpoint is missing or does not answer within 2
+seconds. The command takes no arguments; arguments an older prompt may
+still pass, such as `--nonce <n>`, are ignored.
 
-An arm request is `{"v":1,"kind":"arm","nonce":<string>}`. A nonce equal to
-the probe's arms the server for the rest of the process and gets
-`{"ok":true,"armed":true}`; a different nonce gets
-`{"ok":false,"reason":"nonce"}` and arms nothing; a correct nonce on an
-already-armed server gets the armed reply again. A status request,
-`{"v":1,"kind":"status"}`, replies
-`{"ok":true,"armed":<bool>,"pane":<TMUX_PANE>}` and emits nothing to Claude.
+An arm request is `{"v":1,"kind":"arm"}` and carries no credential —
+the peer-uid gate is the whole access control. It arms the server for
+the rest of the process and gets `{"ok":true,"armed":true}`; a re-arm
+gets the armed reply again. Fields the handler does not read — a `nonce`
+sent by an older caller — are ignored, so an older `arm` request still
+arms. A status request, `{"v":1,"kind":"status"}`, replies
+`{"ok":true,"armed":<bool>,"pane":<TMUX_PANE>}` and emits nothing to
+Claude.
 
 ### The report request
 
@@ -454,15 +455,6 @@ Two fields of a report are opaque. The `token` field is never validated and
 never emitted. The `bytes` field is copied into `meta.bytes` as a string
 exactly as given — or `""` when the field is absent. The server sends `text`
 as it got it, after the shape check, so the pointer wording has one owner.
-
-### Probe repeats
-
-Claude Code may register the channel listener after `notifications/initialized`,
-so the first probe can be lost. While the server is unarmed, a `report`
-request therefore sends the probe again — the same nonce — at most once per
-60 seconds and at most 3 repeats in the life of the process. A flagged session
-whose model never runs the command sees at most four probe turns, not one per
-minute. An armed server never probes again.
 
 ## The pane state the sidebar keeps
 
