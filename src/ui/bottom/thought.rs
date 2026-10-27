@@ -2,7 +2,7 @@
 //!
 //! The text comes from [`state.thought`](crate::state::ThoughtState),
 //! which `refresh_thought_feed` fills from the pane's thinking feed on
-//! the 1 s refresh while this tab is displayed. The tab draws one muted
+//! the 1 s refresh while this tab is displayed. The tab draws one yellow
 //! `HH:mm:ss` line — the local time of the record that began the
 //! thought — above the wrapped thought, and follows the end of a
 //! growing thought until the user scrolls up (design D6).
@@ -40,10 +40,10 @@ pub(super) fn draw_thought_content(frame: &mut Frame, state: &mut AppState, inne
         return;
     }
 
-    // The block is the muted `HH:mm:ss` line (when drawn) plus the
-    // wrapped thought rows. It lives inside the scroll content, so a
-    // tall thought shows its last rows whole — the spec pins the last
-    // wrapped rows of the thought, not a pinned stamp above them.
+    // The block is the `HH:mm:ss` line (when drawn) plus the wrapped
+    // thought rows. It lives inside the scroll content, so a tall
+    // thought shows its last rows whole — the spec pins the last
+    // wrapped rows of the thought, not a pinned stamp above it.
     let mut block: Vec<Line<'_>> = Vec::new();
     if let Some(ts) = &state.thought.last.start_ts {
         // An unparsable `ts` draws no time line: the stamp is a
@@ -51,7 +51,7 @@ pub(super) fn draw_thought_content(frame: &mut Frame, state: &mut AppState, inne
         if let Some(hhmmss) = crate::time::local_hhmmss_from_ts(ts) {
             block.push(Line::from(Span::styled(
                 hhmmss,
-                Style::default().fg(theme.text_muted),
+                Style::default().fg(theme.thought_timestamp),
             )));
         }
     }
@@ -75,22 +75,12 @@ pub(super) fn draw_thought_content(frame: &mut Frame, state: &mut AppState, inne
 
     state.scrolls.thought.total_lines = block.len();
 
-    // A block that fits is centered vertically: equal blank rows above
-    // and below, the extra one of an odd remainder below. Nothing
-    // scrolls (the max offset is 0), so the scroll offset rests at 0.
-    if block.len() <= visible {
-        let above = (visible - block.len()) / 2;
-        state.scrolls.thought.offset = 0;
-        let mut lines = vec![Line::from(""); above];
-        lines.extend(block);
-        frame.render_widget(Paragraph::new(lines), padded_rect(inner));
-        return;
-    }
-
-    // A block taller than the panel fills it: while the follow stands
-    // the offset moves to the last page; a suspended follow only
-    // clamps, so a shrinking thought cannot leave a stale offset
-    // pointing past the end.
+    // The block starts at the top row: a block that fits leaves the
+    // offset at 0 (the max offset is 0 anyway), while a block taller
+    // than the panel fills it — while the follow stands the offset
+    // moves to the last page; a suspended follow only clamps, so a
+    // shrinking thought cannot leave a stale offset pointing past
+    // the end.
     if state.thought.follow {
         state.scrolls.thought.offset = state
             .scrolls

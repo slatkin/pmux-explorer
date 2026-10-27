@@ -50,6 +50,8 @@ pub struct ColorTheme {
     pub pr_link: Color,
     pub section_title: Color,
     pub activity_timestamp: Color,
+    /// Thought tab color of the `HH:mm:ss` line above the thinking text.
+    pub thought_timestamp: Color,
     pub response_arrow: Color,
 }
 
@@ -93,6 +95,7 @@ impl Default for ColorTheme {
             pr_link: Color::Indexed(117),
             section_title: Color::Indexed(109),
             activity_timestamp: Color::Indexed(109),
+            thought_timestamp: Color::Indexed(220),
             response_arrow: Color::Indexed(81),
         }
     }
@@ -151,6 +154,10 @@ impl ColorTheme {
         theme.activity_timestamp = read(
             tmux::SIDEBAR_COLOR_ACTIVITY_TIMESTAMP,
             theme.activity_timestamp,
+        );
+        theme.thought_timestamp = read(
+            tmux::SIDEBAR_COLOR_THOUGHT_TIMESTAMP,
+            theme.thought_timestamp,
         );
         theme.response_arrow = read(tmux::SIDEBAR_COLOR_RESPONSE_ARROW, theme.response_arrow);
 
