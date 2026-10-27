@@ -229,7 +229,11 @@ TUI main loop (app::run in app.rs; submodules app/{setup,workers,input,render,pa
   → notices popup render/copy state  ← derived from AppState plugin fields
                         ↓
   → ui::draw() renders frame         ← reads all AppState fields;
-    status row = agent label + pane_name (ui/panes/row/status.rs)
+    status row = agent label + pane_name (ui/panes/row/status.rs);
+    claude and pi draw a Nerd Font glyph as their label, codex and
+    opencode keep their protocol name
+    repo header = git glyph + repo name + right-aligned spawn button
+    (ui/panes/row_collector.rs), glyph only when the group has a repo_root
 ```
 
 ---

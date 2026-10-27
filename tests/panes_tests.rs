@@ -122,7 +122,7 @@ fn test_running_icon_blink_off() {
      ≡1 ●1 ◐0 ○0 ✕0           ⤢
     ⓘ                        — ▾
     project
-    ┃ ● claude
+    ┃ ● 
     ─ Tools│Tasks│Git ──────────
             No tools yet
     ");
@@ -150,7 +150,7 @@ fn test_running_spinner_frame_advances() {
      ≡1 ●1 ◐0 ○0 ✕0           ⤢
     ⓘ                        — ▾
     project
-    ┃ ● claude
+    ┃ ● 
     ─ Tools│Tasks│Git ──────────
             No tools yet
     ");
@@ -177,7 +177,7 @@ fn test_waiting_icon() {
      ≡1 ●0 ◐1 ○0 ✕0           ⤢
     ⓘ                        — ▾
     project
-    ┃ ◐ claude
+    ┃ ◐ 
     ─ Tools│Tasks│Git ──────────
             No tools yet
     ");
@@ -204,7 +204,7 @@ fn test_error_icon() {
      ≡1 ●0 ◐0 ○0 ✕1           ⤢
     ⓘ                        — ▾
     project
-    ┃ ✕ claude
+    ┃ ✕ 
     ─ Tools│Tasks│Git ──────────
             No tools yet
     ");
@@ -300,19 +300,19 @@ fn test_agents_auto_scroll_up_shows_group_header() {
      ≡8 ●0 ◐0 ○8 ✕0           ⤢
     ⓘ                        — ▾
     project
-      ○ claude
+      ○ 
         Waiting for prompt…
-    ┃ ○ claude
+    ┃ ○ 
         Waiting for prompt…
-      ○ claude
+      ○ 
         Waiting for prompt…
-      ○ claude
+      ○ 
         Waiting for prompt…
-      ○ claude
+      ○ 
         Waiting for prompt…
-      ○ claude
+      ○ 
         Waiting for prompt…
-      ○ claude
+      ○ 
         Waiting for prompt…
     ─ Tools│Tasks│Git ──────────
             No tools yet
@@ -350,11 +350,11 @@ fn repo_popup_renders_repo_names_when_open() {
      ≡2 ●0 ◐0 ○2 ✕0                       ⤢
     ⓘ                                    — ▾
     frontend                    ┌──────────┐
-    ┃ ○ claude                  │ All      │
+    ┃ ○                        │ All      │
         Waiting for prompt…     │ frontend │
                                 │ backend  │
     backend                     └──────────┘
-    ┃ ○ claude
+    ┃ ○ 
         Waiting for prompt…
     ─ Tools│Tasks│Git ──────────────────────
                   No tools yet
@@ -397,11 +397,11 @@ fn repo_popup_highlights_selected_entry_with_background() {
      ≡[fg:111]2[fg:153] ●[fg:114]0[fg:245] ◐[fg:245]0[fg:245] ○[fg:245]2[fg:255] ✕[fg:245]0[fg:245]                       ⤢[fg:114]
     ⓘ[fg:221]                                    —[fg:255] ▾[fg:255]
     f[fg:153]r[fg:153]o[fg:153]n[fg:153]t[fg:153]e[fg:153]n[fg:153]d[fg:153]                    ┌[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]┐[fg:153]
-    ┃[fg:153] ○[fg:110] [fg:174]c[fg:174]l[fg:174]a[fg:174]u[fg:174]d[fg:174]e[fg:174]                  │[fg:153] [fg:255]A[fg:255]l[fg:255]l[fg:255] [fg:255] [fg:255] [fg:255] [fg:255] [fg:255] [fg:255]│[fg:153]
+    ┃[fg:153] ○[fg:110] [fg:174][fg:174]                       │[fg:153] [fg:255]A[fg:255]l[fg:255]l[fg:255] [fg:255] [fg:255] [fg:255] [fg:255] [fg:255] [fg:255]│[fg:153]
        [fg:255] [fg:255]W[fg:255]a[fg:255]i[fg:255]t[fg:255]i[fg:255]n[fg:255]g[fg:255] [fg:255]f[fg:255]o[fg:255]r[fg:255] [fg:255]p[fg:255]r[fg:255]o[fg:255]m[fg:255]p[fg:255]t[fg:255]…[fg:255]     │[fg:153] [fg:252]f[fg:252]r[fg:252]o[fg:252]n[fg:252]t[fg:252]e[fg:252]n[fg:252]d[fg:252] [fg:252]│[fg:153]
                                 │[fg:153] [fg:255,bg:239]b[fg:255,bg:239]a[fg:255,bg:239]c[fg:255,bg:239]k[fg:255,bg:239]e[fg:255,bg:239]n[fg:255,bg:239]d[fg:255,bg:239] [fg:255,bg:239] [fg:255,bg:239]│[fg:153]
     b[fg:153]a[fg:153]c[fg:153]k[fg:153]e[fg:153]n[fg:153]d[fg:153]                     └[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]┘[fg:153]
-    ┃[fg:153] ○[fg:110] [fg:174]c[fg:174]l[fg:174]a[fg:174]u[fg:174]d[fg:174]e[fg:174]
+    ┃[fg:153] ○[fg:110] [fg:174][fg:174]
        [fg:255] [fg:255]W[fg:255]a[fg:255]i[fg:255]t[fg:255]i[fg:255]n[fg:255]g[fg:255] [fg:255]f[fg:255]o[fg:255]r[fg:255] [fg:255]p[fg:255]r[fg:255]o[fg:255]m[fg:255]p[fg:255]t[fg:255]…[fg:255]
 
 

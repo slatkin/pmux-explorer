@@ -34,7 +34,7 @@ fn snapshot_single_agent_idle_ui() {
      ≡1 ●0 ◐0 ○1 ✕0           ⤢
     ⓘ                        — ▾
     project
-    ┃ ○ claude
+    ┃ ○ 
         Waiting for prompt…
     ─ Tools│Tasks│Git ──────────
             No tools yet
@@ -68,7 +68,7 @@ fn snapshot_secondary_header_without_notices() {
      ≡1 ●0 ◐0 ○1 ✕0           ⤢
                              — ▾
     project
-    ┃ ○ claude
+    ┃ ○ 
         Waiting for prompt…
     ─ Tools│Tasks│Git ──────────
             No tools yet
@@ -98,7 +98,7 @@ fn snapshot_secondary_header_long_repo_filter_truncated() {
      ≡1 ●0 ◐0 ○1 ✕0           ⤢
     ⓘ  very-long-repository-n… ▾
     very-long-repository-name-th
-    ┃ ○ claude
+    ┃ ○ 
         Waiting for prompt…
     ─ Tools│Tasks│Git ──────────
             No tools yet
@@ -131,7 +131,7 @@ fn snapshot_version_banner_does_not_duplicate_in_scroll_area() {
      ≡1 ●0 ◐0 ○1 ✕0           ⤢
     ⓘ                        — ▾
     project
-    ┃ ○ claude
+    ┃ ○ 
         Waiting for prompt…
     ");
 }
@@ -159,7 +159,7 @@ fn snapshot_single_agent_running_with_elapsed() {
      ≡1 ●1 ◐0 ○0 ✕0           ⤢
     ⓘ                        — ▾
     dotfiles
-    ┃ ● claude              2m5s
+    ┃ ●                    2m5s
     ─ Tools│Tasks│Git ──────────
             No tools yet
     ");
@@ -189,7 +189,7 @@ fn snapshot_long_pane_name_truncated_keeps_elapsed_visible() {
      ≡1 ●1 ◐0 ○0 ✕0           ⤢
     ⓘ                        — ▾
     dotfiles
-    ┃ ● claude this-is-a-r… 2m5s
+    ┃ ●  this-is-a-ridicu… 2m5s
     ─ Tools│Tasks│Git ──────────
             No tools yet
     ");
@@ -217,7 +217,7 @@ fn running_spinner_different_frame() {
      ≡1 ●1 ◐0 ○0 ✕0           ⤢
     ⓘ                        — ▾
     project
-    ┃ ● claude
+    ┃ ● 
     ─ Tools│Tasks│Git ──────────
             No tools yet
     ");
@@ -246,7 +246,7 @@ fn snapshot_agent_with_prompt_ui() {
      ≡1 ●0 ◐0 ○1 ✕0           ⤢
     ⓘ                        — ▾
     project
-    ┃ ○ claude
+    ┃ ○ 
         fix the bug
     ─ Tools│Tasks│Git ──────────
             No tools yet
@@ -276,7 +276,7 @@ fn snapshot_agent_with_japanese_prompt_ui() {
      ≡1 ●1 ◐0 ○0 ✕0           ⤢
     ⓘ                        — ▾
     project
-    ┃ ● claude
+    ┃ ● 
         こ れ っ て 今 1時 間 経 っ て い
         る け ど 、 起 動 し て 確 認 し て
         も 問 題 な い ？
@@ -350,7 +350,7 @@ fn snapshot_two_agents_same_window_ui() {
      ≡2 ●1 ◐0 ○1 ✕0           ⤢
     ⓘ                        — ▾
     project
-    ┃ ● claude
+    ┃ ● 
         fix the bug
       ○ codex
         Waiting for prompt…
@@ -398,7 +398,7 @@ fn snapshot_two_windows_ui() {
      ≡2 ●1 ◐0 ○1 ✕0           ⤢
     ⓘ                        — ▾
     project-a
-    ┃ ● claude
+    ┃ ● 
     project-b
       ○ codex
         Waiting for prompt…
@@ -449,7 +449,7 @@ fn snapshot_multi_session_ui() {
      ≡2 ●1 ◐0 ○1 ✕0           ⤢
     ⓘ                        — ▾
     dotfiles
-    ┃ ● claude
+    ┃ ● 
     api
       ○ codex
         Waiting for prompt…
@@ -481,7 +481,7 @@ fn snapshot_wait_reason_ui() {
      ≡1 ●0 ◐1 ○0 ✕0           ⤢
     ⓘ                        — ▾
     project
-    ┃ ◐ claude
+    ┃ ◐ 
         permission required
     ─ Tools│Tasks│Git ──────────
             No tools yet
@@ -511,7 +511,7 @@ fn snapshot_auto_rename_window_title_ui() {
      ≡1 ●0 ◐0 ○1 ✕0           ⤢
     ⓘ                        — ▾
     project
-    ┃ ○ claude
+    ┃ ○ 
         Waiting for prompt…
     ─ Tools│Tasks│Git ──────────
             No tools yet
@@ -557,7 +557,7 @@ fn snapshot_activity_log_ui() {
      ≡1 ●1 ◐0 ○0 ✕0           ⤢
     ⓘ                        — ▾
     project
-    ┃ ● claude
+    ┃ ● 
     ─ Tools│Tasks│Git ──────────
     10:32                   Edit
       src/main.rs
@@ -595,7 +595,7 @@ fn snapshot_activity_log_long_label_ui() {
      ≡1 ●1 ◐0 ○0 ✕0           ⤢
     ⓘ                        — ▾
     project
-    ┃ ● claude
+    ┃ ● 
     ─ Tools│Tasks│Git ──────────
     10:32                   Read
       config/pmux-explorer-rs/sr
@@ -628,7 +628,7 @@ fn snapshot_prompt_wrapping_ui() {
      ≡1 ●0 ◐0 ○1 ✕0           ⤢
     ⓘ                        — ▾
     project
-    ┃ ○ claude
+    ┃ ○ 
         Please fix the
         authentication bug in
         the login flow that…
@@ -659,7 +659,7 @@ fn snapshot_selected_unfocused_ui() {
      ≡1 ●0 ◐0 ○1 ✕0           ⤢
     ⓘ                        — ▾
     project
-    ┃ ○ claude
+    ┃ ○ 
         Waiting for prompt…
     ─ Tools│Tasks│Git ──────────
             No tools yet
@@ -689,7 +689,7 @@ fn snapshot_error_state_ui() {
      ≡1 ●0 ◐0 ○0 ✕1           ⤢
     ⓘ                        — ▾
     project
-    ┃ ✕ claude
+    ┃ ✕ 
         something broke
     ─ Tools│Tasks│Git ──────────
             No tools yet
@@ -719,7 +719,7 @@ fn snapshot_narrow_width_ui() {
      ≡1 ●0 ◐0 ○1 ✕0 ⤢
     ⓘ              — ▾
     project
-    ┃ ○ claude
+    ┃ ○ 
         hello world
     ─ Tools│Tasks│Git
        No tools yet
@@ -768,8 +768,8 @@ fn snapshot_worktree_branch_ui() {
     insta::assert_snapshot!(output, @"
      ≡1 ●1 ◐0 ○0 ✕0           ⤢
     ⓘ                        — ▾
-    project                    +
-    ┃ ● claude
+     project                  +
+    ┃ ● 
     ┃   + feature/sidebar
         fix bug
     ─ Tools│Tasks│Git ──────────
@@ -796,8 +796,8 @@ fn snapshot_worktree_long_branch_truncated_ui() {
     insta::assert_snapshot!(output, @"
      ≡1 ●0 ◐0 ○1 ✕0           ⤢
     ⓘ                        — ▾
-    project                    +
-    ┃ ○ claude
+     project                  +
+    ┃ ○ 
     ┃   + feature/very-long-bra…
         Waiting for prompt…
     ─ Tools│Tasks│Git ──────────
@@ -825,8 +825,8 @@ fn snapshot_long_branch_with_ports_ui() {
     insta::assert_snapshot!(output, @"
      ≡1 ●1 ◐0 ○0 ✕0                       ⤢
     ⓘ                                    — ▾
-    project                                +
-    ┃ ● claude
+     project                              +
+    ┃ ● 
     ┃   feature/sidebar/really…  :3000, 5173
     ─ Tools│Tasks│Git ──────────────────────
                   No tools yet
@@ -856,7 +856,7 @@ fn snapshot_task_progress_partial_ui() {
      ≡1 ●1 ◐0 ○0 ✕0           ⤢
     ⓘ                        — ▾
     project
-    ┃ ● claude
+    ┃ ● 
         ✔◼◻ 1/3
         working
     ─ Tools│Tasks│Git ──────────
@@ -883,7 +883,7 @@ fn snapshot_task_progress_all_completed_ui() {
      ≡1 ●1 ◐0 ○0 ✕0           ⤢
     ⓘ                        — ▾
     project
-    ┃ ● claude
+    ┃ ● 
         ✔✔ 2/2
     ─ Tools│Tasks│Git ──────────
             No tools yet
@@ -910,7 +910,7 @@ fn snapshot_task_progress_all_pending_ui() {
      ≡1 ●1 ◐0 ○0 ✕0           ⤢
     ⓘ                        — ▾
     project
-    ┃ ● claude
+    ┃ ● 
         ◻◻◻ 0/3
     ─ Tools│Tasks│Git ──────────
             No tools yet
@@ -953,8 +953,8 @@ fn snapshot_all_elements_combined_ui() {
     insta::assert_snapshot!(output, @"
      ≡1 ●0 ◐1 ○0 ✕0             ⤢
     ⓘ                          — ▾
-    project                      +
-    ┃ ◐ claude auto
+     project                    +
+    ┃ ◐  auto
     ┃   main
         ✔◼ 1/2
         ├ Explore #1
@@ -980,7 +980,7 @@ fn snapshot_response_japanese_ui() {
      ≡1 ●0 ◐0 ○1 ✕0             ⤢
     ⓘ                          — ▾
     project
-    ┃ ○ claude
+    ┃ ○ 
       ▷ 修 正 が 完 了 し ま し た 。 テ ス ト
         も 全 て 通 っ て い ま す 。
     ─ Tools│Tasks│Git ────────────
@@ -1014,12 +1014,12 @@ fn snapshot_three_groups_middle_focused_ui() {
      ≡3 ●1 ◐0 ○2 ✕0           ⤢
     ⓘ                        — ▾
     repo-a
-      ● claude
+      ● 
     repo-b
     ┃ ○ codex
         Waiting for prompt…
     repo-c
-      ○ claude
+      ○ 
         Waiting for prompt…
     ─ Tools│Tasks│Git ──────────
             No tools yet
@@ -1040,7 +1040,7 @@ fn snapshot_bypass_all_badge_ui() {
      ≡1 ●1 ◐0 ○0 ✕0           ⤢
     ⓘ                        — ▾
     project
-    ┃ ● claude !
+    ┃ ●  !
     ─ Tools│Tasks│Git ──────────
             No tools yet
     ");
@@ -1058,7 +1058,7 @@ fn snapshot_full_auto_badge_ui() {
      ≡1 ●1 ◐0 ○0 ✕0           ⤢
     ⓘ                        — ▾
     project
-    ┃ ● claude auto
+    ┃ ●  auto
     ─ Tools│Tasks│Git ──────────
             No tools yet
     ");
@@ -1076,7 +1076,7 @@ fn snapshot_plan_badge_ui() {
      ≡1 ●1 ◐0 ○0 ✕0           ⤢
     ⓘ                        — ▾
     project
-    ┃ ● claude plan
+    ┃ ●  plan
     ─ Tools│Tasks│Git ──────────
             No tools yet
     ");
@@ -1094,7 +1094,7 @@ fn snapshot_accept_edits_badge_ui() {
      ≡1 ●1 ◐0 ○0 ✕0           ⤢
     ⓘ                        — ▾
     project
-    ┃ ● claude edit
+    ┃ ●  edit
     ─ Tools│Tasks│Git ──────────
             No tools yet
     ");
@@ -1121,8 +1121,8 @@ fn snapshot_response_with_branch_ui() {
     insta::assert_snapshot!(output, @"
      ≡1 ●0 ◐0 ○1 ✕0                 ⤢
     ⓘ                              — ▾
-    project                          +
-    ┃ ○ claude
+     project                        +
+    ┃ ○ 
     ┃   feature/ui-v2
       ▷ Done. All tests are green.
     ─ Tools│Tasks│Git ────────────────
@@ -1144,7 +1144,7 @@ fn snapshot_wait_reason_elicitation_ui() {
      ≡1 ●0 ◐1 ○0 ✕0           ⤢
     ⓘ                        — ▾
     project
-    ┃ ◐ claude
+    ┃ ◐ 
         waiting for selection
     ─ Tools│Tasks│Git ──────────
             No tools yet
@@ -1163,7 +1163,7 @@ fn snapshot_wait_reason_unknown_ui() {
      ≡1 ●0 ◐1 ○0 ✕0           ⤢
     ⓘ                        — ▾
     project
-    ┃ ◐ claude
+    ┃ ◐ 
         some_future_reason
     ─ Tools│Tasks│Git ──────────
             No tools yet
@@ -1184,7 +1184,7 @@ fn snapshot_wait_reason_permission_denied_ui() {
      ≡1 ●0 ◐1 ○0 ✕0           ⤢
     ⓘ                        — ▾
     project
-    ┃ ◐ claude
+    ┃ ◐ 
         permission denied
     ─ Tools│Tasks│Git ──────────
             No tools yet
@@ -1212,8 +1212,8 @@ fn snapshot_worktree_with_name_ui() {
     insta::assert_snapshot!(output, @"
      ≡1 ●1 ◐0 ○0 ✕0           ⤢
     ⓘ                        — ▾
-    project                    +
-    ┃ ● claude
+     project                  +
+    ┃ ● 
     ┃   + auth-wt: feat/auth
     ─ Tools│Tasks│Git ──────────
             No tools yet
@@ -1239,8 +1239,8 @@ fn snapshot_worktree_name_same_as_branch_ui() {
     insta::assert_snapshot!(output, @"
      ≡1 ●1 ◐0 ○0 ✕0           ⤢
     ⓘ                        — ▾
-    project                    +
-    ┃ ● claude
+     project                  +
+    ┃ ● 
     ┃   + feat/auth
     ─ Tools│Tasks│Git ──────────
             No tools yet
@@ -1297,7 +1297,7 @@ fn snapshot_activity_all_tool_types_ui() {
      ≡1 ●1 ◐0 ○0 ✕0           ⤢
     ⓘ                        — ▾
     project
-    ┃ ● claude
+    ┃ ● 
     ─ Tools│Tasks│Git ──────────
     10:07                  Agent
       Explore codebase
@@ -1327,7 +1327,7 @@ fn snapshot_focus_activity_log_ui() {
      ≡1 ●1 ◐0 ○0 ✕0           ⤢
     ⓘ                        — ▾
     project
-    ┃ ● claude
+    ┃ ● 
     ─ Tools│Tasks│Git ──────────
     10:00                   Read
       file.rs
@@ -1352,7 +1352,7 @@ fn right_border_narrow_width_with_badge() {
      ≡1 ●1 ◐0 ○0 ✕0     ⤢
     ⓘ                  — ▾
     project
-    ┃ ● claude !    2h0m0s
+    ┃ ●  !         2h0m0s
         fix the issue
     ─ Tools│Tasks│Git ────
          No tools yet
@@ -1401,7 +1401,7 @@ fn right_border_all_permission_modes_and_agents() {
      ≡1 ●1 ◐0 ○0 ✕0           ⤢
     ⓘ                        — ▾
     project
-    ┃ ● claude          1h30m32s
+    ┃ ●                1h30m32s
     ─ Tools│Tasks│Git ──────────
             No tools yet
 
@@ -1409,7 +1409,7 @@ fn right_border_all_permission_modes_and_agents() {
      ≡1 ●1 ◐0 ○0 ✕0           ⤢
     ⓘ                        — ▾
     project
-    ┃ ● claude auto     1h30m32s
+    ┃ ●  auto          1h30m32s
     ─ Tools│Tasks│Git ──────────
             No tools yet
 
@@ -1417,7 +1417,7 @@ fn right_border_all_permission_modes_and_agents() {
      ≡1 ●1 ◐0 ○0 ✕0           ⤢
     ⓘ                        — ▾
     project
-    ┃ ● claude dontAsk  1h30m32s
+    ┃ ●  dontAsk       1h30m32s
     ─ Tools│Tasks│Git ──────────
             No tools yet
 
@@ -1425,7 +1425,7 @@ fn right_border_all_permission_modes_and_agents() {
      ≡1 ●1 ◐0 ○0 ✕0           ⤢
     ⓘ                        — ▾
     project
-    ┃ ● claude plan     1h30m32s
+    ┃ ●  plan          1h30m32s
     ─ Tools│Tasks│Git ──────────
             No tools yet
 
@@ -1433,7 +1433,7 @@ fn right_border_all_permission_modes_and_agents() {
      ≡1 ●1 ◐0 ○0 ✕0           ⤢
     ⓘ                        — ▾
     project
-    ┃ ● claude edit     1h30m32s
+    ┃ ●  edit          1h30m32s
     ─ Tools│Tasks│Git ──────────
             No tools yet
 
@@ -1441,7 +1441,7 @@ fn right_border_all_permission_modes_and_agents() {
      ≡1 ●1 ◐0 ○0 ✕0           ⤢
     ⓘ                        — ▾
     project
-    ┃ ● claude !        1h30m32s
+    ┃ ●  !             1h30m32s
     ─ Tools│Tasks│Git ──────────
             No tools yet
 
@@ -1514,7 +1514,7 @@ fn snapshot_filter_bar_shows_counts() {
      ≡2 ●1 ◐0 ○1 ✕0             ⤢
     ⓘ                          — ▾
     project
-    ┃ ● claude
+    ┃ ● 
       ○ codex
         Waiting for prompt…
     ─ Tools│Tasks│Git ────────────
@@ -1540,7 +1540,7 @@ fn snapshot_filter_running_hides_idle() {
      ≡2 ●1 ◐0 ○1 ✕0             ⤢
     ⓘ                          — ▾
     project
-    ┃ ● claude
+    ┃ ● 
     ─ Tools│Tasks│Git ────────────
              No tools yet
     ");
@@ -1592,7 +1592,7 @@ fn snapshot_filter_hides_empty_groups() {
      ≡2 ●1 ◐0 ○1 ✕0             ⤢
     ⓘ                          — ▾
     repo-a
-    ┃ ● claude
+    ┃ ● 
     ─ Tools│Tasks│Git ────────────
              No tools yet
     ");
@@ -1616,7 +1616,7 @@ fn snapshot_filter_all_shows_everything() {
      ≡2 ●1 ◐0 ○1 ✕0             ⤢
     ⓘ                          — ▾
     project
-    ┃ ● claude
+    ┃ ● 
       ○ codex
         Waiting for prompt…
     ─ Tools│Tasks│Git ────────────
@@ -1660,12 +1660,12 @@ fn snapshot_filter_bar_stays_fixed_on_scroll() {
      ≡6 ●6 ◐0 ○0 ✕0             ⤢
     ⓘ                          — ▾
     project
-      ● claude
-    ┃ ● claude
-      ● claude
-      ● claude
-      ● claude
-      ● claude
+      ● 
+    ┃ ● 
+      ● 
+      ● 
+      ● 
+      ● 
     ─ Tools│Tasks│Git ────────────
              No tools yet
     ");
@@ -1710,7 +1710,7 @@ fn snapshot_filter_error_shows_agents() {
      ≡2 ●1 ◐0 ○0 ✕1             ⤢
     ⓘ                          — ▾
     project
-    ┃ ✕ claude
+    ┃ ✕ 
         something broke
     ─ Tools│Tasks│Git ────────────
              No tools yet
@@ -1736,7 +1736,7 @@ fn snapshot_filter_waiting_shows_only_waiting() {
      ≡2 ●0 ◐1 ○1 ✕0             ⤢
     ⓘ                          — ▾
     project
-    ┃ ◐ claude
+    ┃ ◐ 
         permission required
     ─ Tools│Tasks│Git ────────────
              No tools yet
@@ -1782,8 +1782,8 @@ fn snapshot_repo_header_shows_spawn_plus_button() {
     insta::assert_snapshot!(output, @"
      ≡1 ●0 ◐0 ○1 ✕0             ⤢
     ⓘ                          — ▾
-    proj                         +
-    ┃ ○ claude
+     proj                       +
+    ┃ ○ 
     ┃   main
         Waiting for prompt…
     ─ Tools│Tasks│Git ────────────
@@ -1800,7 +1800,7 @@ fn snapshot_spawn_modal_default_state() {
     insta::assert_snapshot!(output, @"
      ≡1 ●0 ◐0 ○1 ✕0                 ⤢
     ⓘ╭ Spawn worktree ──────────────╮▾
-    p│                              │+
+    │                              │+
     ┃│ NAME                         │
     ┃│ █                            │
      │ AGENT                        │
@@ -1828,7 +1828,7 @@ fn snapshot_spawn_modal_anchors_directly_below_repo_header() {
     insta::assert_snapshot!(output, @"
      ≡1 ●0 ◐0 ○1 ✕0                 ⤢
     ⓘ                              — ▾
-    proj                             +
+     proj                           +
     ╭ Spawn worktree ──────────────╮
     │ NAME                         │
     │ █                            │
@@ -1858,7 +1858,7 @@ fn snapshot_spawn_modal_advance_fields_cycles_agent_and_mode() {
     insta::assert_snapshot!(output, @"
      ≡1 ●0 ◐0 ○1 ✕0                 ⤢
     ⓘ╭ Spawn worktree ──────────────╮▾
-    p│                              │+
+    │                              │+
     ┃│ NAME                         │
     ┃│ add login                    │
      │ AGENT                        │
@@ -1883,7 +1883,7 @@ fn snapshot_spawn_modal_tail_fits_long_task_name() {
     insta::assert_snapshot!(output, @"
      ≡1 ●0 ◐0 ○1 ✕0                 ⤢
     ⓘ╭ Spawn worktree ──────────────╮▾
-    p│                              │+
+    │                              │+
     ┃│ NAME                         │
     ┃│ …re-authentication-pipeline█ │
      │ AGENT                        │
@@ -1936,7 +1936,7 @@ fn snapshot_spawn_modal_compact_layout_in_short_agent_area() {
     insta::assert_snapshot!(output, @"
      ≡1 ●0 ◐0 ○1 ✕0                       ⤢
     ⓘ                                    — ▾
-    proj╭ Spawn worktree ──────────────╮   +
+     pr╭ Spawn worktree ──────────────╮   +
     ┃ ○ │ hi█                          │
     ┃   │ claude                       │
         │ default                      │
@@ -1956,7 +1956,7 @@ fn snapshot_spawn_modal_compact_layout_shows_inline_error() {
     insta::assert_snapshot!(output, @"
      ≡1 ●0 ◐0 ○1 ✕0                       ⤢
     ⓘ                                    — ▾
-    proj╭ Spawn worktree ──────────────╮   +
+     pr╭ Spawn worktree ──────────────╮   +
     ┃ ○ │ █                            │
     ┃   │ claude                       │
         │ default                      │
@@ -2006,11 +2006,11 @@ fn snapshot_sidebar_spawned_pane_appends_trailing_remove_marker() {
     insta::assert_snapshot!(output, @"
      ≡2 ●0 ◐0 ○2 ✕0             ⤢
     ⓘ                          — ▾
-    proj                         +
-    ┃ ○ claude
+     proj                       +
+    ┃ ○ 
     ┃   + main
         Waiting for prompt…
-      ○ claude
+      ○ 
         + feat/x                 ×
         Waiting for prompt…
     ─ Tools│Tasks│Git ────────────
@@ -2146,8 +2146,8 @@ fn snapshot_sidebar_spawned_long_branch_truncates_and_keeps_x() {
     insta::assert_snapshot!(output, @"
      ≡1 ●0 ◐0 ○1 ✕0       ⤢
     ⓘ                    — ▾
-    proj                   +
-      ○ claude
+     proj                 +
+      ○ 
         + feature/really-l…×
         Waiting for prompt…
     ─ Tools│Tasks│Git ──────
@@ -2189,8 +2189,8 @@ fn snapshot_sidebar_spawned_coexists_with_port_display() {
     insta::assert_snapshot!(output, @"
      ≡1 ●0 ◐0 ○1 ✕0             ⤢
     ⓘ                          — ▾
-    proj                         +
-      ○ claude
+     proj                       +
+      ○ 
         + feat/srv         :3000 ×
         Waiting for prompt…
     ─ Tools│Tasks│Git ────────────
@@ -2212,8 +2212,8 @@ fn snapshot_remove_confirm_modal_shows_three_options() {
     insta::assert_snapshot!(output, @"
      ≡1 ●0 ◐0 ○1 ✕0                                 ⤢
     ⓘ                                              — ▾
-    proj                                             +
-    ┃ ○ claude
+     proj                                           +
+    ┃ ○ 
     ┃   main   ╭ add-login ───────────────╮
         Waiting│[y] remove worktree       │
                │[c] close window only     │
@@ -2237,7 +2237,7 @@ fn snapshot_spawn_modal_shows_inline_error_when_task_empty() {
     insta::assert_snapshot!(output, @"
      ≡1 ●0 ◐0 ○1 ✕0                 ⤢
     ⓘ╭ Spawn worktree ──────────────╮▾
-    p│                              │+
+    │                              │+
     ┃│ NAME                         │
     ┃│ █                            │
      │ AGENT                        │
@@ -2282,8 +2282,8 @@ fn snapshot_remove_confirm_modal_shows_inline_error() {
     insta::assert_snapshot!(output, @"
      ≡1 ●0 ◐0 ○1 ✕0                                 ⤢
     ⓘ                                              — ▾
-    proj                                             +
-    ┃ ○ claude
+     proj                                           +
+    ┃ ○ 
     ┃   main   ╭ add-login ───────────────╮
         Waiting│[y] remove worktree       │
                │[c] close window only     │
@@ -2318,7 +2318,7 @@ fn snapshot_background_status_shows_bg_command_row() {
      ≡1 ●1 ◐0 ○0 ✕0               ⤢
     ⓘ                            — ▾
     project
-    ┃ ◎ claude
+    ┃ ◎ 
         $ npm run dev
     ─ Tools│Tasks│Git ──────────────
               No tools yet
@@ -2349,7 +2349,7 @@ fn snapshot_running_pane_still_shows_live_bg_command() {
      ≡1 ●1 ◐0 ○0 ✕0               ⤢
     ⓘ                            — ▾
     project
-    ┃ ● claude                   10s
+    ┃ ●                         10s
         $ cargo watch
     ─ Tools│Tasks│Git ──────────────
               No tools yet
@@ -2379,7 +2379,7 @@ fn snapshot_background_long_command_truncates_with_ellipsis() {
      ≡1 ●1 ◐0 ○0 ✕0           ⤢
     ⓘ                        — ▾
     project
-    ┃ ◎ claude
+    ┃ ◎ 
         $ cargo run --bin very-…
     ─ Tools│Tasks│Git ──────────
             No tools yet
@@ -2432,7 +2432,7 @@ fn snapshot_subagent_identity_survives_repo_filter_hiding_parent() {
      ≡1 ●1 ◐0 ○0 ✕0                                           ⤢
     ⓘ                                              project-sub ▾
     project-sub
-      ● pi ♟
+      ●  ♟
       ▷ orchestrator
     ─ Tools│Thought│Tasks│Git ──────────────────────────────────
                             No tools yet

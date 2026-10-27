@@ -8,6 +8,45 @@ use super::row;
 use crate::state::{AppState, Focus};
 use crate::ui::text::display_width;
 
+/// Git glyph drawn before a repo header's name, so the header reads as a
+/// repository rather than a plain label. A group with no resolved
+/// `repo_root` keeps its bare name.
+const GIT_GLYPH: &str = "\u{e702}";
+
+/// Build a repo group's header: the git glyph and repo name at column 0,
+/// with the spawn button right-aligned on the same row. A group with no
+/// resolved `repo_root` is not a git repository, so it gets neither the
+/// glyph nor the button. The recorded spawn target keeps the bare repo
+/// name, because the button acts on the repository, not on the heading.
+fn repo_header_line(
+    collected: &mut CollectedRows,
+    group_name: &str,
+    repo_root: Option<&str>,
+    width: usize,
+    color: ratatui::style::Color,
+) -> Line<'static> {
+    let Some(root) = repo_root else {
+        return Line::from(Span::styled(
+            group_name.to_string(),
+            Style::default().fg(color),
+        ));
+    };
+    let heading = format!("{GIT_GLYPH} {group_name}");
+    let pad_width = width
+        .saturating_sub(display_width(&heading))
+        .saturating_sub(SPAWN_BUTTON.len());
+    collected.pending_spawn.push((
+        collected.lines.len(),
+        group_name.to_string(),
+        root.to_string(),
+    ));
+    Line::from(vec![
+        Span::styled(heading, Style::default().fg(color)),
+        Span::raw(" ".repeat(pad_width)),
+        Span::styled(SPAWN_BUTTON, Style::default().fg(color)),
+    ])
+}
+
 #[derive(Debug, Default)]
 pub(super) struct CollectedRows {
     pub lines: Vec<Line<'static>>,
@@ -53,11 +92,10 @@ pub(super) fn collect(state: &AppState, width: u16) -> CollectedRows {
             .is_some_and(|fid| group.panes.iter().any(|(p, _)| p.pane_id == *fid));
 
         // Plain repo header at column 0, with a `[+]` spawn button
-        // right-aligned on the same row. Only rendered when the group
-        // has a resolved repo_root — panes outside a git repo get a
-        // plain title.
-        let title = &group.name;
-        let title_color = if group_has_focused_pane {
+        // right-aligned on the same row. Only a group with a resolved
+        // repo_root is a git repository, so only that one gets the git
+        // glyph and the button.
+        let color = if group_has_focused_pane {
             theme.accent
         } else {
             theme.text_active
@@ -65,32 +103,9 @@ pub(super) fn collect(state: &AppState, width: u16) -> CollectedRows {
         let repo_root = group
             .panes
             .iter()
-            .find_map(|(_, git)| git.repo_root.clone());
-        let spans: Vec<Span<'static>> = if let Some(ref root) = repo_root {
-            let title_w = display_width(title);
-            let pad_width = width
-                .saturating_sub(title_w)
-                .saturating_sub(SPAWN_BUTTON.len());
-            collected
-                .pending_spawn
-                .push((collected.lines.len(), group.name.clone(), root.clone()));
-            let button_color = if group_has_focused_pane {
-                theme.accent
-            } else {
-                theme.text_active
-            };
-            vec![
-                Span::styled(title.clone(), Style::default().fg(title_color)),
-                Span::raw(" ".repeat(pad_width)),
-                Span::styled(SPAWN_BUTTON, Style::default().fg(button_color)),
-            ]
-        } else {
-            vec![Span::styled(
-                title.clone(),
-                Style::default().fg(title_color),
-            )]
-        };
-        collected.lines.push(Line::from(spans));
+            .find_map(|(_, git)| git.repo_root.as_deref());
+        let header = repo_header_line(&mut collected, &group.name, repo_root, width, color);
+        collected.lines.push(header);
         collected.line_to_row.push(None);
 
         for (pane, git_info) in filtered_panes.iter() {

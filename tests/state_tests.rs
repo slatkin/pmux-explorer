@@ -1176,11 +1176,11 @@ fn rendered_filter_row_and_hit_test_agree_at_the_20_column_minimum() {
      ≡40 ●10 ◐10 ○10  ⤢
     ⓘ                — ▾
     project
-      ● claude
-    ┃ ● claude
-      ● claude
-      ● claude
-      ● claude
+      ● 
+    ┃ ● 
+      ● 
+      ● 
+      ● 
     ─ Tools│Tasks│Git ──
         No tools yet
     ");
@@ -1316,29 +1316,29 @@ fn floating_panel_clicks_hit_the_clamped_bottom_panel_geometry() {
      ≡20 ●0 ◐0 ○20 ✕0                     ⤡
     ⓘ                                    — ▾
     project
-      ○ claude
+      ○ 
         Waiting for prompt…
-    ┃ ○ claude
+    ┃ ○ 
         Waiting for prompt…
-      ○ claude
+      ○ 
         Waiting for prompt…
-      ○ claude
+      ○ 
         Waiting for prompt…
-      ○ claude
+      ○ 
         Waiting for prompt…
-      ○ claude
+      ○ 
         Waiting for prompt…
-      ○ claude
+      ○ 
         Waiting for prompt…
-      ○ claude
+      ○ 
         Waiting for prompt…
-      ○ claude
+      ○ 
         Waiting for prompt…
-      ○ claude
+      ○ 
         Waiting for prompt…
-      ○ claude
+      ○ 
         Waiting for prompt…
-      ○ claude
+      ○ 
     ─ Tools│Tasks│Git ──────────────────────
                   No tools yet
     ");

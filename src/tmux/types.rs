@@ -166,8 +166,14 @@ impl AgentType {
         }
     }
 
-    pub fn label(&self) -> &str {
-        self.as_str()
+    /// The name the sidebar draws for a pane's agent. Claude and pi draw a
+    /// Nerd Font glyph instead of a word; the rest keep their protocol name.
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Claude => "\u{ec82}",
+            Self::Pi => "\u{e22c}",
+            _ => self.as_str(),
+        }
     }
 }
 
@@ -241,10 +247,10 @@ mod tests {
 
     #[test]
     fn agent_type_label() {
-        assert_eq!(AgentType::Claude.label(), "claude");
+        assert_eq!(AgentType::Claude.label(), "\u{ec82}");
         assert_eq!(AgentType::Codex.label(), "codex");
         assert_eq!(AgentType::OpenCode.label(), "opencode");
-        assert_eq!(AgentType::Pi.label(), "pi");
+        assert_eq!(AgentType::Pi.label(), "\u{e22c}");
         assert_eq!(AgentType::Unknown.label(), "unknown");
     }
 
