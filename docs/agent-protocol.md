@@ -217,7 +217,7 @@ A teammate of an agent team went idle.
 
 ## The task command
 
-The bottom panel carries a Tasks tab beside Activity and Git that shows the
+The bottom panel carries a Tasks tab beside Tools and Git that shows the
 todo list of the focused pane. The pane's agent writes that list through a
 shell subcommand rather than an event. This is the one write path every
 agent can use, because every agent can run a shell command, and it needs no
@@ -283,6 +283,96 @@ none.
   `UPDATE_BEFORE_FINISH_REMINDER`:
 
   `Reminder: make sure the task board is up to date.`
+
+## The thinking feed
+
+The Thought tab shows what a pi session is thinking. That text does not
+travel through the hook command: the pi producer — the pmux extension, which
+writes it through the pmux change `thinking-feed` — records the thinking in a
+per-session file, the thinking feed, and the sidebar reads that file. The
+path rule and the record shape below are shared with pmux, and both sides pin
+the same path vector in a test.
+
+### The path
+
+The feed of a session is `<dir>/<session id>.jsonl`, where `<dir>` is
+`$XDG_RUNTIME_DIR/pmux-thinking`, or `/tmp/pmux-thinking-<uid>` when
+`XDG_RUNTIME_DIR` is unset or empty, and `<session id>` is the session
+identifier the sidebar also holds in `@pane_session_id`. With
+`XDG_RUNTIME_DIR=/run/user/1000` and session id `abc`, the feed is
+`/run/user/1000/pmux-thinking/abc.jsonl`; with `XDG_RUNTIME_DIR` unset and
+uid 1000, it is `/tmp/pmux-thinking-1000/abc.jsonl`. A new session id gets
+its own file, and a resumed session appends to the file of its id.
+
+The producer creates the directory with mode 0700 and the file with mode
+0600, sets those modes again when either already exists with another mode,
+and writes no feed in a directory that another uid owns. The sidebar only
+reads the feed, and it removes the file when the pane's agent state is
+cleared (see "The cleanup rule" below).
+
+A session id that is empty, `.` or `..`, or that holds a `/`, gives no feed:
+a read finds no file, and a teardown removes nothing. The rule keeps a
+strange id from naming a path outside the feed directory.
+
+### The records
+
+Each line is one JSON object `{kind, ts, producer, text?}`. `kind` is `start`
+when a thinking block begins, `delta` for streamed text, and `end` when the
+block completes. `ts` is the ISO 8601 time the phase was seen, `producer` is
+one random token per producer, and `text` carries the streamed text of a
+`delta` and the final content of an `end`. A `start` carries no `text`, and
+an `end` carries `text` only when its content is not empty.
+
+Deltas that arrive within 50 ms are coalesced into one `delta` record,
+stamped with the time of the first of them. Pending deltas are appended
+before a `start`, before an `end`, and when the session shuts down, so a
+record is never lost to a fast-following phase.
+
+### The last thought
+
+The sidebar reduces the records of the feed to one last thought, and the tab
+shows that. The whole reduction is these rules:
+
+- A `start` begins a new last thought, with no text and the `ts` of that
+  record. After a new `start` the previous text is gone.
+- A `delta` appends its text. While the block is open, text longer than
+  16000 characters is trimmed to its last 8000 — the half-drop leaves room
+  for another 8000 before the limit is crossed again, so a block does not
+  trim on every delta.
+- An `end` with text replaces the text with it, and an `end` without text
+  keeps the text it has. Either way the block is closed, and the thought
+  stays on screen until the next `start`.
+- A line that is not a valid record is ignored, and the other lines apply.
+  The `producer` field is part of the shape but is not read: the last
+  thought is the newest block whatever produced it.
+
+The text is made terminal-safe as it is read: control characters other than
+`\n` and `\t` and every terminal escape sequence are removed, and line
+breaks stay. The tab shows the result as plain text at the top of the panel,
+indented one column on each side and wrapped to the panel width less those
+two columns, under the yellow `HH:mm:ss` local time of the record that began
+the thought.
+
+A feed is read only while the Thought tab is drawn, once per refresh tick,
+and only through the bytes it grew by since the previous read. The first
+read of a feed begins at its newest `start` record, not at the start of the
+file, so a large feed costs one backward scan however many blocks it holds.
+
+### The cleanup rule
+
+The sidebar owns feed deletion; keeping the feed is not pmux's job. When the
+sidebar clears the state of a pi pane, it removes that pane's feed file
+through the same path rule and the same session-id checks as a read, with
+the session id taken from `@pane_session_id` before the pane options are
+wiped. Three paths clear a pi pane: the shell-fallback sweep in
+`src/tmux/query.rs`, the port-scan sweep in `src/state/refresh.rs`, and the
+pi `session-end` teardown in `src/cli/hook/context/pending.rs`, and each of
+them goes through `thinking_feed::remove_pi_feed`. A feed file that is
+absent is not an error and does not delay the clearing of the pane's state.
+
+A feed whose pane died while no sidebar ran stays until the feed directory
+is cleared — at logout for `XDG_RUNTIME_DIR`, at reboot for the `/tmp`
+fallback. One file holds one session's thinking, so the leftover is cheap.
 
 ## The channel endpoint
 

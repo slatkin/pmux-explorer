@@ -100,7 +100,11 @@ pub(in crate::cli::hook) fn on_session_end(
             },
         );
     }
-    run_session_end_teardown(pane);
+    // The thinking feed environment is resolved here, at the hook's
+    // edge, the way the polling-side sweeps resolve it, so the
+    // teardown body takes it as an argument and tests inject a
+    // scratch env.
+    run_session_end_teardown(pane, &crate::thinking_feed::FeedEnv::from_process());
     0
 }
 

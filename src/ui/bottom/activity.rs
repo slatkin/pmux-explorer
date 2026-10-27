@@ -13,7 +13,7 @@ pub(super) fn draw_activity_content(frame: &mut Frame, state: &mut AppState, inn
     let theme = &state.theme;
 
     if state.activity.entries.is_empty() {
-        super::render_centered(frame, inner, "No activity yet", theme.text_muted);
+        super::render_centered(frame, inner, "No tools yet", theme.text_muted);
         return;
     }
 

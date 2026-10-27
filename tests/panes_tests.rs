@@ -123,8 +123,8 @@ fn test_running_icon_blink_off() {
     ⓘ                        — ▾
     project
     ┃ ● claude
-    ─ Activity│Tasks│Git ───────
-           No activity yet
+    ─ Tools│Tasks│Git ──────────
+            No tools yet
     ");
 }
 
@@ -151,8 +151,8 @@ fn test_running_spinner_frame_advances() {
     ⓘ                        — ▾
     project
     ┃ ● claude
-    ─ Activity│Tasks│Git ───────
-           No activity yet
+    ─ Tools│Tasks│Git ──────────
+            No tools yet
     ");
 }
 
@@ -178,8 +178,8 @@ fn test_waiting_icon() {
     ⓘ                        — ▾
     project
     ┃ ◐ claude
-    ─ Activity│Tasks│Git ───────
-           No activity yet
+    ─ Tools│Tasks│Git ──────────
+            No tools yet
     ");
 }
 
@@ -205,8 +205,8 @@ fn test_error_icon() {
     ⓘ                        — ▾
     project
     ┃ ✕ claude
-    ─ Activity│Tasks│Git ───────
-           No activity yet
+    ─ Tools│Tasks│Git ──────────
+            No tools yet
     ");
 }
 
@@ -314,8 +314,8 @@ fn test_agents_auto_scroll_up_shows_group_header() {
         Waiting for prompt…
       ○ claude
         Waiting for prompt…
-    ─ Activity│Tasks│Git ───────
-           No activity yet
+    ─ Tools│Tasks│Git ──────────
+            No tools yet
     ");
 }
 
@@ -356,8 +356,8 @@ fn repo_popup_renders_repo_names_when_open() {
     backend                     └──────────┘
     ┃ ○ claude
         Waiting for prompt…
-    ─ Activity│Tasks│Git ───────────────────
-                 No activity yet
+    ─ Tools│Tasks│Git ──────────────────────
+                  No tools yet
     ");
     // The popup area is required for click hit-testing and is non-visual
     // state, so it stays as a direct assertion.
@@ -415,10 +415,10 @@ fn repo_popup_highlights_selected_entry_with_background() {
 
 
 
-    ─[fg:240] [fg:240]A[fg:153]c[fg:153]t[fg:153]i[fg:153]v[fg:153]i[fg:153]t[fg:153]y[fg:153]│[fg:240]T[fg:252]a[fg:252]s[fg:252]k[fg:252]s[fg:252]│[fg:240]G[fg:252]i[fg:252]t[fg:252] [fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]
+    ─[fg:240] [fg:240]T[fg:153]o[fg:153]o[fg:153]l[fg:153]s[fg:153]│[fg:240]T[fg:252]a[fg:252]s[fg:252]k[fg:252]s[fg:252]│[fg:240]G[fg:252]i[fg:252]t[fg:252] [fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]
 
 
 
-                 N[fg:252]o[fg:252] [fg:252]a[fg:252]c[fg:252]t[fg:252]i[fg:252]v[fg:252]i[fg:252]t[fg:252]y[fg:252] [fg:252]y[fg:252]e[fg:252]t[fg:252]
+                  N[fg:252]o[fg:252] [fg:252]t[fg:252]o[fg:252]o[fg:252]l[fg:252]s[fg:252] [fg:252]y[fg:252]e[fg:252]t[fg:252]
     ");
 }

@@ -5,9 +5,9 @@ use crate::activity::{self, TaskProgress};
 use crate::cli::sanitize_tmux_value;
 use crate::process::ProcessSnapshot;
 use crate::task_store;
-use crate::tmux::{self, PaneStatus, SessionInfo};
+use crate::tmux::{self, AgentType, PaneStatus, SessionInfo};
 
-use super::AppState;
+use super::{AppState, BottomTab};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TaskProgressDecision {
@@ -66,6 +66,15 @@ pub(crate) fn file_cache_fresh(
     )
 }
 
+/// A pane the port scan found dead, with the identity its feed removal
+/// needs: the agent and the session id, read from the pane list before
+/// any option is wiped.
+struct DeadPane {
+    pane_id: String,
+    agent: AgentType,
+    session_id: Option<String>,
+}
+
 impl AppState {
     pub(crate) fn refresh_now(&mut self) {
         self.now = crate::time::now_epoch_secs();
@@ -83,7 +92,16 @@ impl AppState {
         self.find_focused_pane();
     }
 
-    fn clear_dead_agent_metadata(pane_id: &str) {
+    fn clear_dead_agent_metadata(
+        pane_id: &str,
+        agent: AgentType,
+        session_id: &str,
+        env: &crate::thinking_feed::FeedEnv,
+    ) {
+        // The feed goes first: the session id is in hand from the pane
+        // list, and a pi pane's thinking feed dies with its state the
+        // same way the shell-fallback sweep clears it (design D7).
+        crate::thinking_feed::remove_pi_feed(agent, session_id, env);
         // The lifecycle set from `tmux::AGENT_SESSION_PANE_OPTIONS`, minus
         // the pending-teardown markers: the hook-side drain owns those,
         // and a fresh SessionStart clears both on the next run.
@@ -124,16 +142,20 @@ impl AppState {
     }
 
     /// One tick of the file-backed refresh pass: the task-store close
-    /// sweep, then the activity log, the focused pane's task list, and
-    /// every pane's task progress. Touches only `/tmp` files and
-    /// `AppState` — no tmux I/O — so tests drive it directly. The close
-    /// sweep runs first so a focused list that closes renders the
-    /// empty state in the same frame.
+    /// sweep, then the activity log, the focused pane's task list,
+    /// every pane's task progress, and — while the Thought tab is
+    /// displayed — the focused pane's thinking feed. Touches only local
+    /// files (the `/tmp` stores plus the feed under `$XDG_RUNTIME_DIR`
+    /// or `/tmp`) and `AppState` — no tmux I/O — so tests drive it
+    /// directly.
+    /// The close sweep runs first so a focused list that closes renders
+    /// the empty state in the same frame.
     pub fn refresh_activity_data(&mut self) {
         self.refresh_task_close();
         self.refresh_activity_log();
         self.refresh_pane_tasks();
         self.refresh_task_progress();
+        self.refresh_thought_feed();
     }
 
     /// Fast refresh: tmux state + activity log (called every 1s).
@@ -162,7 +184,8 @@ impl AppState {
         // copy) so every field the state holds has a reader.
         let focused = self.sidebar_pane.pane_active;
         let window_active = self.sidebar_pane.window_active;
-        let (mut sessions, mut process_snapshot) = tmux::query_sessions_with_process_snapshot();
+        let (mut sessions, mut process_snapshot) =
+            tmux::query_sessions_with_process_snapshot(&self.thought.env);
         self.sweep_dead_bg_shells_if_due(&mut sessions, &mut process_snapshot);
         if let Some(process_snapshot) = self.refresh_port_data(&sessions, process_snapshot.as_ref())
         {
@@ -190,12 +213,16 @@ impl AppState {
         {
             let scanned = crate::port::scan_session_process_snapshot(sessions, process_snapshot)?;
             let mut updates: Vec<(String, Vec<u16>, Option<String>)> = Vec::new();
-            let mut dead_panes: Vec<String> = Vec::new();
+            let mut dead_panes: Vec<DeadPane> = Vec::new();
             for session in sessions {
                 for window in &session.windows {
                     for pane in &window.panes {
                         if !scanned.live_agent_panes.contains(&pane.pane_id) {
-                            dead_panes.push(pane.pane_id.clone());
+                            dead_panes.push(DeadPane {
+                                pane_id: pane.pane_id.clone(),
+                                agent: pane.agent.clone(),
+                                session_id: pane.session_id.clone(),
+                            });
                         }
                         updates.push((
                             pane.pane_id.clone(),
@@ -214,9 +241,14 @@ impl AppState {
                 pane_state.ports = ports;
                 pane_state.command = command;
             }
-            for pane_id in dead_panes {
-                Self::clear_dead_agent_metadata(&pane_id);
-                self.clear_pane_state(&pane_id);
+            for dead in dead_panes {
+                Self::clear_dead_agent_metadata(
+                    &dead.pane_id,
+                    dead.agent,
+                    dead.session_id.as_deref().unwrap_or(""),
+                    &self.thought.env,
+                );
+                self.clear_pane_state(&dead.pane_id);
             }
             self.timers.port_scan_initialized = true;
             self.timers.last_port_refresh = std::time::Instant::now();
@@ -440,6 +472,33 @@ impl AppState {
         entries.retain(|e| e.tool != activity::TASK_RESET_MARKER);
         self.activity.entries = entries;
         self.activity.log_cache = current_mtime.map(|m| (pane_id.clone(), m));
+    }
+
+    /// Read the focused pi pane's thinking feed into `thought.last`
+    /// (design D4) — only while the Thought tab is drawn: a hidden
+    /// bottom panel (a percent of 0, a sidebar too short, the floating
+    /// clamp) draws no tab and reads no feed, and another displayed
+    /// tab leaves the last thought as the previous read left it. The
+    /// feed environment was resolved once at startup into
+    /// `ThoughtState`, so the path helper takes the env as an argument.
+    pub(crate) fn refresh_thought_feed(&mut self) {
+        if self.layout.bottom_panel_height == 0 || self.displayed_bottom_tab() != BottomTab::Thought
+        {
+            return;
+        }
+        let session_id = self
+            .focus_state
+            .focused_pane_id
+            .as_deref()
+            .and_then(|id| self.pane_by_id(id))
+            .and_then(|pane| pane.session_id.clone());
+        let Some(session_id) = session_id else {
+            // No focused pane, or one without a session id: no feed.
+            self.thought.last = self.thought.reader.read("", None);
+            return;
+        };
+        let path = self.thought.env.feed_path(&session_id);
+        self.thought.last = self.thought.reader.read(&session_id, path.as_deref());
     }
 }
 
@@ -884,7 +943,8 @@ mod tests {
             tmux::test_mock::set(pane, key, "x");
         }
 
-        AppState::clear_dead_agent_metadata(pane);
+        let env = crate::thinking_feed::FeedEnv::default();
+        AppState::clear_dead_agent_metadata(pane, AgentType::Pi, "", &env);
 
         for key in tmux::AGENT_SESSION_PANE_OPTIONS {
             let preserved = matches!(
@@ -1042,6 +1102,169 @@ mod tests {
 
         cleanup_task_store(pane_a);
         cleanup_task_store(pane_b);
+    }
+
+    // ─── refresh_thought_feed ───────────────────────────────────
+
+    use crate::thinking_feed::scratch_env;
+
+    /// An AppState focused on a pi pane carrying `session_id`, whose
+    /// feed lives under the scratch `dir` (the captured startup env is
+    /// overwritten, so no process env is touched). The bottom panel is
+    /// marked drawn — the feed read runs only while the tab is on
+    /// screen.
+    fn pi_feed_state(dir: &tempfile::TempDir, session_id: &str) -> AppState {
+        let mut pane = test_pane("%PI_FEED");
+        pane.agent = AgentType::Pi;
+        pane.session_id = Some(session_id.into());
+        let mut state = AppState::new("%99".into());
+        state.repo_groups = vec![crate::group::RepoGroup {
+            name: "test".into(),
+            has_focus: true,
+            panes: vec![(pane, crate::group::PaneGitInfo::default())],
+        }];
+        state.focus_state.focused_pane_id = Some("%PI_FEED".into());
+        state.thought.env = scratch_env(dir.path());
+        state.layout.bottom_panel_height = 10;
+        state
+    }
+
+    #[test]
+    fn a_hidden_bottom_panel_reads_no_feed() {
+        // The spec gates the read on the tab being drawn: a stored
+        // Thought with the panel hidden (a percent of 0 drew no panel
+        // last frame) must not stat or read the feed.
+        let dir = tempfile::TempDir::new().unwrap();
+        let env = scratch_env(dir.path());
+        let feed = env.feed_path("sess").unwrap();
+        std::fs::create_dir_all(feed.parent().unwrap()).unwrap();
+        std::fs::write(
+            &feed,
+            format!(
+                "{}\n{}\n",
+                r#"{"kind":"start","ts":"t1","producer":"pmux"}"#,
+                r#"{"kind":"delta","ts":"t2","producer":"pmux","text":"unseen"}"#
+            ),
+        )
+        .unwrap();
+        let mut state = pi_feed_state(&dir, "sess");
+        state.global.bottom_tab = BottomTab::Thought;
+        state.layout.bottom_panel_height = 0;
+
+        state.refresh_activity_data();
+
+        assert!(
+            state.thought.last.is_empty(),
+            "a hidden bottom panel draws no tab and must read no feed"
+        );
+    }
+
+    #[test]
+    fn another_displayed_tab_reads_no_feed() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let env = scratch_env(dir.path());
+        let feed = env.feed_path("sess").unwrap();
+        std::fs::create_dir_all(feed.parent().unwrap()).unwrap();
+        std::fs::write(
+            &feed,
+            format!(
+                "{}\n{}\n",
+                r#"{"kind":"start","ts":"t1","producer":"pmux"}"#,
+                r#"{"kind":"delta","ts":"t2","producer":"pmux","text":"thought"}"#
+            ),
+        )
+        .unwrap();
+        let mut state = pi_feed_state(&dir, "sess");
+        state.global.bottom_tab = BottomTab::Tasks;
+
+        state.refresh_activity_data();
+
+        assert!(
+            state.thought.last.is_empty(),
+            "the Tasks tab must read no thinking feed"
+        );
+
+        // A delta arriving while another tab is displayed stays unread.
+        std::fs::write(
+            &feed,
+            format!(
+                "{}\n{}\n{}\n",
+                r#"{"kind":"start","ts":"t1","producer":"pmux"}"#,
+                r#"{"kind":"delta","ts":"t2","producer":"pmux","text":"thought"}"#,
+                r#"{"kind":"delta","ts":"t3","producer":"pmux","text":" more"}"#
+            ),
+        )
+        .unwrap();
+        state.refresh_activity_data();
+
+        assert!(state.thought.last.is_empty());
+    }
+
+    #[test]
+    fn a_new_delta_shows_on_the_next_refresh() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let env = scratch_env(dir.path());
+        let feed = env.feed_path("sess").unwrap();
+        std::fs::create_dir_all(feed.parent().unwrap()).unwrap();
+        std::fs::write(
+            &feed,
+            format!(
+                "{}\n{}\n",
+                r#"{"kind":"start","ts":"t1","producer":"pmux"}"#,
+                r#"{"kind":"delta","ts":"t2","producer":"pmux","text":"first read"}"#
+            ),
+        )
+        .unwrap();
+        let mut state = pi_feed_state(&dir, "sess");
+        state.global.bottom_tab = BottomTab::Thought;
+
+        state.refresh_activity_data();
+        assert_eq!(state.thought.last.text, "first read");
+
+        // The delta appended after this tick's read shows on the next
+        // one — within a second, per the spec's tick scenario.
+        std::fs::write(
+            &feed,
+            format!(
+                "{}\n{}\n{}\n",
+                r#"{"kind":"start","ts":"t1","producer":"pmux"}"#,
+                r#"{"kind":"delta","ts":"t2","producer":"pmux","text":"first read"}"#,
+                r#"{"kind":"delta","ts":"t3","producer":"pmux","text":" and more"}"#
+            ),
+        )
+        .unwrap();
+        state.refresh_activity_data();
+
+        assert_eq!(state.thought.last.text, "first read and more");
+    }
+
+    #[test]
+    fn a_displayed_thought_tab_without_a_session_id_shows_nothing() {
+        // No focused pane at all: the read is the empty state, and a
+        // later focus with a session id picks its feed up.
+        let dir = tempfile::TempDir::new().unwrap();
+        let env = scratch_env(dir.path());
+        let feed = env.feed_path("sess").unwrap();
+        std::fs::create_dir_all(feed.parent().unwrap()).unwrap();
+        std::fs::write(
+            &feed,
+            format!(
+                "{}\n{}\n",
+                r#"{"kind":"start","ts":"t1","producer":"pmux"}"#,
+                r#"{"kind":"delta","ts":"t2","producer":"pmux","text":"late"}"#
+            ),
+        )
+        .unwrap();
+        let mut state = pi_feed_state(&dir, "sess");
+        state.global.bottom_tab = BottomTab::Thought;
+        state.focus_state.focused_pane_id = None;
+
+        state.refresh_activity_data();
+        assert!(state.thought.last.is_empty());
+
+        state.focus_state.focused_pane_id = Some("%PI_FEED".into());
+        state.refresh_activity_data();
+        assert_eq!(state.thought.last.text, "late");
     }
 
     // ─── refresh_task_close ───────────────────────────────────────

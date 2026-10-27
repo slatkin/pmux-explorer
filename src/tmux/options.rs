@@ -190,6 +190,7 @@ pub const SIDEBAR_COLOR_FILE_CHANGE: &str = "@sidebar_color_file_change";
 pub const SIDEBAR_COLOR_PR_LINK: &str = "@sidebar_color_pr_link";
 pub const SIDEBAR_COLOR_SECTION_TITLE: &str = "@sidebar_color_section_title";
 pub const SIDEBAR_COLOR_ACTIVITY_TIMESTAMP: &str = "@sidebar_color_activity_timestamp";
+pub const SIDEBAR_COLOR_THOUGHT_TIMESTAMP: &str = "@sidebar_color_thought_timestamp";
 pub const SIDEBAR_COLOR_RESPONSE_ARROW: &str = "@sidebar_color_response_arrow";
 
 pub const SIDEBAR_ICON_ALL: &str = "@sidebar_icon_all";

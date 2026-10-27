@@ -18,6 +18,7 @@ mod refresh;
 mod scroll;
 mod tab;
 mod tasks;
+mod thought;
 mod timers;
 
 pub use activity::ActivityState;
@@ -25,7 +26,8 @@ pub use filter::{RepoFilter, StatusCounts, StatusFilter};
 pub use focus::{Focus, FocusState};
 pub use global::GlobalState;
 pub use layout::{
-    FrameLayout, HyperlinkOverlay, RepoSpawnTarget, RowTarget, SpawnRemoveTarget, SplitDrag,
+    BottomTabTarget, FrameLayout, HyperlinkOverlay, RepoSpawnTarget, RowTarget, SpawnRemoveTarget,
+    SplitDrag,
 };
 pub(crate) use layout::{filter_bar_layout, split_rows};
 pub(crate) use notices::debug_forced_display;
@@ -37,36 +39,35 @@ pub use popup::{PopupState, SpawnField};
 pub(crate) use refresh::{TaskProgressDecision, classify_task_progress};
 pub use scroll::{ScrollState, ScrollStates};
 pub use tasks::TasksState;
+pub use thought::ThoughtState;
 pub use timers::RefreshTimers;
 
-/// Bottom-panel tabs in cycle order. The selected tab is shared state:
-/// it lives in [`GlobalState`], is written with `set -g
-/// @sidebar_bottom_tab`, and changes only through an explicit selection
-/// (the manual cycle, a tab-title click) or through the shared value a
-/// peer instance selected.
+/// Bottom-panel tabs. The selected tab is shared state: it lives in
+/// [`GlobalState`], is written with `set -g @sidebar_bottom_tab`, and
+/// changes only through an explicit selection (the manual cycle, a
+/// tab-title click) or through the shared value a peer instance
+/// selected.
+///
+/// `Thought` is stored in the shared value like the others, but the
+/// rule draws it only while the focused pane runs pi; a stored Thought
+/// displays as Activity otherwise (see
+/// [`AppState::displayed_bottom_tab`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BottomTab {
     Activity,
     Tasks,
     GitStatus,
+    Thought,
 }
 
 impl BottomTab {
-    /// The next tab in cycle order.
-    pub fn next(self) -> Self {
-        match self {
-            Self::Activity => Self::Tasks,
-            Self::Tasks => Self::GitStatus,
-            Self::GitStatus => Self::Activity,
-        }
-    }
-
     /// Whether this tab drives the background git poller.
     pub fn is_git_status(self) -> bool {
         matches!(self, Self::GitStatus)
     }
 
-    /// The label persisted in the `@sidebar_bottom_tab` tmux option.
+    /// The label drawn on the rule and persisted in the
+    /// `@sidebar_bottom_tab` tmux option (lower case, see `as_str`).
     /// The values contain no space, so they ride the space-split parse
     /// of the shared reading safely.
     pub fn as_str(&self) -> &'static str {
@@ -74,6 +75,7 @@ impl BottomTab {
             Self::Activity => "activity",
             Self::Tasks => "tasks",
             Self::GitStatus => "git",
+            Self::Thought => "thought",
         }
     }
 
@@ -84,7 +86,20 @@ impl BottomTab {
         match s {
             "tasks" => Self::Tasks,
             "git" => Self::GitStatus,
+            "thought" => Self::Thought,
             _ => Self::Activity,
+        }
+    }
+
+    /// The capitalized label the rule draws for this tab. The click
+    /// hitboxes are computed from the same strings, so a label and its
+    /// hitbox cannot drift apart.
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Activity => "Tools",
+            Self::Tasks => "Tasks",
+            Self::GitStatus => "Git",
+            Self::Thought => "Thought",
         }
     }
 }
@@ -115,6 +130,9 @@ pub struct AppState {
     /// Focused pane's task store for the Tasks tab (refreshed by
     /// `refresh_pane_tasks` with the activity log's mtime check).
     pub tasks: TasksState,
+    /// The Thought tab's feed reader state (refreshed by
+    /// `refresh_thought_feed` only while the tab is drawn).
+    pub thought: ThoughtState,
     pub tmux_pane: String,
     /// The sidebar's own pane state as tmux reported it on the last
     /// refresh: focus, size, window size and the floating flag. The
@@ -206,6 +224,7 @@ impl AppState {
             split_drag: None,
             activity: ActivityState::new(),
             tasks: TasksState::new(),
+            thought: ThoughtState::from_process(),
             tmux_pane,
             scrolls: ScrollStates::default(),
             theme: ColorTheme::default(),
@@ -1035,6 +1054,20 @@ mod tests {
         // directly, so we don't assert it here (tmux not available in tests).
     }
 
+    // ─── BottomTab label parse ──────────────────────────────────────
+
+    #[test]
+    fn thought_parses_to_thought_and_unknown_still_falls_back_to_activity() {
+        // The shared option may name the Thought tab a newer sidebar
+        // wrote; an old binary reading it must not invent a tab, and
+        // any unknown value stays on the Activity default.
+        assert_eq!(BottomTab::from_label("thought"), BottomTab::Thought);
+        assert_eq!(BottomTab::from_label("activity"), BottomTab::Activity);
+        assert_eq!(BottomTab::from_label("nonsense"), BottomTab::Activity);
+        assert_eq!(BottomTab::Thought.as_str(), "thought");
+        assert_eq!(BottomTab::Thought.label(), "Thought");
+    }
+
     // ─── next_bottom_tab / scroll_bottom tests ──────────────────────
 
     #[test]
@@ -1195,6 +1228,7 @@ mod tests {
     fn terminal_click_on_the_tab_row_switches_the_tab() {
         let mut state = AppState::new("%99".into());
         state.layout.bottom_panel_height = 20;
+        crate::ui::bottom::draw_tab_targets(&mut state, 40);
         state.global.bottom_tab = BottomTab::GitStatus;
         // term_height=50, bottom panel 20 → rule at row 30. The press
         // starts a split drag (any press column resizes — decision 4);
@@ -1264,6 +1298,7 @@ mod tests {
         // clamped panel (rows 18..25) is clickable agent list.
         state.layout.line_to_row = vec![Some(1); 24];
         state.global.selected_pane_row = 0;
+        crate::ui::bottom::draw_tab_targets(&mut state, 40);
         state.global.bottom_tab = BottomTab::GitStatus;
 
         // Row 26 is the drawn tab row (38 - 12); the unclamped height
@@ -1360,9 +1395,10 @@ mod tests {
         let mut state = AppState::new("%99".into());
         state.layout.bottom_panel_height = 12;
         state.global.bottom_percent = 30;
+        crate::ui::bottom::draw_tab_targets(&mut state, 40);
 
-        // Press on col 18, inside the Git label.
-        assert!(state.handle_terminal_click(28, 18, 40));
+        // Press on col 14, inside the Git label.
+        assert!(state.handle_terminal_click(28, 14, 40));
         assert_eq!(
             state.global.bottom_tab,
             BottomTab::Activity,
@@ -1374,7 +1410,7 @@ mod tests {
         assert_eq!(
             state.global.bottom_tab,
             BottomTab::GitStatus,
-            "col 18 is inside the Git label"
+            "col 14 is inside the Git label"
         );
         assert_eq!(
             state.global.bottom_percent, 30,
@@ -1391,6 +1427,7 @@ mod tests {
         state.layout.bottom_panel_height = 12;
         state.global.bottom_percent = 30;
         state.global.bottom_tab = BottomTab::Tasks;
+        crate::ui::bottom::draw_tab_targets(&mut state, 40);
 
         state.handle_terminal_click(28, 30, 40);
         state.end_split_drag(40);
@@ -1411,6 +1448,7 @@ mod tests {
         state.layout.bottom_panel_height = 12;
         state.global.bottom_percent = 30;
         state.global.bottom_tab = BottomTab::Tasks;
+        crate::ui::bottom::draw_tab_targets(&mut state, 40);
 
         // Press on col 12, inside the Tasks label, then drag.
         state.handle_terminal_click(28, 12, 40);
@@ -1503,12 +1541,13 @@ mod tests {
         let mut state = AppState::new("%99".into());
         state.layout.bottom_panel_height = 3;
         state.global.bottom_percent = 1;
+        crate::ui::bottom::draw_tab_targets(&mut state, 40);
         state.global.bottom_tab = BottomTab::Activity;
 
         // An unmoved press on the Tasks label, then a second press on
         // the Git label (both on the drawn rule row 37 = 40 - 3).
         state.handle_terminal_click(37, 12, 40);
-        state.handle_terminal_click(37, 18, 40);
+        state.handle_terminal_click(37, 14, 40);
 
         assert_eq!(
             state.global.bottom_percent, 1,
@@ -1526,7 +1565,7 @@ mod tests {
         let drag = state
             .split_drag
             .expect("the new press started a fresh drag");
-        assert_eq!(drag.press_col, 18);
+        assert_eq!(drag.press_col, 14);
 
         state.end_split_drag(40);
         assert_eq!(

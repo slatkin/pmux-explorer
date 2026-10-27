@@ -22,7 +22,9 @@ pub(super) fn spawn(state: &AppState) -> Workers {
     let (git_tx, git_rx) = mpsc::channel::<GitData>();
     let (version_tx, version_rx) = mpsc::channel::<UpdateNotice>();
     let tmux_pane_clone = state.tmux_pane.clone();
-    let git_tab_active = Arc::new(AtomicBool::new(state.global.bottom_tab.is_git_status()));
+    let git_tab_active = Arc::new(AtomicBool::new(
+        state.displayed_bottom_tab().is_git_status(),
+    ));
     let git_tab_flag = Arc::clone(&git_tab_active);
     std::thread::spawn(move || {
         git_poll_loop(&tmux_pane_clone, &git_tx, &git_tab_flag);
