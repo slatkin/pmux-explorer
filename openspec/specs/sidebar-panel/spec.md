@@ -26,7 +26,9 @@ it docked again.
 The sidebar's top row SHALL carry a control at its right edge that pops the
 sidebar out when the sidebar is docked and pops it back in when the sidebar
 is floating. The control SHALL show a different glyph in each state. Clicking
-the control and pressing the `p` key SHALL do the same thing.
+the control and pressing the tmux prefix followed by `Ctrl+P` while the
+sidebar has focus SHALL do the same thing. Bare `p` SHALL NOT toggle the
+panel. `Ctrl+P` without the prefix SHALL keep its navigation action.
 
 #### Scenario: the control is at the right edge
 - **WHEN** the sidebar is rendered
@@ -37,8 +39,16 @@ the control and pressing the `p` key SHALL do the same thing.
 - **THEN** the control shows the pop-out glyph, and when the sidebar is floating it shows the pop-in glyph
 
 #### Scenario: the keyboard shortcut
-- **WHEN** the user presses `p` while the sidebar has focus
+- **WHEN** the user presses the tmux prefix followed by `Ctrl+P` while the sidebar has focus
 - **THEN** the sidebar pops out if it is docked and pops in if it is floating
+
+#### Scenario: an accidental plain keypress
+- **WHEN** the user presses bare `p` while the sidebar has focus
+- **THEN** the sidebar stays in its current docked or floating state
+
+#### Scenario: the shortcut outside the sidebar
+- **WHEN** the user presses the tmux prefix followed by `Ctrl+P` outside the sidebar
+- **THEN** tmux switches to the previous window
 
 ### Requirement: popping out floats the sidebar as a panel
 

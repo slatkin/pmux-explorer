@@ -76,7 +76,7 @@ fn float_geometry(info: SidebarPaneInfo) -> Option<PanelGeometry> {
 }
 
 impl AppState {
-    /// The single action behind the pop-out control and the `p` key:
+    /// The action behind the pop-out control and tmux prefix + Ctrl-P:
     /// float the pane when it is docked, dock it when it is floating.
     /// The mode is read from the pane here, so the action follows the
     /// pane's actual state even when the pane was floated by hand.
@@ -104,7 +104,7 @@ impl AppState {
             // unreachable) or tmux never reported the size (older than
             // the floating flag). No tmux call — a 0-size float is
             // refused with "position too small" — but the user who
-            // pressed `p` must learn why nothing happened.
+            // used the shortcut must learn why nothing happened.
             self.set_flash(
                 "Pop-out unavailable: could not read the window size, so the sidebar stays docked.",
             );

@@ -172,8 +172,11 @@ fn handle_main_key(key: KeyEvent, state: &mut AppState, git_tab_active: &AtomicB
         KeyCode::Char('j') | KeyCode::Down => pane_nav_down(state),
         KeyCode::Char('n') if ctrl => pane_nav_down(state),
         KeyCode::Char('k') | KeyCode::Up => pane_nav_up(state),
+        // pmux-explorer.conf forwards tmux prefix + Ctrl-P as M-C-p.
+        KeyCode::Char('p') if key.modifiers == (KeyModifiers::CONTROL | KeyModifiers::ALT) => {
+            state.toggle_popout();
+        }
         KeyCode::Char('p') if ctrl => pane_nav_up(state),
-        KeyCode::Char('p') => state.toggle_popout(),
         KeyCode::Char('n') => {
             if state.focus_state.focus == Focus::Panes {
                 state.open_spawn_input_from_selection();
@@ -313,6 +316,13 @@ mod tests {
         KeyEvent::new(KeyCode::Char(c), KeyModifiers::CONTROL)
     }
 
+    fn popout_key() -> KeyEvent {
+        KeyEvent::new(
+            KeyCode::Char('p'),
+            KeyModifiers::CONTROL | KeyModifiers::ALT,
+        )
+    }
+
     /// Build an AppState with three navigable pane rows and Panes focus,
     /// which is the precondition the navigation arms operate against.
     fn state_with_three_panes() -> AppState {
@@ -399,49 +409,42 @@ mod tests {
     }
 
     #[test]
-    fn bare_p_toggles_the_popout_and_does_not_navigate() {
-        // The bare `p` runs the pop-out action, not navigation. The pane
-        // id cannot exist in any tmux server, so the pane probe fails and
-        // the action reports the unreadable window size instead of acting
-        // — the flash is the proof that `p` reached the pop-out (the
-        // refusal flash itself is covered by the injected popout tests).
-        // The selection starts off row 0, so a `p` that navigated would
-        // move it and fail here.
+    fn bare_p_does_not_pop_out_or_navigate() {
         let mut state = state_with_three_panes();
         state.tmux_pane = "%4294967295".into();
         state.global.selected_pane_row = 1;
         let flag = AtomicBool::new(false);
         handle_key_event(key(KeyCode::Char('p')), &mut state, &flag);
         assert_eq!(state.global.selected_pane_row, 1);
-        assert!(
-            state
-                .flash
-                .as_ref()
-                .is_some_and(|(msg, _)| msg.starts_with("Pop-out unavailable:")),
-            "pressing `p` must reach the pop-out action"
-        );
+        assert!(state.flash.is_none());
     }
 
     #[test]
-    fn bare_p_does_not_toggle_while_a_popup_is_open() {
-        // Popups swallow every key: the bare `p` must not float the pane
-        // behind the repo popup's back.
+    fn popout_shortcut_does_not_toggle_while_a_popup_is_open() {
         let mut state = state_with_repo_popup_open();
         state.tmux_pane = "%4294967295".into();
         let flag = AtomicBool::new(false);
-        handle_key_event(key(KeyCode::Char('p')), &mut state, &flag);
+        handle_key_event(popout_key(), &mut state, &flag);
         assert!(state.flash.is_none(), "no pop-out while a popup is open");
         assert!(state.is_repo_popup_open());
     }
 
     #[test]
-    fn ctrl_p_still_navigates_panes_after_p_is_bound() {
+    fn popout_shortcut_toggles_without_navigating() {
+        // A nonexistent pane makes the action report a failed probe,
+        // so reaching it is observable without floating a real pane.
         let mut state = state_with_three_panes();
-        state.global.selected_pane_row = 2;
+        state.tmux_pane = "%4294967295".into();
+        state.global.selected_pane_row = 1;
         let flag = AtomicBool::new(false);
-        handle_key_event(ctrl_key('p'), &mut state, &flag);
+        handle_key_event(popout_key(), &mut state, &flag);
         assert_eq!(state.global.selected_pane_row, 1);
-        assert!(state.flash.is_none());
+        assert_eq!(
+            state.flash.as_ref().map(|(msg, _)| msg.as_str()),
+            Some(
+                "Pop-out unavailable: could not read the window size, so the sidebar stays docked."
+            ),
+        );
     }
 
     #[test]

@@ -7,7 +7,7 @@ The sidebar is a docked column by default, sharing the window's width with the w
 
 ## The pop-out control
 
-The sidebar's top row carries the control at its right edge. It shows `⤢` while the sidebar is docked and `⤡` while the sidebar is floating. Clicking it and pressing `p` do the same thing: pop out when docked, pop in when floating.
+The sidebar's top row carries the control at its right edge. It shows `⤢` while the sidebar is docked and `⤡` while the sidebar is floating. Clicking it and pressing the tmux prefix followed by `Ctrl+P` while the sidebar has focus do the same thing: pop out when docked, pop in when floating. Bare `p` does nothing, so an accidental keypress does not float the sidebar.
 
 The control reads the state of the sidebar pane itself, so a sidebar that was floated from the tmux command line shows the `⤡` glyph and can be popped back in from the sidebar.
 

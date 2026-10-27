@@ -17,8 +17,12 @@ description: Every shortcut in the sidebar, the worktree spawn modal, and the cl
 | `Enter`        | Jump to the selected pane                                           |
 | `Tab`          | Cycle status filter                                                 |
 | `Shift+Tab`    | Cycle bottom panel tab (Tools, Thought (pi panes only), Tasks, Git) |
-| `p`            | Pop the sidebar out of the window / back in                         |
+| `prefix + Ctrl+P` | Pop the sidebar out / back in while the sidebar has focus        |
 | `Esc`          | Return focus or close the popup                                     |
+
+For pop-out/pop-in, press the tmux prefix, release it, then press `Ctrl+P`.
+Bare `p` does nothing. `Ctrl+P` without the prefix still moves the selection up.
+Outside the sidebar, `prefix + Ctrl+P` keeps tmux's previous-window action.
 
 ## Repo filter popup
 
