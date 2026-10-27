@@ -1,7 +1,7 @@
 use super::location::sync_worktree_meta;
 use super::meta::clear_all_meta;
 use crate::cli::{set_attention, set_status};
-use crate::tmux;
+use crate::tmux::{self, AgentType};
 
 /// Legacy pane-option name. Nothing sets this any more — a child
 /// SessionEnd can't be distinguished from the parent's, so the
@@ -36,8 +36,25 @@ pub(in crate::cli::hook) fn drain_pending_teardowns(pane: &str) {
 /// Side-effect body of the SessionEnd teardown. Invoked by
 /// `on_session_end` when no subagents are active; subagent-active
 /// SessionEnds are short-circuited before they reach this point.
-pub(in crate::cli::hook) fn run_session_end_teardown(pane: &str) {
+///
+/// A pi pane's thinking feed dies with its state (design D7): the agent
+/// and session id are read from the pane options before `clear_all_meta`
+/// wipes them, and the feed env values arrive as arguments the way the
+/// polling-side sweeps take them, so tests inject a scratch directory
+/// instead of touching the process env. Only a pi pane removes a feed;
+/// a rejected session id removes nothing, and a missing file is not an
+/// error.
+pub(in crate::cli::hook) fn run_session_end_teardown(
+    pane: &str,
+    xdg_runtime_dir: Option<&str>,
+    uid: u32,
+) {
     set_attention(pane, "clear");
+    let agent = AgentType::from_label(&tmux::get_pane_option_value(pane, tmux::PANE_AGENT));
+    if let Some(agent) = agent {
+        let session_id = tmux::get_pane_option_value(pane, tmux::PANE_SESSION_ID);
+        crate::thinking_feed::remove_pi_feed(agent, &session_id, xdg_runtime_dir, uid);
+    }
     clear_all_meta(pane);
     set_status(pane, "clear");
     let log_path = crate::activity::log_file_path(pane);
