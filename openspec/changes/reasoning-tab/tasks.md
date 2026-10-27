@@ -22,8 +22,8 @@
 
 ## 4. Documentation
 
-- [ ] 4.1 Add a "The thinking feed" section to `docs/agent-protocol.md`: the path rule, file and directory modes, the record shape, the last-thought reading, and the cleanup rule (the sidebar removes the file when the pane's agent state is cleared); verify it matches the pmux `thinking-feed` spec word for word on the path and the record fields
-- [ ] 4.2 Update `docs/state-management.md` (the `bottom_tab` row, the `BottomTab` enum, the reader state, the feed file's removal in the teardown sweep), `CLAUDE.md` (module list entries for the reader and `ui/bottom/thought.rs`), and the README tab list; verify by reading each changed section against the code
+- [x] 4.1 Add a "The thinking feed" section to `docs/agent-protocol.md`: the path rule, file and directory modes, the record shape, the last-thought reading, and the cleanup rule (the sidebar removes the file when the pane's agent state is cleared); verify it matches the pmux `thinking-feed` spec word for word on the path and the record fields
+- [x] 4.2 Update `docs/state-management.md` (the `bottom_tab` row, the `BottomTab` enum, the reader state, the feed file's removal in the teardown sweep), `CLAUDE.md` (module list entries for the reader and `ui/bottom/thought.rs`), and the README tab list; verify by reading each changed section against the code
 
 ## 5. Integration
 
