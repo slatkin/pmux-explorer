@@ -2,9 +2,9 @@
 
 ## 1. Feed path and reducer
 
-- [ ] 1.1 Add the thinking feed path helper (design D5): `<dir>/<session id>.jsonl` with the `$XDG_RUNTIME_DIR/pmux-thinking` / `/tmp/pmux-thinking-<uid>` rule, env values as arguments, and rejection of an empty, `.`, `..` or `/`-holding session id; verify with unit tests for both directories, each rejected id, and the path vector the pmux `thinking-feed` change pins
-- [ ] 1.2 Add the last-thought reducer (design D3): `start` clears, `delta` appends with the 16000/8000 tail trim while open, `end` with text replaces, `end` without text closes, invalid lines ignored, text made terminal-safe at ingest; verify with unit tests for every scenario in `specs/thought-tab` "the records make the last thought", "the last thought is bounded" and the escape-sequence scenario
-- [ ] 1.3 Add the incremental reader (design D4): per-feed `(session id, offset, mtime)` cache, backward 64 KiB scan to the newest `start` on a new session or a shorter file, partial trailing line held back; verify with unit tests on temp files for the first read of a large feed (only the newest block parsed), an append between reads, a partial line completed on the next read, and a truncated/replaced file
+- [x] 1.1 Add the thinking feed path helper (design D5): `<dir>/<session id>.jsonl` with the `$XDG_RUNTIME_DIR/pmux-thinking` / `/tmp/pmux-thinking-<uid>` rule, env values as arguments, and rejection of an empty, `.`, `..` or `/`-holding session id; verify with unit tests for both directories, each rejected id, and the path vector the pmux `thinking-feed` change pins
+- [x] 1.2 Add the last-thought reducer (design D3): `start` clears, `delta` appends with the 16000/8000 tail trim while open, `end` with text replaces, `end` without text closes, invalid lines ignored, text made terminal-safe at ingest; verify with unit tests for every scenario in `specs/thought-tab` "the records make the last thought", "the last thought is bounded" and the escape-sequence scenario
+- [x] 1.3 Add the incremental reader (design D4): per-feed `(session id, offset, mtime)` cache, backward 64 KiB scan to the newest `start` on a new session or a shorter file, partial trailing line held back; verify with unit tests on temp files for the first read of a large feed (only the newest block parsed), an append between reads, a partial line completed on the next read, and a truncated/replaced file
 
 ## 2. Thought tab state and refresh
 
