@@ -57,9 +57,11 @@ fn read_stdin_json() -> serde_json::Value {
         return serde_json::Value::Null;
     }
     let mut buf = String::new();
-    // A read error or malformed JSON is a deliberately ignored event, not an
-    // error the hook can act on: producers are same-project, and the resulting
-    // `Null` is the no-op shape the handlers already expect.
+    // A read error leaves `buf` empty and malformed JSON yields `Null`,
+    // which the adapter still parses into an all-default-fields event —
+    // handlers run on it, they do not no-op. The failure itself is
+    // deliberately unreported: producers are same-project, the hook has no
+    // channel to act on it, and the exit-0 contract holds either way.
     let _ = std::io::stdin().read_to_string(&mut buf);
     serde_json::from_str(&buf).unwrap_or(serde_json::Value::Null)
 }
