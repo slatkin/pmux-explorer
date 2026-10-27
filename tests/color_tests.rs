@@ -482,14 +482,14 @@ fn test_response_arrow_uses_response_arrow_color() {
     state.focus_state.sidebar_focused = false;
 
     // Styled snapshot locks in:
-    //   • response_arrow color (fg:81) + bold on the ▷ glyph
+    //   • response_arrow color (fg:81) + bold on the response glyph
     //   • text_active color (fg:255) on the focused response text
     insta::assert_snapshot!(render_to_styled_string(&mut state, 40, 27), @"
      ≡[fg:111]1[fg:153] ●[fg:114]0[fg:245] ◐[fg:245]0[fg:245] ○[fg:245]1[fg:255] ✕[fg:245]0[fg:245]                       ⤢[fg:114]
     ⓘ[fg:221]                                    —[fg:252] ▾[fg:252]
     p[fg:153]r[fg:153]o[fg:153]j[fg:153]e[fg:153]c[fg:153]t[fg:153]
     ┃[fg:153] ○[fg:110] [fg:174][fg:174]
-      ▷[fg:81,bold] [fg:81,bold]T[fg:255]a[fg:255]s[fg:255]k[fg:255] [fg:255]c[fg:255]o[fg:255]m[fg:255]p[fg:255]l[fg:255]e[fg:255]t[fg:255]e[fg:255]d[fg:255] [fg:255]s[fg:255]u[fg:255]c[fg:255]c[fg:255]e[fg:255]s[fg:255]s[fg:255]f[fg:255]u[fg:255]l[fg:255]l[fg:255]y[fg:255]
+      󰭹[fg:81,bold] [fg:81,bold]T[fg:255]a[fg:255]s[fg:255]k[fg:255] [fg:255]c[fg:255]o[fg:255]m[fg:255]p[fg:255]l[fg:255]e[fg:255]t[fg:255]e[fg:255]d[fg:255] [fg:255]s[fg:255]u[fg:255]c[fg:255]c[fg:255]e[fg:255]s[fg:255]s[fg:255]f[fg:255]u[fg:255]l[fg:255]l[fg:255]y[fg:255]
 
 
 

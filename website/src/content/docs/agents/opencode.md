@@ -12,7 +12,7 @@ surface is similar to Codex but with a different event source.
 
 - Live status from `session.created` / `session.status` / `session.idle`
 - Prompt text from `session.status=active`
-- Response preview (`▷ ...`) from `stop`
+- Response preview from `stop`, headed by the Nerd Font chat glyph (U+F0B79)
 - Elapsed time since the last prompt
 
 ### Attention cues

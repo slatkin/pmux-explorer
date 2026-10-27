@@ -11,7 +11,7 @@ Claude Code, Codex, OpenCode, and pi work with the sidebar, but they expose diff
 | --- | --- | --- | --- | --- | --- |
 | Base status tracking | ✓ | ✓ | ✓ | ✓ | Covers `running`, `idle`, and `error`; `waiting` and `background` depend on agent-specific events |
 | Prompt text display | ✓ | ✓ | ✓ | ✓ | Saved from the prompt event of each agent |
-| Response text display (`▷ ...`) | ✓ | ✓ | ✓ | ✓ | Populated from the end-of-turn payload |
+| Response text display (chat glyph, U+F0B79) | ✓ | ✓ | ✓ | ✓ | Populated from the end-of-turn payload |
 | Background shell state | ✓ | — | — | — | Claude Bash tools can report `run_in_background`; the others do not document a background Bash flag |
 | Waiting status + wait reason | ✓ | — | ✓ | ✓ | Claude has `Notification`, `PermissionDenied`, and `TeammateIdle`; OpenCode maps permission prompts; pi maps its blocking prompt events |
 | API failure reason display | ✓ | — | ✓ | ✓ | The failure event is wired for Claude, OpenCode, and pi |

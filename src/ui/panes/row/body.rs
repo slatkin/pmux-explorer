@@ -187,6 +187,11 @@ pub(super) fn background_hint_row(ctx: &RowCtx, cmd: &str) -> Line<'static> {
     )
 }
 
+/// Glyph that heads the response preview line, so the line reads as the
+/// agent's reply rather than the user's prompt. Includes the trailing
+/// space the reply text starts after.
+pub(super) const RESPONSE_ARROW_PREFIX: &str = "\u{f0b79} ";
+
 pub(super) fn prompt_rows(pane: &crate::tmux::PaneInfo, ctx: &RowCtx) -> Vec<Line<'static>> {
     let theme = ctx.theme;
     let is_response = pane.prompt_is_response;
@@ -202,11 +207,11 @@ pub(super) fn prompt_rows(pane: &crate::tmux::PaneInfo, ctx: &RowCtx) -> Vec<Lin
     for (li, wl) in wrapped.iter().enumerate() {
         if is_response && li == 0 {
             let arrow_color = theme.response_arrow;
-            let text_dw = 2 + display_width(wl); // "▷ " width
+            let text_dw = display_width(RESPONSE_ARROW_PREFIX) + display_width(wl);
             out.push(ctx.row_line(
                 vec![
                     Span::styled(
-                        "▷ ",
+                        RESPONSE_ARROW_PREFIX,
                         ctx.apply_bg(
                             Style::default()
                                 .fg(arrow_color)
