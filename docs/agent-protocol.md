@@ -248,8 +248,12 @@ status changes nothing.
 `TMUX_PANE` the way the hook command does, so it must run in the
 environment of the pane it describes.
 
-**The command never breaks the turn.** It exits 0 on every path, including
-a missing `TMUX_PANE`, where it records nothing.
+**The command never breaks the turn on bad input.** It exits 0 on every
+path that changes nothing — a missing `TMUX_PANE`, too few or unknown
+arguments, an unknown id or status. The one nonzero path is a store write
+that did not land: the command then reports the io error on stderr and
+exits 1, because printing an id for an item that never reached disk would
+let the agent carry on believing the task was recorded.
 
 The list is one JSON file per pane,
 `/tmp/pmux-explorer-tasks<PANE>.json`, written beside the activity log. The

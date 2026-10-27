@@ -34,9 +34,10 @@ pub(super) fn write_activity_entry(
 
 /// Report a failed activity-log write on stderr. The hook command exits 0
 /// on every path by its protocol contract, so stderr is the only channel
-/// that tells the producer the entry never landed.
+/// that tells the producer the write failed. Covers both the entry append
+/// and the trailing trim — the io error names which operation failed.
 pub(super) fn report_write_error(error: &std::io::Error) {
-    eprintln!("hook: the activity log entry was not written ({error})");
+    eprintln!("hook: the activity log write failed ({error})");
 }
 
 /// Trim a log file to `keep` lines when it exceeds `threshold` lines. A
