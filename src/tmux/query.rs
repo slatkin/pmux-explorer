@@ -506,7 +506,7 @@ fn parse_subagent_identity(
 ///
 /// A pi pane's thinking feed dies with its state (design D7): the feed
 /// path is resolved from `session_id` — read from the pane line before
-/// any option is wiped — through [`crate::thinking_feed::feed_path`],
+/// any option is wiped — through [`crate::thinking_feed::remove_pi_feed`],
 /// whose env values arrive as arguments so tests inject a scratch
 /// directory. A rejected session id removes nothing, and a missing file
 /// is not an error, the same treatment the activity log's `remove_file`
@@ -523,11 +523,7 @@ fn clear_agent_pane_state(
     }
     let log_path = crate::activity::log_file_path(pane_id);
     let _ = std::fs::remove_file(log_path);
-    if agent == AgentType::Pi
-        && let Some(feed) = crate::thinking_feed::feed_path(xdg_runtime_dir, uid, session_id)
-    {
-        let _ = std::fs::remove_file(feed);
-    }
+    crate::thinking_feed::remove_pi_feed(agent, session_id, xdg_runtime_dir, uid);
 }
 
 fn is_shell_command(command: &str) -> bool {

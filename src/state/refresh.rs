@@ -5,7 +5,7 @@ use crate::activity::{self, TaskProgress};
 use crate::cli::sanitize_tmux_value;
 use crate::process::ProcessSnapshot;
 use crate::task_store;
-use crate::tmux::{self, PaneStatus, SessionInfo};
+use crate::tmux::{self, AgentType, PaneStatus, SessionInfo};
 
 use super::{AppState, BottomTab};
 
@@ -66,6 +66,15 @@ pub(crate) fn file_cache_fresh(
     )
 }
 
+/// A pane the port scan found dead, with the identity its feed removal
+/// needs: the agent and the session id, read from the pane list before
+/// any option is wiped.
+struct DeadPane {
+    pane_id: String,
+    agent: AgentType,
+    session_id: Option<String>,
+}
+
 impl AppState {
     pub(crate) fn refresh_now(&mut self) {
         self.now = crate::time::now_epoch_secs();
@@ -83,7 +92,17 @@ impl AppState {
         self.find_focused_pane();
     }
 
-    fn clear_dead_agent_metadata(pane_id: &str) {
+    fn clear_dead_agent_metadata(
+        pane_id: &str,
+        agent: AgentType,
+        session_id: &str,
+        xdg_runtime_dir: Option<&str>,
+        uid: u32,
+    ) {
+        // The feed goes first: the session id is in hand from the pane
+        // list, and a pi pane's thinking feed dies with its state the
+        // same way the shell-fallback sweep clears it (design D7).
+        crate::thinking_feed::remove_pi_feed(agent, session_id, xdg_runtime_dir, uid);
         // The lifecycle set from `tmux::AGENT_SESSION_PANE_OPTIONS`, minus
         // the pending-teardown markers: the hook-side drain owns those,
         // and a fresh SessionStart clears both on the next run.
@@ -192,12 +211,16 @@ impl AppState {
         {
             let scanned = crate::port::scan_session_process_snapshot(sessions, process_snapshot)?;
             let mut updates: Vec<(String, Vec<u16>, Option<String>)> = Vec::new();
-            let mut dead_panes: Vec<String> = Vec::new();
+            let mut dead_panes: Vec<DeadPane> = Vec::new();
             for session in sessions {
                 for window in &session.windows {
                     for pane in &window.panes {
                         if !scanned.live_agent_panes.contains(&pane.pane_id) {
-                            dead_panes.push(pane.pane_id.clone());
+                            dead_panes.push(DeadPane {
+                                pane_id: pane.pane_id.clone(),
+                                agent: pane.agent.clone(),
+                                session_id: pane.session_id.clone(),
+                            });
                         }
                         updates.push((
                             pane.pane_id.clone(),
@@ -216,9 +239,15 @@ impl AppState {
                 pane_state.ports = ports;
                 pane_state.command = command;
             }
-            for pane_id in dead_panes {
-                Self::clear_dead_agent_metadata(&pane_id);
-                self.clear_pane_state(&pane_id);
+            for dead in dead_panes {
+                Self::clear_dead_agent_metadata(
+                    &dead.pane_id,
+                    dead.agent,
+                    dead.session_id.as_deref().unwrap_or(""),
+                    self.thought.xdg_runtime_dir.as_deref(),
+                    self.thought.uid,
+                );
+                self.clear_pane_state(&dead.pane_id);
             }
             self.timers.port_scan_initialized = true;
             self.timers.last_port_refresh = std::time::Instant::now();
@@ -915,7 +944,7 @@ mod tests {
             tmux::test_mock::set(pane, key, "x");
         }
 
-        AppState::clear_dead_agent_metadata(pane);
+        AppState::clear_dead_agent_metadata(pane, AgentType::Pi, "", None, 1000);
 
         for key in tmux::AGENT_SESSION_PANE_OPTIONS {
             let preserved = matches!(
@@ -929,6 +958,128 @@ mod tests {
                 if preserved { "preserved" } else { "cleared" }
             );
         }
+    }
+
+    // ─── the port-scan sweep removes a dead pi pane's feed ────────
+
+    /// Mock options for `pane` plus a feed file for `session_id` under
+    /// the scratch dir, ready for a teardown-sweep call.
+    fn dead_pane_setup(
+        pane: &str,
+        dir: &tempfile::TempDir,
+        session_id: &str,
+    ) -> std::path::PathBuf {
+        for key in tmux::AGENT_SESSION_PANE_OPTIONS {
+            tmux::test_mock::set(pane, key, "x");
+        }
+        let feed = feed_in(dir.path(), session_id);
+        std::fs::create_dir_all(feed.parent().unwrap()).unwrap();
+        std::fs::write(&feed, "{}").unwrap();
+        feed
+    }
+
+    fn expect_options_cleared(pane: &str) {
+        for key in tmux::AGENT_SESSION_PANE_OPTIONS {
+            // The pending-teardown markers are preserved: the hook-side
+            // drain owns those (see `clear_dead_agent_metadata`).
+            let preserved = matches!(
+                *key,
+                tmux::PANE_PENDING_SESSION_END | tmux::PANE_PENDING_WORKTREE_REMOVE
+            );
+            assert_eq!(
+                tmux::test_mock::contains(pane, key),
+                preserved,
+                "expected {key} {}",
+                if preserved { "preserved" } else { "cleared" }
+            );
+        }
+    }
+
+    #[test]
+    fn clear_dead_agent_metadata_removes_a_dead_pi_pane_feed() {
+        let _guard = tmux::test_mock::install();
+        let dir = tempfile::TempDir::new().unwrap();
+        let feed = dead_pane_setup("%PORT_PI_FEED", &dir, "sess");
+
+        AppState::clear_dead_agent_metadata(
+            "%PORT_PI_FEED",
+            AgentType::Pi,
+            "sess",
+            Some(dir.path().to_str().unwrap()),
+            1000,
+        );
+
+        expect_options_cleared("%PORT_PI_FEED");
+        assert!(
+            !feed.exists(),
+            "the port-scan sweep must remove the pi pane's feed with its state"
+        );
+    }
+
+    #[test]
+    fn clear_dead_agent_metadata_clears_state_without_a_feed_file() {
+        // No feed was ever written: the absent file must not fail or
+        // delay the clearing of the pane's state.
+        let _guard = tmux::test_mock::install();
+        let dir = tempfile::TempDir::new().unwrap();
+        let feed = dead_pane_setup("%PORT_PI_NOFEED", &dir, "absent");
+        std::fs::remove_file(&feed).unwrap();
+
+        AppState::clear_dead_agent_metadata(
+            "%PORT_PI_NOFEED",
+            AgentType::Pi,
+            "absent",
+            Some(dir.path().to_str().unwrap()),
+            1000,
+        );
+
+        expect_options_cleared("%PORT_PI_NOFEED");
+    }
+
+    #[test]
+    fn clear_dead_agent_metadata_removes_nothing_for_an_unsafe_session_id() {
+        // `../x` is rejected by the path helper, so nothing may be
+        // removed — not even a file the unsanitized join would land on
+        // (`<dir>/pmux-thinking/../x.jsonl` = `<dir>/x.jsonl`).
+        let _guard = tmux::test_mock::install();
+        let dir = tempfile::TempDir::new().unwrap();
+        dead_pane_setup("%PORT_PI_UNSAFE", &dir, "x");
+        let outside = dir.path().join("x.jsonl");
+        std::fs::write(&outside, "{}").unwrap();
+
+        AppState::clear_dead_agent_metadata(
+            "%PORT_PI_UNSAFE",
+            AgentType::Pi,
+            "../x",
+            Some(dir.path().to_str().unwrap()),
+            1000,
+        );
+
+        expect_options_cleared("%PORT_PI_UNSAFE");
+        assert!(
+            outside.exists(),
+            "an unsafe session id must remove no file, however it would resolve"
+        );
+    }
+
+    #[test]
+    fn clear_dead_agent_metadata_removes_no_feed_for_a_non_pi_pane() {
+        // Only a pi pane removes a feed: a Codex pane's session id must
+        // leave the feed of that name untouched (its options still go).
+        let _guard = tmux::test_mock::install();
+        let dir = tempfile::TempDir::new().unwrap();
+        let feed = dead_pane_setup("%PORT_CODEX", &dir, "sess");
+
+        AppState::clear_dead_agent_metadata(
+            "%PORT_CODEX",
+            AgentType::Codex,
+            "sess",
+            Some(dir.path().to_str().unwrap()),
+            1000,
+        );
+
+        expect_options_cleared("%PORT_CODEX");
+        assert!(feed.exists(), "a non-pi pane must not have a feed removed");
     }
 
     #[test]

@@ -4,7 +4,8 @@
 //! pmux writes the thinking of one pi session as JSON records, one per
 //! line, to a per-session feed file; the sidebar reduces those records to
 //! a single last thought and reads only the bytes a feed grew by since
-//! the previous tick. The record shape and the path rule are shared with
+//! the previous tick, and its teardown sweeps remove the feed of a dead
+//! pane. The record shape and the path rule are shared with
 //! the pmux `thinking-feed` change and pinned by tests on both sides.
 
 use std::fs::{self, File};
@@ -13,6 +14,8 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use serde::Deserialize;
+
+use crate::tmux::AgentType;
 
 /// The feed directory under `XDG_RUNTIME_DIR`, shared with pmux.
 const RUNTIME_SUBDIR: &str = "pmux-thinking";
@@ -49,6 +52,27 @@ pub fn feed_path(xdg_runtime_dir: Option<&str>, uid: u32, session_id: &str) -> O
         None => PathBuf::from(format!("{TMP_SUBDIR_PREFIX}{uid}")),
     };
     Some(dir.join(format!("{session_id}.jsonl")))
+}
+
+/// Remove the thinking feed of one session, when the pane's agent is pi.
+///
+/// Both teardown paths that clear a dead pi pane's state — the
+/// shell-fallback sweep in `tmux/query.rs` and the port-scan dead-pane
+/// sweep in `state/refresh.rs` — call this before the pane's options are
+/// wiped, with the session id read while it was still in hand. A session
+/// id [`feed_path`] rejects removes nothing, and a missing file is not
+/// an error — the same treatment the activity log's `remove_file` gets.
+pub(crate) fn remove_pi_feed(
+    agent: AgentType,
+    session_id: &str,
+    xdg_runtime_dir: Option<&str>,
+    uid: u32,
+) {
+    if agent == AgentType::Pi
+        && let Some(feed) = feed_path(xdg_runtime_dir, uid, session_id)
+    {
+        let _ = std::fs::remove_file(feed);
+    }
 }
 
 /// The last thought of one feed: the text of the newest thinking block,
