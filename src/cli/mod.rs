@@ -69,9 +69,10 @@ fn local_time_hhmm() -> String {
     // SAFETY: `time` writes only through its pointer argument; a null
     // pointer asks for the current time and the return value carries it.
     let now = unsafe { libc::time(std::ptr::null_mut()) };
-    // SAFETY: `zeroed` is the valid initial state for `libc::tm` — a plain
-    // C struct of integers — and every field `localtime_r` does not write
-    // stays zero.
+    // SAFETY: `zeroed` is the valid initial state for `libc::tm` — all
+    // integer fields zero and `tm_zone` a null pointer, valid for every
+    // field's type — and every field `localtime_r` does not write stays
+    // zero. Nothing below dereferences `tm_zone`.
     let mut tm: libc::tm = unsafe { std::mem::zeroed() };
     // SAFETY: `localtime_r` reads `now` and writes only `tm`; both are valid
     // for the call. It reports failure by returning null, checked here.
