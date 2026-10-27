@@ -17,8 +17,8 @@
 
 ## 3. Rendering
 
-- [ ] 3.1 Draw `Thought` as the fourth rule label when shown, with the displayed tab in the accent color; verify with `insta` inline snapshots of the rule for a pi pane at 40 columns, a non-pi pane at 30 columns, and the 20-column truncation (update the existing `top_line_border` test)
-- [ ] 3.2 Add `src/ui/bottom/thought.rs` (design D6): the muted `HH:mm:ss` start line, the wrapped thought, follow-the-end scrolling that a scroll up suspends and a new `start` resets, and the `No thinking yet` notice; verify with `insta` inline snapshots for a short thought, a tall thought showing its last rows, a scrolled-up view, and the empty notice
+- [x] 3.1 Draw `Thought` as the fourth rule label when shown, with the displayed tab in the accent color; verify with `insta` inline snapshots of the rule for a pi pane at 40 columns, a non-pi pane at 30 columns, and the 20-column truncation (update the existing `top_line_border` test)
+- [x] 3.2 Add `src/ui/bottom/thought.rs` (design D6): the muted `HH:mm:ss` start line, the wrapped thought, follow-the-end scrolling that a scroll up suspends and a new `start` resets, and the `No thinking yet` notice; verify with `insta` inline snapshots for a short thought, a tall thought showing its last rows, a scrolled-up view, and the empty notice
 
 ## 4. Documentation
 
