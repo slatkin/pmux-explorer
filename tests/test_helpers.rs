@@ -55,11 +55,15 @@ pub fn buffer_to_styled_string(buf: &Buffer) -> String {
             line.push_str(cell.symbol());
 
             let mut attrs = Vec::new();
-            if let Color::Indexed(n) = cell.fg {
-                attrs.push(format!("fg:{n}"));
+            match cell.fg {
+                Color::Indexed(n) => attrs.push(format!("fg:{n}")),
+                Color::Rgb(r, g, b) => attrs.push(format!("fg:#{r:02x}{g:02x}{b:02x}")),
+                _ => {}
             }
-            if let Color::Indexed(n) = cell.bg {
-                attrs.push(format!("bg:{n}"));
+            match cell.bg {
+                Color::Indexed(n) => attrs.push(format!("bg:{n}")),
+                Color::Rgb(r, g, b) => attrs.push(format!("bg:#{r:02x}{g:02x}{b:02x}")),
+                _ => {}
             }
             if let Color::Indexed(n) = cell.underline_color {
                 attrs.push(format!("ul:{n}"));

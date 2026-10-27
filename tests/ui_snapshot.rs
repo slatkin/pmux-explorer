@@ -1638,7 +1638,7 @@ fn snapshot_filter_bar_icons_use_selected_and_inactive_colors() {
 
     let styled = render_to_styled_string(&mut state, 30, 25);
     let line = styled.lines().next().unwrap();
-    insta::assert_snapshot!(line, @" [bg:236]≡[fg:111,bg:236]2[fg:153,bg:236] [bg:236]●[fg:114,bg:236]1[fg:255,bg:236] [bg:236]◐[fg:245,bg:236]0[fg:245,bg:236] [bg:236]○[fg:245,bg:236]1[fg:255,bg:236] [bg:236]✕[fg:245,bg:236]0[fg:245,bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]⤢[fg:114,bg:236] [bg:236]");
+    insta::assert_snapshot!(line, @" [bg:#24283b]≡[fg:#7aa2f7,bg:#24283b]2[fg:#7aa2f7,bg:#24283b] [bg:#24283b]●[fg:#9ece6a,bg:#24283b]1[fg:#c0caf5,bg:#24283b] [bg:#24283b]◐[fg:#9aa5ce,bg:#24283b]0[fg:#9aa5ce,bg:#24283b] [bg:#24283b]○[fg:#9aa5ce,bg:#24283b]1[fg:#c0caf5,bg:#24283b] [bg:#24283b]✕[fg:#9aa5ce,bg:#24283b]0[fg:#9aa5ce,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]⤢[fg:#9ece6a,bg:#24283b] [bg:#24283b]");
 }
 
 #[test]
@@ -1688,7 +1688,7 @@ fn snapshot_filter_selected_icon_has_color_without_underline() {
     // modifier on the selected filter would surface in the snapshot diff.
     let styled = render_to_styled_string(&mut state, 30, 25);
     let line = styled.lines().next().unwrap();
-    insta::assert_snapshot!(line, @" [bg:236]≡[fg:245,bg:236]2[fg:255,bg:236] [bg:236]●[fg:114,bg:236]1[fg:153,bg:236] [bg:236]◐[fg:245,bg:236]0[fg:245,bg:236] [bg:236]○[fg:245,bg:236]1[fg:255,bg:236] [bg:236]✕[fg:245,bg:236]0[fg:245,bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]⤢[fg:114,bg:236] [bg:236]");
+    insta::assert_snapshot!(line, @" [bg:#24283b]≡[fg:#9aa5ce,bg:#24283b]2[fg:#c0caf5,bg:#24283b] [bg:#24283b]●[fg:#9ece6a,bg:#24283b]1[fg:#7aa2f7,bg:#24283b] [bg:#24283b]◐[fg:#9aa5ce,bg:#24283b]0[fg:#9aa5ce,bg:#24283b] [bg:#24283b]○[fg:#9aa5ce,bg:#24283b]1[fg:#c0caf5,bg:#24283b] [bg:#24283b]✕[fg:#9aa5ce,bg:#24283b]0[fg:#9aa5ce,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]⤢[fg:#9ece6a,bg:#24283b] [bg:#24283b]");
 }
 
 #[test]

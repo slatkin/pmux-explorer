@@ -83,7 +83,7 @@ fn snapshot_codex_agent_styled() {
     let theme = ColorTheme::default();
     assert_eq!(
         theme.agent_color(&AgentType::Codex),
-        ratatui::style::Color::Indexed(141)
+        ratatui::style::Color::Rgb(0xbb, 0x9a, 0xf7)
     );
 }
 
@@ -94,7 +94,7 @@ fn snapshot_unknown_agent_styled() {
     let theme = ColorTheme::default();
     assert_eq!(
         theme.agent_color(&AgentType::Unknown),
-        ratatui::style::Color::Indexed(244)
+        ratatui::style::Color::Rgb(0x56, 0x5f, 0x89)
     );
 }
 
@@ -394,15 +394,15 @@ fn repo_popup_highlights_selected_entry_with_background() {
     // Styled snapshot locks in that the `backend` row carries the selection
     // background (bg:239) on each cell of the entry.
     insta::assert_snapshot!(render_to_styled_string(&mut state, 40, 30), @"
-     ≡[fg:111]2[fg:153] ●[fg:114]0[fg:245] ◐[fg:245]0[fg:245] ○[fg:245]2[fg:255] ✕[fg:245]0[fg:245]                       ⤢[fg:114]
-    ⓘ[fg:221]                                    —[fg:255] ▾[fg:255]
-    f[fg:153]r[fg:153]o[fg:153]n[fg:153]t[fg:153]e[fg:153]n[fg:153]d[fg:153]                    ┌[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]┐[fg:153]
-    ┃[fg:153] ○[fg:110] [fg:174][fg:174]                       │[fg:153] [fg:255]A[fg:255]l[fg:255]l[fg:255] [fg:255] [fg:255] [fg:255] [fg:255] [fg:255] [fg:255]│[fg:153]
-       [fg:255] [fg:255]W[fg:255]a[fg:255]i[fg:255]t[fg:255]i[fg:255]n[fg:255]g[fg:255] [fg:255]f[fg:255]o[fg:255]r[fg:255] [fg:255]p[fg:255]r[fg:255]o[fg:255]m[fg:255]p[fg:255]t[fg:255]…[fg:255]     │[fg:153] [fg:252]f[fg:252]r[fg:252]o[fg:252]n[fg:252]t[fg:252]e[fg:252]n[fg:252]d[fg:252] [fg:252]│[fg:153]
-                                │[fg:153] [fg:255,bg:239]b[fg:255,bg:239]a[fg:255,bg:239]c[fg:255,bg:239]k[fg:255,bg:239]e[fg:255,bg:239]n[fg:255,bg:239]d[fg:255,bg:239] [fg:255,bg:239] [fg:255,bg:239]│[fg:153]
-    b[fg:153]a[fg:153]c[fg:153]k[fg:153]e[fg:153]n[fg:153]d[fg:153]                     └[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]┘[fg:153]
-    ┃[fg:153] ○[fg:110] [fg:174][fg:174]
-       [fg:255] [fg:255]W[fg:255]a[fg:255]i[fg:255]t[fg:255]i[fg:255]n[fg:255]g[fg:255] [fg:255]f[fg:255]o[fg:255]r[fg:255] [fg:255]p[fg:255]r[fg:255]o[fg:255]m[fg:255]p[fg:255]t[fg:255]…[fg:255]
+     ≡[fg:#7aa2f7]2[fg:#7aa2f7] ●[fg:#9ece6a]0[fg:#9aa5ce] ◐[fg:#9aa5ce]0[fg:#9aa5ce] ○[fg:#9aa5ce]2[fg:#c0caf5] ✕[fg:#9aa5ce]0[fg:#9aa5ce]                       ⤢[fg:#9ece6a]
+    ⓘ[fg:#e0af68]                                    —[fg:#c0caf5] ▾[fg:#c0caf5]
+    f[fg:#7aa2f7]r[fg:#7aa2f7]o[fg:#7aa2f7]n[fg:#7aa2f7]t[fg:#7aa2f7]e[fg:#7aa2f7]n[fg:#7aa2f7]d[fg:#7aa2f7]                    ┌[fg:#7aa2f7]─[fg:#7aa2f7]─[fg:#7aa2f7]─[fg:#7aa2f7]─[fg:#7aa2f7]─[fg:#7aa2f7]─[fg:#7aa2f7]─[fg:#7aa2f7]─[fg:#7aa2f7]─[fg:#7aa2f7]─[fg:#7aa2f7]┐[fg:#7aa2f7]
+    ┃[fg:#7aa2f7] ○[fg:#7dcfff] [fg:#ff9e64][fg:#ff9e64]                       │[fg:#7aa2f7] [fg:#c0caf5]A[fg:#c0caf5]l[fg:#c0caf5]l[fg:#c0caf5] [fg:#c0caf5] [fg:#c0caf5] [fg:#c0caf5] [fg:#c0caf5] [fg:#c0caf5] [fg:#c0caf5]│[fg:#7aa2f7]
+       [fg:#c0caf5] [fg:#c0caf5]W[fg:#c0caf5]a[fg:#c0caf5]i[fg:#c0caf5]t[fg:#c0caf5]i[fg:#c0caf5]n[fg:#c0caf5]g[fg:#c0caf5] [fg:#c0caf5]f[fg:#c0caf5]o[fg:#c0caf5]r[fg:#c0caf5] [fg:#c0caf5]p[fg:#c0caf5]r[fg:#c0caf5]o[fg:#c0caf5]m[fg:#c0caf5]p[fg:#c0caf5]t[fg:#c0caf5]…[fg:#c0caf5]     │[fg:#7aa2f7] [fg:#a9b1d6]f[fg:#a9b1d6]r[fg:#a9b1d6]o[fg:#a9b1d6]n[fg:#a9b1d6]t[fg:#a9b1d6]e[fg:#a9b1d6]n[fg:#a9b1d6]d[fg:#a9b1d6] [fg:#a9b1d6]│[fg:#7aa2f7]
+                                │[fg:#7aa2f7] [fg:#c0caf5,bg:#414868]b[fg:#c0caf5,bg:#414868]a[fg:#c0caf5,bg:#414868]c[fg:#c0caf5,bg:#414868]k[fg:#c0caf5,bg:#414868]e[fg:#c0caf5,bg:#414868]n[fg:#c0caf5,bg:#414868]d[fg:#c0caf5,bg:#414868] [fg:#c0caf5,bg:#414868] [fg:#c0caf5,bg:#414868]│[fg:#7aa2f7]
+    b[fg:#7aa2f7]a[fg:#7aa2f7]c[fg:#7aa2f7]k[fg:#7aa2f7]e[fg:#7aa2f7]n[fg:#7aa2f7]d[fg:#7aa2f7]                     └[fg:#7aa2f7]─[fg:#7aa2f7]─[fg:#7aa2f7]─[fg:#7aa2f7]─[fg:#7aa2f7]─[fg:#7aa2f7]─[fg:#7aa2f7]─[fg:#7aa2f7]─[fg:#7aa2f7]─[fg:#7aa2f7]─[fg:#7aa2f7]┘[fg:#7aa2f7]
+    ┃[fg:#7aa2f7] ○[fg:#7dcfff] [fg:#ff9e64][fg:#ff9e64]
+       [fg:#c0caf5] [fg:#c0caf5]W[fg:#c0caf5]a[fg:#c0caf5]i[fg:#c0caf5]t[fg:#c0caf5]i[fg:#c0caf5]n[fg:#c0caf5]g[fg:#c0caf5] [fg:#c0caf5]f[fg:#c0caf5]o[fg:#c0caf5]r[fg:#c0caf5] [fg:#c0caf5]p[fg:#c0caf5]r[fg:#c0caf5]o[fg:#c0caf5]m[fg:#c0caf5]p[fg:#c0caf5]t[fg:#c0caf5]…[fg:#c0caf5]
 
 
 
@@ -415,10 +415,10 @@ fn repo_popup_highlights_selected_entry_with_background() {
 
 
 
-    ─[fg:240] [fg:240]T[fg:153]o[fg:153]o[fg:153]l[fg:153]s[fg:153]│[fg:240]T[fg:252]a[fg:252]s[fg:252]k[fg:252]s[fg:252]│[fg:240]G[fg:252]i[fg:252]t[fg:252] [fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]
+    ─[fg:240] [fg:240]T[fg:#7aa2f7]o[fg:#7aa2f7]o[fg:#7aa2f7]l[fg:#7aa2f7]s[fg:#7aa2f7]│[fg:240]T[fg:#a9b1d6]a[fg:#a9b1d6]s[fg:#a9b1d6]k[fg:#a9b1d6]s[fg:#a9b1d6]│[fg:240]G[fg:#a9b1d6]i[fg:#a9b1d6]t[fg:#a9b1d6] [fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]
 
 
 
-                  N[fg:252]o[fg:252] [fg:252]t[fg:252]o[fg:252]o[fg:252]l[fg:252]s[fg:252] [fg:252]y[fg:252]e[fg:252]t[fg:252]
+                  N[fg:#a9b1d6]o[fg:#a9b1d6] [fg:#a9b1d6]t[fg:#a9b1d6]o[fg:#a9b1d6]o[fg:#a9b1d6]l[fg:#a9b1d6]s[fg:#a9b1d6] [fg:#a9b1d6]y[fg:#a9b1d6]e[fg:#a9b1d6]t[fg:#a9b1d6]
     ");
 }

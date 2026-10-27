@@ -33,17 +33,17 @@ pub struct ColorTheme {
     pub port: Color,
     pub wait_reason: Color,
     /// Wait-reason text for a reason that demands the user. Default
-    /// Indexed(167) is red, so it does not blend into the yellow agent
-    /// title on the row above.
+    /// Tokyo Night red (`#f7768e`) so it does not blend into the yellow
+    /// agent title on the row above.
     pub wait_reason_action: Color,
     pub selection_bg: Color,
     /// Base focus background over the whole sidebar while its tmux pane
-    /// is the active one. Default Indexed(234) sits below selection_bg
-    /// (Indexed 239) so the cursor still pops.
+    /// is the active one. Default Tokyo Night background (`#1a1b26`)
+    /// sits below selection_bg (`#414868`) so the cursor still pops.
     pub focus_bg: Color,
     /// Active focus background over the keyboard-owning section.
-    /// Default Indexed(236) stays distinct from focus_bg on a dark
-    /// terminal.
+    /// Default Tokyo Night storm background (`#24283b`) stays distinct
+    /// from focus_bg on a dark terminal.
     pub focus_active_bg: Color,
     pub branch: Color,
     pub badge_danger: Color,
@@ -75,48 +75,48 @@ pub struct ColorTheme {
 impl Default for ColorTheme {
     fn default() -> Self {
         Self {
-            accent: Color::Indexed(153),
+            accent: Color::Rgb(0x7a, 0xa2, 0xf7),
             border_inactive: Color::Indexed(240),
-            status_all: Color::Indexed(111),
-            status_running: Color::Indexed(114),
-            status_waiting: Color::Indexed(221),
-            status_idle: Color::Indexed(110),
-            status_error: Color::Indexed(167),
-            status_unknown: Color::Indexed(244),
-            filter_inactive: Color::Indexed(245),
-            agent_claude: Color::Indexed(174),
-            agent_codex: Color::Indexed(141),
-            agent_opencode: Color::Indexed(117),
-            agent_pi: Color::Indexed(222),
-            pet_body: Color::Indexed(208),
-            pet_eye: Color::Indexed(114),
-            text_active: Color::Indexed(255),
-            text_muted: Color::Indexed(252),
-            text_inactive: Color::Indexed(244),
-            session_header: Color::Indexed(39),
-            port: Color::Indexed(246),
-            wait_reason: Color::Indexed(221),
-            wait_reason_action: Color::Indexed(167),
-            selection_bg: Color::Indexed(239),
-            focus_bg: Color::Indexed(234),
-            focus_active_bg: Color::Indexed(236),
-            branch: Color::Indexed(109),
-            badge_danger: Color::Indexed(167),
-            badge_auto: Color::Indexed(221),
-            badge_plan: Color::Indexed(117),
-            task_progress: Color::Indexed(223),
-            task_pending: Color::Indexed(111),
-            task_completed: Color::Indexed(114),
-            subagent: Color::Indexed(73),
-            commit_hash: Color::Indexed(221),
-            diff_added: Color::Indexed(114),
-            diff_deleted: Color::Indexed(174),
-            file_change: Color::Indexed(221),
-            pr_link: Color::Indexed(117),
-            section_title: Color::Indexed(109),
-            activity_timestamp: Color::Indexed(109),
-            thought_timestamp: Color::Indexed(220),
-            response_arrow: Color::Indexed(81),
+            status_all: Color::Rgb(0x7a, 0xa2, 0xf7),
+            status_running: Color::Rgb(0x9e, 0xce, 0x6a),
+            status_waiting: Color::Rgb(0xe0, 0xaf, 0x68),
+            status_idle: Color::Rgb(0x7d, 0xcf, 0xff),
+            status_error: Color::Rgb(0xf7, 0x76, 0x8e),
+            status_unknown: Color::Rgb(0x56, 0x5f, 0x89),
+            filter_inactive: Color::Rgb(0x9a, 0xa5, 0xce),
+            agent_claude: Color::Rgb(0xff, 0x9e, 0x64),
+            agent_codex: Color::Rgb(0xbb, 0x9a, 0xf7),
+            agent_opencode: Color::Rgb(0x7d, 0xcf, 0xff),
+            agent_pi: Color::Rgb(0xe0, 0xaf, 0x68),
+            pet_body: Color::Rgb(0xff, 0x9e, 0x64),
+            pet_eye: Color::Rgb(0x9e, 0xce, 0x6a),
+            text_active: Color::Rgb(0xc0, 0xca, 0xf5),
+            text_muted: Color::Rgb(0xa9, 0xb1, 0xd6),
+            text_inactive: Color::Rgb(0x56, 0x5f, 0x89),
+            session_header: Color::Rgb(0x7d, 0xcf, 0xff),
+            port: Color::Rgb(0x9a, 0xa5, 0xce),
+            wait_reason: Color::Rgb(0xe0, 0xaf, 0x68),
+            wait_reason_action: Color::Rgb(0xf7, 0x76, 0x8e),
+            selection_bg: Color::Rgb(0x41, 0x48, 0x68),
+            focus_bg: Color::Rgb(0x1a, 0x1b, 0x26),
+            focus_active_bg: Color::Rgb(0x24, 0x28, 0x3b),
+            branch: Color::Rgb(0x73, 0xda, 0xcb),
+            badge_danger: Color::Rgb(0xf7, 0x76, 0x8e),
+            badge_auto: Color::Rgb(0xe0, 0xaf, 0x68),
+            badge_plan: Color::Rgb(0x7d, 0xcf, 0xff),
+            task_progress: Color::Rgb(0xff, 0x9e, 0x64),
+            task_pending: Color::Rgb(0x7a, 0xa2, 0xf7),
+            task_completed: Color::Rgb(0x9e, 0xce, 0x6a),
+            subagent: Color::Rgb(0x73, 0xda, 0xcb),
+            commit_hash: Color::Rgb(0xe0, 0xaf, 0x68),
+            diff_added: Color::Rgb(0x9e, 0xce, 0x6a),
+            diff_deleted: Color::Rgb(0xf7, 0x76, 0x8e),
+            file_change: Color::Rgb(0xe0, 0xaf, 0x68),
+            pr_link: Color::Rgb(0x7d, 0xcf, 0xff),
+            section_title: Color::Rgb(0x2a, 0xc3, 0xde),
+            activity_timestamp: Color::Rgb(0x2a, 0xc3, 0xde),
+            thought_timestamp: Color::Rgb(0xe0, 0xaf, 0x68),
+            response_arrow: Color::Rgb(0x7d, 0xcf, 0xff),
             focus_border: Color::Rgb(0xE6, 0x98, 0x75),
         }
     }
@@ -277,41 +277,53 @@ mod tests {
         let theme = ColorTheme::default();
         assert_eq!(
             theme.status_color(&PaneStatus::Running, false),
-            Color::Indexed(114)
+            Color::Rgb(0x9e, 0xce, 0x6a)
         );
         assert_eq!(
             theme.status_color(&PaneStatus::Waiting, false),
-            Color::Indexed(221)
+            Color::Rgb(0xe0, 0xaf, 0x68)
         );
         assert_eq!(
             theme.status_color(&PaneStatus::Idle, false),
-            Color::Indexed(110)
+            Color::Rgb(0x7d, 0xcf, 0xff)
         );
         assert_eq!(
             theme.status_color(&PaneStatus::Error, false),
-            Color::Indexed(167)
+            Color::Rgb(0xf7, 0x76, 0x8e)
         );
         assert_eq!(
             theme.status_color(&PaneStatus::Unknown, false),
-            Color::Indexed(244)
+            Color::Rgb(0x56, 0x5f, 0x89)
         );
     }
 
     #[test]
     fn agent_color_all() {
         let theme = ColorTheme::default();
-        assert_eq!(theme.agent_color(&AgentType::Claude), Color::Indexed(174));
-        assert_eq!(theme.agent_color(&AgentType::Codex), Color::Indexed(141));
-        assert_eq!(theme.agent_color(&AgentType::OpenCode), Color::Indexed(117));
-        assert_eq!(theme.agent_color(&AgentType::Pi), Color::Indexed(222));
+        assert_eq!(
+            theme.agent_color(&AgentType::Claude),
+            Color::Rgb(0xff, 0x9e, 0x64)
+        );
+        assert_eq!(
+            theme.agent_color(&AgentType::Codex),
+            Color::Rgb(0xbb, 0x9a, 0xf7)
+        );
+        assert_eq!(
+            theme.agent_color(&AgentType::OpenCode),
+            Color::Rgb(0x7d, 0xcf, 0xff)
+        );
+        assert_eq!(
+            theme.agent_color(&AgentType::Pi),
+            Color::Rgb(0xe0, 0xaf, 0x68)
+        );
         assert_eq!(theme.agent_color(&AgentType::Unknown), theme.status_unknown);
     }
 
     #[test]
     fn pet_color_defaults_match_current_palette() {
         let theme = ColorTheme::default();
-        assert_eq!(theme.pet_body, Color::Indexed(208));
-        assert_eq!(theme.pet_eye, Color::Indexed(114));
+        assert_eq!(theme.pet_body, Color::Rgb(0xff, 0x9e, 0x64));
+        assert_eq!(theme.pet_eye, Color::Rgb(0x9e, 0xce, 0x6a));
     }
 
     #[test]

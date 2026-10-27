@@ -15,48 +15,48 @@ fn test_all_color_theme_defaults() {
     let theme = ColorTheme::default();
 
     // Core UI colors
-    assert_eq!(theme.accent, Color::Indexed(153));
+    assert_eq!(theme.accent, Color::Rgb(0x7a, 0xa2, 0xf7));
     assert_eq!(theme.border_inactive, Color::Indexed(240));
-    assert_eq!(theme.selection_bg, Color::Indexed(239));
-    assert_eq!(theme.focus_bg, Color::Indexed(234));
-    assert_eq!(theme.focus_active_bg, Color::Indexed(236));
+    assert_eq!(theme.selection_bg, Color::Rgb(0x41, 0x48, 0x68));
+    assert_eq!(theme.focus_bg, Color::Rgb(0x1a, 0x1b, 0x26));
+    assert_eq!(theme.focus_active_bg, Color::Rgb(0x24, 0x28, 0x3b));
 
     // Status colors
-    assert_eq!(theme.status_all, Color::Indexed(111));
-    assert_eq!(theme.status_running, Color::Indexed(114));
-    assert_eq!(theme.status_waiting, Color::Indexed(221));
-    assert_eq!(theme.status_idle, Color::Indexed(110));
-    assert_eq!(theme.status_error, Color::Indexed(167));
-    assert_eq!(theme.status_unknown, Color::Indexed(244));
+    assert_eq!(theme.status_all, Color::Rgb(0x7a, 0xa2, 0xf7));
+    assert_eq!(theme.status_running, Color::Rgb(0x9e, 0xce, 0x6a));
+    assert_eq!(theme.status_waiting, Color::Rgb(0xe0, 0xaf, 0x68));
+    assert_eq!(theme.status_idle, Color::Rgb(0x7d, 0xcf, 0xff));
+    assert_eq!(theme.status_error, Color::Rgb(0xf7, 0x76, 0x8e));
+    assert_eq!(theme.status_unknown, Color::Rgb(0x56, 0x5f, 0x89));
 
     // Agent colors
-    assert_eq!(theme.agent_claude, Color::Indexed(174));
-    assert_eq!(theme.agent_codex, Color::Indexed(141));
-    assert_eq!(theme.pet_body, Color::Indexed(208));
-    assert_eq!(theme.pet_eye, Color::Indexed(114));
+    assert_eq!(theme.agent_claude, Color::Rgb(0xff, 0x9e, 0x64));
+    assert_eq!(theme.agent_codex, Color::Rgb(0xbb, 0x9a, 0xf7));
+    assert_eq!(theme.pet_body, Color::Rgb(0xff, 0x9e, 0x64));
+    assert_eq!(theme.pet_eye, Color::Rgb(0x9e, 0xce, 0x6a));
 
     // Text colors
-    assert_eq!(theme.text_active, Color::Indexed(255));
-    assert_eq!(theme.text_muted, Color::Indexed(252));
-    assert_eq!(theme.text_inactive, Color::Indexed(244));
+    assert_eq!(theme.text_active, Color::Rgb(0xc0, 0xca, 0xf5));
+    assert_eq!(theme.text_muted, Color::Rgb(0xa9, 0xb1, 0xd6));
+    assert_eq!(theme.text_inactive, Color::Rgb(0x56, 0x5f, 0x89));
 
     // Header/UI element colors
-    assert_eq!(theme.session_header, Color::Indexed(39));
-    assert_eq!(theme.port, Color::Indexed(246));
-    assert_eq!(theme.wait_reason, Color::Indexed(221));
-    assert_eq!(theme.wait_reason_action, Color::Indexed(167));
-    assert_eq!(theme.branch, Color::Indexed(109));
+    assert_eq!(theme.session_header, Color::Rgb(0x7d, 0xcf, 0xff));
+    assert_eq!(theme.port, Color::Rgb(0x9a, 0xa5, 0xce));
+    assert_eq!(theme.wait_reason, Color::Rgb(0xe0, 0xaf, 0x68));
+    assert_eq!(theme.wait_reason_action, Color::Rgb(0xf7, 0x76, 0x8e));
+    assert_eq!(theme.branch, Color::Rgb(0x73, 0xda, 0xcb));
 
     // New theme fields
-    assert_eq!(theme.badge_danger, Color::Indexed(167));
-    assert_eq!(theme.badge_auto, Color::Indexed(221));
-    assert_eq!(theme.task_progress, Color::Indexed(223));
-    assert_eq!(theme.subagent, Color::Indexed(73));
-    assert_eq!(theme.commit_hash, Color::Indexed(221));
-    assert_eq!(theme.diff_added, Color::Indexed(114));
-    assert_eq!(theme.diff_deleted, Color::Indexed(174));
-    assert_eq!(theme.file_change, Color::Indexed(221));
-    assert_eq!(theme.pr_link, Color::Indexed(117));
+    assert_eq!(theme.badge_danger, Color::Rgb(0xf7, 0x76, 0x8e));
+    assert_eq!(theme.badge_auto, Color::Rgb(0xe0, 0xaf, 0x68));
+    assert_eq!(theme.task_progress, Color::Rgb(0xff, 0x9e, 0x64));
+    assert_eq!(theme.subagent, Color::Rgb(0x73, 0xda, 0xcb));
+    assert_eq!(theme.commit_hash, Color::Rgb(0xe0, 0xaf, 0x68));
+    assert_eq!(theme.diff_added, Color::Rgb(0x9e, 0xce, 0x6a));
+    assert_eq!(theme.diff_deleted, Color::Rgb(0xf7, 0x76, 0x8e));
+    assert_eq!(theme.file_change, Color::Rgb(0xe0, 0xaf, 0x68));
+    assert_eq!(theme.pr_link, Color::Rgb(0x7d, 0xcf, 0xff));
     assert_eq!(theme.focus_border, Color::Rgb(0xE6, 0x98, 0x75));
 }
 
@@ -68,23 +68,23 @@ fn test_status_color_all_variants() {
 
     assert_eq!(
         theme.status_color(&PaneStatus::Running, false),
-        Color::Indexed(114)
+        Color::Rgb(0x9e, 0xce, 0x6a)
     );
     assert_eq!(
         theme.status_color(&PaneStatus::Waiting, false),
-        Color::Indexed(221)
+        Color::Rgb(0xe0, 0xaf, 0x68)
     );
     assert_eq!(
         theme.status_color(&PaneStatus::Idle, false),
-        Color::Indexed(110)
+        Color::Rgb(0x7d, 0xcf, 0xff)
     );
     assert_eq!(
         theme.status_color(&PaneStatus::Error, false),
-        Color::Indexed(167)
+        Color::Rgb(0xf7, 0x76, 0x8e)
     );
     assert_eq!(
         theme.status_color(&PaneStatus::Unknown, false),
-        Color::Indexed(244)
+        Color::Rgb(0x56, 0x5f, 0x89)
     );
 }
 
@@ -115,8 +115,14 @@ fn test_status_color_attention_overrides_all() {
 fn test_agent_color_all_variants() {
     let theme = ColorTheme::default();
 
-    assert_eq!(theme.agent_color(&AgentType::Claude), Color::Indexed(174));
-    assert_eq!(theme.agent_color(&AgentType::Codex), Color::Indexed(141));
+    assert_eq!(
+        theme.agent_color(&AgentType::Claude),
+        Color::Rgb(0xff, 0x9e, 0x64)
+    );
+    assert_eq!(
+        theme.agent_color(&AgentType::Codex),
+        Color::Rgb(0xbb, 0x9a, 0xf7)
+    );
     assert_eq!(theme.agent_color(&AgentType::Unknown), theme.status_unknown);
 }
 
@@ -144,10 +150,10 @@ fn test_permission_mode_bypass_all_renders_danger_color() {
     // Styled snapshot locks in the BypassAll `!` badge rendered with
     // badge_danger (fg:167).
     insta::assert_snapshot!(render_to_styled_string(&mut state, 28, 26), @"
-     ≡[fg:111]1[fg:153] ●[fg:114]1[fg:255] ◐[fg:245]0[fg:245] ○[fg:245]0[fg:245] ✕[fg:245]0[fg:245]           ⤢[fg:114]
-    ⓘ[fg:221]                        —[fg:252] ▾[fg:252]
-    p[fg:153]r[fg:153]o[fg:153]j[fg:153]e[fg:153]c[fg:153]t[fg:153]
-    ┃[fg:153] ●[fg:82] [fg:174][fg:174] [fg:167]![fg:167]
+     ≡[fg:#7aa2f7]1[fg:#7aa2f7] ●[fg:#9ece6a]1[fg:#c0caf5] ◐[fg:#9aa5ce]0[fg:#9aa5ce] ○[fg:#9aa5ce]0[fg:#9aa5ce] ✕[fg:#9aa5ce]0[fg:#9aa5ce]           ⤢[fg:#9ece6a]
+    ⓘ[fg:#e0af68]                        —[fg:#a9b1d6] ▾[fg:#a9b1d6]
+    p[fg:#7aa2f7]r[fg:#7aa2f7]o[fg:#7aa2f7]j[fg:#7aa2f7]e[fg:#7aa2f7]c[fg:#7aa2f7]t[fg:#7aa2f7]
+    ┃[fg:#7aa2f7] ●[fg:82] [fg:#ff9e64][fg:#ff9e64] [fg:#f7768e]![fg:#f7768e]
 
 
 
@@ -162,11 +168,11 @@ fn test_permission_mode_bypass_all_renders_danger_color() {
 
 
 
-    ─[fg:240] [fg:240]T[fg:153]o[fg:153]o[fg:153]l[fg:153]s[fg:153]│[fg:240]T[fg:252]a[fg:252]s[fg:252]k[fg:252]s[fg:252]│[fg:240]G[fg:252]i[fg:252]t[fg:252] [fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]
+    ─[fg:240] [fg:240]T[fg:#7aa2f7]o[fg:#7aa2f7]o[fg:#7aa2f7]l[fg:#7aa2f7]s[fg:#7aa2f7]│[fg:240]T[fg:#a9b1d6]a[fg:#a9b1d6]s[fg:#a9b1d6]k[fg:#a9b1d6]s[fg:#a9b1d6]│[fg:240]G[fg:#a9b1d6]i[fg:#a9b1d6]t[fg:#a9b1d6] [fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]
 
 
 
-            N[fg:252]o[fg:252] [fg:252]t[fg:252]o[fg:252]o[fg:252]l[fg:252]s[fg:252] [fg:252]y[fg:252]e[fg:252]t[fg:252]
+            N[fg:#a9b1d6]o[fg:#a9b1d6] [fg:#a9b1d6]t[fg:#a9b1d6]o[fg:#a9b1d6]o[fg:#a9b1d6]l[fg:#a9b1d6]s[fg:#a9b1d6] [fg:#a9b1d6]y[fg:#a9b1d6]e[fg:#a9b1d6]t[fg:#a9b1d6]
     ");
 }
 
@@ -192,10 +198,10 @@ fn test_permission_mode_full_auto_renders_auto_color() {
     // Styled snapshot locks in the Auto `auto` badge rendered with
     // badge_auto (fg:221).
     insta::assert_snapshot!(render_to_styled_string(&mut state, 28, 26), @"
-     ≡[fg:111]1[fg:153] ●[fg:114]1[fg:255] ◐[fg:245]0[fg:245] ○[fg:245]0[fg:245] ✕[fg:245]0[fg:245]           ⤢[fg:114]
-    ⓘ[fg:221]                        —[fg:252] ▾[fg:252]
-    p[fg:153]r[fg:153]o[fg:153]j[fg:153]e[fg:153]c[fg:153]t[fg:153]
-    ┃[fg:153] ●[fg:82] [fg:174][fg:174] [fg:221]a[fg:221]u[fg:221]t[fg:221]o[fg:221]
+     ≡[fg:#7aa2f7]1[fg:#7aa2f7] ●[fg:#9ece6a]1[fg:#c0caf5] ◐[fg:#9aa5ce]0[fg:#9aa5ce] ○[fg:#9aa5ce]0[fg:#9aa5ce] ✕[fg:#9aa5ce]0[fg:#9aa5ce]           ⤢[fg:#9ece6a]
+    ⓘ[fg:#e0af68]                        —[fg:#a9b1d6] ▾[fg:#a9b1d6]
+    p[fg:#7aa2f7]r[fg:#7aa2f7]o[fg:#7aa2f7]j[fg:#7aa2f7]e[fg:#7aa2f7]c[fg:#7aa2f7]t[fg:#7aa2f7]
+    ┃[fg:#7aa2f7] ●[fg:82] [fg:#ff9e64][fg:#ff9e64] [fg:#e0af68]a[fg:#e0af68]u[fg:#e0af68]t[fg:#e0af68]o[fg:#e0af68]
 
 
 
@@ -210,11 +216,11 @@ fn test_permission_mode_full_auto_renders_auto_color() {
 
 
 
-    ─[fg:240] [fg:240]T[fg:153]o[fg:153]o[fg:153]l[fg:153]s[fg:153]│[fg:240]T[fg:252]a[fg:252]s[fg:252]k[fg:252]s[fg:252]│[fg:240]G[fg:252]i[fg:252]t[fg:252] [fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]
+    ─[fg:240] [fg:240]T[fg:#7aa2f7]o[fg:#7aa2f7]o[fg:#7aa2f7]l[fg:#7aa2f7]s[fg:#7aa2f7]│[fg:240]T[fg:#a9b1d6]a[fg:#a9b1d6]s[fg:#a9b1d6]k[fg:#a9b1d6]s[fg:#a9b1d6]│[fg:240]G[fg:#a9b1d6]i[fg:#a9b1d6]t[fg:#a9b1d6] [fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]
 
 
 
-            N[fg:252]o[fg:252] [fg:252]t[fg:252]o[fg:252]o[fg:252]l[fg:252]s[fg:252] [fg:252]y[fg:252]e[fg:252]t[fg:252]
+            N[fg:#a9b1d6]o[fg:#a9b1d6] [fg:#a9b1d6]t[fg:#a9b1d6]o[fg:#a9b1d6]o[fg:#a9b1d6]l[fg:#a9b1d6]s[fg:#a9b1d6] [fg:#a9b1d6]y[fg:#a9b1d6]e[fg:#a9b1d6]t[fg:#a9b1d6]
     ");
 }
 
@@ -311,31 +317,31 @@ fn test_git_summary_modified_uses_badge_auto_color() {
     // Styled snapshot locks in the Modified file badge color
     // (badge_auto fg:221).
     insta::assert_snapshot!(render_to_styled_string(&mut state, 28, 25), @"
-     [bg:234]≡[fg:111,bg:234]1[fg:153,bg:234] [bg:234]●[fg:114,bg:234]1[fg:255,bg:234] [bg:234]◐[fg:245,bg:234]0[fg:245,bg:234] [bg:234]○[fg:245,bg:234]0[fg:245,bg:234] [bg:234]✕[fg:245,bg:234]0[fg:245,bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]⤢[fg:114,bg:234] [bg:234]
-    ⓘ[fg:221,bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]—[fg:252,bg:234] [bg:234]▾[fg:252,bg:234]
-    p[fg:153,bg:234]r[fg:153,bg:234]o[fg:153,bg:234]j[fg:153,bg:234]e[fg:153,bg:234]c[fg:153,bg:234]t[fg:153,bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-    ┃[fg:153,bg:234] [bg:234]●[fg:82,bg:234] [fg:174,bg:234][fg:174,bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-    ─[fg:153,bg:236] [fg:153,bg:236]T[fg:252,bg:236]o[fg:252,bg:236]o[fg:252,bg:236]l[fg:252,bg:236]s[fg:252,bg:236]│[fg:240,bg:236]T[fg:252,bg:236]a[fg:252,bg:236]s[fg:252,bg:236]k[fg:252,bg:236]s[fg:252,bg:236]│[fg:240,bg:236]G[fg:153,bg:236]i[fg:153,bg:236]t[fg:153,bg:236] [fg:153,bg:236]─[fg:153,bg:236]─[fg:153,bg:236]─[fg:153,bg:236]─[fg:153,bg:236]─[fg:153,bg:236]─[fg:153,bg:236]─[fg:153,bg:236]─[fg:153,bg:236]─[fg:153,bg:236]─[fg:153,bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-    m[fg:255,bg:236]a[fg:255,bg:236]i[fg:255,bg:236]n[fg:255,bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]1[fg:252,bg:236] [fg:252,bg:236]f[fg:252,bg:236]i[fg:252,bg:236]l[fg:252,bg:236]e[fg:252,bg:236]s[fg:252,bg:236]
-    ─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]
-    U[fg:109,bg:236]n[fg:109,bg:236]s[fg:109,bg:236]t[fg:109,bg:236]a[fg:109,bg:236]g[fg:109,bg:236]e[fg:109,bg:236]d[fg:109,bg:236] [fg:109,bg:236]([fg:109,bg:236]1[fg:109,bg:236])[fg:109,bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-    M[fg:221,bg:236] [bg:236]s[fg:252,bg:236]r[fg:252,bg:236]c[fg:252,bg:236]/[fg:252,bg:236]l[fg:252,bg:236]i[fg:252,bg:236]b[fg:252,bg:236].[fg:252,bg:236]r[fg:252,bg:236]s[fg:252,bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]+[fg:114,bg:236]5[fg:114,bg:236]/[fg:252,bg:236]-[fg:174,bg:236]2[fg:174,bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
+     [bg:#1a1b26]≡[fg:#7aa2f7,bg:#1a1b26]1[fg:#7aa2f7,bg:#1a1b26] [bg:#1a1b26]●[fg:#9ece6a,bg:#1a1b26]1[fg:#c0caf5,bg:#1a1b26] [bg:#1a1b26]◐[fg:#9aa5ce,bg:#1a1b26]0[fg:#9aa5ce,bg:#1a1b26] [bg:#1a1b26]○[fg:#9aa5ce,bg:#1a1b26]0[fg:#9aa5ce,bg:#1a1b26] [bg:#1a1b26]✕[fg:#9aa5ce,bg:#1a1b26]0[fg:#9aa5ce,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]⤢[fg:#9ece6a,bg:#1a1b26] [bg:#1a1b26]
+    ⓘ[fg:#e0af68,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]—[fg:#a9b1d6,bg:#1a1b26] [bg:#1a1b26]▾[fg:#a9b1d6,bg:#1a1b26]
+    p[fg:#7aa2f7,bg:#1a1b26]r[fg:#7aa2f7,bg:#1a1b26]o[fg:#7aa2f7,bg:#1a1b26]j[fg:#7aa2f7,bg:#1a1b26]e[fg:#7aa2f7,bg:#1a1b26]c[fg:#7aa2f7,bg:#1a1b26]t[fg:#7aa2f7,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+    ┃[fg:#7aa2f7,bg:#1a1b26] [bg:#1a1b26]●[fg:82,bg:#1a1b26] [fg:#ff9e64,bg:#1a1b26][fg:#ff9e64,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+    ─[fg:#7aa2f7,bg:#24283b] [fg:#7aa2f7,bg:#24283b]T[fg:#a9b1d6,bg:#24283b]o[fg:#a9b1d6,bg:#24283b]o[fg:#a9b1d6,bg:#24283b]l[fg:#a9b1d6,bg:#24283b]s[fg:#a9b1d6,bg:#24283b]│[fg:240,bg:#24283b]T[fg:#a9b1d6,bg:#24283b]a[fg:#a9b1d6,bg:#24283b]s[fg:#a9b1d6,bg:#24283b]k[fg:#a9b1d6,bg:#24283b]s[fg:#a9b1d6,bg:#24283b]│[fg:240,bg:#24283b]G[fg:#7aa2f7,bg:#24283b]i[fg:#7aa2f7,bg:#24283b]t[fg:#7aa2f7,bg:#24283b] [fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+    m[fg:#c0caf5,bg:#24283b]a[fg:#c0caf5,bg:#24283b]i[fg:#c0caf5,bg:#24283b]n[fg:#c0caf5,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]1[fg:#a9b1d6,bg:#24283b] [fg:#a9b1d6,bg:#24283b]f[fg:#a9b1d6,bg:#24283b]i[fg:#a9b1d6,bg:#24283b]l[fg:#a9b1d6,bg:#24283b]e[fg:#a9b1d6,bg:#24283b]s[fg:#a9b1d6,bg:#24283b]
+    ─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]
+    U[fg:#2ac3de,bg:#24283b]n[fg:#2ac3de,bg:#24283b]s[fg:#2ac3de,bg:#24283b]t[fg:#2ac3de,bg:#24283b]a[fg:#2ac3de,bg:#24283b]g[fg:#2ac3de,bg:#24283b]e[fg:#2ac3de,bg:#24283b]d[fg:#2ac3de,bg:#24283b] [fg:#2ac3de,bg:#24283b]([fg:#2ac3de,bg:#24283b]1[fg:#2ac3de,bg:#24283b])[fg:#2ac3de,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+    M[fg:#e0af68,bg:#24283b] [bg:#24283b]s[fg:#a9b1d6,bg:#24283b]r[fg:#a9b1d6,bg:#24283b]c[fg:#a9b1d6,bg:#24283b]/[fg:#a9b1d6,bg:#24283b]l[fg:#a9b1d6,bg:#24283b]i[fg:#a9b1d6,bg:#24283b]b[fg:#a9b1d6,bg:#24283b].[fg:#a9b1d6,bg:#24283b]r[fg:#a9b1d6,bg:#24283b]s[fg:#a9b1d6,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]+[fg:#9ece6a,bg:#24283b]5[fg:#9ece6a,bg:#24283b]/[fg:#a9b1d6,bg:#24283b]-[fg:#f7768e,bg:#24283b]2[fg:#f7768e,bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
     ");
 }
 
@@ -373,11 +379,11 @@ fn test_task_progress_line_uses_task_progress_color() {
     // Styled snapshot locks in both the task_progress color (fg:223) and
     // the progress glyphs (✔/◼/◻) with the "1/3" count.
     insta::assert_snapshot!(render_to_styled_string(&mut state, 40, 40), @"
-     ≡[fg:111]1[fg:153] ●[fg:114]1[fg:255] ◐[fg:245]0[fg:245] ○[fg:245]0[fg:245] ✕[fg:245]0[fg:245]                       ⤢[fg:114]
-    ⓘ[fg:221]                                    —[fg:252] ▾[fg:252]
-    p[fg:153]r[fg:153]o[fg:153]j[fg:153]e[fg:153]c[fg:153]t[fg:153]
-    ┃[fg:153] ●[fg:82] [fg:174][fg:174]
-       [fg:223] [fg:223]✔[fg:223]◼[fg:223]◻[fg:223] [fg:223]1[fg:223]/[fg:223]3[fg:223]
+     ≡[fg:#7aa2f7]1[fg:#7aa2f7] ●[fg:#9ece6a]1[fg:#c0caf5] ◐[fg:#9aa5ce]0[fg:#9aa5ce] ○[fg:#9aa5ce]0[fg:#9aa5ce] ✕[fg:#9aa5ce]0[fg:#9aa5ce]                       ⤢[fg:#9ece6a]
+    ⓘ[fg:#e0af68]                                    —[fg:#a9b1d6] ▾[fg:#a9b1d6]
+    p[fg:#7aa2f7]r[fg:#7aa2f7]o[fg:#7aa2f7]j[fg:#7aa2f7]e[fg:#7aa2f7]c[fg:#7aa2f7]t[fg:#7aa2f7]
+    ┃[fg:#7aa2f7] ●[fg:82] [fg:#ff9e64][fg:#ff9e64]
+       [fg:#ff9e64] [fg:#ff9e64]✔[fg:#ff9e64]◼[fg:#ff9e64]◻[fg:#ff9e64] [fg:#ff9e64]1[fg:#ff9e64]/[fg:#ff9e64]3[fg:#ff9e64]
 
 
 
@@ -401,13 +407,13 @@ fn test_task_progress_line_uses_task_progress_color() {
 
 
 
-    ─[fg:240] [fg:240]T[fg:153]o[fg:153]o[fg:153]l[fg:153]s[fg:153]│[fg:240]T[fg:252]a[fg:252]s[fg:252]k[fg:252]s[fg:252]│[fg:240]G[fg:252]i[fg:252]t[fg:252] [fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]
+    ─[fg:240] [fg:240]T[fg:#7aa2f7]o[fg:#7aa2f7]o[fg:#7aa2f7]l[fg:#7aa2f7]s[fg:#7aa2f7]│[fg:240]T[fg:#a9b1d6]a[fg:#a9b1d6]s[fg:#a9b1d6]k[fg:#a9b1d6]s[fg:#a9b1d6]│[fg:240]G[fg:#a9b1d6]i[fg:#a9b1d6]t[fg:#a9b1d6] [fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]
 
 
 
 
 
-                  N[fg:252]o[fg:252] [fg:252]t[fg:252]o[fg:252]o[fg:252]l[fg:252]s[fg:252] [fg:252]y[fg:252]e[fg:252]t[fg:252]
+                  N[fg:#a9b1d6]o[fg:#a9b1d6] [fg:#a9b1d6]t[fg:#a9b1d6]o[fg:#a9b1d6]o[fg:#a9b1d6]l[fg:#a9b1d6]s[fg:#a9b1d6] [fg:#a9b1d6]y[fg:#a9b1d6]e[fg:#a9b1d6]t[fg:#a9b1d6]
     ");
 }
 
@@ -433,11 +439,11 @@ fn test_subagent_line_uses_subagent_color() {
     // Styled snapshot locks in the subagent line color (fg:73) plus the
     // rendered "Explore #1" label.
     insta::assert_snapshot!(render_to_styled_string(&mut state, 40, 27), @"
-     ≡[fg:111]1[fg:153] ●[fg:114]1[fg:255] ◐[fg:245]0[fg:245] ○[fg:245]0[fg:245] ✕[fg:245]0[fg:245]                       ⤢[fg:114]
-    ⓘ[fg:221]                                    —[fg:252] ▾[fg:252]
-    p[fg:153]r[fg:153]o[fg:153]j[fg:153]e[fg:153]c[fg:153]t[fg:153]
-    ┃[fg:153] ●[fg:82] [fg:174][fg:174]
-       [fg:252] [fg:252]└[fg:252] [fg:252]E[fg:73]x[fg:73]p[fg:73]l[fg:73]o[fg:73]r[fg:73]e[fg:73] [fg:73]#[fg:73]1[fg:73]
+     ≡[fg:#7aa2f7]1[fg:#7aa2f7] ●[fg:#9ece6a]1[fg:#c0caf5] ◐[fg:#9aa5ce]0[fg:#9aa5ce] ○[fg:#9aa5ce]0[fg:#9aa5ce] ✕[fg:#9aa5ce]0[fg:#9aa5ce]                       ⤢[fg:#9ece6a]
+    ⓘ[fg:#e0af68]                                    —[fg:#a9b1d6] ▾[fg:#a9b1d6]
+    p[fg:#7aa2f7]r[fg:#7aa2f7]o[fg:#7aa2f7]j[fg:#7aa2f7]e[fg:#7aa2f7]c[fg:#7aa2f7]t[fg:#7aa2f7]
+    ┃[fg:#7aa2f7] ●[fg:82] [fg:#ff9e64][fg:#ff9e64]
+       [fg:#a9b1d6] [fg:#a9b1d6]└[fg:#a9b1d6] [fg:#a9b1d6]E[fg:#73dacb]x[fg:#73dacb]p[fg:#73dacb]l[fg:#73dacb]o[fg:#73dacb]r[fg:#73dacb]e[fg:#73dacb] [fg:#73dacb]#[fg:#73dacb]1[fg:#73dacb]
 
 
 
@@ -452,11 +458,11 @@ fn test_subagent_line_uses_subagent_color() {
 
 
 
-    ─[fg:240] [fg:240]T[fg:153]o[fg:153]o[fg:153]l[fg:153]s[fg:153]│[fg:240]T[fg:252]a[fg:252]s[fg:252]k[fg:252]s[fg:252]│[fg:240]G[fg:252]i[fg:252]t[fg:252] [fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]
+    ─[fg:240] [fg:240]T[fg:#7aa2f7]o[fg:#7aa2f7]o[fg:#7aa2f7]l[fg:#7aa2f7]s[fg:#7aa2f7]│[fg:240]T[fg:#a9b1d6]a[fg:#a9b1d6]s[fg:#a9b1d6]k[fg:#a9b1d6]s[fg:#a9b1d6]│[fg:240]G[fg:#a9b1d6]i[fg:#a9b1d6]t[fg:#a9b1d6] [fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]
 
 
 
-                  N[fg:252]o[fg:252] [fg:252]t[fg:252]o[fg:252]o[fg:252]l[fg:252]s[fg:252] [fg:252]y[fg:252]e[fg:252]t[fg:252]
+                  N[fg:#a9b1d6]o[fg:#a9b1d6] [fg:#a9b1d6]t[fg:#a9b1d6]o[fg:#a9b1d6]o[fg:#a9b1d6]l[fg:#a9b1d6]s[fg:#a9b1d6] [fg:#a9b1d6]y[fg:#a9b1d6]e[fg:#a9b1d6]t[fg:#a9b1d6]
     ");
 }
 
@@ -485,11 +491,11 @@ fn test_response_arrow_uses_response_arrow_color() {
     //   • response_arrow color (fg:81) + bold on the response glyph
     //   • text_active color (fg:255) on the focused response text
     insta::assert_snapshot!(render_to_styled_string(&mut state, 40, 27), @"
-     ≡[fg:111]1[fg:153] ●[fg:114]0[fg:245] ◐[fg:245]0[fg:245] ○[fg:245]1[fg:255] ✕[fg:245]0[fg:245]                       ⤢[fg:114]
-    ⓘ[fg:221]                                    —[fg:252] ▾[fg:252]
-    p[fg:153]r[fg:153]o[fg:153]j[fg:153]e[fg:153]c[fg:153]t[fg:153]
-    ┃[fg:153] ○[fg:110] [fg:174][fg:174]
-      󰭹[fg:81,bold] [fg:81,bold]T[fg:255]a[fg:255]s[fg:255]k[fg:255] [fg:255]c[fg:255]o[fg:255]m[fg:255]p[fg:255]l[fg:255]e[fg:255]t[fg:255]e[fg:255]d[fg:255] [fg:255]s[fg:255]u[fg:255]c[fg:255]c[fg:255]e[fg:255]s[fg:255]s[fg:255]f[fg:255]u[fg:255]l[fg:255]l[fg:255]y[fg:255]
+     ≡[fg:#7aa2f7]1[fg:#7aa2f7] ●[fg:#9ece6a]0[fg:#9aa5ce] ◐[fg:#9aa5ce]0[fg:#9aa5ce] ○[fg:#9aa5ce]1[fg:#c0caf5] ✕[fg:#9aa5ce]0[fg:#9aa5ce]                       ⤢[fg:#9ece6a]
+    ⓘ[fg:#e0af68]                                    —[fg:#a9b1d6] ▾[fg:#a9b1d6]
+    p[fg:#7aa2f7]r[fg:#7aa2f7]o[fg:#7aa2f7]j[fg:#7aa2f7]e[fg:#7aa2f7]c[fg:#7aa2f7]t[fg:#7aa2f7]
+    ┃[fg:#7aa2f7] ○[fg:#7dcfff] [fg:#ff9e64][fg:#ff9e64]
+      󰭹[fg:#7dcfff,bold] [fg:#7dcfff,bold]T[fg:#c0caf5]a[fg:#c0caf5]s[fg:#c0caf5]k[fg:#c0caf5] [fg:#c0caf5]c[fg:#c0caf5]o[fg:#c0caf5]m[fg:#c0caf5]p[fg:#c0caf5]l[fg:#c0caf5]e[fg:#c0caf5]t[fg:#c0caf5]e[fg:#c0caf5]d[fg:#c0caf5] [fg:#c0caf5]s[fg:#c0caf5]u[fg:#c0caf5]c[fg:#c0caf5]c[fg:#c0caf5]e[fg:#c0caf5]s[fg:#c0caf5]s[fg:#c0caf5]f[fg:#c0caf5]u[fg:#c0caf5]l[fg:#c0caf5]l[fg:#c0caf5]y[fg:#c0caf5]
 
 
 
@@ -504,11 +510,11 @@ fn test_response_arrow_uses_response_arrow_color() {
 
 
 
-    ─[fg:240] [fg:240]T[fg:153]o[fg:153]o[fg:153]l[fg:153]s[fg:153]│[fg:240]T[fg:252]a[fg:252]s[fg:252]k[fg:252]s[fg:252]│[fg:240]G[fg:252]i[fg:252]t[fg:252] [fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]
+    ─[fg:240] [fg:240]T[fg:#7aa2f7]o[fg:#7aa2f7]o[fg:#7aa2f7]l[fg:#7aa2f7]s[fg:#7aa2f7]│[fg:240]T[fg:#a9b1d6]a[fg:#a9b1d6]s[fg:#a9b1d6]k[fg:#a9b1d6]s[fg:#a9b1d6]│[fg:240]G[fg:#a9b1d6]i[fg:#a9b1d6]t[fg:#a9b1d6] [fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]
 
 
 
-                  N[fg:252]o[fg:252] [fg:252]t[fg:252]o[fg:252]o[fg:252]l[fg:252]s[fg:252] [fg:252]y[fg:252]e[fg:252]t[fg:252]
+                  N[fg:#a9b1d6]o[fg:#a9b1d6] [fg:#a9b1d6]t[fg:#a9b1d6]o[fg:#a9b1d6]o[fg:#a9b1d6]l[fg:#a9b1d6]s[fg:#a9b1d6] [fg:#a9b1d6]y[fg:#a9b1d6]e[fg:#a9b1d6]t[fg:#a9b1d6]
     ");
 }
 
@@ -541,46 +547,46 @@ fn test_pr_link_uses_pr_link_color() {
     // Styled snapshot locks in the PR link: pr_link color (fg:117) plus
     // the underline modifier on the `#99` glyphs.
     insta::assert_snapshot!(render_to_styled_string(&mut state, 28, 40), @"
-     [bg:234]≡[fg:111,bg:234]1[fg:153,bg:234] [bg:234]●[fg:114,bg:234]1[fg:255,bg:234] [bg:234]◐[fg:245,bg:234]0[fg:245,bg:234] [bg:234]○[fg:245,bg:234]0[fg:245,bg:234] [bg:234]✕[fg:245,bg:234]0[fg:245,bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]⤢[fg:114,bg:234] [bg:234]
-    ⓘ[fg:221,bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]—[fg:252,bg:234] [bg:234]▾[fg:252,bg:234]
-    p[fg:153,bg:234]r[fg:153,bg:234]o[fg:153,bg:234]j[fg:153,bg:234]e[fg:153,bg:234]c[fg:153,bg:234]t[fg:153,bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-    ┃[fg:153,bg:234] [bg:234]●[fg:82,bg:234] [fg:174,bg:234][fg:174,bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-    ─[fg:153,bg:236] [fg:153,bg:236]T[fg:252,bg:236]o[fg:252,bg:236]o[fg:252,bg:236]l[fg:252,bg:236]s[fg:252,bg:236]│[fg:240,bg:236]T[fg:252,bg:236]a[fg:252,bg:236]s[fg:252,bg:236]k[fg:252,bg:236]s[fg:252,bg:236]│[fg:240,bg:236]G[fg:153,bg:236]i[fg:153,bg:236]t[fg:153,bg:236] [fg:153,bg:236]─[fg:153,bg:236]─[fg:153,bg:236]─[fg:153,bg:236]─[fg:153,bg:236]─[fg:153,bg:236]─[fg:153,bg:236]─[fg:153,bg:236]─[fg:153,bg:236]─[fg:153,bg:236]─[fg:153,bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-    f[fg:255,bg:236]e[fg:255,bg:236]a[fg:255,bg:236]t[fg:255,bg:236]u[fg:255,bg:236]r[fg:255,bg:236]e[fg:255,bg:236]/[fg:255,bg:236]t[fg:255,bg:236]e[fg:255,bg:236]s[fg:255,bg:236]t[fg:255,bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]#[fg:117,bg:236,underline]9[fg:117,bg:236,underline]9[fg:117,bg:236,underline]
-    ─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]W[fg:252,bg:236]o[fg:252,bg:236]r[fg:252,bg:236]k[fg:252,bg:236]i[fg:252,bg:236]n[fg:252,bg:236]g[fg:252,bg:236] [fg:252,bg:236]t[fg:252,bg:236]r[fg:252,bg:236]e[fg:252,bg:236]e[fg:252,bg:236] [fg:252,bg:236]c[fg:252,bg:236]l[fg:252,bg:236]e[fg:252,bg:236]a[fg:252,bg:236]n[fg:252,bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
+     [bg:#1a1b26]≡[fg:#7aa2f7,bg:#1a1b26]1[fg:#7aa2f7,bg:#1a1b26] [bg:#1a1b26]●[fg:#9ece6a,bg:#1a1b26]1[fg:#c0caf5,bg:#1a1b26] [bg:#1a1b26]◐[fg:#9aa5ce,bg:#1a1b26]0[fg:#9aa5ce,bg:#1a1b26] [bg:#1a1b26]○[fg:#9aa5ce,bg:#1a1b26]0[fg:#9aa5ce,bg:#1a1b26] [bg:#1a1b26]✕[fg:#9aa5ce,bg:#1a1b26]0[fg:#9aa5ce,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]⤢[fg:#9ece6a,bg:#1a1b26] [bg:#1a1b26]
+    ⓘ[fg:#e0af68,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]—[fg:#a9b1d6,bg:#1a1b26] [bg:#1a1b26]▾[fg:#a9b1d6,bg:#1a1b26]
+    p[fg:#7aa2f7,bg:#1a1b26]r[fg:#7aa2f7,bg:#1a1b26]o[fg:#7aa2f7,bg:#1a1b26]j[fg:#7aa2f7,bg:#1a1b26]e[fg:#7aa2f7,bg:#1a1b26]c[fg:#7aa2f7,bg:#1a1b26]t[fg:#7aa2f7,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+    ┃[fg:#7aa2f7,bg:#1a1b26] [bg:#1a1b26]●[fg:82,bg:#1a1b26] [fg:#ff9e64,bg:#1a1b26][fg:#ff9e64,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+    ─[fg:#7aa2f7,bg:#24283b] [fg:#7aa2f7,bg:#24283b]T[fg:#a9b1d6,bg:#24283b]o[fg:#a9b1d6,bg:#24283b]o[fg:#a9b1d6,bg:#24283b]l[fg:#a9b1d6,bg:#24283b]s[fg:#a9b1d6,bg:#24283b]│[fg:240,bg:#24283b]T[fg:#a9b1d6,bg:#24283b]a[fg:#a9b1d6,bg:#24283b]s[fg:#a9b1d6,bg:#24283b]k[fg:#a9b1d6,bg:#24283b]s[fg:#a9b1d6,bg:#24283b]│[fg:240,bg:#24283b]G[fg:#7aa2f7,bg:#24283b]i[fg:#7aa2f7,bg:#24283b]t[fg:#7aa2f7,bg:#24283b] [fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+    f[fg:#c0caf5,bg:#24283b]e[fg:#c0caf5,bg:#24283b]a[fg:#c0caf5,bg:#24283b]t[fg:#c0caf5,bg:#24283b]u[fg:#c0caf5,bg:#24283b]r[fg:#c0caf5,bg:#24283b]e[fg:#c0caf5,bg:#24283b]/[fg:#c0caf5,bg:#24283b]t[fg:#c0caf5,bg:#24283b]e[fg:#c0caf5,bg:#24283b]s[fg:#c0caf5,bg:#24283b]t[fg:#c0caf5,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]#[fg:#7dcfff,bg:#24283b,underline]9[fg:#7dcfff,bg:#24283b,underline]9[fg:#7dcfff,bg:#24283b,underline]
+    ─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]W[fg:#a9b1d6,bg:#24283b]o[fg:#a9b1d6,bg:#24283b]r[fg:#a9b1d6,bg:#24283b]k[fg:#a9b1d6,bg:#24283b]i[fg:#a9b1d6,bg:#24283b]n[fg:#a9b1d6,bg:#24283b]g[fg:#a9b1d6,bg:#24283b] [fg:#a9b1d6,bg:#24283b]t[fg:#a9b1d6,bg:#24283b]r[fg:#a9b1d6,bg:#24283b]e[fg:#a9b1d6,bg:#24283b]e[fg:#a9b1d6,bg:#24283b] [fg:#a9b1d6,bg:#24283b]c[fg:#a9b1d6,bg:#24283b]l[fg:#a9b1d6,bg:#24283b]e[fg:#a9b1d6,bg:#24283b]a[fg:#a9b1d6,bg:#24283b]n[fg:#a9b1d6,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
     ");
 }
 
@@ -609,46 +615,46 @@ fn test_diff_stat_added_uses_diff_added_color() {
     // Styled snapshot locks in the `+42` additions rendered with
     // diff_added color (fg:114).
     insta::assert_snapshot!(render_to_styled_string(&mut state, 28, 40), @"
-     [bg:234]≡[fg:111,bg:234]1[fg:153,bg:234] [bg:234]●[fg:114,bg:234]1[fg:255,bg:234] [bg:234]◐[fg:245,bg:234]0[fg:245,bg:234] [bg:234]○[fg:245,bg:234]0[fg:245,bg:234] [bg:234]✕[fg:245,bg:234]0[fg:245,bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]⤢[fg:114,bg:234] [bg:234]
-    ⓘ[fg:221,bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]—[fg:252,bg:234] [bg:234]▾[fg:252,bg:234]
-    p[fg:153,bg:234]r[fg:153,bg:234]o[fg:153,bg:234]j[fg:153,bg:234]e[fg:153,bg:234]c[fg:153,bg:234]t[fg:153,bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-    ┃[fg:153,bg:234] [bg:234]●[fg:82,bg:234] [fg:174,bg:234][fg:174,bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-    ─[fg:153,bg:236] [fg:153,bg:236]T[fg:252,bg:236]o[fg:252,bg:236]o[fg:252,bg:236]l[fg:252,bg:236]s[fg:252,bg:236]│[fg:240,bg:236]T[fg:252,bg:236]a[fg:252,bg:236]s[fg:252,bg:236]k[fg:252,bg:236]s[fg:252,bg:236]│[fg:240,bg:236]G[fg:153,bg:236]i[fg:153,bg:236]t[fg:153,bg:236] [fg:153,bg:236]─[fg:153,bg:236]─[fg:153,bg:236]─[fg:153,bg:236]─[fg:153,bg:236]─[fg:153,bg:236]─[fg:153,bg:236]─[fg:153,bg:236]─[fg:153,bg:236]─[fg:153,bg:236]─[fg:153,bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-    m[fg:255,bg:236]a[fg:255,bg:236]i[fg:255,bg:236]n[fg:255,bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-    +[fg:114,bg:236]4[fg:114,bg:236]2[fg:114,bg:236]/[fg:252,bg:236]-[fg:174,bg:236]1[fg:174,bg:236]0[fg:174,bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]0[fg:252,bg:236] [fg:252,bg:236]f[fg:252,bg:236]i[fg:252,bg:236]l[fg:252,bg:236]e[fg:252,bg:236]s[fg:252,bg:236]
-    ─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]W[fg:252,bg:236]o[fg:252,bg:236]r[fg:252,bg:236]k[fg:252,bg:236]i[fg:252,bg:236]n[fg:252,bg:236]g[fg:252,bg:236] [fg:252,bg:236]t[fg:252,bg:236]r[fg:252,bg:236]e[fg:252,bg:236]e[fg:252,bg:236] [fg:252,bg:236]c[fg:252,bg:236]l[fg:252,bg:236]e[fg:252,bg:236]a[fg:252,bg:236]n[fg:252,bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
+     [bg:#1a1b26]≡[fg:#7aa2f7,bg:#1a1b26]1[fg:#7aa2f7,bg:#1a1b26] [bg:#1a1b26]●[fg:#9ece6a,bg:#1a1b26]1[fg:#c0caf5,bg:#1a1b26] [bg:#1a1b26]◐[fg:#9aa5ce,bg:#1a1b26]0[fg:#9aa5ce,bg:#1a1b26] [bg:#1a1b26]○[fg:#9aa5ce,bg:#1a1b26]0[fg:#9aa5ce,bg:#1a1b26] [bg:#1a1b26]✕[fg:#9aa5ce,bg:#1a1b26]0[fg:#9aa5ce,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]⤢[fg:#9ece6a,bg:#1a1b26] [bg:#1a1b26]
+    ⓘ[fg:#e0af68,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]—[fg:#a9b1d6,bg:#1a1b26] [bg:#1a1b26]▾[fg:#a9b1d6,bg:#1a1b26]
+    p[fg:#7aa2f7,bg:#1a1b26]r[fg:#7aa2f7,bg:#1a1b26]o[fg:#7aa2f7,bg:#1a1b26]j[fg:#7aa2f7,bg:#1a1b26]e[fg:#7aa2f7,bg:#1a1b26]c[fg:#7aa2f7,bg:#1a1b26]t[fg:#7aa2f7,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+    ┃[fg:#7aa2f7,bg:#1a1b26] [bg:#1a1b26]●[fg:82,bg:#1a1b26] [fg:#ff9e64,bg:#1a1b26][fg:#ff9e64,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+    ─[fg:#7aa2f7,bg:#24283b] [fg:#7aa2f7,bg:#24283b]T[fg:#a9b1d6,bg:#24283b]o[fg:#a9b1d6,bg:#24283b]o[fg:#a9b1d6,bg:#24283b]l[fg:#a9b1d6,bg:#24283b]s[fg:#a9b1d6,bg:#24283b]│[fg:240,bg:#24283b]T[fg:#a9b1d6,bg:#24283b]a[fg:#a9b1d6,bg:#24283b]s[fg:#a9b1d6,bg:#24283b]k[fg:#a9b1d6,bg:#24283b]s[fg:#a9b1d6,bg:#24283b]│[fg:240,bg:#24283b]G[fg:#7aa2f7,bg:#24283b]i[fg:#7aa2f7,bg:#24283b]t[fg:#7aa2f7,bg:#24283b] [fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+    m[fg:#c0caf5,bg:#24283b]a[fg:#c0caf5,bg:#24283b]i[fg:#c0caf5,bg:#24283b]n[fg:#c0caf5,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+    +[fg:#9ece6a,bg:#24283b]4[fg:#9ece6a,bg:#24283b]2[fg:#9ece6a,bg:#24283b]/[fg:#a9b1d6,bg:#24283b]-[fg:#f7768e,bg:#24283b]1[fg:#f7768e,bg:#24283b]0[fg:#f7768e,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]0[fg:#a9b1d6,bg:#24283b] [fg:#a9b1d6,bg:#24283b]f[fg:#a9b1d6,bg:#24283b]i[fg:#a9b1d6,bg:#24283b]l[fg:#a9b1d6,bg:#24283b]e[fg:#a9b1d6,bg:#24283b]s[fg:#a9b1d6,bg:#24283b]
+    ─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]W[fg:#a9b1d6,bg:#24283b]o[fg:#a9b1d6,bg:#24283b]r[fg:#a9b1d6,bg:#24283b]k[fg:#a9b1d6,bg:#24283b]i[fg:#a9b1d6,bg:#24283b]n[fg:#a9b1d6,bg:#24283b]g[fg:#a9b1d6,bg:#24283b] [fg:#a9b1d6,bg:#24283b]t[fg:#a9b1d6,bg:#24283b]r[fg:#a9b1d6,bg:#24283b]e[fg:#a9b1d6,bg:#24283b]e[fg:#a9b1d6,bg:#24283b] [fg:#a9b1d6,bg:#24283b]c[fg:#a9b1d6,bg:#24283b]l[fg:#a9b1d6,bg:#24283b]e[fg:#a9b1d6,bg:#24283b]a[fg:#a9b1d6,bg:#24283b]n[fg:#a9b1d6,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
     ");
 }
 
@@ -677,31 +683,31 @@ fn test_diff_stat_deleted_uses_diff_deleted_color() {
     // Styled snapshot locks in the `-25` deletions rendered with
     // diff_deleted color (fg:174).
     insta::assert_snapshot!(render_to_styled_string(&mut state, 28, 25), @"
-     [bg:234]≡[fg:111,bg:234]1[fg:153,bg:234] [bg:234]●[fg:114,bg:234]1[fg:255,bg:234] [bg:234]◐[fg:245,bg:234]0[fg:245,bg:234] [bg:234]○[fg:245,bg:234]0[fg:245,bg:234] [bg:234]✕[fg:245,bg:234]0[fg:245,bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]⤢[fg:114,bg:234] [bg:234]
-    ⓘ[fg:221,bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]—[fg:252,bg:234] [bg:234]▾[fg:252,bg:234]
-    p[fg:153,bg:234]r[fg:153,bg:234]o[fg:153,bg:234]j[fg:153,bg:234]e[fg:153,bg:234]c[fg:153,bg:234]t[fg:153,bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-    ┃[fg:153,bg:234] [bg:234]●[fg:82,bg:234] [fg:174,bg:234][fg:174,bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-    ─[fg:153,bg:236] [fg:153,bg:236]T[fg:252,bg:236]o[fg:252,bg:236]o[fg:252,bg:236]l[fg:252,bg:236]s[fg:252,bg:236]│[fg:240,bg:236]T[fg:252,bg:236]a[fg:252,bg:236]s[fg:252,bg:236]k[fg:252,bg:236]s[fg:252,bg:236]│[fg:240,bg:236]G[fg:153,bg:236]i[fg:153,bg:236]t[fg:153,bg:236] [fg:153,bg:236]─[fg:153,bg:236]─[fg:153,bg:236]─[fg:153,bg:236]─[fg:153,bg:236]─[fg:153,bg:236]─[fg:153,bg:236]─[fg:153,bg:236]─[fg:153,bg:236]─[fg:153,bg:236]─[fg:153,bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-    m[fg:255,bg:236]a[fg:255,bg:236]i[fg:255,bg:236]n[fg:255,bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-    +[fg:114,bg:236]0[fg:114,bg:236]/[fg:252,bg:236]-[fg:174,bg:236]2[fg:174,bg:236]5[fg:174,bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]0[fg:252,bg:236] [fg:252,bg:236]f[fg:252,bg:236]i[fg:252,bg:236]l[fg:252,bg:236]e[fg:252,bg:236]s[fg:252,bg:236]
-    ─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]W[fg:252,bg:236]o[fg:252,bg:236]r[fg:252,bg:236]k[fg:252,bg:236]i[fg:252,bg:236]n[fg:252,bg:236]g[fg:252,bg:236] [fg:252,bg:236]t[fg:252,bg:236]r[fg:252,bg:236]e[fg:252,bg:236]e[fg:252,bg:236] [fg:252,bg:236]c[fg:252,bg:236]l[fg:252,bg:236]e[fg:252,bg:236]a[fg:252,bg:236]n[fg:252,bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
+     [bg:#1a1b26]≡[fg:#7aa2f7,bg:#1a1b26]1[fg:#7aa2f7,bg:#1a1b26] [bg:#1a1b26]●[fg:#9ece6a,bg:#1a1b26]1[fg:#c0caf5,bg:#1a1b26] [bg:#1a1b26]◐[fg:#9aa5ce,bg:#1a1b26]0[fg:#9aa5ce,bg:#1a1b26] [bg:#1a1b26]○[fg:#9aa5ce,bg:#1a1b26]0[fg:#9aa5ce,bg:#1a1b26] [bg:#1a1b26]✕[fg:#9aa5ce,bg:#1a1b26]0[fg:#9aa5ce,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]⤢[fg:#9ece6a,bg:#1a1b26] [bg:#1a1b26]
+    ⓘ[fg:#e0af68,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]—[fg:#a9b1d6,bg:#1a1b26] [bg:#1a1b26]▾[fg:#a9b1d6,bg:#1a1b26]
+    p[fg:#7aa2f7,bg:#1a1b26]r[fg:#7aa2f7,bg:#1a1b26]o[fg:#7aa2f7,bg:#1a1b26]j[fg:#7aa2f7,bg:#1a1b26]e[fg:#7aa2f7,bg:#1a1b26]c[fg:#7aa2f7,bg:#1a1b26]t[fg:#7aa2f7,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+    ┃[fg:#7aa2f7,bg:#1a1b26] [bg:#1a1b26]●[fg:82,bg:#1a1b26] [fg:#ff9e64,bg:#1a1b26][fg:#ff9e64,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+    ─[fg:#7aa2f7,bg:#24283b] [fg:#7aa2f7,bg:#24283b]T[fg:#a9b1d6,bg:#24283b]o[fg:#a9b1d6,bg:#24283b]o[fg:#a9b1d6,bg:#24283b]l[fg:#a9b1d6,bg:#24283b]s[fg:#a9b1d6,bg:#24283b]│[fg:240,bg:#24283b]T[fg:#a9b1d6,bg:#24283b]a[fg:#a9b1d6,bg:#24283b]s[fg:#a9b1d6,bg:#24283b]k[fg:#a9b1d6,bg:#24283b]s[fg:#a9b1d6,bg:#24283b]│[fg:240,bg:#24283b]G[fg:#7aa2f7,bg:#24283b]i[fg:#7aa2f7,bg:#24283b]t[fg:#7aa2f7,bg:#24283b] [fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+    m[fg:#c0caf5,bg:#24283b]a[fg:#c0caf5,bg:#24283b]i[fg:#c0caf5,bg:#24283b]n[fg:#c0caf5,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+    +[fg:#9ece6a,bg:#24283b]0[fg:#9ece6a,bg:#24283b]/[fg:#a9b1d6,bg:#24283b]-[fg:#f7768e,bg:#24283b]2[fg:#f7768e,bg:#24283b]5[fg:#f7768e,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]0[fg:#a9b1d6,bg:#24283b] [fg:#a9b1d6,bg:#24283b]f[fg:#a9b1d6,bg:#24283b]i[fg:#a9b1d6,bg:#24283b]l[fg:#a9b1d6,bg:#24283b]e[fg:#a9b1d6,bg:#24283b]s[fg:#a9b1d6,bg:#24283b]
+    ─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]W[fg:#a9b1d6,bg:#24283b]o[fg:#a9b1d6,bg:#24283b]r[fg:#a9b1d6,bg:#24283b]k[fg:#a9b1d6,bg:#24283b]i[fg:#a9b1d6,bg:#24283b]n[fg:#a9b1d6,bg:#24283b]g[fg:#a9b1d6,bg:#24283b] [fg:#a9b1d6,bg:#24283b]t[fg:#a9b1d6,bg:#24283b]r[fg:#a9b1d6,bg:#24283b]e[fg:#a9b1d6,bg:#24283b]e[fg:#a9b1d6,bg:#24283b] [fg:#a9b1d6,bg:#24283b]c[fg:#a9b1d6,bg:#24283b]l[fg:#a9b1d6,bg:#24283b]e[fg:#a9b1d6,bg:#24283b]a[fg:#a9b1d6,bg:#24283b]n[fg:#a9b1d6,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
     ");
 }
 
@@ -736,31 +742,31 @@ fn test_file_change_stat_uses_file_change_color() {
     // Styled snapshot locks in the `M lib.rs` row rendered with
     // badge_auto (fg:221) on the status glyph.
     insta::assert_snapshot!(render_to_styled_string(&mut state, 28, 25), @"
-     [bg:234]≡[fg:111,bg:234]1[fg:153,bg:234] [bg:234]●[fg:114,bg:234]1[fg:255,bg:234] [bg:234]◐[fg:245,bg:234]0[fg:245,bg:234] [bg:234]○[fg:245,bg:234]0[fg:245,bg:234] [bg:234]✕[fg:245,bg:234]0[fg:245,bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]⤢[fg:114,bg:234] [bg:234]
-    ⓘ[fg:221,bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]—[fg:252,bg:234] [bg:234]▾[fg:252,bg:234]
-    p[fg:153,bg:234]r[fg:153,bg:234]o[fg:153,bg:234]j[fg:153,bg:234]e[fg:153,bg:234]c[fg:153,bg:234]t[fg:153,bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-    ┃[fg:153,bg:234] [bg:234]●[fg:82,bg:234] [fg:174,bg:234][fg:174,bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-    ─[fg:153,bg:236] [fg:153,bg:236]T[fg:252,bg:236]o[fg:252,bg:236]o[fg:252,bg:236]l[fg:252,bg:236]s[fg:252,bg:236]│[fg:240,bg:236]T[fg:252,bg:236]a[fg:252,bg:236]s[fg:252,bg:236]k[fg:252,bg:236]s[fg:252,bg:236]│[fg:240,bg:236]G[fg:153,bg:236]i[fg:153,bg:236]t[fg:153,bg:236] [fg:153,bg:236]─[fg:153,bg:236]─[fg:153,bg:236]─[fg:153,bg:236]─[fg:153,bg:236]─[fg:153,bg:236]─[fg:153,bg:236]─[fg:153,bg:236]─[fg:153,bg:236]─[fg:153,bg:236]─[fg:153,bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-    m[fg:255,bg:236]a[fg:255,bg:236]i[fg:255,bg:236]n[fg:255,bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]1[fg:252,bg:236] [fg:252,bg:236]f[fg:252,bg:236]i[fg:252,bg:236]l[fg:252,bg:236]e[fg:252,bg:236]s[fg:252,bg:236]
-    ─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]─[fg:240,bg:236]
-    U[fg:109,bg:236]n[fg:109,bg:236]s[fg:109,bg:236]t[fg:109,bg:236]a[fg:109,bg:236]g[fg:109,bg:236]e[fg:109,bg:236]d[fg:109,bg:236] [fg:109,bg:236]([fg:109,bg:236]1[fg:109,bg:236])[fg:109,bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-    M[fg:221,bg:236] [bg:236]l[fg:252,bg:236]i[fg:252,bg:236]b[fg:252,bg:236].[fg:252,bg:236]r[fg:252,bg:236]s[fg:252,bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]+[fg:114,bg:236]4[fg:114,bg:236]0[fg:114,bg:236]/[fg:252,bg:236]-[fg:174,bg:236]1[fg:174,bg:236]0[fg:174,bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
+     [bg:#1a1b26]≡[fg:#7aa2f7,bg:#1a1b26]1[fg:#7aa2f7,bg:#1a1b26] [bg:#1a1b26]●[fg:#9ece6a,bg:#1a1b26]1[fg:#c0caf5,bg:#1a1b26] [bg:#1a1b26]◐[fg:#9aa5ce,bg:#1a1b26]0[fg:#9aa5ce,bg:#1a1b26] [bg:#1a1b26]○[fg:#9aa5ce,bg:#1a1b26]0[fg:#9aa5ce,bg:#1a1b26] [bg:#1a1b26]✕[fg:#9aa5ce,bg:#1a1b26]0[fg:#9aa5ce,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]⤢[fg:#9ece6a,bg:#1a1b26] [bg:#1a1b26]
+    ⓘ[fg:#e0af68,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]—[fg:#a9b1d6,bg:#1a1b26] [bg:#1a1b26]▾[fg:#a9b1d6,bg:#1a1b26]
+    p[fg:#7aa2f7,bg:#1a1b26]r[fg:#7aa2f7,bg:#1a1b26]o[fg:#7aa2f7,bg:#1a1b26]j[fg:#7aa2f7,bg:#1a1b26]e[fg:#7aa2f7,bg:#1a1b26]c[fg:#7aa2f7,bg:#1a1b26]t[fg:#7aa2f7,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+    ┃[fg:#7aa2f7,bg:#1a1b26] [bg:#1a1b26]●[fg:82,bg:#1a1b26] [fg:#ff9e64,bg:#1a1b26][fg:#ff9e64,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+    ─[fg:#7aa2f7,bg:#24283b] [fg:#7aa2f7,bg:#24283b]T[fg:#a9b1d6,bg:#24283b]o[fg:#a9b1d6,bg:#24283b]o[fg:#a9b1d6,bg:#24283b]l[fg:#a9b1d6,bg:#24283b]s[fg:#a9b1d6,bg:#24283b]│[fg:240,bg:#24283b]T[fg:#a9b1d6,bg:#24283b]a[fg:#a9b1d6,bg:#24283b]s[fg:#a9b1d6,bg:#24283b]k[fg:#a9b1d6,bg:#24283b]s[fg:#a9b1d6,bg:#24283b]│[fg:240,bg:#24283b]G[fg:#7aa2f7,bg:#24283b]i[fg:#7aa2f7,bg:#24283b]t[fg:#7aa2f7,bg:#24283b] [fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]─[fg:#7aa2f7,bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+    m[fg:#c0caf5,bg:#24283b]a[fg:#c0caf5,bg:#24283b]i[fg:#c0caf5,bg:#24283b]n[fg:#c0caf5,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]1[fg:#a9b1d6,bg:#24283b] [fg:#a9b1d6,bg:#24283b]f[fg:#a9b1d6,bg:#24283b]i[fg:#a9b1d6,bg:#24283b]l[fg:#a9b1d6,bg:#24283b]e[fg:#a9b1d6,bg:#24283b]s[fg:#a9b1d6,bg:#24283b]
+    ─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]─[fg:240,bg:#24283b]
+    U[fg:#2ac3de,bg:#24283b]n[fg:#2ac3de,bg:#24283b]s[fg:#2ac3de,bg:#24283b]t[fg:#2ac3de,bg:#24283b]a[fg:#2ac3de,bg:#24283b]g[fg:#2ac3de,bg:#24283b]e[fg:#2ac3de,bg:#24283b]d[fg:#2ac3de,bg:#24283b] [fg:#2ac3de,bg:#24283b]([fg:#2ac3de,bg:#24283b]1[fg:#2ac3de,bg:#24283b])[fg:#2ac3de,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+    M[fg:#e0af68,bg:#24283b] [bg:#24283b]l[fg:#a9b1d6,bg:#24283b]i[fg:#a9b1d6,bg:#24283b]b[fg:#a9b1d6,bg:#24283b].[fg:#a9b1d6,bg:#24283b]r[fg:#a9b1d6,bg:#24283b]s[fg:#a9b1d6,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]+[fg:#9ece6a,bg:#24283b]4[fg:#9ece6a,bg:#24283b]0[fg:#9ece6a,bg:#24283b]/[fg:#a9b1d6,bg:#24283b]-[fg:#f7768e,bg:#24283b]1[fg:#f7768e,bg:#24283b]0[fg:#f7768e,bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
     ");
 }
 
@@ -794,10 +800,10 @@ fn test_custom_theme_new_fields_override() {
     assert_eq!(theme.port, Color::Indexed(82));
 
     // Original fields should still be default
-    assert_eq!(theme.accent, Color::Indexed(153));
-    assert_eq!(theme.agent_claude, Color::Indexed(174));
-    assert_eq!(theme.pet_body, Color::Indexed(208));
-    assert_eq!(theme.pet_eye, Color::Indexed(114));
+    assert_eq!(theme.accent, Color::Rgb(0x7a, 0xa2, 0xf7));
+    assert_eq!(theme.agent_claude, Color::Rgb(0xff, 0x9e, 0x64));
+    assert_eq!(theme.pet_body, Color::Rgb(0xff, 0x9e, 0x64));
+    assert_eq!(theme.pet_eye, Color::Rgb(0x9e, 0xce, 0x6a));
 }
 
 // ─── Branch color in styled output ──────────────────────────────────
@@ -836,11 +842,11 @@ fn test_branch_color_in_agent_panel() {
     // Styled snapshot locks in the branch name rendered with branch color
     // (fg:109).
     insta::assert_snapshot!(render_to_styled_string(&mut state, 40, 26), @"
-     ≡[fg:111]1[fg:153] ●[fg:114]1[fg:255] ◐[fg:245]0[fg:245] ○[fg:245]0[fg:245] ✕[fg:245]0[fg:245]                       ⤢[fg:114]
-    ⓘ[fg:221]                                    —[fg:252] ▾[fg:252]
-    p[fg:153]r[fg:153]o[fg:153]j[fg:153]e[fg:153]c[fg:153]t[fg:153]                                +[fg:153]
-    ┃[fg:153] ●[fg:82] [fg:174][fg:174]
-    ┃[fg:153]  [fg:109] [fg:109][fg:109] [fg:109]f[fg:109]e[fg:109]a[fg:109]t[fg:109]u[fg:109]r[fg:109]e[fg:109]/[fg:109]c[fg:109]o[fg:109]o[fg:109]l[fg:109]-[fg:109]f[fg:109]e[fg:109]a[fg:109]t[fg:109]u[fg:109]r[fg:109]e[fg:109]
+     ≡[fg:#7aa2f7]1[fg:#7aa2f7] ●[fg:#9ece6a]1[fg:#c0caf5] ◐[fg:#9aa5ce]0[fg:#9aa5ce] ○[fg:#9aa5ce]0[fg:#9aa5ce] ✕[fg:#9aa5ce]0[fg:#9aa5ce]                       ⤢[fg:#9ece6a]
+    ⓘ[fg:#e0af68]                                    —[fg:#a9b1d6] ▾[fg:#a9b1d6]
+    p[fg:#7aa2f7]r[fg:#7aa2f7]o[fg:#7aa2f7]j[fg:#7aa2f7]e[fg:#7aa2f7]c[fg:#7aa2f7]t[fg:#7aa2f7]                                +[fg:#7aa2f7]
+    ┃[fg:#7aa2f7] ●[fg:82] [fg:#ff9e64][fg:#ff9e64]
+    ┃[fg:#7aa2f7]  [fg:#73dacb] [fg:#73dacb][fg:#73dacb] [fg:#73dacb]f[fg:#73dacb]e[fg:#73dacb]a[fg:#73dacb]t[fg:#73dacb]u[fg:#73dacb]r[fg:#73dacb]e[fg:#73dacb]/[fg:#73dacb]c[fg:#73dacb]o[fg:#73dacb]o[fg:#73dacb]l[fg:#73dacb]-[fg:#73dacb]f[fg:#73dacb]e[fg:#73dacb]a[fg:#73dacb]t[fg:#73dacb]u[fg:#73dacb]r[fg:#73dacb]e[fg:#73dacb]
     ");
 }
 
@@ -867,31 +873,31 @@ fn test_selection_bg_color_applied() {
     // Styled snapshot locks in the selected agent row's selection
     // background (bg:239).
     insta::assert_snapshot!(render_to_styled_string(&mut state, 28, 25), @"
-     [bg:236]≡[fg:111,bg:236]1[fg:153,bg:236] [bg:236]●[fg:114,bg:236]0[fg:245,bg:236] [bg:236]◐[fg:245,bg:236]0[fg:245,bg:236] [bg:236]○[fg:245,bg:236]1[fg:255,bg:236] [bg:236]✕[fg:245,bg:236]0[fg:245,bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]⤢[fg:114,bg:236] [bg:236]
-    ⓘ[fg:221,bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]—[fg:252,bg:236] [bg:236]▾[fg:252,bg:236]
-    p[fg:153,bg:236]r[fg:153,bg:236]o[fg:153,bg:236]j[fg:153,bg:236]e[fg:153,bg:236]c[fg:153,bg:236]t[fg:153,bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-    ┃[fg:153,bg:239] [bg:239]○[fg:110,bg:239] [fg:174,bg:239][fg:174,bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239]
-     [bg:236] [bg:236] [fg:255,bg:236] [fg:255,bg:236]W[fg:255,bg:236]a[fg:255,bg:236]i[fg:255,bg:236]t[fg:255,bg:236]i[fg:255,bg:236]n[fg:255,bg:236]g[fg:255,bg:236] [fg:255,bg:236]f[fg:255,bg:236]o[fg:255,bg:236]r[fg:255,bg:236] [fg:255,bg:236]p[fg:255,bg:236]r[fg:255,bg:236]o[fg:255,bg:236]m[fg:255,bg:236]p[fg:255,bg:236]t[fg:255,bg:236]…[fg:255,bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-    ─[fg:240,bg:234] [fg:240,bg:234]T[fg:153,bg:234]o[fg:153,bg:234]o[fg:153,bg:234]l[fg:153,bg:234]s[fg:153,bg:234]│[fg:240,bg:234]T[fg:252,bg:234]a[fg:252,bg:234]s[fg:252,bg:234]k[fg:252,bg:234]s[fg:252,bg:234]│[fg:240,bg:234]G[fg:252,bg:234]i[fg:252,bg:234]t[fg:252,bg:234] [fg:240,bg:234]─[fg:240,bg:234]─[fg:240,bg:234]─[fg:240,bg:234]─[fg:240,bg:234]─[fg:240,bg:234]─[fg:240,bg:234]─[fg:240,bg:234]─[fg:240,bg:234]─[fg:240,bg:234]─[fg:240,bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]N[fg:252,bg:234]o[fg:252,bg:234] [fg:252,bg:234]t[fg:252,bg:234]o[fg:252,bg:234]o[fg:252,bg:234]l[fg:252,bg:234]s[fg:252,bg:234] [fg:252,bg:234]y[fg:252,bg:234]e[fg:252,bg:234]t[fg:252,bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
+     [bg:#24283b]≡[fg:#7aa2f7,bg:#24283b]1[fg:#7aa2f7,bg:#24283b] [bg:#24283b]●[fg:#9ece6a,bg:#24283b]0[fg:#9aa5ce,bg:#24283b] [bg:#24283b]◐[fg:#9aa5ce,bg:#24283b]0[fg:#9aa5ce,bg:#24283b] [bg:#24283b]○[fg:#9aa5ce,bg:#24283b]1[fg:#c0caf5,bg:#24283b] [bg:#24283b]✕[fg:#9aa5ce,bg:#24283b]0[fg:#9aa5ce,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]⤢[fg:#9ece6a,bg:#24283b] [bg:#24283b]
+    ⓘ[fg:#e0af68,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]—[fg:#a9b1d6,bg:#24283b] [bg:#24283b]▾[fg:#a9b1d6,bg:#24283b]
+    p[fg:#7aa2f7,bg:#24283b]r[fg:#7aa2f7,bg:#24283b]o[fg:#7aa2f7,bg:#24283b]j[fg:#7aa2f7,bg:#24283b]e[fg:#7aa2f7,bg:#24283b]c[fg:#7aa2f7,bg:#24283b]t[fg:#7aa2f7,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+    ┃[fg:#7aa2f7,bg:#414868] [bg:#414868]○[fg:#7dcfff,bg:#414868] [fg:#ff9e64,bg:#414868][fg:#ff9e64,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]
+     [bg:#24283b] [bg:#24283b] [fg:#c0caf5,bg:#24283b] [fg:#c0caf5,bg:#24283b]W[fg:#c0caf5,bg:#24283b]a[fg:#c0caf5,bg:#24283b]i[fg:#c0caf5,bg:#24283b]t[fg:#c0caf5,bg:#24283b]i[fg:#c0caf5,bg:#24283b]n[fg:#c0caf5,bg:#24283b]g[fg:#c0caf5,bg:#24283b] [fg:#c0caf5,bg:#24283b]f[fg:#c0caf5,bg:#24283b]o[fg:#c0caf5,bg:#24283b]r[fg:#c0caf5,bg:#24283b] [fg:#c0caf5,bg:#24283b]p[fg:#c0caf5,bg:#24283b]r[fg:#c0caf5,bg:#24283b]o[fg:#c0caf5,bg:#24283b]m[fg:#c0caf5,bg:#24283b]p[fg:#c0caf5,bg:#24283b]t[fg:#c0caf5,bg:#24283b]…[fg:#c0caf5,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+    ─[fg:240,bg:#1a1b26] [fg:240,bg:#1a1b26]T[fg:#7aa2f7,bg:#1a1b26]o[fg:#7aa2f7,bg:#1a1b26]o[fg:#7aa2f7,bg:#1a1b26]l[fg:#7aa2f7,bg:#1a1b26]s[fg:#7aa2f7,bg:#1a1b26]│[fg:240,bg:#1a1b26]T[fg:#a9b1d6,bg:#1a1b26]a[fg:#a9b1d6,bg:#1a1b26]s[fg:#a9b1d6,bg:#1a1b26]k[fg:#a9b1d6,bg:#1a1b26]s[fg:#a9b1d6,bg:#1a1b26]│[fg:240,bg:#1a1b26]G[fg:#a9b1d6,bg:#1a1b26]i[fg:#a9b1d6,bg:#1a1b26]t[fg:#a9b1d6,bg:#1a1b26] [fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]N[fg:#a9b1d6,bg:#1a1b26]o[fg:#a9b1d6,bg:#1a1b26] [fg:#a9b1d6,bg:#1a1b26]t[fg:#a9b1d6,bg:#1a1b26]o[fg:#a9b1d6,bg:#1a1b26]o[fg:#a9b1d6,bg:#1a1b26]l[fg:#a9b1d6,bg:#1a1b26]s[fg:#a9b1d6,bg:#1a1b26] [fg:#a9b1d6,bg:#1a1b26]y[fg:#a9b1d6,bg:#1a1b26]e[fg:#a9b1d6,bg:#1a1b26]t[fg:#a9b1d6,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
     ");
 }
 
@@ -933,36 +939,36 @@ fn test_accent_vs_border_inactive_colors() {
     //   • focused group header rendered with accent (fg:153)
     //   • unfocused group header rendered with border_inactive (fg:240)
     insta::assert_snapshot!(render_to_styled_string(&mut state, 28, 30), @"
-     [bg:236]≡[fg:111,bg:236]2[fg:153,bg:236] [bg:236]●[fg:114,bg:236]1[fg:255,bg:236] [bg:236]◐[fg:245,bg:236]0[fg:245,bg:236] [bg:236]○[fg:245,bg:236]1[fg:255,bg:236] [bg:236]✕[fg:245,bg:236]0[fg:245,bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]⤢[fg:114,bg:236] [bg:236]
-    ⓘ[fg:221,bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]—[fg:252,bg:236] [bg:236]▾[fg:252,bg:236]
-    f[fg:153,bg:236]o[fg:153,bg:236]c[fg:153,bg:236]u[fg:153,bg:236]s[fg:153,bg:236]e[fg:153,bg:236]d[fg:153,bg:236]-[fg:153,bg:236]r[fg:153,bg:236]e[fg:153,bg:236]p[fg:153,bg:236]o[fg:153,bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-    ┃[fg:153,bg:239] [bg:239]●[fg:82,bg:239] [fg:174,bg:239][fg:174,bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-    u[fg:255,bg:236]n[fg:255,bg:236]f[fg:255,bg:236]o[fg:255,bg:236]c[fg:255,bg:236]u[fg:255,bg:236]s[fg:255,bg:236]e[fg:255,bg:236]d[fg:255,bg:236]-[fg:255,bg:236]r[fg:255,bg:236]e[fg:255,bg:236]p[fg:255,bg:236]o[fg:255,bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-     [bg:236] [bg:236]○[fg:110,bg:236] [fg:141,bg:236]c[fg:141,bg:236]o[fg:141,bg:236]d[fg:141,bg:236]e[fg:141,bg:236]x[fg:141,bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-     [bg:236] [bg:236] [fg:244,bg:236] [fg:244,bg:236]W[fg:244,bg:236]a[fg:244,bg:236]i[fg:244,bg:236]t[fg:244,bg:236]i[fg:244,bg:236]n[fg:244,bg:236]g[fg:244,bg:236] [fg:244,bg:236]f[fg:244,bg:236]o[fg:244,bg:236]r[fg:244,bg:236] [fg:244,bg:236]p[fg:244,bg:236]r[fg:244,bg:236]o[fg:244,bg:236]m[fg:244,bg:236]p[fg:244,bg:236]t[fg:244,bg:236]…[fg:244,bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-     [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236] [bg:236]
-    ─[fg:240,bg:234] [fg:240,bg:234]T[fg:153,bg:234]o[fg:153,bg:234]o[fg:153,bg:234]l[fg:153,bg:234]s[fg:153,bg:234]│[fg:240,bg:234]T[fg:252,bg:234]a[fg:252,bg:234]s[fg:252,bg:234]k[fg:252,bg:234]s[fg:252,bg:234]│[fg:240,bg:234]G[fg:252,bg:234]i[fg:252,bg:234]t[fg:252,bg:234] [fg:240,bg:234]─[fg:240,bg:234]─[fg:240,bg:234]─[fg:240,bg:234]─[fg:240,bg:234]─[fg:240,bg:234]─[fg:240,bg:234]─[fg:240,bg:234]─[fg:240,bg:234]─[fg:240,bg:234]─[fg:240,bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]N[fg:252,bg:234]o[fg:252,bg:234] [fg:252,bg:234]t[fg:252,bg:234]o[fg:252,bg:234]o[fg:252,bg:234]l[fg:252,bg:234]s[fg:252,bg:234] [fg:252,bg:234]y[fg:252,bg:234]e[fg:252,bg:234]t[fg:252,bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
-     [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234] [bg:234]
+     [bg:#24283b]≡[fg:#7aa2f7,bg:#24283b]2[fg:#7aa2f7,bg:#24283b] [bg:#24283b]●[fg:#9ece6a,bg:#24283b]1[fg:#c0caf5,bg:#24283b] [bg:#24283b]◐[fg:#9aa5ce,bg:#24283b]0[fg:#9aa5ce,bg:#24283b] [bg:#24283b]○[fg:#9aa5ce,bg:#24283b]1[fg:#c0caf5,bg:#24283b] [bg:#24283b]✕[fg:#9aa5ce,bg:#24283b]0[fg:#9aa5ce,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]⤢[fg:#9ece6a,bg:#24283b] [bg:#24283b]
+    ⓘ[fg:#e0af68,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]—[fg:#a9b1d6,bg:#24283b] [bg:#24283b]▾[fg:#a9b1d6,bg:#24283b]
+    f[fg:#7aa2f7,bg:#24283b]o[fg:#7aa2f7,bg:#24283b]c[fg:#7aa2f7,bg:#24283b]u[fg:#7aa2f7,bg:#24283b]s[fg:#7aa2f7,bg:#24283b]e[fg:#7aa2f7,bg:#24283b]d[fg:#7aa2f7,bg:#24283b]-[fg:#7aa2f7,bg:#24283b]r[fg:#7aa2f7,bg:#24283b]e[fg:#7aa2f7,bg:#24283b]p[fg:#7aa2f7,bg:#24283b]o[fg:#7aa2f7,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+    ┃[fg:#7aa2f7,bg:#414868] [bg:#414868]●[fg:82,bg:#414868] [fg:#ff9e64,bg:#414868][fg:#ff9e64,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+    u[fg:#c0caf5,bg:#24283b]n[fg:#c0caf5,bg:#24283b]f[fg:#c0caf5,bg:#24283b]o[fg:#c0caf5,bg:#24283b]c[fg:#c0caf5,bg:#24283b]u[fg:#c0caf5,bg:#24283b]s[fg:#c0caf5,bg:#24283b]e[fg:#c0caf5,bg:#24283b]d[fg:#c0caf5,bg:#24283b]-[fg:#c0caf5,bg:#24283b]r[fg:#c0caf5,bg:#24283b]e[fg:#c0caf5,bg:#24283b]p[fg:#c0caf5,bg:#24283b]o[fg:#c0caf5,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+     [bg:#24283b] [bg:#24283b]○[fg:#7dcfff,bg:#24283b] [fg:#bb9af7,bg:#24283b]c[fg:#bb9af7,bg:#24283b]o[fg:#bb9af7,bg:#24283b]d[fg:#bb9af7,bg:#24283b]e[fg:#bb9af7,bg:#24283b]x[fg:#bb9af7,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [fg:#565f89,bg:#24283b] [fg:#565f89,bg:#24283b]W[fg:#565f89,bg:#24283b]a[fg:#565f89,bg:#24283b]i[fg:#565f89,bg:#24283b]t[fg:#565f89,bg:#24283b]i[fg:#565f89,bg:#24283b]n[fg:#565f89,bg:#24283b]g[fg:#565f89,bg:#24283b] [fg:#565f89,bg:#24283b]f[fg:#565f89,bg:#24283b]o[fg:#565f89,bg:#24283b]r[fg:#565f89,bg:#24283b] [fg:#565f89,bg:#24283b]p[fg:#565f89,bg:#24283b]r[fg:#565f89,bg:#24283b]o[fg:#565f89,bg:#24283b]m[fg:#565f89,bg:#24283b]p[fg:#565f89,bg:#24283b]t[fg:#565f89,bg:#24283b]…[fg:#565f89,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+     [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+    ─[fg:240,bg:#1a1b26] [fg:240,bg:#1a1b26]T[fg:#7aa2f7,bg:#1a1b26]o[fg:#7aa2f7,bg:#1a1b26]o[fg:#7aa2f7,bg:#1a1b26]l[fg:#7aa2f7,bg:#1a1b26]s[fg:#7aa2f7,bg:#1a1b26]│[fg:240,bg:#1a1b26]T[fg:#a9b1d6,bg:#1a1b26]a[fg:#a9b1d6,bg:#1a1b26]s[fg:#a9b1d6,bg:#1a1b26]k[fg:#a9b1d6,bg:#1a1b26]s[fg:#a9b1d6,bg:#1a1b26]│[fg:240,bg:#1a1b26]G[fg:#a9b1d6,bg:#1a1b26]i[fg:#a9b1d6,bg:#1a1b26]t[fg:#a9b1d6,bg:#1a1b26] [fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]─[fg:240,bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]N[fg:#a9b1d6,bg:#1a1b26]o[fg:#a9b1d6,bg:#1a1b26] [fg:#a9b1d6,bg:#1a1b26]t[fg:#a9b1d6,bg:#1a1b26]o[fg:#a9b1d6,bg:#1a1b26]o[fg:#a9b1d6,bg:#1a1b26]l[fg:#a9b1d6,bg:#1a1b26]s[fg:#a9b1d6,bg:#1a1b26] [fg:#a9b1d6,bg:#1a1b26]y[fg:#a9b1d6,bg:#1a1b26]e[fg:#a9b1d6,bg:#1a1b26]t[fg:#a9b1d6,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
     ");
 }
 
@@ -989,10 +995,10 @@ fn test_running_status_color_in_output() {
     // Styled snapshot locks in the running spinner using SPINNER_PULSE[0]
     // color (fg:82).
     insta::assert_snapshot!(render_to_styled_string(&mut state, 28, 25), @"
-     ≡[fg:111]1[fg:153] ●[fg:114]1[fg:255] ◐[fg:245]0[fg:245] ○[fg:245]0[fg:245] ✕[fg:245]0[fg:245]           ⤢[fg:114]
-    ⓘ[fg:221]                        —[fg:252] ▾[fg:252]
-    p[fg:153]r[fg:153]o[fg:153]j[fg:153]e[fg:153]c[fg:153]t[fg:153]
-    ┃[fg:153] ●[fg:82] [fg:174][fg:174]
+     ≡[fg:#7aa2f7]1[fg:#7aa2f7] ●[fg:#9ece6a]1[fg:#c0caf5] ◐[fg:#9aa5ce]0[fg:#9aa5ce] ○[fg:#9aa5ce]0[fg:#9aa5ce] ✕[fg:#9aa5ce]0[fg:#9aa5ce]           ⤢[fg:#9ece6a]
+    ⓘ[fg:#e0af68]                        —[fg:#a9b1d6] ▾[fg:#a9b1d6]
+    p[fg:#7aa2f7]r[fg:#7aa2f7]o[fg:#7aa2f7]j[fg:#7aa2f7]e[fg:#7aa2f7]c[fg:#7aa2f7]t[fg:#7aa2f7]
+    ┃[fg:#7aa2f7] ●[fg:82] [fg:#ff9e64][fg:#ff9e64]
     ");
 }
 
@@ -1017,10 +1023,10 @@ fn test_waiting_status_color_in_output() {
     // Styled snapshot locks in the waiting status using status_waiting
     // color (fg:221).
     insta::assert_snapshot!(render_to_styled_string(&mut state, 28, 25), @"
-     ≡[fg:111]1[fg:153] ●[fg:114]0[fg:245] ◐[fg:245]1[fg:255] ○[fg:245]0[fg:245] ✕[fg:245]0[fg:245]           ⤢[fg:114]
-    ⓘ[fg:221]                        —[fg:252] ▾[fg:252]
-    p[fg:153]r[fg:153]o[fg:153]j[fg:153]e[fg:153]c[fg:153]t[fg:153]
-    ┃[fg:153] ◐[fg:221] [fg:174][fg:174]
+     ≡[fg:#7aa2f7]1[fg:#7aa2f7] ●[fg:#9ece6a]0[fg:#9aa5ce] ◐[fg:#9aa5ce]1[fg:#c0caf5] ○[fg:#9aa5ce]0[fg:#9aa5ce] ✕[fg:#9aa5ce]0[fg:#9aa5ce]           ⤢[fg:#9ece6a]
+    ⓘ[fg:#e0af68]                        —[fg:#a9b1d6] ▾[fg:#a9b1d6]
+    p[fg:#7aa2f7]r[fg:#7aa2f7]o[fg:#7aa2f7]j[fg:#7aa2f7]e[fg:#7aa2f7]c[fg:#7aa2f7]t[fg:#7aa2f7]
+    ┃[fg:#7aa2f7] ◐[fg:#e0af68] [fg:#ff9e64][fg:#ff9e64]
     ");
 }
 
@@ -1045,10 +1051,10 @@ fn test_error_status_color_in_output() {
     // Styled snapshot locks in the error status using status_error
     // color (fg:167).
     insta::assert_snapshot!(render_to_styled_string(&mut state, 28, 25), @"
-     ≡[fg:111]1[fg:153] ●[fg:114]0[fg:245] ◐[fg:245]0[fg:245] ○[fg:245]0[fg:245] ✕[fg:245]1[fg:255]           ⤢[fg:114]
-    ⓘ[fg:221]                        —[fg:252] ▾[fg:252]
-    p[fg:153]r[fg:153]o[fg:153]j[fg:153]e[fg:153]c[fg:153]t[fg:153]
-    ┃[fg:153] ✕[fg:167] [fg:174][fg:174]
+     ≡[fg:#7aa2f7]1[fg:#7aa2f7] ●[fg:#9ece6a]0[fg:#9aa5ce] ◐[fg:#9aa5ce]0[fg:#9aa5ce] ○[fg:#9aa5ce]0[fg:#9aa5ce] ✕[fg:#9aa5ce]1[fg:#c0caf5]           ⤢[fg:#9ece6a]
+    ⓘ[fg:#e0af68]                        —[fg:#a9b1d6] ▾[fg:#a9b1d6]
+    p[fg:#7aa2f7]r[fg:#7aa2f7]o[fg:#7aa2f7]j[fg:#7aa2f7]e[fg:#7aa2f7]c[fg:#7aa2f7]t[fg:#7aa2f7]
+    ┃[fg:#7aa2f7] ✕[fg:#f7768e] [fg:#ff9e64][fg:#ff9e64]
     ");
 }
 
@@ -1072,11 +1078,11 @@ fn test_idle_status_color_in_output() {
     // Styled snapshot locks in the idle status using status_idle
     // color (fg:110).
     insta::assert_snapshot!(render_to_styled_string(&mut state, 28, 25), @"
-     ≡[fg:111]1[fg:153] ●[fg:114]0[fg:245] ◐[fg:245]0[fg:245] ○[fg:245]1[fg:255] ✕[fg:245]0[fg:245]           ⤢[fg:114]
-    ⓘ[fg:221]                        —[fg:252] ▾[fg:252]
-    p[fg:153]r[fg:153]o[fg:153]j[fg:153]e[fg:153]c[fg:153]t[fg:153]
-    ┃[fg:153] ○[fg:110] [fg:174][fg:174]
-       [fg:255] [fg:255]W[fg:255]a[fg:255]i[fg:255]t[fg:255]i[fg:255]n[fg:255]g[fg:255] [fg:255]f[fg:255]o[fg:255]r[fg:255] [fg:255]p[fg:255]r[fg:255]o[fg:255]m[fg:255]p[fg:255]t[fg:255]…[fg:255]
+     ≡[fg:#7aa2f7]1[fg:#7aa2f7] ●[fg:#9ece6a]0[fg:#9aa5ce] ◐[fg:#9aa5ce]0[fg:#9aa5ce] ○[fg:#9aa5ce]1[fg:#c0caf5] ✕[fg:#9aa5ce]0[fg:#9aa5ce]           ⤢[fg:#9ece6a]
+    ⓘ[fg:#e0af68]                        —[fg:#a9b1d6] ▾[fg:#a9b1d6]
+    p[fg:#7aa2f7]r[fg:#7aa2f7]o[fg:#7aa2f7]j[fg:#7aa2f7]e[fg:#7aa2f7]c[fg:#7aa2f7]t[fg:#7aa2f7]
+    ┃[fg:#7aa2f7] ○[fg:#7dcfff] [fg:#ff9e64][fg:#ff9e64]
+       [fg:#c0caf5] [fg:#c0caf5]W[fg:#c0caf5]a[fg:#c0caf5]i[fg:#c0caf5]t[fg:#c0caf5]i[fg:#c0caf5]n[fg:#c0caf5]g[fg:#c0caf5] [fg:#c0caf5]f[fg:#c0caf5]o[fg:#c0caf5]r[fg:#c0caf5] [fg:#c0caf5]p[fg:#c0caf5]r[fg:#c0caf5]o[fg:#c0caf5]m[fg:#c0caf5]p[fg:#c0caf5]t[fg:#c0caf5]…[fg:#c0caf5]
 
 
 
@@ -1089,11 +1095,11 @@ fn test_idle_status_color_in_output() {
 
 
 
-    ─[fg:240] [fg:240]T[fg:153]o[fg:153]o[fg:153]l[fg:153]s[fg:153]│[fg:240]T[fg:252]a[fg:252]s[fg:252]k[fg:252]s[fg:252]│[fg:240]G[fg:252]i[fg:252]t[fg:252] [fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]
+    ─[fg:240] [fg:240]T[fg:#7aa2f7]o[fg:#7aa2f7]o[fg:#7aa2f7]l[fg:#7aa2f7]s[fg:#7aa2f7]│[fg:240]T[fg:#a9b1d6]a[fg:#a9b1d6]s[fg:#a9b1d6]k[fg:#a9b1d6]s[fg:#a9b1d6]│[fg:240]G[fg:#a9b1d6]i[fg:#a9b1d6]t[fg:#a9b1d6] [fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]
 
 
 
-            N[fg:252]o[fg:252] [fg:252]t[fg:252]o[fg:252]o[fg:252]l[fg:252]s[fg:252] [fg:252]y[fg:252]e[fg:252]t[fg:252]
+            N[fg:#a9b1d6]o[fg:#a9b1d6] [fg:#a9b1d6]t[fg:#a9b1d6]o[fg:#a9b1d6]o[fg:#a9b1d6]l[fg:#a9b1d6]s[fg:#a9b1d6] [fg:#a9b1d6]y[fg:#a9b1d6]e[fg:#a9b1d6]t[fg:#a9b1d6]
     ");
 }
 
@@ -1102,6 +1108,6 @@ fn test_unknown_status_color_in_output() {
     let theme = pmux_explorer::ui::colors::ColorTheme::default();
     assert_eq!(
         theme.status_color(&PaneStatus::Unknown, false),
-        ratatui::style::Color::Indexed(244)
+        ratatui::style::Color::Rgb(0x56, 0x5f, 0x89)
     );
 }
