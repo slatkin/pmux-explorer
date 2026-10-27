@@ -39,34 +39,32 @@ pub use scroll::{ScrollState, ScrollStates};
 pub use tasks::TasksState;
 pub use timers::RefreshTimers;
 
-/// Bottom-panel tabs in cycle order. The selected tab is shared state:
-/// it lives in [`GlobalState`], is written with `set -g
-/// @sidebar_bottom_tab`, and changes only through an explicit selection
-/// (the manual cycle, a tab-title click) or through the shared value a
-/// peer instance selected.
+/// Bottom-panel tabs. The selected tab is shared state: it lives in
+/// [`GlobalState`], is written with `set -g @sidebar_bottom_tab`, and
+/// changes only through an explicit selection (the manual cycle, a
+/// tab-title click) or through the shared value a peer instance
+/// selected.
+///
+/// `Thought` is stored in the shared value like the others, but the
+/// rule draws it only while the focused pane runs pi; a stored Thought
+/// displays as Activity otherwise (see
+/// [`AppState::displayed_bottom_tab`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BottomTab {
     Activity,
     Tasks,
     GitStatus,
+    Thought,
 }
 
 impl BottomTab {
-    /// The next tab in cycle order.
-    pub fn next(self) -> Self {
-        match self {
-            Self::Activity => Self::Tasks,
-            Self::Tasks => Self::GitStatus,
-            Self::GitStatus => Self::Activity,
-        }
-    }
-
     /// Whether this tab drives the background git poller.
     pub fn is_git_status(self) -> bool {
         matches!(self, Self::GitStatus)
     }
 
-    /// The label persisted in the `@sidebar_bottom_tab` tmux option.
+    /// The label drawn on the rule and persisted in the
+    /// `@sidebar_bottom_tab` tmux option (lower case, see `as_str`).
     /// The values contain no space, so they ride the space-split parse
     /// of the shared reading safely.
     pub fn as_str(&self) -> &'static str {
@@ -74,6 +72,7 @@ impl BottomTab {
             Self::Activity => "activity",
             Self::Tasks => "tasks",
             Self::GitStatus => "git",
+            Self::Thought => "thought",
         }
     }
 
@@ -84,7 +83,20 @@ impl BottomTab {
         match s {
             "tasks" => Self::Tasks,
             "git" => Self::GitStatus,
+            "thought" => Self::Thought,
             _ => Self::Activity,
+        }
+    }
+
+    /// The capitalized label the rule draws for this tab. The click
+    /// hitboxes are computed from the same strings, so a label and its
+    /// hitbox cannot drift apart.
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Activity => "Activity",
+            Self::Tasks => "Tasks",
+            Self::GitStatus => "Git",
+            Self::Thought => "Thought",
         }
     }
 }
@@ -1033,6 +1045,20 @@ mod tests {
         assert_eq!(state.global.selected_pane_row, 0);
         // focused_pane_id is set by find_focused_pane() which queries tmux
         // directly, so we don't assert it here (tmux not available in tests).
+    }
+
+    // ─── BottomTab label parse ──────────────────────────────────────
+
+    #[test]
+    fn thought_parses_to_thought_and_unknown_still_falls_back_to_activity() {
+        // The shared option may name the Thought tab a newer sidebar
+        // wrote; an old binary reading it must not invent a tab, and
+        // any unknown value stays on the Activity default.
+        assert_eq!(BottomTab::from_label("thought"), BottomTab::Thought);
+        assert_eq!(BottomTab::from_label("activity"), BottomTab::Activity);
+        assert_eq!(BottomTab::from_label("nonsense"), BottomTab::Activity);
+        assert_eq!(BottomTab::Thought.as_str(), "thought");
+        assert_eq!(BottomTab::Thought.label(), "Thought");
     }
 
     // ─── next_bottom_tab / scroll_bottom tests ──────────────────────

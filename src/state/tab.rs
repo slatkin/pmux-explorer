@@ -1,44 +1,87 @@
 use super::{AppState, BottomTab};
+use crate::tmux::AgentType;
 
 impl AppState {
+    /// Whether the focused pane runs pi. The focused pane is looked up
+    /// by id across the groups, the way the activity and task reads do;
+    /// no focused pane (or a vanished one) is not pi.
+    fn focused_pane_is_pi(&self) -> bool {
+        self.focus_state
+            .focused_pane_id
+            .as_deref()
+            .and_then(|id| self.pane_by_id(id))
+            .is_some_and(|pane| pane.agent == AgentType::Pi)
+    }
+
+    /// The tabs the rule shows for the focused pane: Activity, Tasks
+    /// and Git always, plus Thought while the focused pane runs pi.
+    /// The cycle and the click hitboxes are both derived from this
+    /// list, so a hidden tab has no cycle step and no hitbox.
+    pub fn shown_bottom_tabs(&self) -> Vec<BottomTab> {
+        let mut tabs = vec![BottomTab::Activity, BottomTab::Tasks, BottomTab::GitStatus];
+        if self.focused_pane_is_pi() {
+            tabs.push(BottomTab::Thought);
+        }
+        tabs
+    }
+
+    /// The tab the bottom panel draws: the stored shared selection,
+    /// except that Thought displays as Activity when the focused pane
+    /// does not run pi. Only an explicit selection writes the stored
+    /// value, so a focus change never touches `@sidebar_bottom_tab` —
+    /// a peer window that still focuses a pi pane keeps its Thought
+    /// tab.
+    pub fn displayed_bottom_tab(&self) -> BottomTab {
+        match self.global.bottom_tab {
+            BottomTab::Thought if !self.focused_pane_is_pi() => BottomTab::Activity,
+            tab => tab,
+        }
+    }
+
     pub fn next_bottom_tab(&mut self) {
-        let next = self.global.bottom_tab.next();
+        // The cycle steps through the shown tabs from the displayed
+        // tab, so from a stored Thought hidden behind the Activity
+        // fallback the next selection is Tasks.
+        let shown = self.shown_bottom_tabs();
+        let current = self.displayed_bottom_tab();
+        let next = shown
+            .iter()
+            .position(|tab| *tab == current)
+            .map_or(shown[0], |idx| shown[(idx + 1) % shown.len()]);
         self.global.set_bottom_tab(next);
     }
 
     /// Handle a click on the bottom panel's rule (its first drawn row).
     /// Rule layout: "─ Activity│Tasks│Git ──────" — col is relative to
-    /// the terminal. The `─ ` prefix occupies cols 0-1, so the label
-    /// text starts at col 2: "Activity" spans cols 2..9, "│" at col 10,
-    /// "Tasks" spans cols 11..15, "│" at col 16, "Git" spans cols 17..19.
+    /// the terminal. The `─ ` prefix occupies cols 0-1, so the first
+    /// label starts at col 2; one `│` separator column follows each
+    /// label. The hitboxes are computed from the shown tabs and the
+    /// same label strings `build_tab_title` draws, so a label hidden
+    /// because its tab is not shown has no hitbox and the columns can
+    /// never drift from the drawing.
     pub fn handle_bottom_tab_click(&mut self, col: u16) {
         // Only the drawn labels are clickable. The `─ ` prefix cols 0-1
-        // and the dash fill right of `Git` change nothing — a click
-        // outside a label must not write the shared value at all, so
-        // the Activity hitbox is the label columns only (decision 3).
+        // and the dash fill right of the last label change nothing — a
+        // click outside a label must not write the shared value at all
+        // (decision 3).
         let x = col.saturating_sub(1) as usize;
-        // "Activity" = 8 chars on x 1..9, "│" = 1 char (9), "Tasks" = 5
-        // chars (10..14), "│" = 1 char (15), "Git" = 3 chars (16..18)
-        let selected = if (1..9).contains(&x) {
-            Some(BottomTab::Activity)
-        } else if (10..15).contains(&x) {
-            Some(BottomTab::Tasks)
-        } else if (16..19).contains(&x) {
-            Some(BottomTab::GitStatus)
-        } else {
-            // Outside every title hitbox the click must not write the
-            // shared value at all — there is no tab change to save.
-            None
-        };
+        let mut cursor = 1usize; // the first label starts right after "─ "
+        let selected = self.shown_bottom_tabs().into_iter().find(|tab| {
+            let width = tab.label().chars().count();
+            let hit = cursor..cursor + width;
+            cursor += width + 1; // label, then the separator column
+            hit.contains(&x)
+        });
         let Some(tab) = selected else { return };
         self.global.set_bottom_tab(tab);
     }
 
     pub fn scroll_bottom(&mut self, delta: isize) {
-        match self.global.bottom_tab {
+        match self.displayed_bottom_tab() {
             BottomTab::Activity => self.activity.scroll.scroll(delta),
             BottomTab::Tasks => self.tasks.scroll.scroll(delta),
             BottomTab::GitStatus => self.scrolls.git.scroll(delta),
+            BottomTab::Thought => self.scrolls.thought.scroll(delta),
         }
     }
 }
@@ -75,11 +118,28 @@ mod tests {
         }
     }
 
+    fn test_pane_with_agent(id: &str, agent: AgentType) -> PaneInfo {
+        let mut pane = test_pane(id);
+        pane.agent = agent;
+        pane
+    }
+
     fn agent_group(pane_id: &str) -> RepoGroup {
         RepoGroup {
             name: "project".into(),
             has_focus: true,
             panes: vec![(test_pane(pane_id), PaneGitInfo::default())],
+        }
+    }
+
+    fn group_with(panes: Vec<PaneInfo>) -> RepoGroup {
+        RepoGroup {
+            name: "project".into(),
+            has_focus: true,
+            panes: panes
+                .into_iter()
+                .map(|pane| (pane, PaneGitInfo::default()))
+                .collect(),
         }
     }
 
@@ -184,6 +244,119 @@ mod tests {
         );
     }
 
+    // ─── the shown tabs and the displayed tab ─────────────────────
+
+    #[test]
+    fn the_thought_tab_is_shown_only_while_the_focused_pane_runs_pi() {
+        let mut state = state_with_groups(vec![agent_group("%1")], Some("%1"));
+        assert_eq!(
+            state.shown_bottom_tabs(),
+            vec![BottomTab::Activity, BottomTab::Tasks, BottomTab::GitStatus]
+        );
+
+        state.repo_groups = vec![group_with(vec![test_pane_with_agent("%1", AgentType::Pi)])];
+        assert_eq!(
+            state.shown_bottom_tabs(),
+            vec![
+                BottomTab::Activity,
+                BottomTab::Tasks,
+                BottomTab::GitStatus,
+                BottomTab::Thought
+            ]
+        );
+    }
+
+    #[test]
+    fn a_stored_thought_displays_as_activity_for_a_non_pi_pane() {
+        // Spec "focus moves to a Claude pane": the tab the panel draws
+        // is the Activity fallback, while the stored shared value keeps
+        // holding `thought`.
+        let mut state = state_with_groups(vec![agent_group("%1")], Some("%1"));
+        state.global.bottom_tab = BottomTab::Thought;
+
+        assert_eq!(state.displayed_bottom_tab(), BottomTab::Activity);
+        assert_eq!(
+            state.global.bottom_tab,
+            BottomTab::Thought,
+            "the fallback displays without moving the stored tab"
+        );
+    }
+
+    #[test]
+    fn a_stored_thought_displays_as_thought_for_a_pi_pane() {
+        // Spec "focus returns to a pi pane" and "another window keeps
+        // Thought": the display is derived from the focus, so a window
+        // whose focused pane runs pi shows the stored Thought.
+        let pi = test_pane_with_agent("%1", AgentType::Pi);
+        let mut state = state_with_groups(vec![group_with(vec![pi])], Some("%1"));
+        state.global.bottom_tab = BottomTab::Thought;
+
+        assert_eq!(state.displayed_bottom_tab(), BottomTab::Thought);
+    }
+
+    #[test]
+    fn a_focus_change_displays_the_fallback_and_writes_nothing() {
+        // Spec "focus moves to a Claude pane": the tick that follows the
+        // focus change carries no tab logic, so the display flips to the
+        // fallback while `@sidebar_bottom_tab` is never written — the
+        // stored value stays `thought`, and a peer window focusing a pi
+        // pane keeps its Thought tab.
+        let pi = test_pane_with_agent("%1", AgentType::Pi);
+        let mut state = state_with_groups(vec![group_with(vec![pi, test_pane("%2")])], Some("%1"));
+        state.global.bottom_tab = BottomTab::Thought;
+        assert_eq!(state.displayed_bottom_tab(), BottomTab::Thought);
+
+        state.focus_state.focused_pane_id = Some("%2".into());
+        run_tab_reads(&mut state);
+
+        assert_eq!(state.displayed_bottom_tab(), BottomTab::Activity);
+        assert_eq!(
+            state.global.bottom_tab,
+            BottomTab::Thought,
+            "a focus change must not write @sidebar_bottom_tab"
+        );
+
+        // The stored Thought displays again the moment a pi pane is
+        // focused — no selection needed.
+        state.focus_state.focused_pane_id = Some("%1".into());
+        assert_eq!(state.displayed_bottom_tab(), BottomTab::Thought);
+    }
+
+    // ─── the cycle steps through the shown tabs ───────────────────
+
+    #[test]
+    fn the_cycle_covers_four_tabs_for_a_pi_pane() {
+        // Spec "Keyboard cycles four tabs for a pi pane": Thought takes
+        // its place after Git and wraps back to Activity.
+        let pi = test_pane_with_agent("%1", AgentType::Pi);
+        let mut state = state_with_groups(vec![group_with(vec![pi])], Some("%1"));
+
+        state.next_bottom_tab();
+        assert_eq!(state.global.bottom_tab, BottomTab::Tasks);
+        state.next_bottom_tab();
+        assert_eq!(state.global.bottom_tab, BottomTab::GitStatus);
+        state.next_bottom_tab();
+        assert_eq!(state.global.bottom_tab, BottomTab::Thought);
+        state.next_bottom_tab();
+        assert_eq!(state.global.bottom_tab, BottomTab::Activity);
+    }
+
+    #[test]
+    fn the_cycle_from_the_thought_fallback_selects_tasks() {
+        // Spec "the cycle key from the fallback": a stored Thought that
+        // displays as Activity cycles on from the displayed tab.
+        let mut state = state_with_groups(vec![agent_group("%1")], Some("%1"));
+        state.global.bottom_tab = BottomTab::Thought;
+
+        state.next_bottom_tab();
+
+        assert_eq!(
+            state.global.bottom_tab,
+            BottomTab::Tasks,
+            "Tasks follows the Activity fallback in the cycle"
+        );
+    }
+
     // ─── three-way cycle + click hitboxes ───────────────────────
 
     #[test]
@@ -237,6 +410,44 @@ mod tests {
                 "col {col} is left of the first label"
             );
         }
+    }
+
+    #[test]
+    fn a_click_on_the_thought_label_selects_it_for_a_pi_pane() {
+        // Spec "a click on the Thought label": with Thought shown the
+        // rule reads "─ Activity│Tasks│Git│Thought …", so the Thought
+        // label starts at col 21 (8+1+5+1+3+1+1 for the prefix).
+        let pi = test_pane_with_agent("%1", AgentType::Pi);
+        let mut state = state_with_groups(vec![group_with(vec![pi])], Some("%1"));
+
+        state.handle_bottom_tab_click(21); // left edge of "Thought"
+        assert_eq!(state.global.bottom_tab, BottomTab::Thought);
+
+        state.handle_bottom_tab_click(24); // middle of "Thought"
+        assert_eq!(state.global.bottom_tab, BottomTab::Thought);
+    }
+
+    #[test]
+    fn a_click_where_a_hidden_thought_label_would_be_changes_nothing() {
+        // Spec "a click where a hidden label would be": for a non-pi
+        // pane the columns right of `Git` are dash fill, not a label —
+        // neither the tab nor the split may change.
+        let mut state = state_with_groups(vec![agent_group("%1")], Some("%1"));
+        state.global.bottom_tab = BottomTab::Tasks;
+        state.global.bottom_percent = 30;
+
+        for col in [21u16, 24] {
+            state.handle_bottom_tab_click(col);
+            assert_eq!(
+                state.global.bottom_tab,
+                BottomTab::Tasks,
+                "col {col} holds no Thought label for a non-pi pane"
+            );
+        }
+        assert_eq!(
+            state.global.bottom_percent, 30,
+            "a click outside every label must not resize the split"
+        );
     }
 
     #[test]

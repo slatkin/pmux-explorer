@@ -17,6 +17,9 @@ impl ScrollState {
 pub struct ScrollStates {
     pub panes: ScrollState,
     pub git: ScrollState,
+    /// The Thought tab's scroll offset (follow-the-end while the user
+    /// has not scrolled up — see the drawing in `ui/bottom/thought`).
+    pub thought: ScrollState,
 }
 
 #[cfg(test)]
@@ -82,7 +85,7 @@ mod tests {
     }
 
     #[test]
-    fn scroll_states_default_both_at_default() {
+    fn scroll_states_default_all_at_default() {
         let states = ScrollStates::default();
         assert_eq!(states.panes.offset, 0);
         assert_eq!(states.panes.total_lines, 0);
@@ -90,5 +93,8 @@ mod tests {
         assert_eq!(states.git.offset, 0);
         assert_eq!(states.git.total_lines, 0);
         assert_eq!(states.git.visible_height, 0);
+        assert_eq!(states.thought.offset, 0);
+        assert_eq!(states.thought.total_lines, 0);
+        assert_eq!(states.thought.visible_height, 0);
     }
 }

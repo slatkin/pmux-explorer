@@ -52,8 +52,10 @@ pub(super) fn handle_event(
                     // keyboard `BackTab` path does the same update. Without this,
                     // clicking into Git Status leaves polling disabled until the
                     // next refresh tick and the tab renders stale data.
-                    git_tab_active
-                        .store(state.global.bottom_tab.is_git_status(), Ordering::Relaxed);
+                    git_tab_active.store(
+                        state.displayed_bottom_tab().is_git_status(),
+                        Ordering::Relaxed,
+                    );
                 }
                 MouseEventKind::ScrollDown => {
                     state.handle_mouse_scroll(mouse.row, term_height, bottom_h, 3);
@@ -234,7 +236,10 @@ fn esc_returns_focus_to_panes(state: &mut AppState) {
 /// poller flag in step with the Git tab.
 fn handle_back_tab(state: &mut AppState, git_tab_active: &AtomicBool) {
     state.next_bottom_tab();
-    git_tab_active.store(state.global.bottom_tab.is_git_status(), Ordering::Relaxed);
+    git_tab_active.store(
+        state.displayed_bottom_tab().is_git_status(),
+        Ordering::Relaxed,
+    );
 }
 
 fn pane_nav_down(state: &mut AppState) {
@@ -264,10 +269,11 @@ fn pane_nav_up(state: &mut AppState) {
             }
         }
         Focus::ActivityLog => {
-            let at_top = match state.global.bottom_tab {
+            let at_top = match state.displayed_bottom_tab() {
                 BottomTab::Activity => state.activity.scroll.offset == 0,
                 BottomTab::Tasks => state.tasks.scroll.offset == 0,
                 BottomTab::GitStatus => state.scrolls.git.offset == 0,
+                BottomTab::Thought => state.scrolls.thought.offset == 0,
             };
             if at_top {
                 state.focus_state.focus = Focus::Panes;

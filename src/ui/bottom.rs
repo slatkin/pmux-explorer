@@ -75,33 +75,39 @@ pub fn draw_bottom(frame: &mut Frame, state: &mut AppState, area: Rect) {
     );
     frame.render_widget(Paragraph::new(top_line), rule_rect);
 
-    match state.global.bottom_tab {
+    match state.displayed_bottom_tab() {
         BottomTab::Activity => activity::draw_activity_content(frame, state, content_rect),
         BottomTab::Tasks => tasks::draw_tasks_content(frame, state, content_rect),
         BottomTab::GitStatus => git::draw_git_content(frame, state, content_rect),
+        // The Thought tab's own drawing arrives with the rendering
+        // unit; until then its body stays empty.
+        BottomTab::Thought => {}
     }
 }
 
+/// The tab run drawn on the rule: one label span per shown tab, a
+/// separator span between labels, styled active/inactive against the
+/// displayed tab. The shown tabs come from [`AppState::shown_bottom_tabs`]
+/// and the label strings from [`BottomTab::label`] — the same sources the
+/// click hitboxes are computed from, so the two cannot drift.
 fn build_tab_title(state: &AppState) -> Line<'static> {
     let theme = &state.theme;
     let active = Style::default().fg(theme.accent);
     let inactive = Style::default().fg(theme.text_muted);
+    let displayed = state.displayed_bottom_tab();
     let is = |tab: &BottomTab| {
-        if state.global.bottom_tab == *tab {
-            active
-        } else {
-            inactive
-        }
+        if displayed == *tab { active } else { inactive }
     };
     let sep_style = Style::default().fg(theme.border_inactive);
 
-    Line::from(vec![
-        Span::styled("Activity", is(&BottomTab::Activity)),
-        Span::styled("\u{2502}", sep_style),
-        Span::styled("Tasks", is(&BottomTab::Tasks)),
-        Span::styled("\u{2502}", sep_style),
-        Span::styled("Git", is(&BottomTab::GitStatus)),
-    ])
+    let mut spans: Vec<Span<'static>> = Vec::new();
+    for (i, tab) in state.shown_bottom_tabs().into_iter().enumerate() {
+        if i > 0 {
+            spans.push(Span::styled("\u{2502}", sep_style));
+        }
+        spans.push(Span::styled(tab.label(), is(&tab)));
+    }
+    Line::from(spans)
 }
 
 #[cfg(test)]

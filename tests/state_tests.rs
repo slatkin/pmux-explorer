@@ -866,6 +866,24 @@ fn a_bottom_tab_selected_in_one_instance_is_adopted_by_another_within_one_tick()
     );
 }
 
+#[test]
+fn a_peer_selecting_thought_is_adopted_within_one_tick() {
+    // Spec scenario "a peer selects Thought": the shared value
+    // `thought` names the Thought tab, so one adoption tick selects it
+    // (the display may still fall back to Activity — that is the
+    // focused pane's business, not the stored value's).
+    let mut b = make_state(vec![]);
+
+    b.global
+        .apply_all(&make_opts(&[(tmux::SIDEBAR_BOTTOM_TAB, "thought")]), false);
+
+    assert_eq!(
+        b.global.bottom_tab,
+        BottomTab::Thought,
+        "one tick with the shared reading must put B on Thought"
+    );
+}
+
 // ─── Spawn / Remove Popup State ───────────────────────────────────
 
 fn spawn_state_with_repo() -> AppState {
