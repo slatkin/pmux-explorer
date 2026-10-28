@@ -47,13 +47,21 @@ pub struct FeedEnv {
     pub uid: u32,
 }
 
+/// The real user id of this process. The feed's fallback directory
+/// `/tmp/pmux-thinking-<uid>` is keyed by it.
+fn current_uid() -> u32 {
+    // SAFETY: `getuid` reads the process's real user id and writes
+    // nothing; it has no failure mode and accepts no arguments.
+    unsafe { libc::getuid() }
+}
+
 impl FeedEnv {
     /// This process's feed environment: `XDG_RUNTIME_DIR` plus the
     /// current uid.
     pub fn from_process() -> Self {
         FeedEnv {
             xdg_runtime_dir: std::env::var("XDG_RUNTIME_DIR").ok(),
-            uid: crate::mcp::current_uid(),
+            uid: current_uid(),
         }
     }
 

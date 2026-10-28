@@ -1,4 +1,4 @@
-# Shared binary lookup for hook.sh and mcp.sh, sourced by both.
+# Shared binary lookup for hook.sh, sourced by it.
 #
 # The cascade mirrors the install shapes the binary takes: the plugin
 # directory's bin/ and target/release/, then the TPM directory's, then
@@ -6,8 +6,7 @@
 # `LOOKUP_DIR` (the directory the first four probes searched, for error
 # messages); on failure it returns 1. The not-found behavior belongs to
 # the caller: hook.sh exits 0 silently so an agent session never sees a
-# hook failure, while mcp.sh reports on stderr and exits 1 so a failed
-# MCP server shows up in Claude's `/mcp` panel.
+# hook failure.
 LOOKUP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 # Fallback location used when the calling script is executed from a
 # Claude Code plugin install (e.g. `${CLAUDE_PLUGIN_ROOT}/hook.sh`). The

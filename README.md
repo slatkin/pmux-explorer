@@ -70,30 +70,6 @@ Full walkthroughs: [Claude Code setup](https://slatkin.github.io/pmux-explorer/g
 
 `prefix + e` toggles the sidebar in the current window, `prefix + E` toggles it everywhere.
 
-### 4. Hand Claude a channel (optional)
-
-A Claude session started with the channels flag can receive report pointers
-pushed by pmux instead of keystrokes:
-
-```sh
-claude --dangerously-load-development-channels plugin:pmux-explorer@slatkin
-```
-
-Channels are a research preview, and the flag needs all of:
-
-- **claude.ai or Console authentication** for the account the session runs
-  under
-- **`channelsEnabled`** allowed by your organization's policy
-- **an interactive session** — the flag does nothing in a non-interactive
-  (`-p`) run
-
-The channel server never prompts the model itself: it stays unarmed until
-Claude runs `pmux-explorer channel-ready` in its pane — an instruction the
-user's orchestration prompt carries when the session should get reports on
-the channel. While it stays unarmed the sidebar works exactly as it does
-without the channel; the endpoint protocol is documented in
-[docs/agent-protocol.md](docs/agent-protocol.md#the-channel-endpoint).
-
 ## Documentation
 
 The [documentation site](https://slatkin.github.io/pmux-explorer/) covers every feature and option:

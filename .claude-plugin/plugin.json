@@ -8,10 +8,5 @@
   },
   "repository": "https://github.com/slatkin/pmux-explorer",
   "license": "MIT",
-  "keywords": ["tmux", "agent", "monitoring", "tui", "sidebar"],
-  "mcpServers": {
-    "pmux": {
-      "command": "${CLAUDE_PLUGIN_ROOT}/mcp.sh"
-    }
-  }
+  "keywords": ["tmux", "agent", "monitoring", "tui", "sidebar"]
 }
