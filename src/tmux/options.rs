@@ -208,6 +208,8 @@ pub const SIDEBAR_COLOR_TASK_PENDING: &str = "@sidebar_color_task_pending";
 /// Tasks tab `✔` icon + subject color for completed items.
 pub const SIDEBAR_COLOR_TASK_COMPLETED: &str = "@sidebar_color_task_completed";
 pub const SIDEBAR_COLOR_SUBAGENT: &str = "@sidebar_color_subagent";
+/// Bottom-panel tab rule's ` │ ` delimiter between tab glyphs.
+pub const SIDEBAR_COLOR_TAB_SEPARATOR: &str = "@sidebar_color_tab_separator";
 pub const SIDEBAR_COLOR_COMMIT_HASH: &str = "@sidebar_color_commit_hash";
 pub const SIDEBAR_COLOR_DIFF_ADDED: &str = "@sidebar_color_diff_added";
 pub const SIDEBAR_COLOR_DIFF_DELETED: &str = "@sidebar_color_diff_deleted";
@@ -217,6 +219,13 @@ pub const SIDEBAR_COLOR_SECTION_TITLE: &str = "@sidebar_color_section_title";
 pub const SIDEBAR_COLOR_ACTIVITY_TIMESTAMP: &str = "@sidebar_color_activity_timestamp";
 pub const SIDEBAR_COLOR_THOUGHT_TIMESTAMP: &str = "@sidebar_color_thought_timestamp";
 pub const SIDEBAR_COLOR_RESPONSE_ARROW: &str = "@sidebar_color_response_arrow";
+/// Tools tab shell-command token colors, one per `shell_highlight::Class`.
+pub const SIDEBAR_COLOR_CMD_COMMAND: &str = "@sidebar_color_cmd_command";
+pub const SIDEBAR_COLOR_CMD_FLAG: &str = "@sidebar_color_cmd_flag";
+pub const SIDEBAR_COLOR_CMD_STRING: &str = "@sidebar_color_cmd_string";
+pub const SIDEBAR_COLOR_CMD_VARIABLE: &str = "@sidebar_color_cmd_variable";
+pub const SIDEBAR_COLOR_CMD_OPERATOR: &str = "@sidebar_color_cmd_operator";
+pub const SIDEBAR_COLOR_CMD_COMMENT: &str = "@sidebar_color_cmd_comment";
 
 pub const SIDEBAR_ICON_ALL: &str = "@sidebar_icon_all";
 pub const SIDEBAR_ICON_RUNNING: &str = "@sidebar_icon_running";

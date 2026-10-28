@@ -139,10 +139,10 @@ pub(crate) fn build_tab_title(state: &AppState) -> Vec<TitleSpan> {
     let is = |tab: &BottomTab| {
         if displayed == *tab { active } else { inactive }
     };
-    // The delimiters wear the waiting colour (#e0af68) — a quiet
-    // gold that stays distinct from both the bold accent of the
+    // The delimiters wear the tab separator colour (#9aa5ce) — a
+    // quiet grey that stays distinct from both the bold accent of the
     // active glyph and the bright text of the inactive ones.
-    let sep_style = Style::default().fg(theme.status_waiting);
+    let sep_style = Style::default().fg(theme.tab_separator);
 
     let mut spans: Vec<TitleSpan> = Vec::new();
     for (i, tab) in state.shown_bottom_tabs().into_iter().enumerate() {

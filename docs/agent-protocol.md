@@ -175,6 +175,11 @@ for `Read`, `Edit` and `Write`, the command for `Bash`, the pattern for
 names those arguments differently sends the canonical key beside its own, and
 the adapter rewrites the rest.
 
+A label is written as one line in the log: a line break in it becomes a
+space. Every `|` of a label is kept — the log line's first two `|`
+separate the time and the tool name, and everything after them is the
+label, pipes included.
+
 ### `permission-denied`
 
 The agent was refused a tool it asked for. The pane waits, and the reason is

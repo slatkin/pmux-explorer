@@ -11,6 +11,7 @@ pub(crate) mod mcp;
 pub mod pmux_task;
 pub mod port;
 pub(crate) mod process;
+pub mod shell_highlight;
 pub mod state;
 pub mod task_reminders;
 pub mod task_store;

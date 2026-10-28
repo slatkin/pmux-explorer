@@ -1,5 +1,7 @@
 use unicode_width::UnicodeWidthStr;
 
+use crate::shell_highlight::Class;
+
 /// Display width of a string (CJK = 2 columns, ASCII = 1)
 pub fn display_width(s: &str) -> usize {
     UnicodeWidthStr::width(s)
@@ -138,49 +140,109 @@ pub fn truncate_to_width(text: &str, max_width: usize) -> String {
 /// rely on `truncate_to_width` for the same treatment on single lines.
 /// Returns at most `max_lines` lines; empty text returns no lines.
 pub fn wrap_text(text: &str, max_width: usize, max_lines: usize) -> Vec<String> {
+    // Every char gets the plain argument class, so the shared layout
+    // core produces exactly the plain-text lines this signature returns.
+    let classes = vec![Class::Arg; text.chars().count()];
+    wrap_classified(text, &classes, max_width, max_lines)
+        .into_iter()
+        .map(|runs| runs.into_iter().map(|(chunk, _)| chunk).collect::<String>())
+        .collect()
+}
+
+/// Wrap classified text by display width with the same layout as
+/// [`wrap_text`]: word boundaries, hard-split oversized words, at most
+/// `max_lines` lines, and an ellipsis at the end of the last line when
+/// text remains. Each line comes back as runs of consecutive characters
+/// with the same class, ready to draw one span per run. The ellipsis is
+/// class `Arg`; every other character keeps the class its position in
+/// `classes` gives it (one entry per `char` of `text`; a missing tail
+/// defaults to `Arg`). Empty or whitespace-only text returns no lines.
+pub fn wrap_classified(
+    text: &str,
+    classes: &[Class],
+    max_width: usize,
+    max_lines: usize,
+) -> Vec<Vec<(String, Class)>> {
     if max_width == 0 || max_lines == 0 {
         return Vec::new();
     }
 
+    let chars: Vec<(char, Class)> = text
+        .chars()
+        .zip(classes.iter().copied().chain(std::iter::repeat(Class::Arg)))
+        .collect();
+
     // Tokens keep words whole: a word wider than the line is pre-split
     // into width-fitting chunks, and every chunk after the first continues
-    // the word with no space before it.
-    let mut tokens: Vec<(String, bool)> = Vec::new(); // (text, space before)
-    for word in text.split_whitespace() {
-        let mut first_chunk = true;
-        let mut chunk = String::new();
+    // the word with no space before it. Whitespace splits words but is not
+    // part of any token; the join re-inserts one space between tokens.
+    let mut tokens: Vec<(Vec<(char, Class)>, bool)> = Vec::new(); // (chars, space before)
+    let mut word: Vec<(char, Class)> = Vec::new();
+    let mut first_chunk = true;
+    let flush_word = |tokens: &mut Vec<(Vec<(char, Class)>, bool)>,
+                      word: &mut Vec<(char, Class)>,
+                      first_chunk: &mut bool| {
+        if word.is_empty() {
+            return;
+        }
+        let mut chunk: Vec<(char, Class)> = Vec::new();
         let mut chunk_w = 0usize;
-        for ch in word.chars() {
+        for (ch, class) in word.drain(..) {
             let cw = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
             if chunk_w + cw > max_width {
-                tokens.push((std::mem::take(&mut chunk), first_chunk));
-                first_chunk = false;
+                tokens.push((std::mem::take(&mut chunk), *first_chunk));
+                *first_chunk = false;
                 chunk_w = 0;
             }
-            chunk.push(ch);
+            chunk.push((ch, class));
             chunk_w += cw;
         }
         if !chunk.is_empty() {
-            tokens.push((chunk, first_chunk));
+            tokens.push((chunk, *first_chunk));
+        }
+    };
+    for (ch, class) in chars {
+        if ch.is_whitespace() {
+            flush_word(&mut tokens, &mut word, &mut first_chunk);
+            first_chunk = true;
+        } else {
+            word.push((ch, class));
         }
     }
+    flush_word(&mut tokens, &mut word, &mut first_chunk);
 
-    let join = |tokens: &[(String, bool)]| -> String {
-        let mut line = String::new();
-        for (i, (token, space_before)) in tokens.iter().enumerate() {
+    // Join placed tokens into runs of equal class, one space (Arg) where
+    // a token had a space before it.
+    let join_runs = |placed: &[(Vec<(char, Class)>, bool)]| -> Vec<(String, Class)> {
+        let mut runs: Vec<(String, Class)> = Vec::new();
+        let push_char =
+            |ch: char, class: Class, runs: &mut Vec<(String, Class)>| match runs.last_mut() {
+                Some((text, last_class)) if *last_class == class => text.push(ch),
+                _ => runs.push((ch.to_string(), class)),
+            };
+        for (i, (token, space_before)) in placed.iter().enumerate() {
             if i > 0 && *space_before {
-                line.push(' ');
+                push_char(' ', Class::Arg, &mut runs);
             }
-            line.push_str(token);
+            for (ch, class) in token {
+                push_char(*ch, *class, &mut runs);
+            }
         }
-        line
+        runs
     };
 
-    let mut lines: Vec<String> = Vec::new();
+    let token_width = |token: &[(char, Class)]| -> usize {
+        token
+            .iter()
+            .map(|(ch, _)| unicode_width::UnicodeWidthChar::width(*ch).unwrap_or(0))
+            .sum()
+    };
+
+    let mut lines: Vec<Vec<(String, Class)>> = Vec::new();
     let mut next = 0usize;
     while next < tokens.len() {
         let last_allowed = lines.len() + 1 == max_lines;
-        let mut placed: Vec<(String, bool)> = Vec::new();
+        let mut placed: Vec<(Vec<(char, Class)>, bool)> = Vec::new();
         let mut line_w = 0usize;
         while next < tokens.len() {
             let (token, space_before) = &tokens[next];
@@ -189,7 +251,7 @@ pub fn wrap_text(text: &str, max_width: usize, max_lines: usize) -> Vec<String> 
             } else {
                 usize::from(*space_before)
             };
-            let token_w = display_width(token);
+            let token_w = token_width(token);
             if line_w + sep + token_w > max_width {
                 break;
             }
@@ -200,31 +262,45 @@ pub fn wrap_text(text: &str, max_width: usize, max_lines: usize) -> Vec<String> 
 
         if next < tokens.len() && last_allowed {
             // Text remains past the final line: close this line with an
-            // ellipsis at a word boundary.
+            // ellipsis at a word boundary. The ellipsis is always Arg.
+            let finish = |placed: &mut Vec<(Vec<(char, Class)>, bool)>,
+                          lines: &mut Vec<Vec<(String, Class)>>| {
+                let mut runs = join_runs(placed);
+                match runs.last_mut() {
+                    Some((text, Class::Arg)) => text.push('\u{2026}'),
+                    _ => runs.push(("\u{2026}".to_string(), Class::Arg)),
+                }
+                lines.push(runs);
+            };
             if line_w < max_width {
-                lines.push(format!("{}\u{2026}", join(&placed)));
+                finish(&mut placed, &mut lines);
             } else if placed.len() > 1 {
                 // The line filled exactly; give back the last whole word
                 // to make room for the ellipsis.
                 placed.pop();
-                lines.push(format!("{}\u{2026}", join(&placed)));
+                finish(&mut placed, &mut lines);
             } else {
                 // One full-width word: hard-cut it with the ellipsis.
-                let mut cut = String::new();
+                let mut cut_chars: Vec<(char, Class)> = Vec::new();
                 let mut cut_w = 0usize;
-                for ch in placed[0].0.chars() {
-                    let cw = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
+                for (ch, class) in &placed[0].0 {
+                    let cw = unicode_width::UnicodeWidthChar::width(*ch).unwrap_or(0);
                     if cut_w + cw > max_width - 1 {
                         break;
                     }
-                    cut.push(ch);
+                    cut_chars.push((*ch, *class));
                     cut_w += cw;
                 }
-                lines.push(format!("{cut}\u{2026}"));
+                let mut runs = join_runs(&[(cut_chars, false)]);
+                match runs.last_mut() {
+                    Some((text, Class::Arg)) => text.push('\u{2026}'),
+                    _ => runs.push(("\u{2026}".to_string(), Class::Arg)),
+                }
+                lines.push(runs);
             }
             break;
         }
-        lines.push(join(&placed));
+        lines.push(join_runs(&placed));
     }
     lines
 }
@@ -387,6 +463,123 @@ mod tests {
     fn wrap_text_zero_lines() {
         let lines = wrap_text("hello", 10, 0);
         assert!(lines.is_empty());
+    }
+
+    // ─── wrap_classified ──────────────────────────────────────────
+
+    use crate::shell_highlight::{Class, classify};
+
+    /// The plain text of one classified line.
+    fn line_text(line: &[(String, Class)]) -> String {
+        line.iter().map(|(text, _)| text.as_str()).collect()
+    }
+
+    /// All (text, class) runs of one classified line.
+    fn runs(line: &[(String, Class)]) -> &[(String, Class)] {
+        line
+    }
+
+    #[test]
+    fn wrap_classified_string_token_keeps_class_across_lines() {
+        // The quoted string wraps (the space inside it is a split point);
+        // both halves keep the Str class.
+        let label = "echo \"one two\"";
+        let classes = classify(label);
+        let lines = wrap_classified(label, &classes, 9, 3);
+        assert_eq!(lines.len(), 2);
+        assert_eq!(line_text(&lines[0]), "echo \"one");
+        assert_eq!(line_text(&lines[1]), "two\"");
+        // Line 1: `echo` is Command, the string half `"one` is Str.
+        assert_eq!(lines[0][0], ("echo".to_string(), Class::Command));
+        assert_eq!(lines[0][1], (" ".to_string(), Class::Arg));
+        assert_eq!(lines[0][2], ("\"one".to_string(), Class::Str));
+        // Line 2: the wrapped half stays a string.
+        assert_eq!(lines[1][0], ("two\"".to_string(), Class::Str));
+    }
+
+    #[test]
+    fn wrap_classified_ellipsis_is_arg() {
+        let label = "aaa bbb ccc ddd";
+        let classes = classify(label);
+        let lines = wrap_classified(label, &classes, 10, 1);
+        assert_eq!(lines.len(), 1);
+        assert_eq!(line_text(&lines[0]), "aaa bbb\u{2026}");
+        // The ellipsis merges into the trailing Arg run (`aaa` is Command).
+        let (text, class) = lines[0].last().unwrap();
+        assert_eq!(*class, Class::Arg);
+        assert!(text.ends_with('\u{2026}'));
+        assert!(
+            lines[0]
+                .iter()
+                .all(|(_, c)| *c == Class::Arg || *c == Class::Command)
+        );
+    }
+
+    #[test]
+    fn wrap_classified_hard_split_word_keeps_its_classes() {
+        // One oversized word made of two classes, hard-split across lines:
+        // every chunk keeps the class of its characters.
+        let label = "aaabbbccc";
+        let mut classes = vec![Class::Arg; 9];
+        classes[3..6].fill(Class::Str);
+        let lines = wrap_classified(label, &classes, 4, 3);
+        assert_eq!(lines.len(), 3);
+        assert_eq!(line_text(&lines[0]), "aaab");
+        assert_eq!(line_text(&lines[1]), "bbcc");
+        assert_eq!(line_text(&lines[2]), "c");
+        assert_eq!(
+            lines[0],
+            vec![
+                ("aaa".to_string(), Class::Arg),
+                ("b".to_string(), Class::Str)
+            ]
+        );
+        assert_eq!(
+            lines[1],
+            vec![
+                ("bb".to_string(), Class::Str),
+                ("cc".to_string(), Class::Arg)
+            ]
+        );
+        assert!(lines[2].iter().all(|(_, c)| *c == Class::Arg));
+    }
+
+    #[test]
+    fn wrap_classified_line_texts_equal_wrap_text() {
+        let label = "cargo build --release 2>&1 | tee \"out log\"";
+        let classes = classify(label);
+        let classified = wrap_classified(label, &classes, 12, 3);
+        let plain = wrap_text(label, 12, 3);
+        assert_eq!(classified.len(), plain.len());
+        for (line, text) in classified.iter().zip(&plain) {
+            assert_eq!(line_text(line), text.as_str());
+        }
+    }
+
+    #[test]
+    fn wrap_classified_runs_split_on_class_changes() {
+        let label = "echo -n hi";
+        let classes = classify(label);
+        let lines = wrap_classified(label, &classes, 40, 3);
+        assert_eq!(lines.len(), 1);
+        assert_eq!(
+            lines[0],
+            vec![
+                ("echo".to_string(), Class::Command),
+                (" ".to_string(), Class::Arg),
+                ("-n".to_string(), Class::Flag),
+                (" hi".to_string(), Class::Arg),
+            ]
+        );
+    }
+
+    #[test]
+    fn wrap_classified_empty_and_zero_limits() {
+        let classes = classify("");
+        assert!(wrap_classified("", &classes, 10, 3).is_empty());
+        assert!(wrap_classified("   ", &classes, 10, 3).is_empty());
+        assert!(wrap_classified("hi", &classes, 0, 3).is_empty());
+        assert!(wrap_classified("hi", &classes, 10, 0).is_empty());
     }
 
     // ─── elapsed_label ─────────────────────────────────────────────

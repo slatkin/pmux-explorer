@@ -3,7 +3,7 @@ use crate::tmux;
 use crate::tool_name::CanonicalTool;
 
 use super::super::label::extract_tool_label;
-use super::super::{local_time_hhmm, sanitize_tmux_value, set_status};
+use super::super::{local_time_hhmm, sanitize_log_label, sanitize_tmux_value, set_status};
 use super::context::pane_writes_allowed;
 
 /// Write a single activity entry to the log file and trim if needed.
@@ -16,7 +16,7 @@ pub(super) fn write_activity_entry(
     label: &str,
 ) -> std::io::Result<()> {
     let log_path = crate::activity::log_file_path(pane);
-    let label = sanitize_tmux_value(label);
+    let label = sanitize_log_label(label);
     let timestamp = local_time_hhmm();
     let line = format!("{}|{}|{}\n", timestamp, tool_name, label);
 
@@ -206,7 +206,7 @@ mod tests {
         let path = crate::activity::log_file_path(pane_id);
         let _ = fs::remove_file(&path);
 
-        write_activity_entry(pane_id, "Bash", "cat file | grep foo\nbar").unwrap();
+        write_activity_entry(pane_id, "Bash", "cat file | grep foo bar\nbaz").unwrap();
 
         let content = fs::read_to_string(&path).unwrap();
         let lines: Vec<&str> = content.lines().collect();
@@ -216,7 +216,10 @@ mod tests {
             "newlines in label should not create extra lines"
         );
         let label = lines[0].splitn(3, '|').nth(2).unwrap();
-        assert!(!label.contains('|'));
+        assert_eq!(
+            label, "cat file | grep foo bar baz",
+            "the log label keeps its `|`"
+        );
         assert!(!label.contains('\n'));
         fs::remove_file(&path).ok();
     }
@@ -315,6 +318,14 @@ mod tests {
             &Value::Null,
         );
 
+        // The log label keeps `|` (only line breaks become spaces).
+        let content = fs::read_to_string(&path).unwrap();
+        let line = content.lines().next().unwrap_or("");
+        let label = line.splitn(3, '|').nth(2).unwrap_or("");
+        assert_eq!(label, "cat a.log | grep foo bar");
+        assert!(!label.contains('\n'));
+
+        // The `@pane_bg_cmd` pane option keeps its `|`-free sanitizing.
         let stored = tmux::test_mock::get(pane_id, tmux::PANE_BG_CMD).unwrap_or_default();
         assert!(!stored.contains('|'));
         assert!(!stored.contains('\n'));

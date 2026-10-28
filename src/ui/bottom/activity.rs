@@ -6,8 +6,9 @@ use ratatui::{
     widgets::Paragraph,
 };
 
+use crate::shell_highlight::{self, Class};
 use crate::state::AppState;
-use crate::ui::text::{display_width, wrap_text};
+use crate::ui::text::{display_width, wrap_classified};
 
 pub(super) fn draw_activity_content(frame: &mut Frame, state: &mut AppState, inner: Rect) {
     let theme = &state.theme;
@@ -45,12 +46,22 @@ pub(super) fn draw_activity_content(frame: &mut Frame, state: &mut AppState, inn
 
         if !entry.label.is_empty() {
             let label_max_w = inner_w.saturating_sub(2);
-            let wrapped = wrap_text(&entry.label, label_max_w, 3);
-            for wl in wrapped {
-                lines.push(Line::from(Span::styled(
-                    format!("  {wl}"),
-                    Style::default().fg(theme.text_muted),
-                )));
+            // Only shell entries get token colors; every other tool keeps
+            // one muted color through the same run-based draw path.
+            let classes = match entry.tool.as_str() {
+                "Bash" | "Monitor" => shell_highlight::classify(&entry.label),
+                _ => vec![Class::Arg; entry.label.chars().count()],
+            };
+            for line in wrap_classified(&entry.label, &classes, label_max_w, 3) {
+                let mut spans = Vec::with_capacity(line.len() + 1);
+                spans.push(Span::styled("  ", Style::default().fg(theme.text_muted)));
+                for (text, class) in line {
+                    spans.push(Span::styled(
+                        text,
+                        Style::default().fg(theme.cmd_class_color(class)),
+                    ));
+                }
+                lines.push(Line::from(spans));
             }
         }
     }

@@ -1,5 +1,6 @@
 use ratatui::style::Color;
 
+use crate::shell_highlight::Class;
 use crate::tmux::{self, AgentType, PaneStatus};
 
 /// Runtime color theme, loaded from tmux @sidebar_color_* variables on startup.
@@ -71,12 +72,34 @@ pub struct ColorTheme {
     pub activity_timestamp: Color,
     /// Thought tab color of the `HH:mm:ss` line above the thinking text.
     pub thought_timestamp: Color,
+    /// Tools tab color of a shell command word (`Bash`/`Monitor` labels).
+    /// Default Tokyo Night blue (`#7aa2f7`).
+    pub cmd_command: Color,
+    /// Tools tab color of a flag word (`--release`). Default Tokyo Night
+    /// cyan (`#7dcfff`).
+    pub cmd_flag: Color,
+    /// Tools tab color of quoted text. Default Tokyo Night yellow
+    /// (`#e0af68`).
+    pub cmd_string: Color,
+    /// Tools tab color of `$variables` and leading `NAME=value`
+    /// assignments. Default Tokyo Night purple (`#bb9af7`).
+    pub cmd_variable: Color,
+    /// Tools tab color of separators and redirections. Default Tokyo
+    /// Night cyan2 (`#89ddff`).
+    pub cmd_operator: Color,
+    /// Tools tab color of a `#` comment. Default Tokyo Night comment
+    /// grey-blue (`#565f89`).
+    pub cmd_comment: Color,
     pub response_arrow: Color,
     /// Border colour tmux draws around the sidebar pane while it is the
     /// active pane of its window. Default is everforest dark-medium
     /// orange (`#E69875`): loud against dark backgrounds without
     /// reading as an error.
     pub focus_border: Color,
+    /// The ` │ ` delimiter between the bottom-panel tab glyphs on the
+    /// rule. Default Tokyo Night dim foreground (`#9aa5ce`), quiet
+    /// against the filter-bar band next to the bright tab glyphs.
+    pub tab_separator: Color,
 }
 
 impl Default for ColorTheme {
@@ -125,8 +148,15 @@ impl Default for ColorTheme {
             section_title: Color::Rgb(0x2a, 0xc3, 0xde),
             activity_timestamp: Color::Rgb(0x2a, 0xc3, 0xde),
             thought_timestamp: Color::Rgb(0xe0, 0xaf, 0x68),
+            cmd_command: Color::Rgb(0x7a, 0xa2, 0xf7),
+            cmd_flag: Color::Rgb(0x7d, 0xcf, 0xff),
+            cmd_string: Color::Rgb(0xe0, 0xaf, 0x68),
+            cmd_variable: Color::Rgb(0xbb, 0x9a, 0xf7),
+            cmd_operator: Color::Rgb(0x89, 0xdd, 0xff),
+            cmd_comment: Color::Rgb(0x56, 0x5f, 0x89),
             response_arrow: Color::Rgb(0x7d, 0xcf, 0xff),
             focus_border: Color::Rgb(0xE6, 0x98, 0x75),
+            tab_separator: Color::Rgb(0x9a, 0xa5, 0xce),
         }
     }
 }
@@ -139,7 +169,9 @@ impl ColorTheme {
         Self::from_options(&all_opts)
     }
 
-    fn from_options(all_opts: &std::collections::HashMap<String, String>) -> Self {
+    /// Apply a map of global tmux options onto the default theme. Used
+    /// by `from_tmux` and by tests that pin the option-to-field wiring.
+    pub fn from_options(all_opts: &std::collections::HashMap<String, String>) -> Self {
         let mut theme = Self::default();
 
         let read = |var: &str, fallback: Color| -> Color {
@@ -201,7 +233,14 @@ impl ColorTheme {
             theme.thought_timestamp,
         );
         theme.response_arrow = read(tmux::SIDEBAR_COLOR_RESPONSE_ARROW, theme.response_arrow);
+        theme.cmd_command = read(tmux::SIDEBAR_COLOR_CMD_COMMAND, theme.cmd_command);
+        theme.cmd_flag = read(tmux::SIDEBAR_COLOR_CMD_FLAG, theme.cmd_flag);
+        theme.cmd_string = read(tmux::SIDEBAR_COLOR_CMD_STRING, theme.cmd_string);
+        theme.cmd_variable = read(tmux::SIDEBAR_COLOR_CMD_VARIABLE, theme.cmd_variable);
+        theme.cmd_operator = read(tmux::SIDEBAR_COLOR_CMD_OPERATOR, theme.cmd_operator);
+        theme.cmd_comment = read(tmux::SIDEBAR_COLOR_CMD_COMMENT, theme.cmd_comment);
         theme.focus_border = read(tmux::SIDEBAR_COLOR_FOCUS_BORDER, theme.focus_border);
+        theme.tab_separator = read(tmux::SIDEBAR_COLOR_TAB_SEPARATOR, theme.tab_separator);
 
         theme
     }
@@ -226,6 +265,21 @@ impl ColorTheme {
             AgentType::Codex => self.agent_codex,
             AgentType::OpenCode => self.agent_opencode,
             AgentType::Pi => self.agent_pi,
+        }
+    }
+
+    /// The color of one shell-token class in the Tools tab. An argument
+    /// keeps the muted text color the whole label used before, so the
+    /// unhighlighted base stays the one the user already tunes.
+    pub fn cmd_class_color(&self, class: Class) -> Color {
+        match class {
+            Class::Arg => self.text_muted,
+            Class::Command => self.cmd_command,
+            Class::Flag => self.cmd_flag,
+            Class::Str => self.cmd_string,
+            Class::Variable => self.cmd_variable,
+            Class::Operator => self.cmd_operator,
+            Class::Comment => self.cmd_comment,
         }
     }
 }

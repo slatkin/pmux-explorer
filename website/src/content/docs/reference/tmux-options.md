@@ -51,7 +51,8 @@ up when it docks on the right.
 
 | Option                     | Default              | What it paints                                                                                          |
 | -------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------- |
-| `@sidebar_color_border`    | `240`&nbsp;(dark gray)    | Unfocused panel borders and tab separators                                                              |
+| `@sidebar_color_border`    | `240`&nbsp;(dark gray)    | Unfocused panel borders                                                              |
+| `@sidebar_color_tab_separator` | `#9aa5ce`&nbsp;(grey) | The ` \| ` delimiter between the bottom-panel tab glyphs on the rule |
 | `@sidebar_color_accent`    | `#7aa2f7`&nbsp;(blue) | Active pane marker, focused repo header, displayed bottom tab, repo popup border — the brand color |
 | `@sidebar_color_session`   | `#7dcfff`&nbsp;(cyan)          | Session name                                                                                            |
 | `@sidebar_color_selection` | `#414868`&nbsp;(dark blue-gray)    | Selected row background                                                                                 |
@@ -115,6 +116,21 @@ up when it docks on the right.
 | `@sidebar_color_section_title`        | `#2ac3de`&nbsp;(cyan) | Section titles      |
 | `@sidebar_color_activity_timestamp`   | `#2ac3de`&nbsp;(cyan) | Activity timestamps |
 | `@sidebar_color_thought_timestamp`    | `#e0af68`&nbsp;(yellow) | Thought tab's `HH:mm:ss` time line |
+
+## Shell command token colors (Tools tab)
+
+The Tools tab colors the label of a `Bash` or `Monitor` entry by token
+class. Argument words keep the muted text color
+(`@sidebar_color_text_muted`).
+
+| Option                              | Default                    | What it paints             |
+| ----------------------------------- | -------------------------- | -------------------------- |
+| `@sidebar_color_cmd_command`        | `#7aa2f7`&nbsp;(blue)      | The command word           |
+| `@sidebar_color_cmd_flag`           | `#7dcfff`&nbsp;(cyan)      | Flags (`--release`)        |
+| `@sidebar_color_cmd_string`         | `#e0af68`&nbsp;(yellow)    | Quoted text                |
+| `@sidebar_color_cmd_variable`       | `#bb9af7`&nbsp;(purple)    | `$variables` and `NAME=value` assignments |
+| `@sidebar_color_cmd_operator`       | `#89ddff`&nbsp;(cyan)      | Separators and redirections (`\|`, `&&`, `2>&1`) |
+| `@sidebar_color_cmd_comment`        | `#565f89`&nbsp;(grey-blue) | `#` comments               |
 
 ## Status icons
 

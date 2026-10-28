@@ -122,6 +122,16 @@ pub(crate) fn sanitize_tmux_value(s: &str) -> String {
     s.replace(['\n', '|'], " ")
 }
 
+/// Canonicalize a label before writing it to the activity log. The log is
+/// one entry per line, so only `\n` and `\r` must become a space; a `|`
+/// inside a label is kept, because `parse_entry` reads the label with
+/// `splitn(3, '|')`, which leaves every later `|` in the third field.
+/// The pane-option writes keep [`sanitize_tmux_value`], where the `|`
+/// replacement is what keeps a stored value a single field.
+pub(crate) fn sanitize_log_label(s: &str) -> String {
+    s.replace(['\n', '\r'], " ")
+}
+
 // ─── channel-ready subcommand ─────────────────────────────────────────────
 
 /// Run `channel-ready`: one arm request to this pane's endpoint.
@@ -447,6 +457,34 @@ mod tests {
     #[test]
     fn sanitize_consecutive_pipes_and_newlines() {
         assert_eq!(sanitize_tmux_value("a||\n\nb"), "a    b");
+    }
+
+    // ─── sanitize_log_label tests ────────────────────────────────────
+
+    #[test]
+    fn sanitize_log_label_replaces_newlines() {
+        assert_eq!(
+            sanitize_log_label("line1\nline2\nline3"),
+            "line1 line2 line3"
+        );
+    }
+
+    #[test]
+    fn sanitize_log_label_replaces_carriage_returns() {
+        assert_eq!(sanitize_log_label("a\rb"), "a b");
+    }
+
+    #[test]
+    fn sanitize_log_label_keeps_pipes() {
+        assert_eq!(
+            sanitize_log_label("cat file | grep foo bar"),
+            "cat file | grep foo bar"
+        );
+    }
+
+    #[test]
+    fn sanitize_log_label_empty() {
+        assert_eq!(sanitize_log_label(""), "");
     }
 
     // ─── local_time_hhmm tests ──────────────────────────────────────
