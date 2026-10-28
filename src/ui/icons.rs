@@ -2,6 +2,10 @@ use std::collections::HashMap;
 
 use crate::tmux::{self, PaneStatus};
 
+/// Nerd Font glyph shown instead of the OpenCode agent label in a row's
+/// status line, padded one cell on each side on a black background.
+pub const OPENCODE_AGENT_GLYPH: &str = "\u{f0afc}";
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StatusIcons {
     /// Icon for the "All" filter in the top filter bar.

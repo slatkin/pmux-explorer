@@ -14,7 +14,7 @@ pub struct OpenCodeAdapter;
 /// a single vocabulary across agents.
 fn normalize_tool_name(raw: &str) -> String {
     let canonical = match raw {
-        "bash" => CanonicalTool::Bash,
+        "bash" | "shell" => CanonicalTool::Bash,
         "read" => CanonicalTool::Read,
         "write" => CanonicalTool::Write,
         "edit" | "multiedit" => CanonicalTool::Edit,
@@ -202,6 +202,35 @@ mod tests {
                 assert_eq!(tool_name, "Bash");
                 assert_eq!(tool_input["command"], "ls");
                 assert_eq!(tool_response["stdout"], "file.txt");
+            }
+            other => panic!("expected ActivityLog, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn activity_log_normalizes_shell_tool_to_bash() {
+        // OpenCode 2 ships both `bash` and `shell` (its persistent shell
+        // tool); both are command execution for the sidebar.
+        let adapter = OpenCodeAdapter;
+        let event = adapter
+            .parse(
+                "activity-log",
+                &json!({
+                    "tool_name": "shell",
+                    "tool_input": {"command": "ls -la", "workdir": "/tmp"},
+                    "tool_response": {"output": "file.txt"}
+                }),
+            )
+            .unwrap();
+        match event {
+            AgentEvent::ActivityLog {
+                tool_name,
+                tool_input,
+                ..
+            } => {
+                assert_eq!(tool_name, "Bash");
+                assert_eq!(tool_input["command"], "ls -la");
+                assert_eq!(tool_input["workdir"], "/tmp");
             }
             other => panic!("expected ActivityLog, got {:?}", other),
         }

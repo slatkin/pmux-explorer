@@ -26,7 +26,11 @@ pub(super) fn status_row(
     // `select-pane -T`) is appended after the badge slot, so the subagent
     // badge (♟ / ↻) and a permission badge sit between the agent label and
     // the pane name. Only the pane's own name is shown in the title slot —
-    // never the tmux session name.
+    // never the tmux session name. OpenCode renders its label as a padded
+    // Nerd glyph chip on a black background instead of the word, since the
+    // agent's own OSC title ("OpenCode") is filtered from the name slot and
+    // would only duplicate the label.
+    let agent_is_opencode = pane.agent == crate::tmux::AgentType::OpenCode;
     let agent_label = pane.agent.label();
     // A subagent pane owns the badge slot: a pi pane always has the default
     // permission mode, whose badge is empty, so the pmux identity can use it.
@@ -47,8 +51,12 @@ pub(super) fn status_row(
     };
 
     let badge_extra = if badge.is_empty() { 0 } else { 1 };
-    let fixed_width =
-        display_width(icon) + 1 + display_width(agent_label) + badge_extra + display_width(badge);
+    let agent_width = if agent_is_opencode {
+        1 + display_width(crate::ui::icons::OPENCODE_AGENT_GLYPH)
+    } else {
+        1 + display_width(agent_label)
+    };
+    let fixed_width = display_width(icon) + agent_width + badge_extra + display_width(badge);
     // Reserve room for the icon, the agent label, the badge, and the
     // elapsed label; the pane name gets what remains and takes the
     // ellipsis when cut. The agent label itself is never truncated, and
@@ -78,10 +86,25 @@ pub(super) fn status_row(
         icon.to_string(),
         ctx.apply_bg(Style::default().fg(icon_color)),
     ));
-    left_spans.push(Span::styled(
-        format!(" {agent_label}"),
-        ctx.apply_bg(Style::default().fg(title_fg)),
-    ));
+    if agent_is_opencode {
+        // One row-background cell after the status icon first, so the chip
+        // sits in the same column as the other agents' labels instead of
+        // touching the status icon.
+        left_spans.push(Span::styled(" ", ctx.apply_bg(Style::default())));
+        left_spans.push(Span::styled(
+            crate::ui::icons::OPENCODE_AGENT_GLYPH.to_string(),
+            // Literal black/white, not ANSI: the chip must stay a white
+            // glyph on black under any terminal palette.
+            Style::default()
+                .fg(Color::Rgb(255, 255, 255))
+                .bg(Color::Rgb(0, 0, 0)),
+        ));
+    } else {
+        left_spans.push(Span::styled(
+            format!(" {agent_label}"),
+            ctx.apply_bg(Style::default().fg(title_fg)),
+        ));
+    }
     if !badge.is_empty() {
         let badge_color = badge_override.unwrap_or(match pane.permission_mode {
             PermissionMode::BypassPermissions => theme.badge_danger,

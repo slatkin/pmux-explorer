@@ -419,14 +419,20 @@ fn parse_pane_fields_with_processes(
     // is empty, equals the host, or matches an agent's OSC prefix is not
     // a name. `automatic-rename` only affects the window name, so it does
     // not enter the gate. Known gap: agent-set titles other than pi's and
-    // Claude's (Codex, opencode) are not filtered and show as pane names.
-    // A title that carries an em dash keeps only the text before it: the
+    // Claude's (Codex) are not filtered and show as pane names. OpenCode's
+    // own titles ("OpenCode" before a session exists, "OC | <session>"
+    // after) are filtered: the status row already carries the agent glyph,
+    // so the title would only duplicate it. A title that
+    // carries an em dash keeps only the text before it: the
     // suffix (a branch, a status, a cwd) is decoration, not the name.
     let pane_title = &parts[pane_line_field::PANE_TITLE];
+    let is_opencode_title = agent == AgentType::OpenCode
+        && (pane_title.starts_with("OpenCode") || pane_title.starts_with("OC"));
     let pane_name = if !pane_title.is_empty()
         && pane_title != parts[pane_line_field::HOST].as_str()
         && !pane_title.starts_with("π - ")
         && !pane_title.starts_with("✳ ")
+        && !is_opencode_title
     {
         let before_dash = pane_title.split('—').next().unwrap_or(pane_title);
         Some(before_dash.trim().to_string()).filter(|s| !s.is_empty())
@@ -1056,6 +1062,7 @@ mod tests {
             ("myhost", None),                  // tmux default: the host name
             ("π - send-report-channel", None), // pi's OSC title
             ("✳ Claude Code", None),           // Claude Code's OSC title
+            ("OpenCode", Some("OpenCode")),    // opencode's title, but this pane is claude: kept
             ("", None),                        // empty title
             ("edit — fix bug", Some("edit")),  // em dash: keep only the text before it
             ("edit—fix bug", Some("edit")),    // em dash with no surrounding spaces
@@ -1068,6 +1075,41 @@ mod tests {
             fields[pane_line_field::PANE_TITLE] = title;
             let pane = parse_pane_line(&make_pane_line(&fields)).unwrap();
             assert_eq!(pane.pane_name.as_deref(), expected, "title: {title:?}");
+        }
+    }
+
+    #[test]
+    fn parse_pane_line_pane_name_gate_opencode_titles() {
+        // OpenCode sets its own pane titles: "OpenCode" before a session
+        // exists and "OC | <session title>" after. Both are agent chrome,
+        // not pane names — but only for opencode panes; another agent's
+        // pane with a hand-set "OC" title keeps its name.
+        let cases = [
+            ("opencode", "OpenCode", None),
+            // A literal "|" cannot appear in these fixtures: the pane-line
+            // format is pipe-joined, so a pipe in a real title shifts the
+            // fields (known separate defect).
+            ("opencode", "OC - Chili Wind identity question", None),
+            ("opencode", "OC", None),
+            (
+                "claude",
+                "OC - Chili Wind identity question",
+                Some("OC - Chili Wind identity question"),
+            ),
+        ];
+        for (agent, title, expected) in cases {
+            let mut fields = full_fields();
+            fields[pane_line_field::AGENT] = agent;
+            // An opencode pane whose current command is a shell trips the
+            // poll-side stale-agent sweep, which rejects the line entirely.
+            fields[pane_line_field::PANE_CURRENT_COMMAND] = "opencode";
+            fields[pane_line_field::PANE_TITLE] = title;
+            let pane = parse_pane_line(&make_pane_line(&fields)).unwrap();
+            assert_eq!(
+                pane.pane_name.as_deref(),
+                expected,
+                "agent: {agent} title: {title:?}"
+            );
         }
     }
 

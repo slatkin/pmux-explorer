@@ -24,7 +24,7 @@
 - **Desktop notifications** 
   — native alerts when an agent finishes, needs permission, or errors out
 
-OpenCode uses a small local plugin bridge instead of per-event hook config. The plugin lives at `.opencode/plugins/pmux-explorer.js` and can be symlinked as a single file into `~/.config/opencode/plugins/` so it coexists with any existing plugins.
+OpenCode uses a small local plugin bridge instead of per-event hook config. The bridge targets the OpenCode 2 plugin API, lives at `plugins/opencode/pmux-explorer.js`, and can be symlinked as a single file into `~/.config/opencode/plugins/` so it coexists with any existing plugins.
 
 pi is supported through the pmux extension: pmux ships a pi extension that loads in every pi session and publishes the session's activity to the sidebar.
 
@@ -60,7 +60,7 @@ Reload tmux (`tmux source ~/.tmux.conf`), then press `prefix + I`. The install w
 
   ```sh
   mkdir -p ~/.config/opencode/plugins
-  ln -sf ~/.tmux/plugins/pmux-explorer/.opencode/plugins/pmux-explorer.js \
+  ln -sf ~/.tmux/plugins/pmux-explorer/plugins/opencode/pmux-explorer.js \
     ~/.config/opencode/plugins/pmux-explorer.js
   ```
 
