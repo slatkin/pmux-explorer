@@ -54,10 +54,13 @@ pub(super) fn render_filter_bar<'a>(state: &AppState, width: u16) -> (Line<'a>, 
         return (Line::from(Vec::new()), None);
     };
 
+    let first_col = switch_col.unwrap_or(popout_col);
     let mut spans: Vec<Span<'a>> = Vec::new();
-    // The leading gutter column, skipped when the controls own the
-    // whole row (a one- or two-column row).
-    if popout_col > 0 {
+    // The leading gutter column, skipped when the leftmost control
+    // owns column 0 (a one-column row, or the four-column row where
+    // the side switch is leftmost). Gating on the pop-out column alone
+    // would draw a gutter on top of the switch's hitbox there.
+    if first_col > 0 {
         spans.push(Span::raw(" "));
     }
 
@@ -106,7 +109,6 @@ pub(super) fn render_filter_bar<'a>(state: &AppState, width: u16) -> (Line<'a>, 
     // button. Every drawn column ends at or before the leftmost
     // control: the last drawn chip, or the leading gutter when every
     // chip was dropped.
-    let first_col = switch_col.unwrap_or(popout_col);
     let drawn_end = chips
         .last()
         .map_or(first_col.min(1), |chip| chip.start + chip.width);
@@ -553,9 +555,11 @@ mod tests {
             assert_eq!(col, Some(width.saturating_sub(2)));
             assert_eq!(display_width(&text), width as usize);
         }
-        // At 4 columns the pair just fits: switch at 0, pop-out at 2.
+        // At 4 columns the pair just fits: switch at 0, pop-out at 2 —
+        // no leading gutter, or it would draw on the switch's column
+        // and push both glyphs one column right of their hitboxes.
         let (line, col) = render_filter_bar(&state, 4);
-        insta::assert_snapshot!(line_text(&line), @" ⇄ ⤢");
+        insta::assert_snapshot!(line_text(&line), @"⇄ ⤢");
         assert_eq!(col, Some(2));
     }
 

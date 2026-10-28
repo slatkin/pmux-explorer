@@ -2,10 +2,13 @@
 //!
 //! The side lives in the global `@sidebar_position` tmux option — the
 //! one source of truth `cli/toggle.rs` creates sidebars from. The
-//! action flips that side and moves every window's sidebar pane to the
-//! opposite edge with `join-pane`, in one sweep over a single
-//! `list-panes -a` listing (see `tmux::switch_sidebar_sides`). The
-//! option is written even when some windows were skipped, so sidebars
+//! action reads this pane's own edge (`#{pane_left}` — the option
+//! only as a fallback) so the direction is always "opposite of where
+//! this sidebar sits", even in a mixed layout a skipped earlier
+//! switch left behind. It then moves every window's sidebar pane to
+//! the opposite edge with `join-pane`, in one sweep over a single
+//! `list-panes -a` listing (see `tmux::switch_sidebar_sides`), and
+//! writes the option even when some windows were skipped, so sidebars
 //! created later follow the new side; skipped windows keep their old
 //! side until the next switch.
 //!
@@ -49,10 +52,21 @@ impl AppState {
         if self.sidebar_pane.floating {
             return;
         }
-        let current = SidebarPosition::from_setting(&tmux::display_message(
+        // The direction comes off this pane's own edge: a window an
+        // earlier switch skipped still docks on the old side while the
+        // option already names the new one, and "opposite edge" is
+        // the pane's. The option is the fallback for a pane whose
+        // geometry tmux will not say (a dead socket).
+        let current = SidebarPosition::from_pane_left(&tmux::display_message(
             &self.tmux_pane,
-            &format!("#{{{}}}", tmux::SIDEBAR_POSITION),
-        ));
+            "#{pane_left}",
+        ))
+        .unwrap_or_else(|| {
+            SidebarPosition::from_setting(&tmux::display_message(
+                &self.tmux_pane,
+                &format!("#{{{}}}", tmux::SIDEBAR_POSITION),
+            ))
+        });
         let new_side = current.opposite();
         let (moved, skipped) = tmux::switch_sidebar_sides(new_side);
         tmux::run_tmux(&["set", "-g", tmux::SIDEBAR_POSITION, new_side.as_setting()]);

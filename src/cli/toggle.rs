@@ -206,6 +206,21 @@ impl SidebarPosition {
         }
     }
 
+    /// The side a sidebar pane docks on, read off its own
+    /// `#{pane_left}`: column 0 is the left edge, anything else is
+    /// the right. `None` when tmux did not answer with a column (a
+    /// dead socket in tests), so the caller can fall back to the
+    /// option. The side switch derives its direction from the pane,
+    /// not the option — in a mixed layout the two can disagree, and
+    /// the spec's "opposite edge" is the pane's.
+    pub(crate) fn from_pane_left(pane_left: &str) -> Option<Self> {
+        match pane_left.trim().parse::<u32>() {
+            Ok(0) => Some(Self::Left),
+            Ok(_) => Some(Self::Right),
+            Err(_) => None,
+        }
+    }
+
     /// The option value this side writes back to `@sidebar_position`
     /// (the lowercase spelling the config seeds and `from_setting`
     /// parses).

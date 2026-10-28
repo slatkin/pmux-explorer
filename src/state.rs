@@ -1236,7 +1236,7 @@ mod tests {
         // term_height=50, bottom panel 20 → rule at row 30. The press
         // starts a split drag (any press column resizes — decision 4);
         // only the release, if the mouse never left the rule, selects.
-        assert!(state.handle_terminal_click(30, 17, 50));
+        assert!(state.handle_terminal_click(30, 15, 50));
         assert_eq!(
             state.global.bottom_tab,
             BottomTab::GitStatus,
@@ -1308,7 +1308,7 @@ mod tests {
         // would have put the boundary at row 18 and swallowed this click.
         // The press starts a drag on the drawn geometry; the unmoved
         // release is the click that selects.
-        assert!(state.handle_terminal_click(26, 17, 38));
+        assert!(state.handle_terminal_click(26, 15, 38));
         assert_eq!(state.global.bottom_tab, BottomTab::GitStatus);
         state.end_split_drag(38);
         assert_eq!(state.global.bottom_tab, BottomTab::Activity);
@@ -1400,8 +1400,8 @@ mod tests {
         state.global.bottom_percent = 30;
         crate::ui::bottom::draw_tab_targets(&mut state, 40);
 
-        // Press on col 21, the centered Git glyph.
-        assert!(state.handle_terminal_click(28, 21, 40));
+        // Press on col 23, the centered Git glyph.
+        assert!(state.handle_terminal_click(28, 23, 40));
         assert_eq!(
             state.global.bottom_tab,
             BottomTab::Activity,
@@ -1413,7 +1413,7 @@ mod tests {
         assert_eq!(
             state.global.bottom_tab,
             BottomTab::GitStatus,
-            "col 21 is the Git glyph"
+            "col 23 is the Git glyph"
         );
         assert_eq!(
             state.global.bottom_percent, 30,
@@ -1453,8 +1453,8 @@ mod tests {
         state.global.bottom_tab = BottomTab::Tasks;
         crate::ui::bottom::draw_tab_targets(&mut state, 40);
 
-        // Press on col 12, inside the Tasks label, then drag.
-        state.handle_terminal_click(28, 12, 40);
+        // Press on col 19, the Tasks glyph, then drag.
+        state.handle_terminal_click(28, 19, 40);
         state.handle_split_drag_move(20, 40);
         state.end_split_drag(40);
 
@@ -1550,7 +1550,7 @@ mod tests {
         // An unmoved press on the Tasks glyph, then a second press on
         // the Git glyph (both on the drawn rule row 37 = 40 - 3).
         state.handle_terminal_click(37, 19, 40);
-        state.handle_terminal_click(37, 21, 40);
+        state.handle_terminal_click(37, 23, 40);
 
         assert_eq!(
             state.global.bottom_percent, 1,
@@ -1568,7 +1568,7 @@ mod tests {
         let drag = state
             .split_drag
             .expect("the new press started a fresh drag");
-        assert_eq!(drag.press_col, 21);
+        assert_eq!(drag.press_col, 23);
 
         state.end_split_drag(40);
         assert_eq!(

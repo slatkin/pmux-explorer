@@ -137,10 +137,17 @@ pub fn move_pane(pane: &str, x: u16, y: u16) -> Result<(), String> {
 /// workspace pane on the new side (see `target_pane_for_position`);
 /// the joined pane spans the full window height (`-h -f`, tmux 3.8)
 /// and lands before the target for a left move (`-b`), after it for a
-/// right move. Kept separate from the tmux call, like the other
-/// builders here, so a unit test can assert the exact arguments.
+/// right move. `-d` keeps the window's active pane — without it the
+/// just-moved sidebar steals focus in every window the sweep touches.
+/// Kept separate from the tmux call, like the other builders here, so
+/// a unit test can assert the exact arguments.
 fn join_pane_side_move_args(pane: &str, target: &str, position: SidebarPosition) -> Vec<String> {
-    let mut args = vec!["join-pane".to_string(), "-h".to_string(), "-f".to_string()];
+    let mut args = vec![
+        "join-pane".to_string(),
+        "-h".to_string(),
+        "-f".to_string(),
+        "-d".to_string(),
+    ];
     if position == SidebarPosition::Left {
         args.push("-b".to_string());
     }
@@ -267,10 +274,11 @@ pub(crate) fn side_switch_target(
 
 /// The sweep core over already-parsed records: move every window's
 /// sidebar to the new side and count moved and skipped windows. A
-/// window skips when it has no usable target (see
-/// [`side_switch_target`]) or when tmux refuses the move (a zoomed
-/// window, for one); the injected `mover` keeps the counting
-/// unit-testable without a live tmux.
+/// window with no sidebar is not a participant — it is neither moved
+/// nor skipped, so the count names only the sidebars the sweep could
+/// not move: no usable target (see [`side_switch_target`]) or tmux
+/// refused the move (a zoomed window, for one). The injected `mover`
+/// keeps the counting unit-testable without a live tmux.
 fn sweep_side_switch<F>(
     records: &[WindowSweepRecord],
     position: SidebarPosition,
@@ -282,6 +290,9 @@ where
     let mut moved = 0;
     let mut skipped = 0;
     for record in records {
+        if record.sidebar.is_none() {
+            continue;
+        }
         match side_switch_target(record, position) {
             None => skipped += 1,
             Some((sidebar, target)) => match mover(&sidebar, &target) {
@@ -295,8 +306,10 @@ where
 
 /// Move the sidebar of every window to `position` in one sweep, from a
 /// single `list-panes -a` listing. Returns the counts of moved and
-/// skipped windows: a floating sidebar skips without a tmux call, and
-/// any refused `join-pane` (e.g. a zoomed window) skips too.
+/// skipped windows over the sidebar-bearing windows only: a floating
+/// sidebar skips without a tmux call, and any refused `join-pane`
+/// (e.g. a zoomed window) skips too. A window with no sidebar does
+/// not count toward either number.
 pub(crate) fn switch_sidebar_sides(position: SidebarPosition) -> (usize, usize) {
     let format = format!(
         "#{{window_id}}|#{{pane_id}}|#{{{}}}|#{{pane_floating_flag}}|#{{window_zoomed_flag}}|#{{pane_left}}|#{{pane_width}}",
@@ -477,11 +490,11 @@ mod tests {
         // the right joins after it; both span the full window height.
         assert_eq!(
             join_pane_side_move_args("%5", "%2", SidebarPosition::Left),
-            vec!["join-pane", "-h", "-f", "-b", "-s", "%5", "-t", "%2"]
+            vec!["join-pane", "-h", "-f", "-d", "-b", "-s", "%5", "-t", "%2"]
         );
         assert_eq!(
             join_pane_side_move_args("%5", "%2", SidebarPosition::Right),
-            vec!["join-pane", "-h", "-f", "-s", "%5", "-t", "%2"]
+            vec!["join-pane", "-h", "-f", "-d", "-s", "%5", "-t", "%2"]
         );
     }
 
@@ -567,8 +580,9 @@ mod tests {
     #[test]
     fn sweep_counts_a_refused_move_as_skipped() {
         // The mover refuses every call: no window counts as moved, one
-        // skip per window that had a usable target, and the floating
-        // and sidebar-only windows skip without a call at all.
+        // skip per sidebar-bearing window, and the floating and zoomed
+        // windows skip without a call at all. The sidebar-less @5 is
+        // not counted — a window with no sidebar is not a participant.
         let records = sweep_records();
         let mut called = Vec::new();
         let (moved, skipped) =
@@ -576,9 +590,9 @@ mod tests {
                 called.push((sidebar.to_string(), target.to_string()));
                 Err("can't rearrange".to_string())
             });
-        assert_eq!((moved, skipped), (0, 5));
+        assert_eq!((moved, skipped), (0, 4));
         // Only the two windows with a usable target were called; the
-        // floating and sidebar-only ones never reached tmux.
+        // floating and zoomed ones never reached tmux.
         assert_eq!(called.len(), 2);
         assert_eq!(called[0], ("%2".to_string(), "%3".to_string()));
     }
@@ -587,6 +601,8 @@ mod tests {
     fn sweep_counts_successful_moves_and_leaves_skips_out_of_the_count() {
         let records = sweep_records();
         let (moved, skipped) = sweep_side_switch(&records, SidebarPosition::Right, |_, _| Ok(()));
-        assert_eq!((moved, skipped), (2, 3));
+        // Two moves, two skips (the floating and zoomed sidebars) —
+        // the sidebar-less window counts toward neither.
+        assert_eq!((moved, skipped), (2, 2));
     }
 }

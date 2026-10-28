@@ -36,7 +36,7 @@ fn snapshot_single_agent_idle_ui() {
     project
     ┃ 󰒲 
         Waiting for prompt…
-               ││󰊢
+              │  │ 󰊢
             No tools yet
     ");
 }
@@ -70,7 +70,7 @@ fn snapshot_secondary_header_without_notices() {
     project
     ┃ 󰒲 
         Waiting for prompt…
-               ││󰊢
+              │  │ 󰊢
             No tools yet
     ");
 }
@@ -100,7 +100,7 @@ fn snapshot_secondary_header_long_repo_filter_truncated() {
     very-long-repository-name-th
     ┃ 󰒲 
         Waiting for prompt…
-               ││󰊢
+              │  │ 󰊢
             No tools yet
     ");
 }
@@ -160,7 +160,7 @@ fn snapshot_single_agent_running_with_elapsed() {
     ⓘ                        — ▾
     dotfiles
     ┃                     2m5s
-               ││󰊢
+              │  │ 󰊢
             No tools yet
     ");
 }
@@ -190,7 +190,7 @@ fn snapshot_long_pane_name_truncated_keeps_elapsed_visible() {
     ⓘ                        — ▾
     dotfiles
     ┃   this-is-a-ridicu… 2m5s
-               ││󰊢
+              │  │ 󰊢
             No tools yet
     ");
 }
@@ -218,7 +218,7 @@ fn running_spinner_different_frame() {
     ⓘ                        — ▾
     project
     ┃  
-               ││󰊢
+              │  │ 󰊢
             No tools yet
     ");
 }
@@ -248,7 +248,7 @@ fn snapshot_agent_with_prompt_ui() {
     project
     ┃ 󰒲 
         fix the bug
-               ││󰊢
+              │  │ 󰊢
             No tools yet
     ");
 }
@@ -280,7 +280,7 @@ fn snapshot_agent_with_japanese_prompt_ui() {
         こ れ っ て 今 1時 間 経 っ て い
         る け ど 、 起 動 し て 確 認 し て
         も 問 題 な い ？
-               ││󰊢
+              │  │ 󰊢
             No tools yet
     ");
 }
@@ -354,7 +354,7 @@ fn snapshot_two_agents_same_window_ui() {
         fix the bug
       󰒲 codex
         Waiting for prompt…
-               ││󰊢
+              │  │ 󰊢
             No tools yet
     ");
 }
@@ -402,7 +402,7 @@ fn snapshot_two_windows_ui() {
     project-b
       󰒲 codex
         Waiting for prompt…
-               ││󰊢
+              │  │ 󰊢
             No tools yet
     ");
 }
@@ -453,7 +453,7 @@ fn snapshot_multi_session_ui() {
     api
       󰒲 codex
         Waiting for prompt…
-               ││󰊢
+              │  │ 󰊢
             No tools yet
     ");
 }
@@ -483,7 +483,7 @@ fn snapshot_wait_reason_ui() {
     project
     ┃ 󰥔 
         permission required
-               ││󰊢
+              │  │ 󰊢
             No tools yet
     ");
 }
@@ -513,7 +513,7 @@ fn snapshot_auto_rename_window_title_ui() {
     project
     ┃ 󰒲 
         Waiting for prompt…
-               ││󰊢
+              │  │ 󰊢
             No tools yet
     ");
 }
@@ -558,7 +558,7 @@ fn snapshot_activity_log_ui() {
     ⓘ                        — ▾
     project
     ┃  
-               ││󰊢
+              │  │ 󰊢
     10:32                   Edit
       src/main.rs
     10:31                   Bash
@@ -596,7 +596,7 @@ fn snapshot_activity_log_long_label_ui() {
     ⓘ                        — ▾
     project
     ┃  
-               ││󰊢
+              │  │ 󰊢
     10:32                   Read
       config/pmux-explorer-rs/sr
       c/very-long-filename.rs
@@ -632,7 +632,7 @@ fn snapshot_prompt_wrapping_ui() {
         Please fix the
         authentication bug in
         the login flow that…
-               ││󰊢
+              │  │ 󰊢
             No tools yet
     ");
 }
@@ -661,7 +661,7 @@ fn snapshot_selected_unfocused_ui() {
     project
     ┃ 󰒲 
         Waiting for prompt…
-               ││󰊢
+              │  │ 󰊢
             No tools yet
     ");
 }
@@ -691,7 +691,7 @@ fn snapshot_error_state_ui() {
     project
     ┃  
         something broke
-               ││󰊢
+              │  │ 󰊢
             No tools yet
     ");
 }
@@ -721,7 +721,7 @@ fn snapshot_narrow_width_ui() {
     project
     ┃ 󰒲 
         hello world
-          ││󰊢
+         │  │ 󰊢
        No tools yet
     ");
 }
@@ -772,7 +772,7 @@ fn snapshot_worktree_branch_ui() {
     ┃  
     ┃    + feature/sidebar
         fix bug
-               ││󰊢
+              │  │ 󰊢
             No tools yet
     ");
 }
@@ -800,7 +800,7 @@ fn snapshot_worktree_long_branch_truncated_ui() {
     ┃ 󰒲 
     ┃    + feature/very-long-b…
         Waiting for prompt…
-               ││󰊢
+              │  │ 󰊢
             No tools yet
     ");
 }
@@ -828,7 +828,7 @@ fn snapshot_long_branch_with_ports_ui() {
     project                                +
     ┃  
     ┃    feature/sidebar/real…  :3000, 5173
-                     ││󰊢
+                    │  │ 󰊢
                   No tools yet
     ");
 }
@@ -859,7 +859,7 @@ fn snapshot_task_progress_partial_ui() {
     ┃  
         ✔◼◻ 1/3
         working
-               ││󰊢
+              │  │ 󰊢
             No tools yet
     ");
 }
@@ -885,7 +885,7 @@ fn snapshot_task_progress_all_completed_ui() {
     project
     ┃  
         ✔✔ 2/2
-               ││󰊢
+              │  │ 󰊢
             No tools yet
     ");
 }
@@ -912,7 +912,7 @@ fn snapshot_task_progress_all_pending_ui() {
     project
     ┃  
         ◻◻◻ 0/3
-               ││󰊢
+              │  │ 󰊢
             No tools yet
     ");
 }
@@ -961,7 +961,7 @@ fn snapshot_all_elements_combined_ui() {
         └ Plan #2
         permission required
         fixing the bug
-                ││󰊢
+               │  │ 󰊢
              No tools yet
     ");
 }
@@ -983,7 +983,7 @@ fn snapshot_response_japanese_ui() {
     ┃ 󰒲 
       󰭹 修 正 が 完 了 し ま し た 。 テ ス ト
         も 全 て 通 っ て い ま す 。
-                ││󰊢
+               │  │ 󰊢
              No tools yet
     ");
 }
@@ -1021,7 +1021,7 @@ fn snapshot_three_groups_middle_focused_ui() {
     repo-c
       󰒲 
         Waiting for prompt…
-               ││󰊢
+              │  │ 󰊢
             No tools yet
     ");
 }
@@ -1041,7 +1041,7 @@ fn snapshot_bypass_all_badge_ui() {
     ⓘ                        — ▾
     project
     ┃   !
-               ││󰊢
+              │  │ 󰊢
             No tools yet
     ");
 }
@@ -1059,7 +1059,7 @@ fn snapshot_full_auto_badge_ui() {
     ⓘ                        — ▾
     project
     ┃   auto
-               ││󰊢
+              │  │ 󰊢
             No tools yet
     ");
 }
@@ -1077,7 +1077,7 @@ fn snapshot_plan_badge_ui() {
     ⓘ                        — ▾
     project
     ┃   plan
-               ││󰊢
+              │  │ 󰊢
             No tools yet
     ");
 }
@@ -1095,7 +1095,7 @@ fn snapshot_accept_edits_badge_ui() {
     ⓘ                        — ▾
     project
     ┃   edit
-               ││󰊢
+              │  │ 󰊢
             No tools yet
     ");
 }
@@ -1125,7 +1125,7 @@ fn snapshot_response_with_branch_ui() {
     ┃ 󰒲 
     ┃    feature/ui-v2
       󰭹 Done. All tests are green.
-                  ││󰊢
+                 │  │ 󰊢
                No tools yet
     ");
 }
@@ -1146,7 +1146,7 @@ fn snapshot_wait_reason_elicitation_ui() {
     project
     ┃ 󰥔 
         waiting for selection
-               ││󰊢
+              │  │ 󰊢
             No tools yet
     ");
 }
@@ -1165,7 +1165,7 @@ fn snapshot_wait_reason_unknown_ui() {
     project
     ┃ 󰥔 
         some_future_reason
-               ││󰊢
+              │  │ 󰊢
             No tools yet
     ");
 }
@@ -1186,7 +1186,7 @@ fn snapshot_wait_reason_permission_denied_ui() {
     project
     ┃ 󰥔 
         permission denied
-               ││󰊢
+              │  │ 󰊢
             No tools yet
     ");
 }
@@ -1215,7 +1215,7 @@ fn snapshot_worktree_with_name_ui() {
     project                    +
     ┃  
     ┃    + auth-wt: feat/auth
-               ││󰊢
+              │  │ 󰊢
             No tools yet
     ");
 }
@@ -1242,7 +1242,7 @@ fn snapshot_worktree_name_same_as_branch_ui() {
     project                    +
     ┃  
     ┃    + feat/auth
-               ││󰊢
+              │  │ 󰊢
             No tools yet
     ");
 }
@@ -1298,7 +1298,7 @@ fn snapshot_activity_all_tool_types_ui() {
     ⓘ                        — ▾
     project
     ┃  
-               ││󰊢
+              │  │ 󰊢
     10:07                  Agent
       Explore codebase
     10:06                  Skill
@@ -1328,7 +1328,7 @@ fn snapshot_focus_activity_log_ui() {
     ⓘ                        — ▾
     project
     ┃  
-               ││󰊢
+              │  │ 󰊢
     10:00                   Read
       file.rs
     ");
@@ -1354,7 +1354,7 @@ fn right_border_narrow_width_with_badge() {
     project
     ┃   !         2h0m0s
         fix the issue
-            ││󰊢
+           │  │ 󰊢
          No tools yet
     ");
     // Structural invariant (width-agnostic): every line that starts with a
@@ -1402,7 +1402,7 @@ fn right_border_all_permission_modes_and_agents() {
     ⓘ                        — ▾
     project
     ┃                 1h30m32s
-               ││󰊢
+              │  │ 󰊢
             No tools yet
 
     === Claude / Auto ===
@@ -1410,7 +1410,7 @@ fn right_border_all_permission_modes_and_agents() {
     ⓘ                        — ▾
     project
     ┃   auto          1h30m32s
-               ││󰊢
+              │  │ 󰊢
             No tools yet
 
     === Claude / DontAsk ===
@@ -1418,7 +1418,7 @@ fn right_border_all_permission_modes_and_agents() {
     ⓘ                        — ▾
     project
     ┃   dontAsk       1h30m32s
-               ││󰊢
+              │  │ 󰊢
             No tools yet
 
     === Claude / Plan ===
@@ -1426,7 +1426,7 @@ fn right_border_all_permission_modes_and_agents() {
     ⓘ                        — ▾
     project
     ┃   plan          1h30m32s
-               ││󰊢
+              │  │ 󰊢
             No tools yet
 
     === Claude / AcceptEdits ===
@@ -1434,7 +1434,7 @@ fn right_border_all_permission_modes_and_agents() {
     ⓘ                        — ▾
     project
     ┃   edit          1h30m32s
-               ││󰊢
+              │  │ 󰊢
             No tools yet
 
     === Claude / BypassPermissions ===
@@ -1442,7 +1442,7 @@ fn right_border_all_permission_modes_and_agents() {
     ⓘ                        — ▾
     project
     ┃   !             1h30m32s
-               ││󰊢
+              │  │ 󰊢
             No tools yet
 
     === Codex / Default ===
@@ -1450,7 +1450,7 @@ fn right_border_all_permission_modes_and_agents() {
     ⓘ                        — ▾
     project
     ┃  codex           1h30m32s
-               ││󰊢
+              │  │ 󰊢
             No tools yet
 
     === Codex / Auto ===
@@ -1458,7 +1458,7 @@ fn right_border_all_permission_modes_and_agents() {
     ⓘ                        — ▾
     project
     ┃  codex auto      1h30m32s
-               ││󰊢
+              │  │ 󰊢
             No tools yet
 
     === Codex / DontAsk ===
@@ -1466,7 +1466,7 @@ fn right_border_all_permission_modes_and_agents() {
     ⓘ                        — ▾
     project
     ┃  codex dontAsk   1h30m32s
-               ││󰊢
+              │  │ 󰊢
             No tools yet
 
     === Codex / Plan ===
@@ -1474,7 +1474,7 @@ fn right_border_all_permission_modes_and_agents() {
     ⓘ                        — ▾
     project
     ┃  codex plan      1h30m32s
-               ││󰊢
+              │  │ 󰊢
             No tools yet
 
     === Codex / AcceptEdits ===
@@ -1482,7 +1482,7 @@ fn right_border_all_permission_modes_and_agents() {
     ⓘ                        — ▾
     project
     ┃  codex edit      1h30m32s
-               ││󰊢
+              │  │ 󰊢
             No tools yet
 
     === Codex / BypassPermissions ===
@@ -1490,7 +1490,7 @@ fn right_border_all_permission_modes_and_agents() {
     ⓘ                        — ▾
     project
     ┃  codex !         1h30m32s
-               ││󰊢
+              │  │ 󰊢
             No tools yet
     ");
 }
@@ -1517,7 +1517,7 @@ fn snapshot_filter_bar_shows_counts() {
     ┃  
       󰒲 codex
         Waiting for prompt…
-                ││󰊢
+               │  │ 󰊢
              No tools yet
     ");
 }
@@ -1541,7 +1541,7 @@ fn snapshot_filter_running_hides_idle() {
     ⓘ                          — ▾
     project
     ┃  
-                ││󰊢
+               │  │ 󰊢
              No tools yet
     ");
 }
@@ -1566,7 +1566,7 @@ fn snapshot_filter_idle_hides_running() {
     project
       󰒲 codex
         Waiting for prompt…
-                ││󰊢
+               │  │ 󰊢
              No tools yet
     ");
 }
@@ -1593,7 +1593,7 @@ fn snapshot_filter_hides_empty_groups() {
     ⓘ                          — ▾
     repo-a
     ┃  
-                ││󰊢
+               │  │ 󰊢
              No tools yet
     ");
 }
@@ -1619,7 +1619,7 @@ fn snapshot_filter_all_shows_everything() {
     ┃  
       󰒲 codex
         Waiting for prompt…
-                ││󰊢
+               │  │ 󰊢
              No tools yet
     ");
 }
@@ -1666,7 +1666,7 @@ fn snapshot_filter_bar_stays_fixed_on_scroll() {
        
        
        
-                ││󰊢
+               │  │ 󰊢
              No tools yet
     ");
 }
@@ -1712,7 +1712,7 @@ fn snapshot_filter_error_shows_agents() {
     project
     ┃  
         something broke
-                ││󰊢
+               │  │ 󰊢
              No tools yet
     ");
 }
@@ -1738,7 +1738,7 @@ fn snapshot_filter_waiting_shows_only_waiting() {
     project
     ┃ 󰥔 
         permission required
-                ││󰊢
+               │  │ 󰊢
              No tools yet
     ");
 }
@@ -1786,7 +1786,7 @@ fn snapshot_repo_header_shows_spawn_plus_button() {
     ┃ 󰒲 
     ┃    main
         Waiting for prompt…
-                ││󰊢
+               │  │ 󰊢
              No tools yet
     ");
 }
@@ -1808,7 +1808,7 @@ fn snapshot_spawn_modal_default_state() {
      │ MODE                         │
      │ default                      │
      ╰──────────────────────────────╯
-                  ││󰊢
+                 │  │ 󰊢
                No tools yet
     ");
 }
@@ -1837,7 +1837,7 @@ fn snapshot_spawn_modal_anchors_directly_below_repo_header() {
     │ MODE                         │
     │ default                      │
     ╰──────────────────────────────╯
-                  ││󰊢
+                 │  │ 󰊢
                No tools yet
     ");
 }
@@ -1866,7 +1866,7 @@ fn snapshot_spawn_modal_advance_fields_cycles_agent_and_mode() {
      │ MODE                         │
      │ bypassPermissions            │
      ╰──────────────────────────────╯
-                  ││󰊢
+                 │  │ 󰊢
                No tools yet
     ");
 }
@@ -1891,7 +1891,7 @@ fn snapshot_spawn_modal_tail_fits_long_task_name() {
      │ MODE                         │
      │ default                      │
      ╰──────────────────────────────╯
-                  ││󰊢
+                 │  │ 󰊢
                No tools yet
     ");
 }
@@ -1915,7 +1915,7 @@ fn snapshot_spawn_modal_narrow_width_still_fits() {
     │ MODE           │
     │ default        │
     ╰────────────────╯
-          ││󰊢
+         │  │ 󰊢
        No tools yet
     ");
 }
@@ -1941,7 +1941,7 @@ fn snapshot_spawn_modal_compact_layout_in_short_agent_area() {
     ┃   │ claude                       │
         │ default                      │
         ╰──────────────────────────────╯
-                     ││󰊢
+                    │  │ 󰊢
                   No tools yet
     ");
 }
@@ -1962,7 +1962,7 @@ fn snapshot_spawn_modal_compact_layout_shows_inline_error() {
         │ default                      │
         │ name is empty                │
         ╰──────────────────────────────╯
-                     ││󰊢
+                    │  │ 󰊢
                   No tools yet
     ");
 }
@@ -2013,7 +2013,7 @@ fn snapshot_sidebar_spawned_pane_appends_trailing_remove_marker() {
       󰒲 
          + feat/x               ×
         Waiting for prompt…
-                ││󰊢
+               │  │ 󰊢
              No tools yet
     ");
 }
@@ -2150,7 +2150,7 @@ fn snapshot_sidebar_spawned_long_branch_truncates_and_keeps_x() {
       󰒲 
          + feature/really…×
         Waiting for prompt…
-             ││󰊢
+            │  │ 󰊢
           No tools yet
     ");
     // The click target must still be registered even after
@@ -2193,7 +2193,7 @@ fn snapshot_sidebar_spawned_coexists_with_port_display() {
       󰒲 
          + feat/srv       :3000 ×
         Waiting for prompt…
-                ││󰊢
+               │  │ 󰊢
              No tools yet
     ");
 }
@@ -2219,7 +2219,7 @@ fn snapshot_remove_confirm_modal_shows_three_options() {
                │[c] close window only     │
                │[n] cancel                │
                ╰──────────────────────────╯
-                          ││󰊢
+                         │  │ 󰊢
                        No tools yet
     ");
 }
@@ -2246,7 +2246,7 @@ fn snapshot_spawn_modal_shows_inline_error_when_task_empty() {
      │ default                      │
      │ name is empty                │
      ╰──────────────────────────────╯
-                  ││󰊢
+                 │  │ 󰊢
                No tools yet
     ");
 }
@@ -2290,7 +2290,7 @@ fn snapshot_remove_confirm_modal_shows_inline_error() {
                │[n] cancel                │
                │git: worktree has uncommi…│
                ╰──────────────────────────╯
-                          ││󰊢
+                         │  │ 󰊢
                        No tools yet
     ");
 }
@@ -2320,7 +2320,7 @@ fn snapshot_background_status_shows_bg_command_row() {
     project
     ┃ ◎ 
         $ npm run dev
-                 ││󰊢
+                │  │ 󰊢
               No tools yet
     ");
 }
@@ -2351,7 +2351,7 @@ fn snapshot_running_pane_still_shows_live_bg_command() {
     project
     ┃                          10s
         $ cargo watch
-                 ││󰊢
+                │  │ 󰊢
               No tools yet
     ");
 }
@@ -2381,7 +2381,7 @@ fn snapshot_background_long_command_truncates_with_ellipsis() {
     project
     ┃ ◎ 
         $ cargo run --bin very-…
-               ││󰊢
+              │  │ 󰊢
             No tools yet
     ");
 }
@@ -2434,7 +2434,7 @@ fn snapshot_subagent_identity_survives_repo_filter_hiding_parent() {
     project-sub
         ♟
       ▷ orchestrator
-                              │󰟶││󰊢
+                            │ 󰟶 │  │ 󰊢
                             No tools yet
     ");
 }

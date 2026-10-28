@@ -1181,7 +1181,7 @@ fn rendered_filter_row_and_hit_test_agree_at_the_20_column_minimum() {
        
        
        
-           ││󰊢
+          │  │ 󰊢
         No tools yet
     ");
 
@@ -1338,7 +1338,7 @@ fn floating_panel_clicks_hit_the_clamped_bottom_panel_geometry() {
       󰒲 
         Waiting for prompt…
       󰒲 
-                     ││󰊢
+                    │  │ 󰊢
                   No tools yet
     ");
 
@@ -1353,7 +1353,7 @@ fn floating_panel_clicks_hit_the_clamped_bottom_panel_geometry() {
     // the tab.
     state.global.bottom_tab = BottomTab::GitStatus;
     assert!(
-        state.handle_terminal_click(bottom_start, 17, TERM_HEIGHT),
+        state.handle_terminal_click(bottom_start, 15, TERM_HEIGHT),
         "the drawn tab row must be clickable (the centered Tools glyph)"
     );
     assert_eq!(

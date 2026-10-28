@@ -118,8 +118,10 @@ pub fn draw_bottom(frame: &mut Frame, state: &mut AppState, area: Rect) {
 }
 
 /// The tab run drawn on the rule: one glyph span per shown tab, a
-/// separator span between glyphs, styled active/inactive against the
-/// displayed tab. The shown tabs come from [`AppState::shown_bottom_tabs`]
+/// space-delimiter-space separator span between glyphs, styled
+/// active/inactive against the displayed tab. The spaces matter: the
+/// Nerd Font glyphs can render two cells wide, and a bare `│` would
+/// sit under the glyph's second cell. The shown tabs come from [`AppState::shown_bottom_tabs`]
 /// and the glyph strings from [`BottomTab::label`]; each glyph span
 /// carries its tab so `top_line_border` can hand the drawn glyph
 /// columns to the click hitboxes — the two describe one layout.
@@ -137,13 +139,18 @@ pub(crate) fn build_tab_title(state: &AppState) -> Vec<TitleSpan> {
     let is = |tab: &BottomTab| {
         if displayed == *tab { active } else { inactive }
     };
-    let sep_style = Style::default().fg(theme.border_inactive);
+    // The delimiters wear the waiting colour (#e0af68) — a quiet
+    // gold that stays distinct from both the bold accent of the
+    // active glyph and the bright text of the inactive ones.
+    let sep_style = Style::default().fg(theme.status_waiting);
 
     let mut spans: Vec<TitleSpan> = Vec::new();
     for (i, tab) in state.shown_bottom_tabs().into_iter().enumerate() {
         if i > 0 {
+            // " │ " — a free column on each side of the delimiter so a
+            // two-cell glyph never bleeds onto it.
             spans.push(TitleSpan {
-                span: Span::styled("\u{2502}", sep_style),
+                span: Span::styled(" \u{2502} ", sep_style),
                 tab: None,
             });
         }
@@ -223,7 +230,7 @@ mod tests {
         let mut pi = state_with_focused_agent(AgentType::Pi);
         pi.global.bottom_tab = BottomTab::Thought;
         let (rule_line, _) = top_line_border(&build_tab_title(&pi), rule, 40);
-        insta::assert_snapshot!(rule_text(rule_line), @"                │󰟶││󰊢");
+        insta::assert_snapshot!(rule_text(rule_line), @"              │ 󰟶 │  │ 󰊢");
         let title = build_tab_title(&pi);
         let thought = title
             .iter()
@@ -244,19 +251,20 @@ mod tests {
         // the Activity fallback. The run centers at every width.
         let claude = state_with_focused_agent(AgentType::Claude);
         let (rule_line, _) = top_line_border(&build_tab_title(&claude), rule, 30);
-        insta::assert_snapshot!(rule_text(rule_line), @"            ││󰊢");
+        insta::assert_snapshot!(rule_text(rule_line), @"           │  │ 󰊢");
 
-        // Every width keeps the rule exactly the width: the glyphs fit
-        // from 20 columns up, and at 6 the overflowing run loses its
-        // pad, truncates the tail (Git draws nothing) and stays 6 wide.
+        // Every width keeps the rule exactly the width: the four-glyph
+        // pi run needs 13 columns, and at 6 the overflowing run loses
+        // its pad, truncates the tail (Tasks and Git draw nothing)
+        // and stays 6 wide.
         let (rule_line, _) = top_line_border(&build_tab_title(&claude), rule, 22);
-        insta::assert_snapshot!(rule_text(rule_line), @"        ││󰊢");
+        insta::assert_snapshot!(rule_text(rule_line), @"       │  │ 󰊢");
         let (rule_line, _) = top_line_border(&build_tab_title(&pi), rule, 20);
-        insta::assert_snapshot!(rule_text(rule_line), @"      │󰟶││󰊢");
+        insta::assert_snapshot!(rule_text(rule_line), @"    │ 󰟶 │  │ 󰊢");
         let (rule_line, _) = top_line_border(&build_tab_title(&claude), rule, 18);
-        insta::assert_snapshot!(rule_text(rule_line), @"      ││󰊢");
+        insta::assert_snapshot!(rule_text(rule_line), @"     │  │ 󰊢");
         let (rule_line, _) = top_line_border(&build_tab_title(&pi), rule, 6);
-        insta::assert_snapshot!(rule_text(rule_line), @"│󰟶││");
+        insta::assert_snapshot!(rule_text(rule_line), @" │ 󰟶…");
     }
 
     #[test]
@@ -266,18 +274,19 @@ mod tests {
 
         // At a wide width the glyphs sit centered on their full
         // columns; the run's floor-half pad puts the first glyph at
-        // column 16 of 40 and column 6 of 20. Each glyph is one column,
-        // so a click can only ever land on drawn text.
+        // column 13 of 40 and column 3 of 20, and each " │ "
+        // separator costs three. Each glyph is one column, so a click
+        // can only ever land on drawn text.
         let (_, wide) = top_line_border(&build_tab_title(&pi), rule, 40);
         let ranges: Vec<(u16, u16, BottomTab)> =
             wide.iter().map(|t| (t.start, t.end, t.tab)).collect();
         assert_eq!(
             ranges,
             vec![
-                (16, 17, BottomTab::Activity),
-                (18, 19, BottomTab::Thought),
-                (20, 21, BottomTab::Tasks),
-                (22, 23, BottomTab::GitStatus),
+                (13, 14, BottomTab::Activity),
+                (17, 18, BottomTab::Thought),
+                (21, 22, BottomTab::Tasks),
+                (25, 26, BottomTab::GitStatus),
             ]
         );
 
@@ -287,10 +296,10 @@ mod tests {
         assert_eq!(
             ranges,
             vec![
-                (6, 7, BottomTab::Activity),
-                (8, 9, BottomTab::Thought),
-                (10, 11, BottomTab::Tasks),
-                (12, 13, BottomTab::GitStatus),
+                (3, 4, BottomTab::Activity),
+                (7, 8, BottomTab::Thought),
+                (11, 12, BottomTab::Tasks),
+                (15, 16, BottomTab::GitStatus),
             ]
         );
     }

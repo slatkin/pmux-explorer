@@ -121,7 +121,7 @@ fn snapshot_git_status_tab_ui() {
     ⓘ                        — ▾
     project
     ┃  
-               ││󰊢
+              │  │ 󰊢
     feature/sidebar         ↑2↓1
     +42/-15              3 files
     ────────────────────────────
@@ -157,7 +157,7 @@ fn snapshot_git_clean_ui() {
     ⓘ                        — ▾
     project
     ┃  
-               ││󰊢
+              │  │ 󰊢
          Working tree clean
     ");
 }
@@ -193,7 +193,7 @@ fn snapshot_activity_tab_active_ui() {
     ⓘ                        — ▾
     project
     ┃  
-               ││󰊢
+              │  │ 󰊢
     10:32                   Edit
       src/main.rs
     ");
@@ -232,7 +232,7 @@ fn activity_tab_leaves_one_blank_row_above_entries() {
     ⓘ                        — ▾
     project
     ┃  
-               ││󰊢
+              │  │ 󰊢
     10:32                   Edit
       src/main.rs
     ");
@@ -273,7 +273,7 @@ fn snapshot_activity_long_tool_keeps_one_space_gap() {
     ⓘ                        — ▾
     project
     ┃  
-               ││󰊢
+              │  │ 󰊢
     10:32 mcp__context7__query-d
       rust
     ");
@@ -308,7 +308,7 @@ fn snapshot_tab_bar_renders_both_labels() {
     project
     ┃ 󰒲 
         Waiting for prompt…
-               ││󰊢
+              │  │ 󰊢
     10:32                   Edit
       test
     ");
@@ -358,7 +358,7 @@ fn snapshot_tasks_empty_tab_ui() {
     ⓘ                        — ▾
     project
     ┃  
-               ││󰊢
+              │  │ 󰊢
      Build the Tasks tab
      ✔ Record the task path
      ◼ Render the list
@@ -393,7 +393,7 @@ fn snapshot_tasks_tab_ui() {
     ⓘ                        — ▾
     project
     ┃  
-               ││󰊢
+              │  │ 󰊢
           No tasks recorded
     ");
 }
@@ -447,7 +447,7 @@ fn snapshot_tasks_tab_after_finished_list_closes() {
     ⓘ                        — ▾
     project
     ┃  
-               ││󰊢
+              │  │ 󰊢
           No tasks recorded
     ");
 
@@ -514,7 +514,7 @@ fn snapshot_tasks_status_colors_styled() {
      [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
      [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
      [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
-     [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868][fg:#c0caf5,bg:#414868]│[fg:240,bg:#414868][fg:#7aa2f7,bg:#414868,bold]│[fg:240,bg:#414868]󰊢[fg:#c0caf5,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]
+     [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868][fg:#c0caf5,bg:#414868] [fg:#e0af68,bg:#414868]│[fg:#e0af68,bg:#414868] [fg:#e0af68,bg:#414868][fg:#7aa2f7,bg:#414868,bold] [fg:#e0af68,bg:#414868]│[fg:#e0af68,bg:#414868] [fg:#e0af68,bg:#414868]󰊢[fg:#c0caf5,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]
      [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
      [bg:#1a1b26]✔[fg:#9ece6a,bg:#1a1b26] [fg:#9ece6a,bg:#1a1b26]d[fg:#9ece6a,bg:#1a1b26]o[fg:#9ece6a,bg:#1a1b26]n[fg:#9ece6a,bg:#1a1b26]e[fg:#9ece6a,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
      [bg:#1a1b26]◼[fg:#ff9e64,bg:#1a1b26] [fg:#ff9e64,bg:#1a1b26]w[fg:#ff9e64,bg:#1a1b26]i[fg:#ff9e64,bg:#1a1b26]p[fg:#ff9e64,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
@@ -603,7 +603,7 @@ fn snapshot_tasks_description_stays_pinned_while_items_scroll() {
     ⓘ                        — ▾
     project
     ┃  
-               ││󰊢
+              │  │ 󰊢
      Overhaul the sidebar task
      board
      ◻ task 3
@@ -697,7 +697,7 @@ fn snapshot_tasks_subject_wraps_at_narrow_width() {
     ⓘ                    — ▾
     project
     ┃  
-             ││󰊢
+            │  │ 󰊢
      ◻ a-very-long-task-sub
        ject-that-runs-out-o
        f-columns
@@ -734,7 +734,7 @@ fn snapshot_tasks_multiline_subject_shows_every_line() {
     ⓘ                        — ▾
     project
     ┃  
-               ││󰊢
+              │  │ 󰊢
      ◻ first line
        second line
     ");
@@ -789,7 +789,7 @@ fn snapshot_git_full_info_ui() {
     ⓘ                        — ▾
     project
     ┃  
-               ││󰊢
+              │  │ 󰊢
     main
     +120/-30             3 files
     ────────────────────────────
@@ -826,7 +826,7 @@ fn snapshot_git_diff_summary_tight_ui() {
     ⓘ                        — ▾
     project
     ┃  
-               ││󰊢
+              │  │ 󰊢
     main
     +10/-3               0 files
     ");
@@ -867,7 +867,7 @@ fn snapshot_git_staged_file_diff_right_ui() {
     ⓘ                        — ▾
     project
     ┃  
-               ││󰊢
+              │  │ 󰊢
     main
     +10/-2               1 files
     ────────────────────────────
@@ -909,7 +909,7 @@ fn snapshot_git_unstaged_long_name_diff_right_ui() {
     ⓘ                        — ▾
     project
     ┃  
-               ││󰊢
+              │  │ 󰊢
     main
     +150/-50             1 files
     ────────────────────────────
@@ -960,7 +960,7 @@ fn snapshot_git_long_filename_truncated_ui() {
     ⓘ                        — ▾
     project
     ┃  
-               ││󰊢
+              │  │ 󰊢
     main
                          2 files
     ────────────────────────────
@@ -1048,7 +1048,7 @@ fn snapshot_git_more_than_5_files() {
     ⓘ                        — ▾
     project
     ┃  
-               ││󰊢
+              │  │ 󰊢
     main
                          7 files
     ────────────────────────────
@@ -1075,7 +1075,7 @@ fn snapshot_git_more_than_5_files() {
     ⓘ                        — ▾
     project
     ┃  
-               ││󰊢
+              │  │ 󰊢
     main
                          7 files
     ────────────────────────────
@@ -1117,7 +1117,7 @@ fn snapshot_git_branch_only_no_changes() {
     ⓘ                                  — ▾
     project
     ┃  
-                    ││󰊢
+                   │  │ 󰊢
     feature/long-branch-name            ↑5
     ──────────────────────────────────────
               Working tree clean
@@ -1154,7 +1154,7 @@ fn snapshot_git_pr_number_ui() {
     ⓘ                        — ▾
     project
     ┃  
-               ││󰊢
+              │  │ 󰊢
     feature/fix              #42
     +10/-3               0 files
     ");
@@ -1171,7 +1171,7 @@ fn snapshot_git_pr_number_ui() {
      [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
      [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
      [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
-     [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868][fg:#c0caf5,bg:#414868]│[fg:240,bg:#414868][fg:#c0caf5,bg:#414868]│[fg:240,bg:#414868]󰊢[fg:#7aa2f7,bg:#414868,bold] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]
+     [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868][fg:#c0caf5,bg:#414868] [fg:#e0af68,bg:#414868]│[fg:#e0af68,bg:#414868] [fg:#e0af68,bg:#414868][fg:#c0caf5,bg:#414868] [fg:#e0af68,bg:#414868]│[fg:#e0af68,bg:#414868] [fg:#e0af68,bg:#414868]󰊢[fg:#7aa2f7,bg:#414868,bold] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]
      [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
     f[fg:#c0caf5,bg:#24283b]e[fg:#c0caf5,bg:#24283b]a[fg:#c0caf5,bg:#24283b]t[fg:#c0caf5,bg:#24283b]u[fg:#c0caf5,bg:#24283b]r[fg:#c0caf5,bg:#24283b]e[fg:#c0caf5,bg:#24283b]/[fg:#c0caf5,bg:#24283b]f[fg:#c0caf5,bg:#24283b]i[fg:#c0caf5,bg:#24283b]x[fg:#c0caf5,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]#[fg:#7dcfff,bg:#24283b,underline]4[fg:#7dcfff,bg:#24283b,underline]2[fg:#7dcfff,bg:#24283b,underline]
     +[fg:#9ece6a,bg:#24283b]1[fg:#9ece6a,bg:#24283b]0[fg:#9ece6a,bg:#24283b]/[fg:#a9b1d6,bg:#24283b]-[fg:#f7768e,bg:#24283b]3[fg:#f7768e,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]0[fg:#a9b1d6,bg:#24283b] [fg:#a9b1d6,bg:#24283b]f[fg:#a9b1d6,bg:#24283b]i[fg:#a9b1d6,bg:#24283b]l[fg:#a9b1d6,bg:#24283b]e[fg:#a9b1d6,bg:#24283b]s[fg:#a9b1d6,bg:#24283b]
@@ -1216,7 +1216,7 @@ fn snapshot_git_pr_with_diff_ui() {
     ⓘ                        — ▾
     project
     ┃  
-               ││󰊢
+              │  │ 󰊢
     main                    #123
     +55/-20              0 files
     ");
@@ -1249,7 +1249,7 @@ fn snapshot_subagents_tree_ui() {
         ├ Explore #1
         ├ Plan #2
         └ Explore #2
-                     ││󰊢
+                    │  │ 󰊢
                   No tools yet
     ");
 }
@@ -1284,7 +1284,7 @@ fn snapshot_subagent_long_name_truncated_ui() {
     ┃  
         ├ superpowers:code-revi…
         └ claude-code-guide #2
-               ││󰊢
+              │  │ 󰊢
             No tools yet
     ");
 
@@ -1318,7 +1318,7 @@ fn snapshot_activity_empty_centered_ui() {
     project
     ┃ 󰒲 
         Waiting for prompt…
-               ││󰊢
+              │  │ 󰊢
             No tools yet
     ");
 }
@@ -1348,7 +1348,7 @@ fn snapshot_git_clean_centered_ui() {
     project
     ┃ 󰒲 
         Waiting for prompt…
-               ││󰊢
+              │  │ 󰊢
          Working tree clean
     ");
 }
@@ -1386,7 +1386,7 @@ fn snapshot_git_branch_loaded_no_changes_shows_inline_clean() {
     ⓘ                        — ▾
     project
     ┃  
-               ││󰊢
+              │  │ 󰊢
     main
     ────────────────────────────
          Working tree clean
@@ -1421,7 +1421,7 @@ fn snapshot_git_no_data_shows_centered_clean() {
     ⓘ                        — ▾
     project
     ┃  
-               ││󰊢
+              │  │ 󰊢
          Working tree clean
     ");
 }
@@ -1456,7 +1456,7 @@ fn test_git_behind_only() {
     ⓘ                        — ▾
     project
     ┃  
-               ││󰊢
+              │  │ 󰊢
     main                      ↓3
     ────────────────────────────
     ");
@@ -1490,7 +1490,7 @@ fn test_git_ahead_and_behind() {
     ⓘ                                  — ▾
     project
     ┃  
-                    ││󰊢
+                   │  │ 󰊢
     main                              ↑2↓3
     ──────────────────────────────────────
     ");
@@ -1526,7 +1526,7 @@ fn test_git_diff_insertions_only() {
     ⓘ                        — ▾
     project
     ┃  
-               ││󰊢
+              │  │ 󰊢
     main
     +25/-0               0 files
     ");
@@ -1560,7 +1560,7 @@ fn test_git_diff_deletions_only() {
     ⓘ                        — ▾
     project
     ┃  
-               ││󰊢
+              │  │ 󰊢
     main
     +0/-15               0 files
     ");
@@ -1602,7 +1602,7 @@ fn snapshot_branch_truncated_ui() {
     dotfiles                   +
     ┃  
     ┃    feature/tmux-sidebar-…
-               ││󰊢
+              │  │ 󰊢
             No tools yet
     ");
 }
@@ -1660,7 +1660,7 @@ fn snapshot_git_staged_unstaged_untracked_ui() {
     ⓘ                        — ▾
     project
     ┃  
-               ││󰊢
+              │  │ 󰊢
     main                      #5
     +12/-3               4 files
     ────────────────────────────
@@ -1706,7 +1706,7 @@ fn snapshot_git_long_branch_with_pr_ui() {
     ⓘ                        — ▾
     project
     ┃  
-               ││󰊢
+              │  │ 󰊢
     feature/very-long-bran… #123
     +5/-2                1 files
     ────────────────────────────
@@ -1751,7 +1751,7 @@ fn snapshot_git_staged_only_ui() {
     ⓘ                        — ▾
     project
     ┃  
-               ││󰊢
+              │  │ 󰊢
     main
     +20/-0               1 files
     ────────────────────────────
@@ -1796,7 +1796,7 @@ fn snapshot_git_many_files_more_indicator_ui() {
     ⓘ                        — ▾
     project
     ┃  
-               ││󰊢
+              │  │ 󰊢
     dev
                          7 files
     ────────────────────────────
@@ -1844,7 +1844,7 @@ fn snapshot_git_more_than_10_files_ui() {
     ⓘ                        — ▾
     project
     ┃  
-               ││󰊢
+              │  │ 󰊢
     dev
                         12 files
     ────────────────────────────
@@ -1914,7 +1914,7 @@ fn snapshot_focused_group_active_border_styled() {
      [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
      [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
      [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
-     [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868][fg:#7aa2f7,bg:#414868,bold]│[fg:240,bg:#414868][fg:#c0caf5,bg:#414868]│[fg:240,bg:#414868]󰊢[fg:#c0caf5,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]
+     [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868][fg:#7aa2f7,bg:#414868,bold] [fg:#e0af68,bg:#414868]│[fg:#e0af68,bg:#414868] [fg:#e0af68,bg:#414868][fg:#c0caf5,bg:#414868] [fg:#e0af68,bg:#414868]│[fg:#e0af68,bg:#414868] [fg:#e0af68,bg:#414868]󰊢[fg:#c0caf5,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]
      [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
      [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
      [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
@@ -1960,7 +1960,7 @@ fn snapshot_rule_with_full_width_content() {
     project
     ┃ 󰒲 
         Waiting for prompt…
-                     ││󰊢
+                    │  │ 󰊢
     10:32                               Edit
       src/main.rs
     ");
@@ -2001,7 +2001,7 @@ fn snapshot_rule_is_a_solid_band() {
      [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
      [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
      [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
-     [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868][fg:#7aa2f7,bg:#414868,bold]│[fg:240,bg:#414868][fg:#c0caf5,bg:#414868]│[fg:240,bg:#414868]󰊢[fg:#c0caf5,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]
+     [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868][fg:#7aa2f7,bg:#414868,bold] [fg:#e0af68,bg:#414868]│[fg:#e0af68,bg:#414868] [fg:#e0af68,bg:#414868][fg:#c0caf5,bg:#414868] [fg:#e0af68,bg:#414868]│[fg:#e0af68,bg:#414868] [fg:#e0af68,bg:#414868]󰊢[fg:#c0caf5,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]
      [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
      [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]N[fg:#a9b1d6,bg:#24283b]o[fg:#a9b1d6,bg:#24283b] [fg:#a9b1d6,bg:#24283b]t[fg:#a9b1d6,bg:#24283b]o[fg:#a9b1d6,bg:#24283b]o[fg:#a9b1d6,bg:#24283b]l[fg:#a9b1d6,bg:#24283b]s[fg:#a9b1d6,bg:#24283b] [fg:#a9b1d6,bg:#24283b]y[fg:#a9b1d6,bg:#24283b]e[fg:#a9b1d6,bg:#24283b]t[fg:#a9b1d6,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
      [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
@@ -2085,7 +2085,7 @@ fn snapshot_thought_short_ui() {
     ⓘ                        — ▾
     project
     ┃  
-              │󰟶││󰊢
+            │ 󰟶 │  │ 󰊢
      08:00:07
      I should read the file
      first.
@@ -2107,7 +2107,7 @@ fn snapshot_thought_tall_follows_the_end_ui() {
     ⓘ                                    — ▾
     project
     ┃  
-                    │󰟶││󰊢
+                  │ 󰟶 │  │ 󰊢
      thought row 14
      thought row 15
      thought row 16
@@ -2148,7 +2148,7 @@ fn snapshot_thought_scrolled_up_ui() {
     ⓘ                                    — ▾
     project
     ┃  
-                    │󰟶││󰊢
+                  │ 󰟶 │  │ 󰊢
      08:00:07
      thought row 01
      thought row 02
@@ -2178,7 +2178,7 @@ fn snapshot_thought_empty_notice_ui() {
     ⓘ                        — ▾
     project
     ┃  
-              │󰟶││󰊢
+            │ 󰟶 │  │ 󰊢
            No thinking yet
     ");
 }

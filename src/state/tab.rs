@@ -370,20 +370,20 @@ mod tests {
 
     #[test]
     fn click_on_each_title_selects_its_tab() {
-        // Rule layout at 40 columns with a 5-cell icon run: 17 pad
-        // columns, then "││󰊢" on cols 17-21. One click into each of
-        // the three drawn hitbox ranges, including the first glyph's
-        // only column.
+        // Rule layout at 40 columns with a 9-cell icon run: 15 pad
+        // columns, then three glyphs on cols 15, 19 and 23 between the
+        // " │ " separators. One click into each of the three drawn
+        // hitbox ranges, including the first glyph's only column.
         let mut state = AppState::new("%99".into());
         crate::ui::bottom::draw_tab_targets(&mut state, 40);
 
-        state.handle_bottom_tab_click(17); // the Tools glyph
+        state.handle_bottom_tab_click(15); // the Tools glyph
         assert_eq!(state.global.bottom_tab, BottomTab::Activity);
 
         state.handle_bottom_tab_click(19); // the Tasks glyph
         assert_eq!(state.global.bottom_tab, BottomTab::Tasks);
 
-        state.handle_bottom_tab_click(21); // the Git glyph
+        state.handle_bottom_tab_click(23); // the Git glyph
         assert_eq!(state.global.bottom_tab, BottomTab::GitStatus);
     }
 
@@ -391,9 +391,9 @@ mod tests {
     fn click_between_or_after_the_titles_changes_nothing() {
         // A click on a separator column or beyond the title text must
         // not switch tabs — only the drawn glyphs are clickable. At 40
-        // columns the glyph run spans cols 17-21 with separators at 18
-        // and 20, fill from 22 on.
-        for col in [18u16, 20, 22, 26] {
+        // columns the glyph run spans cols 15-23 with the │ of each
+        // " │ " separator on cols 17 and 21, fill from 24 on.
+        for col in [17u16, 21, 25, 30] {
             let mut state = AppState::new("%99".into());
             crate::ui::bottom::draw_tab_targets(&mut state, 40);
             state.global.bottom_tab = BottomTab::Tasks;
@@ -408,13 +408,13 @@ mod tests {
 
     #[test]
     fn click_on_the_prefix_left_of_activity_changes_nothing() {
-        // The centered run starts at column 17 of 40: a click on the
+        // The centered run starts at column 15 of 40: a click on the
         // left pad, on a col-0 event, changes nothing.
         let mut state = AppState::new("%99".into());
         crate::ui::bottom::draw_tab_targets(&mut state, 40);
         state.global.bottom_tab = BottomTab::Tasks;
 
-        for col in [0u16, 1, 16] {
+        for col in [0u16, 1, 14] {
             state.handle_bottom_tab_click(col);
             assert_eq!(
                 state.global.bottom_tab,
@@ -427,13 +427,13 @@ mod tests {
     #[test]
     fn a_click_on_the_thought_label_selects_it_for_a_pi_pane() {
         // Spec "a click on the Thought label": with Thought shown the
-        // 40-column rule reads 16 pad cols then "│󰟶││󰊢", so the
-        // Thought glyph sits alone on col 18 between its separators.
+        // 40-column rule reads 13 pad cols then a 13-cell run, so the
+        // Thought glyph sits alone on col 17 between its separators.
         let pi = test_pane_with_agent("%1", AgentType::Pi);
         let mut state = state_with_groups(vec![group_with(vec![pi])], Some("%1"));
         crate::ui::bottom::draw_tab_targets(&mut state, 40);
 
-        state.handle_bottom_tab_click(18); // the Thought glyph
+        state.handle_bottom_tab_click(17); // the Thought glyph
         assert_eq!(state.global.bottom_tab, BottomTab::Thought);
     }
 
@@ -441,15 +441,16 @@ mod tests {
     fn a_click_where_a_hidden_thought_label_would_be_changes_nothing() {
         // Spec "a click where a hidden label would be": for a non-pi
         // pane the Thought glyph is not drawn — the three-glyph run
-        // spans cols 17-21, so col 18 is the separator after Tools and
-        // col 24 is fill right of Git: neither the tab nor the split
-        // may change there.
+        // spans cols 15-23, so col 17, where the pi rule would draw
+        // Thought, is the │ of the first separator, and col 24 is
+        // fill right of Git: neither the tab nor the split may change
+        // there.
         let mut state = state_with_groups(vec![agent_group("%1")], Some("%1"));
         crate::ui::bottom::draw_tab_targets(&mut state, 40);
         state.global.bottom_tab = BottomTab::Tasks;
         state.global.bottom_percent = 30;
 
-        for col in [18u16, 24] {
+        for col in [17u16, 24] {
             state.handle_bottom_tab_click(col);
             assert_eq!(
                 state.global.bottom_tab,
@@ -466,17 +467,18 @@ mod tests {
     #[test]
     fn a_click_on_the_fill_past_a_truncated_label_changes_nothing() {
         // The hitboxes are the drawn columns: on a 6-column pi-pane
-        // rule the 7-cell run overflows, draws "│󰟶││" (Thought on col
-        // 2, Tasks on col 4) and Git's hitbox collapses to an empty
-        // range at col 6 — where the full-width layout would still
-        // have claimed Git. Clicks on separators, the empty range and
-        // the fill select nothing.
+        // rule the 13-cell run overflows — Activity draws on col 0,
+        // the first separator on cols 1-3, Thought on col 4, and the
+        // second separator truncates to one pad column while Tasks and
+        // Git collapse to empty ranges at col 6, where the full-width
+        // layout would still have claimed them. Clicks on separators,
+        // the empty ranges and the fill select nothing.
         let pi = test_pane_with_agent("%1", AgentType::Pi);
         let mut state = state_with_groups(vec![group_with(vec![pi])], Some("%1"));
         crate::ui::bottom::draw_tab_targets(&mut state, 6);
         state.global.bottom_tab = BottomTab::Activity;
 
-        state.handle_bottom_tab_click(2); // the Thought glyph, still drawn
+        state.handle_bottom_tab_click(4); // the Thought glyph, still drawn
         assert_eq!(state.global.bottom_tab, BottomTab::Thought);
 
         state.global.bottom_tab = BottomTab::Activity;
