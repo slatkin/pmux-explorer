@@ -584,4 +584,24 @@ mod tests {
             "the conf's seeded width must match DEFAULT_WIDTH_PERCENT"
         );
     }
+
+    #[test]
+    fn the_conf_seeds_the_same_position_the_binary_falls_back_to() {
+        // One side, two homes: the conf seeds `@sidebar_position` for
+        // tmux-side visibility and [`SidebarPosition::from_setting`]
+        // falls back to `Left` when the option is unset or invalid. A
+        // test pins them together so a change that updates one copy and
+        // not the other fails here instead of drifting in a user's
+        // session.
+        let conf = include_str!("../../pmux-explorer.conf");
+        let seeded = conf
+            .lines()
+            .find_map(|line| line.split_once("set -g @sidebar_position "))
+            .map(|(_, rest)| SidebarPosition::from_setting(rest.trim().trim_matches('\'')));
+        assert_eq!(
+            seeded,
+            Some(SidebarPosition::from_setting("")),
+            "the conf's seeded position must match the unset fallback"
+        );
+    }
 }

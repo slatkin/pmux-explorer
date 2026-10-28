@@ -183,6 +183,30 @@ mod tests {
     }
 
     #[test]
+    fn the_conf_seeds_the_same_pet_default_the_binary_falls_back_to() {
+        // One switch, two homes: the conf seeds `@sidebar_pet` for
+        // tmux-side visibility and the binary falls back to `off`
+        // (false) when the option is unset or invalid. A test pins
+        // them together so a change that updates one copy and not the
+        // other fails here instead of drifting in a user's session.
+        let conf = include_str!("../../pmux-explorer.conf");
+        let seeded = conf
+            .lines()
+            .find_map(|line| line.split_once("set -g @sidebar_pet "))
+            .map(|(_, rest)| {
+                pet_enabled_from_options(&opts_with(
+                    tmux::SIDEBAR_PET,
+                    rest.trim().trim_matches('\''),
+                ))
+            });
+        assert_eq!(
+            seeded,
+            Some(pet_enabled_from_options(&HashMap::new())),
+            "the conf's seeded pet value must match the unset fallback"
+        );
+    }
+
+    #[test]
     fn bottom_percent_parses_valid_values() {
         for (value, expected) in [("30", 30), ("0", 0), ("100", 100)] {
             let opts = opts_with(tmux::SIDEBAR_BOTTOM_HEIGHT, value);
