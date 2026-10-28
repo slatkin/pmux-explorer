@@ -33,7 +33,7 @@ pub(crate) fn cmd_toggle(args: &[String]) -> i32 {
         let pct: u32 = sidebar_width_setting
             .trim_end_matches('%')
             .parse()
-            .unwrap_or(15);
+            .unwrap_or(DEFAULT_WIDTH_PERCENT);
         if window_width > 0 && pct > 0 {
             let w = window_width * pct / 100;
             if w < 1 {
@@ -167,6 +167,12 @@ fn any_sidebar_pane(output: &str) -> bool {
         parts.len() >= 2 && parts[1] == "sidebar"
     })
 }
+
+/// The percentage applied when `@sidebar_width` holds a percentage
+/// whose number will not parse. The conf seeds the option with the
+/// same number (see the pin test below), so the two must move
+/// together.
+const DEFAULT_WIDTH_PERCENT: u32 = 15;
 
 fn unique_window_paths(output: &str) -> Vec<(String, String)> {
     let mut seen = HashSet::new();
@@ -557,5 +563,25 @@ mod tests {
         // pane than to destroy a live workspace.
         assert!(!should_kill_window(Some("sidebar"), None, Some(1)));
         assert!(!should_kill_window(Some("sidebar"), Some(0), Some(1)));
+    }
+
+    #[test]
+    fn the_conf_seeds_the_same_width_percent_the_binary_falls_back_to() {
+        // One percentage, two homes: the conf seeds `@sidebar_width`
+        // with `15%` and [`DEFAULT_WIDTH_PERCENT`] is the fallback when
+        // the seeded value's number will not parse. A test pins them
+        // together so a change that updates one copy and not the other
+        // fails here instead of drifting in a user's session.
+        let conf = include_str!("../../pmux-explorer.conf");
+        let seeded = conf
+            .lines()
+            .find_map(|line| line.split_once("set -g @sidebar_width "))
+            .map(|(_, rest)| rest.trim().trim_matches('\'').to_owned());
+        let expected = format!("{DEFAULT_WIDTH_PERCENT}%");
+        assert_eq!(
+            seeded.as_deref(),
+            Some(expected.as_str()),
+            "the conf's seeded width must match DEFAULT_WIDTH_PERCENT"
+        );
     }
 }

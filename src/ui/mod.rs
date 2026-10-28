@@ -164,6 +164,25 @@ mod tests {
     }
 
     #[test]
+    fn the_conf_seeds_the_same_bottom_percent_the_binary_falls_back_to() {
+        // One number, two homes: the conf seeds `@sidebar_bottom_height`
+        // for tmux-side visibility and [`DEFAULT_BOTTOM_PERCENT`] is the
+        // fallback when the option is unset or invalid. A test pins
+        // them together so a change that updates one copy and not the
+        // other fails here instead of drifting in a user's session.
+        let conf = include_str!("../../pmux-explorer.conf");
+        let seeded = conf
+            .lines()
+            .find_map(|line| line.split_once("set -g @sidebar_bottom_height "))
+            .and_then(|(_, rest)| rest.trim().trim_matches('\'').parse::<u8>().ok());
+        assert_eq!(
+            seeded,
+            Some(DEFAULT_BOTTOM_PERCENT),
+            "the conf's seeded bottom height must match DEFAULT_BOTTOM_PERCENT"
+        );
+    }
+
+    #[test]
     fn bottom_percent_parses_valid_values() {
         for (value, expected) in [("30", 30), ("0", 0), ("100", 100)] {
             let opts = opts_with(tmux::SIDEBAR_BOTTOM_HEIGHT, value);
