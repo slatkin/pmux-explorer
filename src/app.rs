@@ -94,8 +94,10 @@ pub fn run(
             }
             needs_redraw = true;
             if is_window_active {
-                // Grow the sidebar back when an orchestrator's new panes
-                // squeezed it below `@sidebar_min_width`.
+                // Keep the sidebar's width inside its band: grow it back
+                // when orchestrator panes squeezed it below
+                // `@sidebar_min_width`, shrink it when tmux's resize
+                // behaviour pushed it past `@sidebar_max_width`.
                 let pane_width = terminal.size().map(|s| s.width).unwrap_or(0);
                 size_guard::enforce(&state.tmux_pane, pane_width);
                 // Keep a floating panel as tall and as wide as its window,

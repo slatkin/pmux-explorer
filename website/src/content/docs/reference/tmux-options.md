@@ -13,6 +13,7 @@ Most options must be set **before** loading the plugin in your `tmux.conf`. Colo
 | `@sidebar_key_all`               | `E`     | Prefix-triggered keybinding to toggle the sidebar in all windows                        |
 | `@sidebar_width`                 | `15%`   | Width in columns or as a percentage                                                     |
 | `@sidebar_min_width`             | `20`    | Minimum sidebar width in columns; the sidebar grows itself back when squeezed below it  |
+| `@sidebar_max_width`             | `0`     | Maximum sidebar width in columns; the sidebar shrinks itself back when tmux's resize behaviour pushes it past it. `0` disables it, and a ceiling at or below the effective minimum is ignored — the floor wins |
 | `@sidebar_position`              | `left`  | Sidebar placement (`left` or `right`). The side switch (`prefix + Ctrl+O` or the `⇄` control in the top row) flips this option globally for the running server, so sidebars created later follow the switched side; the value in your tmux config is never written and applies again after a tmux server restart                  |
 | `@sidebar_bottom_height`         | `30`    | Bottom panel height as a percent of the sidebar height (set `0` to hide); resize by dragging the rule above the panel. A configuration with a line count gets that number as a percent |
 | `@sidebar_auto_create`           | `on`    | Auto-create the sidebar on new windows (set `off` to disable)                           |
@@ -21,7 +22,11 @@ Most options must be set **before** loading the plugin in your `tmux.conf`. Colo
 | `@sidebar_notifications_events`  | unset   | Restrict events — see [Notifications](/pmux-explorer/features/notifications/)       |
 | `@sidebar_pet`                  | `off`   | Show the animated pet in a 5-row band above the bottom panel                           |
 
-Setting `@sidebar_min_width` to `0` disables the width floor entirely.
+Setting `@sidebar_min_width` to `0` disables the width floor entirely;
+`@sidebar_max_width` defaults to `0` (no ceiling) for the same reason a
+larger manual size sticks — set a ceiling only when tmux's resize
+behaviour hands the sidebar more columns than it asked for, which shows
+up when it docks on the right.
 
 ## Worktree spawn defaults
 
