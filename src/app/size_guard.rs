@@ -147,4 +147,21 @@ mod tests {
         assert_eq!(parse_max_width(Some(" 60 ")), Some(60));
         assert_eq!(parse_max_width(Some("0")), Some(0));
     }
+
+    #[test]
+    fn the_conf_seeds_the_same_default_the_binary_falls_back_to() {
+        // One number, two homes: the conf seeds `@sidebar_min_width` for
+        // tmux-side visibility (its seed-everything-unset policy) and
+        // [`DEFAULT_MIN_WIDTH`] is the fallback when it is unset. The
+        // copies can drift silently — a changed constant that leaves the
+        // seed behind runs 20 against 35 forever — so a test pins them
+        // together and drift fails here instead.
+        let conf = include_str!("../../pmux-explorer.conf");
+        let seeded = conf
+            .lines()
+            .filter_map(|line| line.split_once("set -g @sidebar_min_width "))
+            .filter_map(|(_, rest)| rest.trim().trim_matches('\'').parse::<u32>().ok())
+            .next();
+        assert_eq!(seeded, Some(DEFAULT_MIN_WIDTH));
+    }
 }
