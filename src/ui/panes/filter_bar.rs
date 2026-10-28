@@ -1,5 +1,5 @@
 use ratatui::{
-    style::Style,
+    style::{Modifier, Style},
     text::{Line, Span},
 };
 
@@ -63,7 +63,8 @@ pub(super) fn render_filter_bar<'a>(state: &AppState, width: u16) -> (Line<'a>, 
     // A chip's icon is grey when its count is zero and lit in its
     // status colour otherwise. Selection plays no part in the icon —
     // the active chip is marked only by its count, which is drawn in
-    // the accent colour.
+    // the bolded accent: the accent alone is the dimmest colour on
+    // the filter bar's band, so the weight carries the selection.
     for (i, chip) in chips.iter().enumerate() {
         if i > 0 {
             spans.push(Span::raw(" "));
@@ -85,7 +86,9 @@ pub(super) fn render_filter_bar<'a>(state: &AppState, width: u16) -> (Line<'a>, 
 
         let count_str = format!("{count}");
         let count_style = if is_selected {
-            Style::default().fg(theme.accent)
+            Style::default()
+                .fg(theme.accent)
+                .add_modifier(Modifier::BOLD)
         } else if count == 0 {
             Style::default().fg(theme.filter_inactive)
         } else {
@@ -373,6 +376,7 @@ mod tests {
 
         assert_eq!(cells[3].content.as_ref(), "1");
         assert_eq!(cells[3].style.fg, Some(theme.accent));
+        assert!(cells[3].style.add_modifier.contains(Modifier::BOLD));
 
         assert_eq!(cells[4].content.as_ref(), "\u{f0954}");
         assert_eq!(cells[4].style.fg, Some(theme.filter_inactive));
@@ -423,6 +427,7 @@ mod tests {
         assert_eq!(cells[4].style.fg, Some(theme.filter_inactive));
         assert_eq!(cells[5].content.as_ref(), "0");
         assert_eq!(cells[5].style.fg, Some(theme.accent));
+        assert!(cells[5].style.add_modifier.contains(Modifier::BOLD));
 
         assert_eq!(cells[6].content.as_ref(), "\u{f04b2}");
         assert_eq!(cells[6].style.fg, Some(theme.status_idle));

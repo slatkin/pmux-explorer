@@ -6,7 +6,7 @@ mod thought;
 use ratatui::{
     Frame,
     layout::{Alignment, Rect},
-    style::{Color, Style},
+    style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Paragraph},
 };
@@ -121,8 +121,14 @@ pub fn draw_bottom(frame: &mut Frame, state: &mut AppState, area: Rect) {
 /// columns to the click hitboxes — the two describe one layout.
 pub(crate) fn build_tab_title(state: &AppState) -> Vec<TitleSpan> {
     let theme = &state.theme;
-    let active = Style::default().fg(theme.accent);
-    let inactive = Style::default().fg(theme.text_muted);
+    // Both label styles sit on the filter bar's band, which is lighter
+    // than the terminal background: the inactive labels wear the bright
+    // text colour (text_muted washes out on the band), and the active
+    // tab keeps the accent but bolded, so it still reads on the band.
+    let active = Style::default()
+        .fg(theme.accent)
+        .add_modifier(Modifier::BOLD);
+    let inactive = Style::default().fg(theme.text_active);
     let displayed = state.displayed_bottom_tab();
     let is = |tab: &BottomTab| {
         if displayed == *tab { active } else { inactive }
@@ -206,7 +212,8 @@ mod tests {
         let rule = Style::default().fg(Color::Indexed(240));
 
         // A pi pane shows the Thought label second; the displayed tab
-        // (Thought here) is styled with the accent, the rest muted.
+        // (Thought here) is styled with the bolded accent, the rest in
+        // the bright text colour.
         let mut pi = state_with_focused_agent(AgentType::Pi);
         pi.global.bottom_tab = BottomTab::Thought;
         let (rule_line, _) = top_line_border(&build_tab_title(&pi), rule, 40);
@@ -214,8 +221,15 @@ mod tests {
         let title = build_tab_title(&pi);
         let thought = title.iter().find(|t| t.span.content == "Thought").unwrap();
         assert_eq!(thought.span.style.fg, Some(pi.theme.accent));
+        assert!(
+            thought
+                .span
+                .style
+                .add_modifier
+                .contains(ratatui::style::Modifier::BOLD)
+        );
         let tools = title.iter().find(|t| t.span.content == "Tools").unwrap();
-        assert_eq!(tools.span.style.fg, Some(pi.theme.text_muted));
+        assert_eq!(tools.span.style.fg, Some(pi.theme.text_active));
 
         // A non-pi pane hides the Thought label; the displayed tab is
         // the Activity fallback.
