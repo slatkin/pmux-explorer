@@ -13,7 +13,7 @@
 use crate::tmux;
 
 /// Minimum width applied when `@sidebar_min_width` is unset.
-pub const DEFAULT_MIN_WIDTH: u32 = 20;
+pub const DEFAULT_MIN_WIDTH: u32 = 35;
 
 /// Parse `@sidebar_min_width` / `@sidebar_max_width`. Unset, empty, or
 /// non-numeric values return `None` (the caller then applies
@@ -100,9 +100,10 @@ mod tests {
     #[test]
     fn resize_target_shrinks_a_pane_past_the_max() {
         assert_eq!(resize_target(60, None, Some(40)), Some(40));
-        // At or below the ceiling the pane is left alone.
+        // At or below the ceiling — and above the default floor — the
+        // pane is left alone.
         assert_eq!(resize_target(40, None, Some(40)), None);
-        assert_eq!(resize_target(30, None, Some(40)), None);
+        assert_eq!(resize_target(38, None, Some(40)), None);
     }
 
     #[test]
