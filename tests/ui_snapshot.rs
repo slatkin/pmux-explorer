@@ -31,12 +31,12 @@ fn snapshot_single_agent_idle_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     󱓯 1  0 󰥔 0 󰒲 1  0      ⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0    ⇄ ⤢
     ⓘ                        — ▾
     project
     ┃ 󰒲 
         Waiting for prompt…
-      Tools│Tasks│Git
+               ││󰊢
             No tools yet
     ");
 }
@@ -65,12 +65,12 @@ fn snapshot_secondary_header_without_notices() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     󱓯 1  0 󰥔 0 󰒲 1  0      ⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0    ⇄ ⤢
                              — ▾
     project
     ┃ 󰒲 
         Waiting for prompt…
-      Tools│Tasks│Git
+               ││󰊢
             No tools yet
     ");
 }
@@ -95,12 +95,12 @@ fn snapshot_secondary_header_long_repo_filter_truncated() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     󱓯 1  0 󰥔 0 󰒲 1  0      ⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0    ⇄ ⤢
     ⓘ  very-long-repository-n… ▾
     very-long-repository-name-th
     ┃ 󰒲 
         Waiting for prompt…
-      Tools│Tasks│Git
+               ││󰊢
             No tools yet
     ");
 }
@@ -128,7 +128,7 @@ fn snapshot_version_banner_does_not_duplicate_in_scroll_area() {
 
     let output = render_to_string(&mut state, 28, 10);
     insta::assert_snapshot!(output, @"
-     󱓯 1  0 󰥔 0 󰒲 1  0      ⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0    ⇄ ⤢
     ⓘ                        — ▾
     project
     ┃ 󰒲 
@@ -156,11 +156,11 @@ fn snapshot_single_agent_running_with_elapsed() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0    ⇄ ⤢
     ⓘ                        — ▾
     dotfiles
     ┃                     2m5s
-      Tools│Tasks│Git
+               ││󰊢
             No tools yet
     ");
 }
@@ -186,11 +186,11 @@ fn snapshot_long_pane_name_truncated_keeps_elapsed_visible() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0    ⇄ ⤢
     ⓘ                        — ▾
     dotfiles
     ┃   this-is-a-ridicu… 2m5s
-      Tools│Tasks│Git
+               ││󰊢
             No tools yet
     ");
 }
@@ -214,11 +214,11 @@ fn running_spinner_different_frame() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0    ⇄ ⤢
     ⓘ                        — ▾
     project
     ┃  
-      Tools│Tasks│Git
+               ││󰊢
             No tools yet
     ");
 }
@@ -243,12 +243,12 @@ fn snapshot_agent_with_prompt_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     󱓯 1  0 󰥔 0 󰒲 1  0      ⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0    ⇄ ⤢
     ⓘ                        — ▾
     project
     ┃ 󰒲 
         fix the bug
-      Tools│Tasks│Git
+               ││󰊢
             No tools yet
     ");
 }
@@ -273,14 +273,14 @@ fn snapshot_agent_with_japanese_prompt_ui() {
 
     let output = render_to_string(&mut state, 28, 27);
     insta::assert_snapshot!(output, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0    ⇄ ⤢
     ⓘ                        — ▾
     project
     ┃  
         こ れ っ て 今 1時 間 経 っ て い
         る け ど 、 起 動 し て 確 認 し て
         も 問 題 な い ？
-      Tools│Tasks│Git
+               ││󰊢
             No tools yet
     ");
 }
@@ -347,14 +347,14 @@ fn snapshot_two_agents_same_window_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     󱓯 2  1 󰥔 0 󰒲 1  0      ⤢
+     󱓯 2  1 󰥔 0 󰒲 1  0    ⇄ ⤢
     ⓘ                        — ▾
     project
     ┃  
         fix the bug
       󰒲 codex
         Waiting for prompt…
-      Tools│Tasks│Git
+               ││󰊢
             No tools yet
     ");
 }
@@ -395,14 +395,14 @@ fn snapshot_two_windows_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     󱓯 2  1 󰥔 0 󰒲 1  0      ⤢
+     󱓯 2  1 󰥔 0 󰒲 1  0    ⇄ ⤢
     ⓘ                        — ▾
     project-a
     ┃  
     project-b
       󰒲 codex
         Waiting for prompt…
-      Tools│Tasks│Git
+               ││󰊢
             No tools yet
     ");
 }
@@ -446,14 +446,14 @@ fn snapshot_multi_session_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     󱓯 2  1 󰥔 0 󰒲 1  0      ⤢
+     󱓯 2  1 󰥔 0 󰒲 1  0    ⇄ ⤢
     ⓘ                        — ▾
     dotfiles
     ┃  
     api
       󰒲 codex
         Waiting for prompt…
-      Tools│Tasks│Git
+               ││󰊢
             No tools yet
     ");
 }
@@ -478,12 +478,12 @@ fn snapshot_wait_reason_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     󱓯 1  0 󰥔 1 󰒲 0  0      ⤢
+     󱓯 1  0 󰥔 1 󰒲 0  0    ⇄ ⤢
     ⓘ                        — ▾
     project
     ┃ 󰥔 
         permission required
-      Tools│Tasks│Git
+               ││󰊢
             No tools yet
     ");
 }
@@ -508,12 +508,12 @@ fn snapshot_auto_rename_window_title_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     󱓯 1  0 󰥔 0 󰒲 1  0      ⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0    ⇄ ⤢
     ⓘ                        — ▾
     project
     ┃ 󰒲 
         Waiting for prompt…
-      Tools│Tasks│Git
+               ││󰊢
             No tools yet
     ");
 }
@@ -554,11 +554,11 @@ fn snapshot_activity_log_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0    ⇄ ⤢
     ⓘ                        — ▾
     project
     ┃  
-      Tools│Tasks│Git
+               ││󰊢
     10:32                   Edit
       src/main.rs
     10:31                   Bash
@@ -592,11 +592,11 @@ fn snapshot_activity_log_long_label_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0    ⇄ ⤢
     ⓘ                        — ▾
     project
     ┃  
-      Tools│Tasks│Git
+               ││󰊢
     10:32                   Read
       config/pmux-explorer-rs/sr
       c/very-long-filename.rs
@@ -625,14 +625,14 @@ fn snapshot_prompt_wrapping_ui() {
 
     let output = render_to_string(&mut state, 28, 27);
     insta::assert_snapshot!(output, @"
-     󱓯 1  0 󰥔 0 󰒲 1  0      ⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0    ⇄ ⤢
     ⓘ                        — ▾
     project
     ┃ 󰒲 
         Please fix the
         authentication bug in
         the login flow that…
-      Tools│Tasks│Git
+               ││󰊢
             No tools yet
     ");
 }
@@ -656,12 +656,12 @@ fn snapshot_selected_unfocused_ui() {
 
     let output = render_to_string(&mut state, 28, 26);
     insta::assert_snapshot!(output, @"
-     󱓯 1  0 󰥔 0 󰒲 1  0      ⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0    ⇄ ⤢
     ⓘ                        — ▾
     project
     ┃ 󰒲 
         Waiting for prompt…
-      Tools│Tasks│Git
+               ││󰊢
             No tools yet
     ");
 }
@@ -686,12 +686,12 @@ fn snapshot_error_state_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     󱓯 1  0 󰥔 0 󰒲 0  1      ⤢
+     󱓯 1  0 󰥔 0 󰒲 0  1    ⇄ ⤢
     ⓘ                        — ▾
     project
     ┃  
         something broke
-      Tools│Tasks│Git
+               ││󰊢
             No tools yet
     ");
 }
@@ -716,12 +716,12 @@ fn snapshot_narrow_width_ui() {
 
     let output = render_to_string(&mut state, 18, 25);
     insta::assert_snapshot!(output, @"
-     󱓯 1  0 󰥔 0 󰒲 1⤢
+     󱓯 1  0 󰥔 0  ⇄ ⤢
     ⓘ              — ▾
     project
     ┃ 󰒲 
         hello world
-      Tools│Tasks│Git
+          ││󰊢
        No tools yet
     ");
 }
@@ -766,13 +766,13 @@ fn snapshot_worktree_branch_ui() {
 
     let output = render_to_string(&mut state, 28, 26);
     insta::assert_snapshot!(output, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0    ⇄ ⤢
     ⓘ                        — ▾
     project                    +
     ┃  
     ┃    + feature/sidebar
         fix bug
-      Tools│Tasks│Git
+               ││󰊢
             No tools yet
     ");
 }
@@ -794,13 +794,13 @@ fn snapshot_worktree_long_branch_truncated_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     󱓯 1  0 󰥔 0 󰒲 1  0      ⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0    ⇄ ⤢
     ⓘ                        — ▾
     project                    +
     ┃ 󰒲 
     ┃    + feature/very-long-b…
         Waiting for prompt…
-      Tools│Tasks│Git
+               ││󰊢
             No tools yet
     ");
 }
@@ -823,12 +823,12 @@ fn snapshot_long_branch_with_ports_ui() {
 
     let output = render_to_string(&mut state, 40, 24);
     insta::assert_snapshot!(output, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0                  ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0                ⇄ ⤢
     ⓘ                                    — ▾
     project                                +
     ┃  
     ┃    feature/sidebar/real…  :3000, 5173
-      Tools│Tasks│Git
+                     ││󰊢
                   No tools yet
     ");
 }
@@ -853,13 +853,13 @@ fn snapshot_task_progress_partial_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0    ⇄ ⤢
     ⓘ                        — ▾
     project
     ┃  
         ✔◼◻ 1/3
         working
-      Tools│Tasks│Git
+               ││󰊢
             No tools yet
     ");
 }
@@ -880,12 +880,12 @@ fn snapshot_task_progress_all_completed_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0    ⇄ ⤢
     ⓘ                        — ▾
     project
     ┃  
         ✔✔ 2/2
-      Tools│Tasks│Git
+               ││󰊢
             No tools yet
     ");
 }
@@ -907,12 +907,12 @@ fn snapshot_task_progress_all_pending_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0    ⇄ ⤢
     ⓘ                        — ▾
     project
     ┃  
         ◻◻◻ 0/3
-      Tools│Tasks│Git
+               ││󰊢
             No tools yet
     ");
 }
@@ -951,7 +951,7 @@ fn snapshot_all_elements_combined_ui() {
 
     let output = render_to_string(&mut state, 30, 32);
     insta::assert_snapshot!(output, @"
-     󱓯 1  0 󰥔 1 󰒲 0  0        ⤢
+     󱓯 1  0 󰥔 1 󰒲 0  0      ⇄ ⤢
     ⓘ                          — ▾
     project                      +
     ┃ 󰥔  auto
@@ -961,7 +961,7 @@ fn snapshot_all_elements_combined_ui() {
         └ Plan #2
         permission required
         fixing the bug
-      Tools│Tasks│Git
+                ││󰊢
              No tools yet
     ");
 }
@@ -977,13 +977,13 @@ fn snapshot_response_japanese_ui() {
 
     let output = render_to_string(&mut state, 30, 27);
     insta::assert_snapshot!(output, @"
-     󱓯 1  0 󰥔 0 󰒲 1  0        ⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0      ⇄ ⤢
     ⓘ                          — ▾
     project
     ┃ 󰒲 
       󰭹 修 正 が 完 了 し ま し た 。 テ ス ト
         も 全 て 通 っ て い ま す 。
-      Tools│Tasks│Git
+                ││󰊢
              No tools yet
     ");
 }
@@ -1011,7 +1011,7 @@ fn snapshot_three_groups_middle_focused_ui() {
 
     let output = render_to_string(&mut state, 28, 33);
     insta::assert_snapshot!(output, @"
-     󱓯 3  1 󰥔 0 󰒲 2  0      ⤢
+     󱓯 3  1 󰥔 0 󰒲 2  0    ⇄ ⤢
     ⓘ                        — ▾
     repo-a
        
@@ -1021,7 +1021,7 @@ fn snapshot_three_groups_middle_focused_ui() {
     repo-c
       󰒲 
         Waiting for prompt…
-      Tools│Tasks│Git
+               ││󰊢
             No tools yet
     ");
 }
@@ -1037,11 +1037,11 @@ fn snapshot_bypass_all_badge_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0    ⇄ ⤢
     ⓘ                        — ▾
     project
     ┃   !
-      Tools│Tasks│Git
+               ││󰊢
             No tools yet
     ");
 }
@@ -1055,11 +1055,11 @@ fn snapshot_full_auto_badge_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0    ⇄ ⤢
     ⓘ                        — ▾
     project
     ┃   auto
-      Tools│Tasks│Git
+               ││󰊢
             No tools yet
     ");
 }
@@ -1073,11 +1073,11 @@ fn snapshot_plan_badge_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0    ⇄ ⤢
     ⓘ                        — ▾
     project
     ┃   plan
-      Tools│Tasks│Git
+               ││󰊢
             No tools yet
     ");
 }
@@ -1091,11 +1091,11 @@ fn snapshot_accept_edits_badge_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0    ⇄ ⤢
     ⓘ                        — ▾
     project
     ┃   edit
-      Tools│Tasks│Git
+               ││󰊢
             No tools yet
     ");
 }
@@ -1119,13 +1119,13 @@ fn snapshot_response_with_branch_ui() {
 
     let output = render_to_string(&mut state, 34, 27);
     insta::assert_snapshot!(output, @"
-     󱓯 1  0 󰥔 0 󰒲 1  0            ⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0          ⇄ ⤢
     ⓘ                              — ▾
     project                          +
     ┃ 󰒲 
     ┃    feature/ui-v2
       󰭹 Done. All tests are green.
-      Tools│Tasks│Git
+                  ││󰊢
                No tools yet
     ");
 }
@@ -1141,12 +1141,12 @@ fn snapshot_wait_reason_elicitation_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     󱓯 1  0 󰥔 1 󰒲 0  0      ⤢
+     󱓯 1  0 󰥔 1 󰒲 0  0    ⇄ ⤢
     ⓘ                        — ▾
     project
     ┃ 󰥔 
         waiting for selection
-      Tools│Tasks│Git
+               ││󰊢
             No tools yet
     ");
 }
@@ -1160,12 +1160,12 @@ fn snapshot_wait_reason_unknown_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     󱓯 1  0 󰥔 1 󰒲 0  0      ⤢
+     󱓯 1  0 󰥔 1 󰒲 0  0    ⇄ ⤢
     ⓘ                        — ▾
     project
     ┃ 󰥔 
         some_future_reason
-      Tools│Tasks│Git
+               ││󰊢
             No tools yet
     ");
 }
@@ -1181,12 +1181,12 @@ fn snapshot_wait_reason_permission_denied_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     󱓯 1  0 󰥔 1 󰒲 0  0      ⤢
+     󱓯 1  0 󰥔 1 󰒲 0  0    ⇄ ⤢
     ⓘ                        — ▾
     project
     ┃ 󰥔 
         permission denied
-      Tools│Tasks│Git
+               ││󰊢
             No tools yet
     ");
 }
@@ -1210,12 +1210,12 @@ fn snapshot_worktree_with_name_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0    ⇄ ⤢
     ⓘ                        — ▾
     project                    +
     ┃  
     ┃    + auth-wt: feat/auth
-      Tools│Tasks│Git
+               ││󰊢
             No tools yet
     ");
 }
@@ -1237,12 +1237,12 @@ fn snapshot_worktree_name_same_as_branch_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0    ⇄ ⤢
     ⓘ                        — ▾
     project                    +
     ┃  
     ┃    + feat/auth
-      Tools│Tasks│Git
+               ││󰊢
             No tools yet
     ");
 }
@@ -1294,11 +1294,11 @@ fn snapshot_activity_all_tool_types_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0    ⇄ ⤢
     ⓘ                        — ▾
     project
     ┃  
-      Tools│Tasks│Git
+               ││󰊢
     10:07                  Agent
       Explore codebase
     10:06                  Skill
@@ -1324,11 +1324,11 @@ fn snapshot_focus_activity_log_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0    ⇄ ⤢
     ⓘ                        — ▾
     project
     ┃  
-      Tools│Tasks│Git
+               ││󰊢
     10:00                   Read
       file.rs
     ");
@@ -1349,12 +1349,12 @@ fn right_border_narrow_width_with_badge() {
     // fully-drawn right border.
     let output = render_to_string(&mut state, 22, 25);
     insta::assert_snapshot!(output, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0⤢
+     󱓯 1  1 󰥔 0 󰒲 0  ⇄ ⤢
     ⓘ                  — ▾
     project
     ┃   !         2h0m0s
         fix the issue
-      Tools│Tasks│Git
+            ││󰊢
          No tools yet
     ");
     // Structural invariant (width-agnostic): every line that starts with a
@@ -1398,99 +1398,99 @@ fn right_border_all_permission_modes_and_agents() {
     }
     insta::assert_snapshot!(composite, @"
     === Claude / Default ===
-     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0    ⇄ ⤢
     ⓘ                        — ▾
     project
     ┃                 1h30m32s
-      Tools│Tasks│Git
+               ││󰊢
             No tools yet
 
     === Claude / Auto ===
-     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0    ⇄ ⤢
     ⓘ                        — ▾
     project
     ┃   auto          1h30m32s
-      Tools│Tasks│Git
+               ││󰊢
             No tools yet
 
     === Claude / DontAsk ===
-     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0    ⇄ ⤢
     ⓘ                        — ▾
     project
     ┃   dontAsk       1h30m32s
-      Tools│Tasks│Git
+               ││󰊢
             No tools yet
 
     === Claude / Plan ===
-     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0    ⇄ ⤢
     ⓘ                        — ▾
     project
     ┃   plan          1h30m32s
-      Tools│Tasks│Git
+               ││󰊢
             No tools yet
 
     === Claude / AcceptEdits ===
-     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0    ⇄ ⤢
     ⓘ                        — ▾
     project
     ┃   edit          1h30m32s
-      Tools│Tasks│Git
+               ││󰊢
             No tools yet
 
     === Claude / BypassPermissions ===
-     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0    ⇄ ⤢
     ⓘ                        — ▾
     project
     ┃   !             1h30m32s
-      Tools│Tasks│Git
+               ││󰊢
             No tools yet
 
     === Codex / Default ===
-     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0    ⇄ ⤢
     ⓘ                        — ▾
     project
     ┃  codex           1h30m32s
-      Tools│Tasks│Git
+               ││󰊢
             No tools yet
 
     === Codex / Auto ===
-     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0    ⇄ ⤢
     ⓘ                        — ▾
     project
     ┃  codex auto      1h30m32s
-      Tools│Tasks│Git
+               ││󰊢
             No tools yet
 
     === Codex / DontAsk ===
-     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0    ⇄ ⤢
     ⓘ                        — ▾
     project
     ┃  codex dontAsk   1h30m32s
-      Tools│Tasks│Git
+               ││󰊢
             No tools yet
 
     === Codex / Plan ===
-     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0    ⇄ ⤢
     ⓘ                        — ▾
     project
     ┃  codex plan      1h30m32s
-      Tools│Tasks│Git
+               ││󰊢
             No tools yet
 
     === Codex / AcceptEdits ===
-     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0    ⇄ ⤢
     ⓘ                        — ▾
     project
     ┃  codex edit      1h30m32s
-      Tools│Tasks│Git
+               ││󰊢
             No tools yet
 
     === Codex / BypassPermissions ===
-     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0    ⇄ ⤢
     ⓘ                        — ▾
     project
     ┃  codex !         1h30m32s
-      Tools│Tasks│Git
+               ││󰊢
             No tools yet
     ");
 }
@@ -1511,13 +1511,13 @@ fn snapshot_filter_bar_shows_counts() {
     let mut state = make_state_with_groups(vec![make_repo_group("project", vec![pane1, pane2])]);
     let output = render_to_string(&mut state, 30, 25);
     insta::assert_snapshot!(output, @"
-     󱓯 2  1 󰥔 0 󰒲 1  0        ⤢
+     󱓯 2  1 󰥔 0 󰒲 1  0      ⇄ ⤢
     ⓘ                          — ▾
     project
     ┃  
       󰒲 codex
         Waiting for prompt…
-      Tools│Tasks│Git
+                ││󰊢
              No tools yet
     ");
 }
@@ -1537,11 +1537,11 @@ fn snapshot_filter_running_hides_idle() {
     state.global.status_filter = StatusFilter::Busy;
     let output = render_to_string(&mut state, 30, 25);
     insta::assert_snapshot!(output, @"
-     󱓯 2  1 󰥔 0 󰒲 1  0        ⤢
+     󱓯 2  1 󰥔 0 󰒲 1  0      ⇄ ⤢
     ⓘ                          — ▾
     project
     ┃  
-      Tools│Tasks│Git
+                ││󰊢
              No tools yet
     ");
 }
@@ -1561,12 +1561,12 @@ fn snapshot_filter_idle_hides_running() {
     state.global.status_filter = StatusFilter::Idle;
     let output = render_to_string(&mut state, 30, 25);
     insta::assert_snapshot!(output, @"
-     󱓯 2  1 󰥔 0 󰒲 1  0        ⤢
+     󱓯 2  1 󰥔 0 󰒲 1  0      ⇄ ⤢
     ⓘ                          — ▾
     project
       󰒲 codex
         Waiting for prompt…
-      Tools│Tasks│Git
+                ││󰊢
              No tools yet
     ");
 }
@@ -1589,11 +1589,11 @@ fn snapshot_filter_hides_empty_groups() {
     state.global.status_filter = StatusFilter::Busy;
     let output = render_to_string(&mut state, 30, 25);
     insta::assert_snapshot!(output, @"
-     󱓯 2  1 󰥔 0 󰒲 1  0        ⤢
+     󱓯 2  1 󰥔 0 󰒲 1  0      ⇄ ⤢
     ⓘ                          — ▾
     repo-a
     ┃  
-      Tools│Tasks│Git
+                ││󰊢
              No tools yet
     ");
 }
@@ -1613,13 +1613,13 @@ fn snapshot_filter_all_shows_everything() {
     state.global.status_filter = StatusFilter::All;
     let output = render_to_string(&mut state, 30, 30);
     insta::assert_snapshot!(output, @"
-     󱓯 2  1 󰥔 0 󰒲 1  0        ⤢
+     󱓯 2  1 󰥔 0 󰒲 1  0      ⇄ ⤢
     ⓘ                          — ▾
     project
     ┃  
       󰒲 codex
         Waiting for prompt…
-      Tools│Tasks│Git
+                ││󰊢
              No tools yet
     ");
 }
@@ -1638,7 +1638,7 @@ fn snapshot_filter_bar_icons_use_selected_and_inactive_colors() {
 
     let styled = render_to_styled_string(&mut state, 30, 25);
     let line = styled.lines().next().unwrap();
-    insta::assert_snapshot!(line, @" [bg:#414868]󱓯[fg:#7aa2f7,bg:#414868] [bg:#414868]2[fg:#7aa2f7,bg:#414868,bold] [bg:#414868][fg:#9ece6a,bg:#414868] [bg:#414868]1[fg:#c0caf5,bg:#414868] [bg:#414868]󰥔[fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868]󰒲[fg:#7dcfff,bg:#414868] [bg:#414868]1[fg:#c0caf5,bg:#414868] [bg:#414868][fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]⤢[fg:#9ece6a,bg:#414868] [bg:#414868]");
+    insta::assert_snapshot!(line, @" [bg:#414868]󱓯[fg:#7aa2f7,bg:#414868] [bg:#414868]2[fg:#7aa2f7,bg:#414868,bold] [bg:#414868][fg:#9ece6a,bg:#414868] [bg:#414868]1[fg:#c0caf5,bg:#414868] [bg:#414868]󰥔[fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868]󰒲[fg:#7dcfff,bg:#414868] [bg:#414868]1[fg:#c0caf5,bg:#414868] [bg:#414868][fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]⇄[fg:#9ece6a,bg:#414868] [bg:#414868]⤢[fg:#9ece6a,bg:#414868] [bg:#414868]");
 }
 
 #[test]
@@ -1657,7 +1657,7 @@ fn snapshot_filter_bar_stays_fixed_on_scroll() {
 
     let output = render_to_string(&mut state, 30, 15);
     insta::assert_snapshot!(output, @"
-     󱓯 6  6 󰥔 0 󰒲 0  0        ⤢
+     󱓯 6  6 󰥔 0 󰒲 0  0      ⇄ ⤢
     ⓘ                          — ▾
     project
        
@@ -1666,7 +1666,7 @@ fn snapshot_filter_bar_stays_fixed_on_scroll() {
        
        
        
-      Tools│Tasks│Git
+                ││󰊢
              No tools yet
     ");
 }
@@ -1688,7 +1688,7 @@ fn snapshot_filter_selected_icon_has_color_without_underline() {
     // modifier on the selected filter would surface in the snapshot diff.
     let styled = render_to_styled_string(&mut state, 30, 25);
     let line = styled.lines().next().unwrap();
-    insta::assert_snapshot!(line, @" [bg:#414868]󱓯[fg:#7aa2f7,bg:#414868] [bg:#414868]2[fg:#c0caf5,bg:#414868] [bg:#414868][fg:#9ece6a,bg:#414868] [bg:#414868]1[fg:#7aa2f7,bg:#414868,bold] [bg:#414868]󰥔[fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868]󰒲[fg:#7dcfff,bg:#414868] [bg:#414868]1[fg:#c0caf5,bg:#414868] [bg:#414868][fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]⤢[fg:#9ece6a,bg:#414868] [bg:#414868]");
+    insta::assert_snapshot!(line, @" [bg:#414868]󱓯[fg:#7aa2f7,bg:#414868] [bg:#414868]2[fg:#c0caf5,bg:#414868] [bg:#414868][fg:#9ece6a,bg:#414868] [bg:#414868]1[fg:#7aa2f7,bg:#414868,bold] [bg:#414868]󰥔[fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868]󰒲[fg:#7dcfff,bg:#414868] [bg:#414868]1[fg:#c0caf5,bg:#414868] [bg:#414868][fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]⇄[fg:#9ece6a,bg:#414868] [bg:#414868]⤢[fg:#9ece6a,bg:#414868] [bg:#414868]");
 }
 
 #[test]
@@ -1707,12 +1707,12 @@ fn snapshot_filter_error_shows_agents() {
     state.global.status_filter = StatusFilter::Error;
     let output = render_to_string(&mut state, 30, 25);
     insta::assert_snapshot!(output, @"
-     󱓯 2  1 󰥔 0 󰒲 0  1        ⤢
+     󱓯 2  1 󰥔 0 󰒲 0  1      ⇄ ⤢
     ⓘ                          — ▾
     project
     ┃  
         something broke
-      Tools│Tasks│Git
+                ││󰊢
              No tools yet
     ");
 }
@@ -1733,12 +1733,12 @@ fn snapshot_filter_waiting_shows_only_waiting() {
     state.global.status_filter = StatusFilter::Waiting;
     let output = render_to_string(&mut state, 30, 25);
     insta::assert_snapshot!(output, @"
-     󱓯 2  0 󰥔 1 󰒲 1  0        ⤢
+     󱓯 2  0 󰥔 1 󰒲 1  0      ⇄ ⤢
     ⓘ                          — ▾
     project
     ┃ 󰥔 
         permission required
-      Tools│Tasks│Git
+                ││󰊢
              No tools yet
     ");
 }
@@ -1780,13 +1780,13 @@ fn snapshot_repo_header_shows_spawn_plus_button() {
     let mut state = make_state_for_popup_tests(vec![repo_group_with_root("proj", vec![pane])]);
     let output = render_to_string(&mut state, 30, 15);
     insta::assert_snapshot!(output, @"
-     󱓯 1  0 󰥔 0 󰒲 1  0        ⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0      ⇄ ⤢
     ⓘ                          — ▾
     proj                         +
     ┃ 󰒲 
     ┃    main
         Waiting for prompt…
-      Tools│Tasks│Git
+                ││󰊢
              No tools yet
     ");
 }
@@ -1798,7 +1798,7 @@ fn snapshot_spawn_modal_default_state() {
     state.open_spawn_input_for_repo("proj".into(), "/home/u/proj".into(), None);
     let output = render_to_string(&mut state, 34, 18);
     insta::assert_snapshot!(output, @"
-     󱓯 1  0 󰥔 0 󰒲 1  0            ⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0          ⇄ ⤢
     ⓘ╭ Spawn worktree ──────────────╮▾
     p│                              │+
     ┃│ NAME                         │
@@ -1808,7 +1808,7 @@ fn snapshot_spawn_modal_default_state() {
      │ MODE                         │
      │ default                      │
      ╰──────────────────────────────╯
-      Tools│Tasks│Git
+                  ││󰊢
                No tools yet
     ");
 }
@@ -1826,7 +1826,7 @@ fn snapshot_spawn_modal_anchors_directly_below_repo_header() {
     state.open_spawn_input_from_selection();
     let output = render_to_string(&mut state, 34, 18);
     insta::assert_snapshot!(output, @"
-     󱓯 1  0 󰥔 0 󰒲 1  0            ⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0          ⇄ ⤢
     ⓘ                              — ▾
     proj                             +
     ╭ Spawn worktree ──────────────╮
@@ -1837,7 +1837,7 @@ fn snapshot_spawn_modal_anchors_directly_below_repo_header() {
     │ MODE                         │
     │ default                      │
     ╰──────────────────────────────╯
-      Tools│Tasks│Git
+                  ││󰊢
                No tools yet
     ");
 }
@@ -1856,7 +1856,7 @@ fn snapshot_spawn_modal_advance_fields_cycles_agent_and_mode() {
     state.spawn_input_cycle(2); // default → bypassPermissions
     let output = render_to_string(&mut state, 34, 18);
     insta::assert_snapshot!(output, @"
-     󱓯 1  0 󰥔 0 󰒲 1  0            ⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0          ⇄ ⤢
     ⓘ╭ Spawn worktree ──────────────╮▾
     p│                              │+
     ┃│ NAME                         │
@@ -1866,7 +1866,7 @@ fn snapshot_spawn_modal_advance_fields_cycles_agent_and_mode() {
      │ MODE                         │
      │ bypassPermissions            │
      ╰──────────────────────────────╯
-      Tools│Tasks│Git
+                  ││󰊢
                No tools yet
     ");
 }
@@ -1881,7 +1881,7 @@ fn snapshot_spawn_modal_tail_fits_long_task_name() {
     }
     let output = render_to_string(&mut state, 34, 18);
     insta::assert_snapshot!(output, @"
-     󱓯 1  0 󰥔 0 󰒲 1  0            ⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0          ⇄ ⤢
     ⓘ╭ Spawn worktree ──────────────╮▾
     p│                              │+
     ┃│ NAME                         │
@@ -1891,7 +1891,7 @@ fn snapshot_spawn_modal_tail_fits_long_task_name() {
      │ MODE                         │
      │ default                      │
      ╰──────────────────────────────╯
-      Tools│Tasks│Git
+                  ││󰊢
                No tools yet
     ");
 }
@@ -1906,7 +1906,7 @@ fn snapshot_spawn_modal_narrow_width_still_fits() {
     }
     let output = render_to_string(&mut state, 18, 18);
     insta::assert_snapshot!(output, @"
-     󱓯 1  0 󰥔 0 󰒲 1⤢
+     󱓯 1  0 󰥔 0  ⇄ ⤢
     ╭ Spawn worktree ╮
     │ NAME           │
     │ hi█            │
@@ -1915,7 +1915,7 @@ fn snapshot_spawn_modal_narrow_width_still_fits() {
     │ MODE           │
     │ default        │
     ╰────────────────╯
-      Tools│Tasks│Git
+          ││󰊢
        No tools yet
     ");
 }
@@ -1934,14 +1934,14 @@ fn snapshot_spawn_modal_compact_layout_in_short_agent_area() {
     }
     let output = render_to_string(&mut state, 40, 14);
     insta::assert_snapshot!(output, @"
-     󱓯 1  0 󰥔 0 󰒲 1  0                  ⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0                ⇄ ⤢
     ⓘ                                    — ▾
     proj╭ Spawn worktree ──────────────╮   +
     ┃ 󰒲 │ hi█                          │
     ┃   │ claude                       │
         │ default                      │
         ╰──────────────────────────────╯
-      Tools│Tasks│Git
+                     ││󰊢
                   No tools yet
     ");
 }
@@ -1954,7 +1954,7 @@ fn snapshot_spawn_modal_compact_layout_shows_inline_error() {
     state.confirm_spawn_input();
     let output = render_to_string(&mut state, 40, 14);
     insta::assert_snapshot!(output, @"
-     󱓯 1  0 󰥔 0 󰒲 1  0                  ⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0                ⇄ ⤢
     ⓘ                                    — ▾
     proj╭ Spawn worktree ──────────────╮   +
     ┃ 󰒲 │ █                            │
@@ -1962,7 +1962,7 @@ fn snapshot_spawn_modal_compact_layout_shows_inline_error() {
         │ default                      │
         │ name is empty                │
         ╰──────────────────────────────╯
-      Tools│Tasks│Git
+                     ││󰊢
                   No tools yet
     ");
 }
@@ -2004,7 +2004,7 @@ fn snapshot_sidebar_spawned_pane_appends_trailing_remove_marker() {
     state.global.bottom_percent = 1;
     let output = render_to_string(&mut state, 30, 20);
     insta::assert_snapshot!(output, @"
-     󱓯 2  0 󰥔 0 󰒲 2  0        ⤢
+     󱓯 2  0 󰥔 0 󰒲 2  0      ⇄ ⤢
     ⓘ                          — ▾
     proj                         +
     ┃ 󰒲 
@@ -2013,7 +2013,7 @@ fn snapshot_sidebar_spawned_pane_appends_trailing_remove_marker() {
       󰒲 
          + feat/x               ×
         Waiting for prompt…
-      Tools│Tasks│Git
+                ││󰊢
              No tools yet
     ");
 }
@@ -2144,13 +2144,13 @@ fn snapshot_sidebar_spawned_long_branch_truncates_and_keeps_x() {
     state.global.bottom_percent = 1;
     let output = render_to_string(&mut state, 24, 20);
     insta::assert_snapshot!(output, @"
-     󱓯 1  0 󰥔 0 󰒲 1  0  ⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0⇄ ⤢
     ⓘ                    — ▾
     proj                   +
       󰒲 
          + feature/really…×
         Waiting for prompt…
-      Tools│Tasks│Git
+             ││󰊢
           No tools yet
     ");
     // The click target must still be registered even after
@@ -2187,13 +2187,13 @@ fn snapshot_sidebar_spawned_coexists_with_port_display() {
     state.pane_state_mut("%9").ports = vec![3000];
     let output = render_to_string(&mut state, 30, 20);
     insta::assert_snapshot!(output, @"
-     󱓯 1  0 󰥔 0 󰒲 1  0        ⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0      ⇄ ⤢
     ⓘ                          — ▾
     proj                         +
       󰒲 
          + feat/srv       :3000 ×
         Waiting for prompt…
-      Tools│Tasks│Git
+                ││󰊢
              No tools yet
     ");
 }
@@ -2210,7 +2210,7 @@ fn snapshot_remove_confirm_modal_shows_three_options() {
     };
     let output = render_to_string(&mut state, 50, 18);
     insta::assert_snapshot!(output, @"
-     󱓯 1  0 󰥔 0 󰒲 1  0                            ⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0                          ⇄ ⤢
     ⓘ                                              — ▾
     proj                                             +
     ┃ 󰒲 
@@ -2219,7 +2219,7 @@ fn snapshot_remove_confirm_modal_shows_three_options() {
                │[c] close window only     │
                │[n] cancel                │
                ╰──────────────────────────╯
-      Tools│Tasks│Git
+                          ││󰊢
                        No tools yet
     ");
 }
@@ -2235,7 +2235,7 @@ fn snapshot_spawn_modal_shows_inline_error_when_task_empty() {
     assert!(state.is_spawn_input_open(), "popup must stay open on error");
     let output = render_to_string(&mut state, 34, 18);
     insta::assert_snapshot!(output, @"
-     󱓯 1  0 󰥔 0 󰒲 1  0            ⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0          ⇄ ⤢
     ⓘ╭ Spawn worktree ──────────────╮▾
     p│                              │+
     ┃│ NAME                         │
@@ -2246,7 +2246,7 @@ fn snapshot_spawn_modal_shows_inline_error_when_task_empty() {
      │ default                      │
      │ name is empty                │
      ╰──────────────────────────────╯
-      Tools│Tasks│Git
+                  ││󰊢
                No tools yet
     ");
 }
@@ -2280,7 +2280,7 @@ fn snapshot_remove_confirm_modal_shows_inline_error() {
     };
     let output = render_to_string(&mut state, 50, 18);
     insta::assert_snapshot!(output, @"
-     󱓯 1  0 󰥔 0 󰒲 1  0                            ⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0                          ⇄ ⤢
     ⓘ                                              — ▾
     proj                                             +
     ┃ 󰒲 
@@ -2290,7 +2290,7 @@ fn snapshot_remove_confirm_modal_shows_inline_error() {
                │[n] cancel                │
                │git: worktree has uncommi…│
                ╰──────────────────────────╯
-      Tools│Tasks│Git
+                          ││󰊢
                        No tools yet
     ");
 }
@@ -2315,12 +2315,12 @@ fn snapshot_background_status_shows_bg_command_row() {
 
     let output = render_to_string(&mut state, 32, 25);
     insta::assert_snapshot!(output, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0          ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0        ⇄ ⤢
     ⓘ                            — ▾
     project
     ┃ ◎ 
         $ npm run dev
-      Tools│Tasks│Git
+                 ││󰊢
               No tools yet
     ");
 }
@@ -2346,12 +2346,12 @@ fn snapshot_running_pane_still_shows_live_bg_command() {
 
     let output = render_to_string(&mut state, 32, 25);
     insta::assert_snapshot!(output, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0          ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0        ⇄ ⤢
     ⓘ                            — ▾
     project
     ┃                          10s
         $ cargo watch
-      Tools│Tasks│Git
+                 ││󰊢
               No tools yet
     ");
 }
@@ -2376,12 +2376,12 @@ fn snapshot_background_long_command_truncates_with_ellipsis() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0      ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0    ⇄ ⤢
     ⓘ                        — ▾
     project
     ┃ ◎ 
         $ cargo run --bin very-…
-      Tools│Tasks│Git
+               ││󰊢
             No tools yet
     ");
 }
@@ -2429,12 +2429,12 @@ fn snapshot_subagent_identity_survives_repo_filter_hiding_parent() {
 
     let output = render_to_string(&mut state, 60, 40);
     insta::assert_snapshot!(output, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0                                      ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0                                    ⇄ ⤢
     ⓘ                                              project-sub ▾
     project-sub
         ♟
       ▷ orchestrator
-      Tools│Thought│Tasks│Git
+                              │󰟶││󰊢
                             No tools yet
     ");
 }

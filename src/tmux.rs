@@ -4,6 +4,7 @@ mod panes;
 mod query;
 mod types;
 
+pub(crate) use commands::switch_sidebar_sides;
 pub use commands::{
     display_message, dock_pane, float_pane, isolate_from_live_server, kill_window, move_pane,
     new_window, pane_active_border_args, pane_session_name, run_tmux, run_tmux_capture,

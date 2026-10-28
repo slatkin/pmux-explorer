@@ -176,6 +176,10 @@ fn handle_main_key(key: KeyEvent, state: &mut AppState, git_tab_active: &AtomicB
         KeyCode::Char('p') if key.modifiers == (KeyModifiers::CONTROL | KeyModifiers::ALT) => {
             state.toggle_popout();
         }
+        // pmux-explorer.conf forwards tmux prefix + Ctrl-O as M-C-o.
+        KeyCode::Char('o') if key.modifiers == (KeyModifiers::CONTROL | KeyModifiers::ALT) => {
+            state.switch_sidebar_side();
+        }
         KeyCode::Char('p') if ctrl => pane_nav_up(state),
         KeyCode::Char('n') => {
             if state.focus_state.focus == Focus::Panes {
@@ -323,6 +327,13 @@ mod tests {
         )
     }
 
+    fn side_switch_key() -> KeyEvent {
+        KeyEvent::new(
+            KeyCode::Char('o'),
+            KeyModifiers::CONTROL | KeyModifiers::ALT,
+        )
+    }
+
     /// Build an AppState with three navigable pane rows and Panes focus,
     /// which is the precondition the navigation arms operate against.
     fn state_with_three_panes() -> AppState {
@@ -445,6 +456,47 @@ mod tests {
                 "Pop-out unavailable: could not read the window size, so the sidebar stays docked."
             ),
         );
+    }
+
+    #[test]
+    fn side_switch_shortcut_switches_without_navigating() {
+        // The key reaches the switch action: on the isolated test tmux
+        // the sweep finds no sidebars and stays silent — the assertion
+        // is that the press neither navigated nor flashed a pop-out.
+        let mut state = state_with_three_panes();
+        state.tmux_pane = "%4294967295".into();
+        state.global.selected_pane_row = 1;
+        let flag = AtomicBool::new(false);
+        handle_key_event(side_switch_key(), &mut state, &flag);
+        assert_eq!(state.global.selected_pane_row, 1);
+        assert!(state.flash.is_none());
+    }
+
+    #[test]
+    fn side_switch_shortcut_does_nothing_while_a_popup_is_open() {
+        // The modal layer swallows the whole keyboard, so prefix + Ctrl-O
+        // must not sweep while a popup is open.
+        let mut state = state_with_repo_popup_open();
+        state.tmux_pane = "%4294967295".into();
+        let flag = AtomicBool::new(false);
+        handle_key_event(side_switch_key(), &mut state, &flag);
+        assert!(
+            state.flash.is_none(),
+            "no side switch while a popup is open"
+        );
+        assert!(state.is_repo_popup_open());
+    }
+
+    #[test]
+    fn bare_o_and_plain_ctrl_o_do_not_switch_the_side() {
+        // Only the M-C-o spelling (tmux prefix + Ctrl-O) switches; plain
+        // Ctrl-O and bare o stay safe inside the TUI.
+        let mut state = state_with_three_panes();
+        state.tmux_pane = "%4294967295".into();
+        let flag = AtomicBool::new(false);
+        handle_key_event(key(KeyCode::Char('o')), &mut state, &flag);
+        handle_key_event(ctrl_key('o'), &mut state, &flag);
+        assert!(state.flash.is_none());
     }
 
     #[test]

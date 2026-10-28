@@ -187,7 +187,7 @@ fn unique_window_paths(output: &str) -> Vec<(String, String)> {
 /// Which side of the window the sidebar pane is created on, driven by
 /// the `@sidebar_position` tmux option.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum SidebarPosition {
+pub(crate) enum SidebarPosition {
     Left,
     Right,
 }
@@ -198,11 +198,29 @@ impl SidebarPosition {
     /// side; everything else — including unset, empty, or invalid values
     /// — falls back to the historical default of `left`, so a typo never
     /// moves the sidebar somewhere unexpected.
-    fn from_setting(setting: &str) -> Self {
+    pub(crate) fn from_setting(setting: &str) -> Self {
         if setting.trim().eq_ignore_ascii_case("right") {
             Self::Right
         } else {
             Self::Left
+        }
+    }
+
+    /// The option value this side writes back to `@sidebar_position`
+    /// (the lowercase spelling the config seeds and `from_setting`
+    /// parses).
+    pub(crate) fn as_setting(self) -> &'static str {
+        match self {
+            Self::Left => "left",
+            Self::Right => "right",
+        }
+    }
+
+    /// The side across the window.
+    pub(crate) fn opposite(self) -> Self {
+        match self {
+            Self::Left => Self::Right,
+            Self::Right => Self::Left,
         }
     }
 }
@@ -234,7 +252,7 @@ fn parse_pane_geometry(line: &str) -> Option<PaneGeometry> {
 /// sidebar, or the pane with the largest right edge (`left + width`) for
 /// a right sidebar, so the new pane always lands at the window's outer
 /// edge. Returns `None` when no line of `output` parses as geometry.
-fn target_pane_for_position(output: &str, position: SidebarPosition) -> Option<String> {
+pub(crate) fn target_pane_for_position(output: &str, position: SidebarPosition) -> Option<String> {
     let panes = output.lines().filter_map(parse_pane_geometry);
     match position {
         SidebarPosition::Left => panes.min_by_key(|pane| pane.left),

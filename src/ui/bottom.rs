@@ -35,14 +35,14 @@ pub(crate) struct TitleSpan {
     tab: Option<BottomTab>,
 }
 
-/// The rule row that tops the bottom panel: a two-space prefix, the tab
-/// run, one separating space, and space fill to the right edge — a
-/// solid band [`draw_bottom`] paints in `filter_bar_bg`. No left, right
-/// or bottom border character exists around it. The prefix plus that
-/// space need 3 display columns; when `width` is smaller (the floor is
-/// the same 20 columns the filter bar treats as its minimum), each title
-/// span truncates against a shared displayed-width budget so the rule
-/// stays exactly `width` long.
+/// The rule row that tops the bottom panel: the tab run centered on
+/// the row and space fill on both sides — a solid band [`draw_bottom`]
+/// paints in `filter_bar_bg`. No left, right or bottom border
+/// character exists around it. The run centers by padding
+/// `floor((width - run) / 2)` columns on the left and the remainder on
+/// the right, so the row stays exactly `width` long; a run wider than
+/// `width` gets no pad and each title span truncates against the
+/// remaining budget, so the row never overflows.
 ///
 /// The walk also produces each label's drawn column range — the click
 /// hitboxes are this layout read back, so a label the rule truncates
@@ -53,11 +53,15 @@ pub(crate) fn top_line_border(
     rule_style: Style,
     width: u16,
 ) -> (Line<'static>, Vec<BottomTabTarget>) {
-    let fixed = 3usize; // the two-space prefix + the space before the fill
-    let mut remaining = (width as usize).saturating_sub(fixed);
-    let mut spans = vec![Span::styled("  ", rule_style)];
+    let run_width: usize = title_spans
+        .iter()
+        .map(|title| display_width(&title.span.content))
+        .sum();
+    let leading = (width as usize).saturating_sub(run_width) / 2;
+    let mut remaining = (width as usize).saturating_sub(leading);
+    let mut spans = vec![Span::styled(" ".repeat(leading), rule_style)];
+    let mut col = leading as u16; // the first span starts after the pad
     let mut targets = Vec::new();
-    let mut col = 2u16; // the first span starts right after the prefix
     for title in title_spans {
         let text = truncate_to_width(&title.span.content, remaining);
         let cols = display_width(&text);
@@ -72,7 +76,7 @@ pub(crate) fn top_line_border(
         col += cols as u16;
         spans.push(Span::styled(text, title.span.style));
     }
-    spans.push(Span::styled(" ".repeat(remaining + 1), rule_style));
+    spans.push(Span::styled(" ".repeat(remaining), rule_style));
     (Line::from(spans), targets)
 }
 
@@ -113,11 +117,11 @@ pub fn draw_bottom(frame: &mut Frame, state: &mut AppState, area: Rect) {
     }
 }
 
-/// The tab run drawn on the rule: one label span per shown tab, a
-/// separator span between labels, styled active/inactive against the
+/// The tab run drawn on the rule: one glyph span per shown tab, a
+/// separator span between glyphs, styled active/inactive against the
 /// displayed tab. The shown tabs come from [`AppState::shown_bottom_tabs`]
-/// and the label strings from [`BottomTab::label`]; each label span
-/// carries its tab so `top_line_border` can hand the drawn label
+/// and the glyph strings from [`BottomTab::label`]; each glyph span
+/// carries its tab so `top_line_border` can hand the drawn glyph
 /// columns to the click hitboxes — the two describe one layout.
 pub(crate) fn build_tab_title(state: &AppState) -> Vec<TitleSpan> {
     let theme = &state.theme;
@@ -144,6 +148,8 @@ pub(crate) fn build_tab_title(state: &AppState) -> Vec<TitleSpan> {
             });
         }
         spans.push(TitleSpan {
+            // One glyph per tab (see `BottomTab::label`); the run is
+            // centered on the rule by `top_line_border`.
             span: Span::styled(tab.label(), is(&tab)),
             tab: Some(tab),
         });
@@ -211,15 +217,18 @@ mod tests {
     fn top_line_border_fits_the_width_and_truncates_the_tab_run() {
         let rule = Style::default().fg(Color::Indexed(240));
 
-        // A pi pane shows the Thought label second; the displayed tab
+        // A pi pane shows the Thought glyph second; the displayed tab
         // (Thought here) is styled with the bolded accent, the rest in
         // the bright text colour.
         let mut pi = state_with_focused_agent(AgentType::Pi);
         pi.global.bottom_tab = BottomTab::Thought;
         let (rule_line, _) = top_line_border(&build_tab_title(&pi), rule, 40);
-        insta::assert_snapshot!(rule_text(rule_line), @"  Tools│Thought│Tasks│Git");
+        insta::assert_snapshot!(rule_text(rule_line), @"                │󰟶││󰊢");
         let title = build_tab_title(&pi);
-        let thought = title.iter().find(|t| t.span.content == "Thought").unwrap();
+        let thought = title
+            .iter()
+            .find(|t| t.span.content == "\u{f07f6}")
+            .unwrap();
         assert_eq!(thought.span.style.fg, Some(pi.theme.accent));
         assert!(
             thought
@@ -228,26 +237,26 @@ mod tests {
                 .add_modifier
                 .contains(ratatui::style::Modifier::BOLD)
         );
-        let tools = title.iter().find(|t| t.span.content == "Tools").unwrap();
+        let tools = title.iter().find(|t| t.span.content == "\u{f0ad}").unwrap();
         assert_eq!(tools.span.style.fg, Some(pi.theme.text_active));
 
-        // A non-pi pane hides the Thought label; the displayed tab is
-        // the Activity fallback.
+        // A non-pi pane hides the Thought glyph; the displayed tab is
+        // the Activity fallback. The run centers at every width.
         let claude = state_with_focused_agent(AgentType::Claude);
         let (rule_line, _) = top_line_border(&build_tab_title(&claude), rule, 30);
-        insta::assert_snapshot!(rule_text(rule_line), @"  Tools│Tasks│Git");
+        insta::assert_snapshot!(rule_text(rule_line), @"            ││󰊢");
 
-        // 22 and 18 leave the full 15-cell tab run plus fill dashes;
-        // 20 — the supported minimum — truncates the tail of the run
-        // (Tasks closes with an ellipsis, Git is gone entirely) but
-        // the rule stays exactly the width. The `─ ` prefix is 2
-        // columns, so the label columns never move.
+        // Every width keeps the rule exactly the width: the glyphs fit
+        // from 20 columns up, and at 6 the overflowing run loses its
+        // pad, truncates the tail (Git draws nothing) and stays 6 wide.
         let (rule_line, _) = top_line_border(&build_tab_title(&claude), rule, 22);
-        insta::assert_snapshot!(rule_text(rule_line), @"  Tools│Tasks│Git");
+        insta::assert_snapshot!(rule_text(rule_line), @"        ││󰊢");
         let (rule_line, _) = top_line_border(&build_tab_title(&pi), rule, 20);
-        insta::assert_snapshot!(rule_text(rule_line), @"  Tools│Thought│Ta…");
+        insta::assert_snapshot!(rule_text(rule_line), @"      │󰟶││󰊢");
         let (rule_line, _) = top_line_border(&build_tab_title(&claude), rule, 18);
-        insta::assert_snapshot!(rule_text(rule_line), @"  Tools│Tasks│Git");
+        insta::assert_snapshot!(rule_text(rule_line), @"      ││󰊢");
+        let (rule_line, _) = top_line_border(&build_tab_title(&pi), rule, 6);
+        insta::assert_snapshot!(rule_text(rule_line), @"│󰟶││");
     }
 
     #[test]
@@ -255,19 +264,20 @@ mod tests {
         let rule = Style::default().fg(Color::Indexed(240));
         let pi = state_with_focused_agent(AgentType::Pi);
 
-        // At a wide width the labels sit at their full columns; at 20
-        // the truncated run gives Tasks only the columns it draws and
-        // Git none, so a click can only ever land on drawn text.
+        // At a wide width the glyphs sit centered on their full
+        // columns; the run's floor-half pad puts the first glyph at
+        // column 16 of 40 and column 6 of 20. Each glyph is one column,
+        // so a click can only ever land on drawn text.
         let (_, wide) = top_line_border(&build_tab_title(&pi), rule, 40);
         let ranges: Vec<(u16, u16, BottomTab)> =
             wide.iter().map(|t| (t.start, t.end, t.tab)).collect();
         assert_eq!(
             ranges,
             vec![
-                (2, 7, BottomTab::Activity),
-                (8, 15, BottomTab::Thought),
-                (16, 21, BottomTab::Tasks),
-                (22, 25, BottomTab::GitStatus),
+                (16, 17, BottomTab::Activity),
+                (18, 19, BottomTab::Thought),
+                (20, 21, BottomTab::Tasks),
+                (22, 23, BottomTab::GitStatus),
             ]
         );
 
@@ -277,10 +287,10 @@ mod tests {
         assert_eq!(
             ranges,
             vec![
-                (2, 7, BottomTab::Activity),
-                (8, 15, BottomTab::Thought),
-                (16, 19, BottomTab::Tasks),
-                (19, 19, BottomTab::GitStatus),
+                (6, 7, BottomTab::Activity),
+                (8, 9, BottomTab::Thought),
+                (10, 11, BottomTab::Tasks),
+                (12, 13, BottomTab::GitStatus),
             ]
         );
     }

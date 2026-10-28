@@ -123,34 +123,37 @@ fn count_digits(n: usize) -> u16 {
 /// Compute the layout of the status filter row for a row `width` columns
 /// wide with the per-filter status counts (see [`StatusCounts`]).
 ///
-/// The pop-out control owns the row's two rightmost columns — the glyph,
-/// then the one-column spacer that keeps it a space away from the right
-/// border — and the chips fill from the left with a single-space
-/// separator after one gutter column. A chip that would no longer fit
-/// before the control is dropped whole — never partially drawn —
-/// together with every chip after it. Returns the chips that fit and the
-/// control's column (`None` for a zero-width row, where nothing is
-/// drawn).
+/// The pop-out control owns the row's two rightmost columns and the
+/// side-switch control the two left of it — each the glyph, then the
+/// one-column spacer that keeps it a space from its neighbour — and
+/// the chips fill from the left with a single-space separator after one
+/// gutter column. A chip that would no longer fit before the leftmost
+/// control is dropped whole — never partially drawn — together with
+/// every chip after it. Returns the chips that fit and both control
+/// columns; the side switch is `None` on a row narrower than 4 columns,
+/// where both glyphs cannot fit side by side.
 ///
 /// Both the renderer and the click hit test run through this function,
 /// so a click can only ever select a chip that is actually drawn.
 pub(crate) fn filter_bar_layout(
     counts: StatusCounts,
     width: u16,
-) -> (Vec<FilterChip>, Option<u16>) {
+) -> (Vec<FilterChip>, Option<u16>, Option<u16>) {
     if width == 0 {
-        return (Vec::new(), None);
+        return (Vec::new(), None, None);
     }
-    // A one-column row cannot hold glyph plus spacer, so the glyph alone
-    // owns the only column there.
-    let control_col = width.saturating_sub(2);
+    let popout_col = width.saturating_sub(2);
+    let switch_col = width.checked_sub(4);
+    // The chips must end before the leftmost control: the side switch
+    // when it is drawn, the pop-out alone on a narrow row.
+    let control_limit = switch_col.unwrap_or(popout_col);
     let mut chips = Vec::new();
     let mut start: u16 = 1; // leading gutter column
     for filter in StatusFilter::VARIANTS {
         // A chip is its icon, one space, then the count digits; the
         // space sits inside the chip so a click on it selects the chip.
         let chip_width = 2 + count_digits(counts.count(filter));
-        if start + chip_width > control_col {
+        if start + chip_width > control_limit {
             break;
         }
         chips.push(FilterChip {
@@ -160,7 +163,7 @@ pub(crate) fn filter_bar_layout(
         });
         start += chip_width + 1; // single-space separator
     }
-    (chips, Some(control_col))
+    (chips, switch_col, Some(popout_col))
 }
 
 /// Rows the bottom panel draws for a `percent` of a sidebar `height`
@@ -399,15 +402,23 @@ impl AppState {
 
         // The row's chip layout comes from the same pure function the
         // renderer used for the current frame, keyed on the width that
-        // frame rendered with. The pop-out control is hit-tested before
-        // the chip walk, so a click on it never changes the status
+        // frame rendered with. Both controls are hit-tested before the
+        // chip walk, so a click on either never changes the status
         // filter.
-        let (chips, control_col) =
+        let (chips, switch_col, popout_col) =
             filter_bar_layout(self.status_counts(), self.layout.filter_bar_width);
-        if let Some(control_col) = control_col
-            && col == control_col
+        if let Some(popout_col) = popout_col
+            && col == popout_col
         {
             self.toggle_popout();
+            return;
+        }
+        if let Some(switch_col) = switch_col
+            && col == switch_col
+        {
+            // A no-op while the sidebar floats; the dimmed glyph says
+            // so before the click.
+            self.switch_sidebar_side();
             return;
         }
         for chip in &chips {

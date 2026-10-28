@@ -1173,7 +1173,7 @@ fn rendered_filter_row_and_hit_test_agree_at_the_20_column_minimum() {
     // pop-out control one column in from the row's right edge, its
     // spacer on the last column.
     insta::assert_snapshot!(output, @"
-     󱓯 40  10 󰥔 10   ⤢
+     󱓯 40  10 󰥔 10 ⇄ ⤢
     ⓘ                — ▾
     project
        
@@ -1181,7 +1181,7 @@ fn rendered_filter_row_and_hit_test_agree_at_the_20_column_minimum() {
        
        
        
-      Tools│Tasks│Git
+           ││󰊢
         No tools yet
     ");
 
@@ -1312,7 +1312,7 @@ fn floating_panel_clicks_hit_the_clamped_bottom_panel_geometry() {
     // bottom panel with its rule row, and the agent list running right
     // up to the rule.
     insta::assert_snapshot!(output, @"
-     󱓯 20  0 󰥔 0 󰒲 20  0                ⤡
+     󱓯 20  0 󰥔 0 󰒲 20  0              ⇄ ⤡
     ⓘ                                    — ▾
     project
       󰒲 
@@ -1338,7 +1338,7 @@ fn floating_panel_clicks_hit_the_clamped_bottom_panel_geometry() {
       󰒲 
         Waiting for prompt…
       󰒲 
-      Tools│Tasks│Git
+                     ││󰊢
                   No tools yet
     ");
 
@@ -1353,8 +1353,8 @@ fn floating_panel_clicks_hit_the_clamped_bottom_panel_geometry() {
     // the tab.
     state.global.bottom_tab = BottomTab::GitStatus;
     assert!(
-        state.handle_terminal_click(bottom_start, 3, TERM_HEIGHT),
-        "the drawn tab row must be clickable"
+        state.handle_terminal_click(bottom_start, 17, TERM_HEIGHT),
+        "the drawn tab row must be clickable (the centered Tools glyph)"
     );
     assert_eq!(
         state.global.bottom_tab,

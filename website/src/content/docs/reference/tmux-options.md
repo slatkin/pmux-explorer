@@ -13,7 +13,7 @@ Most options must be set **before** loading the plugin in your `tmux.conf`. Colo
 | `@sidebar_key_all`               | `E`     | Prefix-triggered keybinding to toggle the sidebar in all windows                        |
 | `@sidebar_width`                 | `15%`   | Width in columns or as a percentage                                                     |
 | `@sidebar_min_width`             | `20`    | Minimum sidebar width in columns; the sidebar grows itself back when squeezed below it  |
-| `@sidebar_position`              | `left`  | Sidebar placement (`left` or `right`)                                                   |
+| `@sidebar_position`              | `left`  | Sidebar placement (`left` or `right`). The side switch (`prefix + Ctrl+O` or the `⇄` control in the top row) flips this option globally for the running server, so sidebars created later follow the switched side; the value in your tmux config is never written and applies again after a tmux server restart                  |
 | `@sidebar_bottom_height`         | `30`    | Bottom panel height as a percent of the sidebar height (set `0` to hide); resize by dragging the rule above the panel. A configuration with a line count gets that number as a percent |
 | `@sidebar_auto_create`           | `on`    | Auto-create the sidebar on new windows (set `off` to disable)                           |
 | `@sidebar_auto_create_delay`     | `0`     | Seconds to defer auto-create after a window opens, so a declaratively-built window (e.g. tmuxinator's `select-layout`) finishes before the sidebar pane is injected; accepts fractional seconds. `0` keeps the create synchronous |

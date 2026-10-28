@@ -16,6 +16,7 @@ mod popout;
 mod popup;
 mod refresh;
 mod scroll;
+mod side_switch;
 mod tab;
 mod tasks;
 mod thought;
@@ -91,15 +92,17 @@ impl BottomTab {
         }
     }
 
-    /// The capitalized label the rule draws for this tab. The click
-    /// hitboxes are computed from the same strings, so a label and its
-    /// hitbox cannot drift apart.
+    /// The Nerd Font glyph the rule draws for this tab (Tools ,
+    /// Tasks , Git 󰊢, Thought 󰟶). The click hitboxes are computed from
+    /// the same strings, so a glyph and its hitbox cannot drift apart.
+    /// The persisted option keeps the lowercase words of `as_str`;
+    /// only the drawing changes.
     pub fn label(&self) -> &'static str {
         match self {
-            Self::Activity => "Tools",
-            Self::Tasks => "Tasks",
-            Self::GitStatus => "Git",
-            Self::Thought => "Thought",
+            Self::Activity => "\u{f0ad}",
+            Self::Tasks => "\u{f0ae}",
+            Self::GitStatus => "\u{f02a2}",
+            Self::Thought => "\u{f07f6}",
         }
     }
 }
@@ -1065,7 +1068,7 @@ mod tests {
         assert_eq!(BottomTab::from_label("activity"), BottomTab::Activity);
         assert_eq!(BottomTab::from_label("nonsense"), BottomTab::Activity);
         assert_eq!(BottomTab::Thought.as_str(), "thought");
-        assert_eq!(BottomTab::Thought.label(), "Thought");
+        assert_eq!(BottomTab::Thought.label(), "\u{f07f6}");
     }
 
     // ─── next_bottom_tab / scroll_bottom tests ──────────────────────
@@ -1233,7 +1236,7 @@ mod tests {
         // term_height=50, bottom panel 20 → rule at row 30. The press
         // starts a split drag (any press column resizes — decision 4);
         // only the release, if the mouse never left the rule, selects.
-        assert!(state.handle_terminal_click(30, 3, 50));
+        assert!(state.handle_terminal_click(30, 17, 50));
         assert_eq!(
             state.global.bottom_tab,
             BottomTab::GitStatus,
@@ -1305,7 +1308,7 @@ mod tests {
         // would have put the boundary at row 18 and swallowed this click.
         // The press starts a drag on the drawn geometry; the unmoved
         // release is the click that selects.
-        assert!(state.handle_terminal_click(26, 3, 38));
+        assert!(state.handle_terminal_click(26, 17, 38));
         assert_eq!(state.global.bottom_tab, BottomTab::GitStatus);
         state.end_split_drag(38);
         assert_eq!(state.global.bottom_tab, BottomTab::Activity);
@@ -1397,8 +1400,8 @@ mod tests {
         state.global.bottom_percent = 30;
         crate::ui::bottom::draw_tab_targets(&mut state, 40);
 
-        // Press on col 14, inside the Git label.
-        assert!(state.handle_terminal_click(28, 14, 40));
+        // Press on col 21, the centered Git glyph.
+        assert!(state.handle_terminal_click(28, 21, 40));
         assert_eq!(
             state.global.bottom_tab,
             BottomTab::Activity,
@@ -1410,7 +1413,7 @@ mod tests {
         assert_eq!(
             state.global.bottom_tab,
             BottomTab::GitStatus,
-            "col 14 is inside the Git label"
+            "col 21 is the Git glyph"
         );
         assert_eq!(
             state.global.bottom_percent, 30,
@@ -1544,10 +1547,10 @@ mod tests {
         crate::ui::bottom::draw_tab_targets(&mut state, 40);
         state.global.bottom_tab = BottomTab::Activity;
 
-        // An unmoved press on the Tasks label, then a second press on
-        // the Git label (both on the drawn rule row 37 = 40 - 3).
-        state.handle_terminal_click(37, 12, 40);
-        state.handle_terminal_click(37, 14, 40);
+        // An unmoved press on the Tasks glyph, then a second press on
+        // the Git glyph (both on the drawn rule row 37 = 40 - 3).
+        state.handle_terminal_click(37, 19, 40);
+        state.handle_terminal_click(37, 21, 40);
 
         assert_eq!(
             state.global.bottom_percent, 1,
@@ -1565,7 +1568,7 @@ mod tests {
         let drag = state
             .split_drag
             .expect("the new press started a fresh drag");
-        assert_eq!(drag.press_col, 14);
+        assert_eq!(drag.press_col, 21);
 
         state.end_split_drag(40);
         assert_eq!(
@@ -1985,6 +1988,33 @@ mod tests {
         reset_filter_debounce(&mut state);
         state.handle_filter_click(17);
         assert_eq!(state.global.status_filter, StatusFilter::Error);
+    }
+
+    #[test]
+    fn filter_click_on_the_side_switch_routes_to_the_switch_action() {
+        // The switch column (26 of 30) wins before the chip walk: the
+        // click neither changes the status filter nor reaches the
+        // pop-out branch. On the isolated test tmux the docked switch
+        // sweeps a server with no sidebars and stays silent.
+        let mut state = AppState::new("%99".into());
+        state.layout.filter_bar_width = 30;
+        state.global.status_filter = StatusFilter::All;
+        reset_filter_debounce(&mut state);
+        state.handle_filter_click(26);
+        assert_eq!(state.global.status_filter, StatusFilter::All);
+        assert!(state.flash.is_none());
+
+        // Floating, the same click is a no-op — while the neighbouring
+        // pop-out column would flash a refusal, so silence here proves
+        // the switch branch ran (and did nothing) rather than the
+        // pop-out one.
+        let mut state = AppState::new("%99".into());
+        state.layout.filter_bar_width = 30;
+        state.sidebar_pane.floating = true;
+        reset_filter_debounce(&mut state);
+        state.handle_filter_click(26);
+        assert!(state.flash.is_none());
+        assert!(state.sidebar_pane.floating);
     }
 
     #[test]
