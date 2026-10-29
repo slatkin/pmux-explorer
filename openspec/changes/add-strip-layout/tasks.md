@@ -35,8 +35,8 @@
 
 ## 6. Strip keyboard input
 
-- [ ] 6.1 Add the strip key map in `src/app/input.rs`: Left/`h` and Right/`l` move focus through `Filter`, `Panes`, `ActivityLog` and stop at the ends; Up/Down step the category, move the selection without leaving the agent panel, or scroll the tab panel; verify with key-event tests for each spec scenario and a test that the column key map is unchanged.
-- [ ] 6.2 Add a strip key table to `website/src/content/docs/reference/keybindings.md`.
+- [x] 6.1 Add the strip key map in `src/app/input.rs`: Left/`h` and Right/`l` move focus through `Filter`, `Panes`, `ActivityLog` and stop at the ends; Up/Down step the category, move the selection without leaving the agent panel, or scroll the tab panel; verify with key-event tests for each spec scenario and a test that the column key map is unchanged.
+- [x] 6.2 Add a strip key table to `website/src/content/docs/reference/keybindings.md`.
 
 ## 7. Side switch in a strip
 
