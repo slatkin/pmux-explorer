@@ -61,7 +61,7 @@ mod tests {
 
     #[test]
     fn pi_prompt_kinds_keep_waiting_under_live_bg_shell() {
-        for reason in ["select", "confirm", "input", "editor", "custom"] {
+        for reason in ["select", "confirm", "input", "editor", "custom", "question"] {
             assert!(
                 is_action_required_wait_reason(reason),
                 "{reason} should be action-required"

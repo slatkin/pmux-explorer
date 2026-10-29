@@ -68,6 +68,9 @@ pub fn wait_reason_entry(reason: &str) -> Option<WaitReasonEntry> {
         "input" => ("waiting for input", true),
         "editor" => ("editor", true),
         "custom" => ("prompt", true),
+        // pi-ask-user's `herdr:blocked` wait. pi-ask-user emits it before the
+        // ui_prompt opens, so an ask_user wait publishes this token first.
+        "question" => ("prompt", true),
         _ => return None,
     };
     Some(WaitReasonEntry {
@@ -657,11 +660,12 @@ mod tests {
         assert_eq!(wait_reason_label("input"), "waiting for input");
         assert_eq!(wait_reason_label("editor"), "editor");
         assert_eq!(wait_reason_label("custom"), "prompt");
+        assert_eq!(wait_reason_label("question"), "prompt");
     }
 
     #[test]
     fn wait_reason_pi_prompt_kinds_are_action_required() {
-        for reason in ["select", "confirm", "input", "editor", "custom"] {
+        for reason in ["select", "confirm", "input", "editor", "custom", "question"] {
             assert_eq!(
                 wait_reason_entry(reason).map(|entry| entry.action_required),
                 Some(true),
