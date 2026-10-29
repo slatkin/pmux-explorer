@@ -588,7 +588,7 @@ fn apply_all_ignores_tmux_filter_matching_last_saved() {
     g.status_filter = StatusFilter::Busy;
 
     let opts = make_opts(&[(tmux::SIDEBAR_FILTER, "all")]);
-    g.apply_all(&opts, false);
+    g.apply_all(&opts, None);
 
     assert_eq!(
         g.status_filter,
@@ -602,7 +602,7 @@ fn apply_all_applies_filter_from_tmux() {
     let mut g = make_global();
 
     let opts = make_opts(&[(tmux::SIDEBAR_FILTER, "waiting")]);
-    g.apply_all(&opts, false);
+    g.apply_all(&opts, None);
 
     assert_eq!(g.status_filter, StatusFilter::Waiting);
 }
@@ -612,7 +612,7 @@ fn apply_all_applies_cursor_from_tmux() {
     let mut g = make_global();
 
     let opts = make_opts(&[(tmux::SIDEBAR_CURSOR, "3")]);
-    g.apply_all(&opts, false);
+    g.apply_all(&opts, None);
 
     assert_eq!(g.selected_pane_row, 3);
 }
@@ -622,7 +622,7 @@ fn apply_all_applies_repo_filter_from_tmux() {
     let mut g = make_global();
 
     let opts = make_opts(&[(tmux::SIDEBAR_REPO_FILTER, "my-app")]);
-    g.apply_all(&opts, false);
+    g.apply_all(&opts, None);
 
     assert_eq!(g.repo_filter, RepoFilter::Repo("my-app".into()));
 }
@@ -634,7 +634,7 @@ fn apply_all_empty_opts_changes_nothing() {
     g.repo_filter = RepoFilter::Repo("app".into());
     g.selected_pane_row = 2;
 
-    g.apply_all(&std::collections::HashMap::new(), false);
+    g.apply_all(&std::collections::HashMap::new(), None);
 
     assert_eq!(g.status_filter, StatusFilter::Busy);
     assert_eq!(g.repo_filter, RepoFilter::Repo("app".into()));
@@ -646,7 +646,7 @@ fn apply_all_applies_error_filter_from_tmux() {
     let mut g = make_global();
 
     let opts = make_opts(&[(tmux::SIDEBAR_FILTER, "error")]);
-    g.apply_all(&opts, false);
+    g.apply_all(&opts, None);
 
     assert_eq!(g.status_filter, StatusFilter::Error);
 }
@@ -658,7 +658,7 @@ fn apply_all_invalid_filter_defaults_to_all() {
 
     // "garbage" parses as All, All == last_saved → no change
     let opts = make_opts(&[(tmux::SIDEBAR_FILTER, "garbage")]);
-    g.apply_all(&opts, false);
+    g.apply_all(&opts, None);
 
     assert_eq!(
         g.status_filter,
@@ -676,7 +676,7 @@ fn apply_all_applies_all_three_from_tmux() {
         (tmux::SIDEBAR_CURSOR, "7"),
         (tmux::SIDEBAR_REPO_FILTER, "my-app"),
     ]);
-    g.apply_all(&opts, false);
+    g.apply_all(&opts, None);
 
     assert_eq!(g.status_filter, StatusFilter::Error);
     assert_eq!(g.selected_pane_row, 7);
@@ -692,13 +692,13 @@ fn apply_all_picks_up_change_from_another_instance() {
     let mut g = make_global();
 
     // Startup: this instance starts with default (All)
-    g.apply_all(&make_opts(&[(tmux::SIDEBAR_FILTER, "running")]), false);
+    g.apply_all(&make_opts(&[(tmux::SIDEBAR_FILTER, "running")]), None);
     assert_eq!(g.status_filter, StatusFilter::Busy);
     // last_saved_filter is now Running
 
     // Another instance changes filter to Waiting (writes to tmux)
     // The next tick applies the value the other instance wrote:
-    g.apply_all(&make_opts(&[(tmux::SIDEBAR_FILTER, "waiting")]), false);
+    g.apply_all(&make_opts(&[(tmux::SIDEBAR_FILTER, "waiting")]), None);
 
     assert_eq!(
         g.status_filter,
@@ -711,12 +711,12 @@ fn apply_all_picks_up_change_from_another_instance() {
 fn apply_all_picks_up_cursor_from_another_instance() {
     let mut g = make_global();
 
-    g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "3")]), false);
+    g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "3")]), None);
     assert_eq!(g.selected_pane_row, 3);
     // last_saved_cursor is now 3
 
     // Another instance moves cursor to 7
-    g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "7")]), false);
+    g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "7")]), None);
 
     assert_eq!(
         g.selected_pane_row, 7,
@@ -731,14 +731,14 @@ fn apply_all_does_not_revert_pending_cursor_save() {
     // before the flush must not drag the cursor back to 2.
     let mut g = make_global();
 
-    g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "2")]), false);
+    g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "2")]), None);
     assert_eq!(g.selected_pane_row, 2);
     g.selected_pane_row = 5;
     g.queue_cursor_save();
 
     // Ticks run while the save is still pending (tmux value unchanged).
-    g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "2")]), false);
-    g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "2")]), false);
+    g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "2")]), None);
+    g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "2")]), None);
 
     assert_eq!(
         g.selected_pane_row, 5,
@@ -754,12 +754,12 @@ fn apply_all_does_not_clobber_a_pending_cursor_move_with_a_remote_value() {
     // the flush persist the peer's value instead of the user's.
     let mut g = make_global();
 
-    g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "2")]), false);
+    g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "2")]), None);
     assert_eq!(g.selected_pane_row, 2);
     g.selected_pane_row = 5;
     g.queue_cursor_save();
 
-    g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "9")]), false);
+    g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "9")]), None);
 
     assert_eq!(
         g.selected_pane_row, 5,
@@ -779,7 +779,7 @@ fn apply_all_picks_up_cursor_and_repo_filter_from_another_instance() {
             (tmux::SIDEBAR_CURSOR, "1"),
             (tmux::SIDEBAR_REPO_FILTER, "app"),
         ]),
-        false,
+        None,
     );
     assert_eq!(g.selected_pane_row, 1);
     assert_eq!(g.repo_filter, RepoFilter::Repo("app".into()));
@@ -789,7 +789,7 @@ fn apply_all_picks_up_cursor_and_repo_filter_from_another_instance() {
             (tmux::SIDEBAR_CURSOR, "6"),
             (tmux::SIDEBAR_REPO_FILTER, "other"),
         ]),
-        false,
+        None,
     );
 
     assert_eq!(
@@ -810,13 +810,13 @@ fn apply_all_unchanged_tmux_value_leaves_local_change_alone() {
     // that keep re-reading it must not clobber the local choice.
     let mut g = make_global();
 
-    g.apply_all(&make_opts(&[(tmux::SIDEBAR_REPO_FILTER, "app")]), false);
+    g.apply_all(&make_opts(&[(tmux::SIDEBAR_REPO_FILTER, "app")]), None);
     assert_eq!(g.repo_filter, RepoFilter::Repo("app".into()));
     g.repo_filter = RepoFilter::Repo("mine".into());
 
-    g.apply_all(&make_opts(&[(tmux::SIDEBAR_REPO_FILTER, "app")]), false);
-    g.apply_all(&make_opts(&[(tmux::SIDEBAR_REPO_FILTER, "app")]), false);
-    g.apply_all(&make_opts(&[(tmux::SIDEBAR_REPO_FILTER, "app")]), false);
+    g.apply_all(&make_opts(&[(tmux::SIDEBAR_REPO_FILTER, "app")]), None);
+    g.apply_all(&make_opts(&[(tmux::SIDEBAR_REPO_FILTER, "app")]), None);
+    g.apply_all(&make_opts(&[(tmux::SIDEBAR_REPO_FILTER, "app")]), None);
 
     assert_eq!(
         g.repo_filter,
@@ -857,7 +857,7 @@ fn a_bottom_tab_selected_in_one_instance_is_adopted_by_another_within_one_tick()
     assert_eq!(b.global.bottom_tab, BottomTab::Activity);
 
     b.global
-        .apply_all(&make_opts(&[(tmux::SIDEBAR_BOTTOM_TAB, "tasks")]), false);
+        .apply_all(&make_opts(&[(tmux::SIDEBAR_BOTTOM_TAB, "tasks")]), None);
 
     assert_eq!(
         b.global.bottom_tab,
@@ -875,7 +875,7 @@ fn a_peer_selecting_thought_is_adopted_within_one_tick() {
     let mut b = make_state(vec![]);
 
     b.global
-        .apply_all(&make_opts(&[(tmux::SIDEBAR_BOTTOM_TAB, "thought")]), false);
+        .apply_all(&make_opts(&[(tmux::SIDEBAR_BOTTOM_TAB, "thought")]), None);
 
     assert_eq!(
         b.global.bottom_tab,

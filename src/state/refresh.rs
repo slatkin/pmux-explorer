@@ -176,12 +176,13 @@ impl AppState {
         // sees the filters another instance wrote. `apply_all` guards
         // every field with its matching `last_saved_*` value, so a local
         // change that tmux already holds is not reverted. The live
-        // split drag is the percent's third guard: while the mouse owns
-        // the height, the shared percent stays unadopted, or the tick
-        // would move the rule under the mouse ("a drag in progress is
-        // not reverted").
+        // split drag is the third guard, axis-specific: while the mouse
+        // owns a panel, the shared value of the drag's own axis stays
+        // unadopted (a column drag guards the bottom percent, a strip
+        // drag the tab width), or the tick would move the panel under
+        // the mouse ("a drag in progress is not reverted").
         self.global
-            .apply_all(&reading.options, self.split_drag.is_some());
+            .apply_all(&reading.options, self.split_drag.map(|drag| drag.axis));
         // The flags are read back from the state (not from a local probe
         // copy) so every field the state holds has a reader.
         let focused = self.sidebar_pane.pane_active;

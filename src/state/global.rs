@@ -5,6 +5,7 @@ use crate::tmux;
 use crate::ui;
 
 use super::BottomTab;
+use super::LayoutKind;
 use super::filter::{RepoFilter, StatusFilter};
 
 /// One pending-write latch for a value shared with tmux.
@@ -292,7 +293,7 @@ impl GlobalState {
     pub fn load_from_tmux(&mut self) {
         let opts = tmux::get_all_global_options();
         // Startup has no live drag: every shared value is applied.
-        self.apply_all(&opts, false);
+        self.apply_all(&opts, None);
     }
 
     /// Retry every shared write tmux rejected (filter, bottom tab,
@@ -318,14 +319,22 @@ impl GlobalState {
     /// tab, bottom percent, strip tab percent, repo filter). Runs once
     /// at startup and on every refresh tick.
     ///
-    /// `split_drag_active` says whether the calling instance is mid
-    /// split drag (`AppState::split_drag` is `Some`): while it is, the
-    /// percent the server holds must not be adopted, or the next tick
-    /// would move the rule out from under the mouse (the "a drag in
-    /// progress is not reverted" requirement). The caller passes the
-    /// gate because the drag lives on `AppState` and this method is a
-    /// `GlobalState` method.
-    pub fn apply_all(&mut self, opts: &HashMap<String, String>, split_drag_active: bool) {
+    /// `split_drag_axis` says whether the calling instance is mid split
+    /// drag and on which axis (`AppState::split_drag`'s axis): the
+    /// adoption gates are axis-specific, because each axis's drag moves
+    /// only its own panel — a column drag's mouse owns the bottom
+    /// panel's height, a strip drag's mouse the divider's column. While
+    /// a drag is live the shared value of its own axis must not be
+    /// adopted, or the next tick would move the panel out from under
+    /// the mouse (the "a drag in progress is not reverted"
+    /// requirement); the other axis's value adopts as usual. The
+    /// caller passes the gate because the drag lives on `AppState` and
+    /// this method is a `GlobalState` method.
+    pub fn apply_all(
+        &mut self,
+        opts: &HashMap<String, String>,
+        split_drag_axis: Option<LayoutKind>,
+    ) {
         // The shared fields below adopt through their latches;
         // `SaveLatch::adopt` carries the whole adoption gate once
         // (while a write is pending the shared value stays unadopted,
@@ -357,31 +366,40 @@ impl GlobalState {
             self.bottom_tab = adopted;
         }
         // The percent is the latch family with an extra adoption gate
-        // and a defaulting parse: while a split drag is live the rule
-        // shows the drag's rows and the mouse owns the height, so the
-        // shared percent stays unadopted this tick exactly as for a
+        // and a defaulting parse: while a column split drag is live the
+        // rule shows the drag's rows and the mouse owns the height, so
+        // the shared percent stays unadopted this tick exactly as for a
         // pending write; after the release the following ticks adopt
-        // the server value again. Unlike the label fields the percent
-        // parse has a default, so it parses the whole option map: an
-        // unset, empty or invalid option resolves to
-        // `DEFAULT_BOTTOM_PERCENT` instead of being skipped. The strip
-        // tab percent below carries the same gate and the same
-        // defaulting parse against `@sidebar_tab_width`.
-        if let Some(adopted) = self.percent_latch.adopt(opts, !split_drag_active, |o| {
-            Some(ui::bottom_percent_from_options(o))
-        }) {
+        // the server value again. The gate is axis-specific: a strip
+        // drag moves the divider, not the rule, so it does not block
+        // this value. Unlike the label fields the percent parse has a
+        // default, so it parses the whole option map: an unset, empty
+        // or invalid option resolves to `DEFAULT_BOTTOM_PERCENT`
+        // instead of being skipped. The strip tab percent below carries
+        // the mirrored gate and the same defaulting parse against
+        // `@sidebar_tab_width`.
+        if let Some(adopted) =
+            self.percent_latch
+                .adopt(opts, split_drag_axis != Some(LayoutKind::Column), |o| {
+                    Some(ui::bottom_percent_from_options(o))
+                })
+        {
             self.bottom_percent = adopted;
         }
-        // The strip tab percent shares the split-drag gate: while a
-        // drag is live the strip's divider follows the mouse, so the
-        // shared tab width stays unadopted this tick; after the release
-        // the following ticks adopt the server value again. The parse
-        // defaults like the bottom percent's, so an unset, empty or
-        // invalid `@sidebar_tab_width` resolves to
+        // The strip tab percent shares the split-drag gate on its own
+        // axis: while a strip drag is live the strip's divider follows
+        // the mouse, so the shared tab width stays unadopted this tick;
+        // after the release the following ticks adopt the server value
+        // again, and a column drag (which moves no divider) never
+        // blocks it. The parse defaults like the bottom percent's, so
+        // an unset, empty or invalid `@sidebar_tab_width` resolves to
         // `DEFAULT_TAB_PERCENT` and is adopted.
-        if let Some(adopted) = self.tab_percent_latch.adopt(opts, !split_drag_active, |o| {
-            Some(ui::tab_percent_from_options(o))
-        }) {
+        if let Some(adopted) =
+            self.tab_percent_latch
+                .adopt(opts, split_drag_axis != Some(LayoutKind::Strip), |o| {
+                    Some(ui::tab_percent_from_options(o))
+                })
+        {
             self.tab_percent = adopted;
         }
         if let Some(repo_str) = opts.get(tmux::SIDEBAR_REPO_FILTER) {
@@ -620,27 +638,27 @@ mod tests {
     }
 
     fn apply_filter(g: &mut GlobalState, value: &str) {
-        g.apply_all(&opts(&[(tmux::SIDEBAR_FILTER, value)]), false);
+        g.apply_all(&opts(&[(tmux::SIDEBAR_FILTER, value)]), None);
     }
 
     fn apply_tab(g: &mut GlobalState, value: &str) {
-        g.apply_all(&opts(&[(tmux::SIDEBAR_BOTTOM_TAB, value)]), false);
+        g.apply_all(&opts(&[(tmux::SIDEBAR_BOTTOM_TAB, value)]), None);
     }
 
     fn apply_percent(g: &mut GlobalState, value: &str) {
-        g.apply_all(&opts(&[(tmux::SIDEBAR_BOTTOM_HEIGHT, value)]), false);
+        g.apply_all(&opts(&[(tmux::SIDEBAR_BOTTOM_HEIGHT, value)]), None);
     }
 
     fn apply_tab_percent(g: &mut GlobalState, value: &str) {
-        g.apply_all(&opts(&[(tmux::SIDEBAR_TAB_WIDTH, value)]), false);
+        g.apply_all(&opts(&[(tmux::SIDEBAR_TAB_WIDTH, value)]), None);
     }
 
     fn apply_tab_key(g: &mut GlobalState) {
-        g.apply_all(&opts(&[(tmux::SIDEBAR_BOTTOM_TAB, "activity")]), false);
+        g.apply_all(&opts(&[(tmux::SIDEBAR_BOTTOM_TAB, "activity")]), None);
     }
 
     fn apply_filter_key(g: &mut GlobalState) {
-        g.apply_all(&opts(&[(tmux::SIDEBAR_FILTER, "busy")]), false);
+        g.apply_all(&opts(&[(tmux::SIDEBAR_FILTER, "busy")]), None);
     }
 
     #[test]
@@ -842,28 +860,33 @@ mod tests {
     // ─── the percent's own gates ─────────────────────────────────────
 
     #[test]
-    fn a_live_split_drag_blocks_the_percent_adoption_and_it_resumes() {
+    fn a_live_column_drag_blocks_the_percent_adoption_and_it_resumes() {
         // Spec "a drag in progress is not reverted": while the drag is
         // live the rule follows the mouse, so a tick adopting the
-        // server's percent would move it under the mouse. After the
-        // release, and the caller passing `false` again, the next ticks
+        // server's percent would move it under the mouse. The gate is
+        // axis-specific: the caller passes the drag's axis, and a
+        // column drag is what blocks the bottom percent. After the
+        // release, and the caller passing `None` again, the next ticks
         // adopt the shared value like always.
         let mut g = GlobalState::new();
         g.percent_latch.last_saved = 30;
         g.bottom_percent = 30;
 
-        g.apply_all(&opts(&[(tmux::SIDEBAR_BOTTOM_HEIGHT, "65")]), true);
+        g.apply_all(
+            &opts(&[(tmux::SIDEBAR_BOTTOM_HEIGHT, "65")]),
+            Some(LayoutKind::Column),
+        );
 
         assert_eq!(
             g.bottom_percent, 30,
-            "a tick during a live drag must not adopt the shared percent"
+            "a tick during a live column drag must not adopt the shared percent"
         );
         assert_eq!(
             g.percent_latch.last_saved, 30,
             "the blocked adoption must not advance the last_saved guard"
         );
 
-        g.apply_all(&opts(&[(tmux::SIDEBAR_BOTTOM_HEIGHT, "65")]), false);
+        g.apply_all(&opts(&[(tmux::SIDEBAR_BOTTOM_HEIGHT, "65")]), None);
 
         assert_eq!(
             g.bottom_percent, 65,
@@ -871,34 +894,78 @@ mod tests {
         );
     }
 
+    #[test]
+    fn a_strip_drag_does_not_block_the_bottom_percent() {
+        // The gates are axis-specific: a strip drag moves the divider,
+        // not the column's rule, so the bottom percent adopts while it
+        // runs.
+        let mut g = GlobalState::new();
+        g.percent_latch.last_saved = 30;
+        g.bottom_percent = 30;
+
+        g.apply_all(
+            &opts(&[(tmux::SIDEBAR_BOTTOM_HEIGHT, "65")]),
+            Some(LayoutKind::Strip),
+        );
+
+        assert_eq!(
+            g.bottom_percent, 65,
+            "a strip drag must not block the column's percent"
+        );
+    }
+
     // ─── the strip tab percent's own gates ─────────────────────────
 
     #[test]
-    fn a_live_split_drag_blocks_the_tab_percent_adoption_and_it_resumes() {
-        // The tab percent's twin of the percent gate: while a drag is
-        // live the strip's divider follows the mouse, so a tick
+    fn a_live_strip_drag_blocks_the_tab_percent_adoption_and_it_resumes() {
+        // The tab percent's twin of the percent gate: while a strip
+        // drag is live the strip's divider follows the mouse, so a tick
         // adopting the server's tab width would move it under the
-        // mouse. After the release the next ticks adopt again.
+        // mouse. The caller passes the drag's axis; after the release
+        // the next ticks adopt again.
         let mut g = GlobalState::new();
         g.tab_percent_latch.last_saved = 40;
         g.tab_percent = 40;
 
-        g.apply_all(&opts(&[(tmux::SIDEBAR_TAB_WIDTH, "65")]), true);
+        g.apply_all(
+            &opts(&[(tmux::SIDEBAR_TAB_WIDTH, "65")]),
+            Some(LayoutKind::Strip),
+        );
 
         assert_eq!(
             g.tab_percent, 40,
-            "a tick during a live drag must not adopt the shared tab width"
+            "a tick during a live strip drag must not adopt the shared tab width"
         );
         assert_eq!(
             g.tab_percent_latch.last_saved, 40,
             "the blocked adoption must not advance the last_saved guard"
         );
 
-        g.apply_all(&opts(&[(tmux::SIDEBAR_TAB_WIDTH, "65")]), false);
+        g.apply_all(&opts(&[(tmux::SIDEBAR_TAB_WIDTH, "65")]), None);
 
         assert_eq!(
             g.tab_percent, 65,
             "after the release the shared value is adopted again"
+        );
+    }
+
+    #[test]
+    fn a_column_drag_does_not_block_the_tab_percent() {
+        // The gates are axis-specific: a column drag moves the rule,
+        // not the strip's divider, so the tab percent adopts while it
+        // runs.
+        let mut g = GlobalState::new();
+        g.tab_percent_latch.last_saved = 40;
+        g.tab_percent = 40;
+
+        g.apply_all(
+            &opts(&[(tmux::SIDEBAR_TAB_WIDTH, "65")]),
+            Some(LayoutKind::Column),
+        );
+
+        assert_eq!(
+            g.tab_percent, 65,
+            "a column drag must not block the strip's tab width"
         );
     }
 
@@ -912,7 +979,7 @@ mod tests {
             g.tab_percent_latch.last_saved = 50;
             g.tab_percent = 50;
 
-            g.apply_all(&opts(&[(tmux::SIDEBAR_TAB_WIDTH, value)]), false);
+            g.apply_all(&opts(&[(tmux::SIDEBAR_TAB_WIDTH, value)]), None);
 
             assert_eq!(
                 g.tab_percent,
@@ -931,7 +998,7 @@ mod tests {
         g.tab_percent_latch.last_saved = 50;
         g.tab_percent = 50;
 
-        g.apply_all(&opts(&[]), false);
+        g.apply_all(&opts(&[]), None);
 
         assert_eq!(g.tab_percent, ui::DEFAULT_TAB_PERCENT);
         assert_eq!(g.tab_percent_latch.last_saved, ui::DEFAULT_TAB_PERCENT);
@@ -947,7 +1014,7 @@ mod tests {
             g.percent_latch.last_saved = 50;
             g.bottom_percent = 50;
 
-            g.apply_all(&opts(&[(tmux::SIDEBAR_BOTTOM_HEIGHT, value)]), false);
+            g.apply_all(&opts(&[(tmux::SIDEBAR_BOTTOM_HEIGHT, value)]), None);
 
             assert_eq!(
                 g.bottom_percent,
@@ -966,7 +1033,7 @@ mod tests {
         g.percent_latch.last_saved = 50;
         g.bottom_percent = 50;
 
-        g.apply_all(&opts(&[]), false);
+        g.apply_all(&opts(&[]), None);
 
         assert_eq!(g.bottom_percent, ui::DEFAULT_BOTTOM_PERCENT);
         assert_eq!(g.percent_latch.last_saved, ui::DEFAULT_BOTTOM_PERCENT);

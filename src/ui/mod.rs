@@ -95,7 +95,7 @@ fn draw_column(frame: &mut Frame, state: &mut AppState, area: Rect) {
     // during the drag; the release path, not a tick, writes the
     // percent. Before any move the shared percent's geometry stands.
     let bot_h = match &state.split_drag {
-        Some(drag) if drag.moved => drag.rows,
+        Some(drag) if drag.moved => drag.size,
         _ => split_rows(state.global.bottom_percent, area.height),
     };
     let bot_h = if state.sidebar_pane.floating {

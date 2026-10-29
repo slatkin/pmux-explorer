@@ -123,12 +123,15 @@ pub struct AppState {
     /// the UI layer; consumed by mouse/keyboard handlers before the
     /// next render.
     pub layout: FrameLayout,
-    /// Live split drag: a press on the rule until its release. While a
-    /// moved drag is set the bottom panel renders [`SplitDrag::rows`]
-    /// instead of the shared percent's height, and `apply_all` holds
-    /// the shared percent's adoption back so a tick cannot move the
-    /// rule under the mouse. Set by a press on the rule, consumed by
-    /// the release (or the stale-drag end on a new press).
+    /// Live split drag: a press on the rule (a column) or the divider
+    /// (a strip) until its release. While a moved drag is set the
+    /// matching panel renders [`SplitDrag::size`] instead of the shared
+    /// percent's geometry, and `apply_all` holds that axis's shared
+    /// percent back so a tick cannot move the rule or the divider under
+    /// the mouse (a column drag blocks `@sidebar_bottom_height`, a
+    /// strip drag `@sidebar_tab_width`). Set by a press on the rule or
+    /// the divider, consumed by the release (or the stale-drag end on a
+    /// new press).
     pub split_drag: Option<SplitDrag>,
     pub activity: ActivityState,
     /// Focused pane's task store for the Tasks tab (refreshed by
@@ -1372,7 +1375,7 @@ mod tests {
         state.handle_split_drag_move(20, 40);
         let drag = state.split_drag.expect("the drag must still be live");
         assert!(drag.moved, "moving to row 20 is a drag, not a held press");
-        assert_eq!(drag.rows, 20, "the rule follows the mouse row");
+        assert_eq!(drag.size, 20, "the rule follows the mouse row");
 
         state.end_split_drag(40);
         assert!(state.split_drag.is_none());
@@ -1398,7 +1401,7 @@ mod tests {
         state.handle_split_drag_move(1, 40);
 
         let drag = state.split_drag.expect("the drag must still be live");
-        assert_eq!(drag.rows, 37, "37 bottom rows put the drawn rule on row 3");
+        assert_eq!(drag.size, 37, "37 bottom rows put the drawn rule on row 3");
     }
 
     #[test]
@@ -1539,7 +1542,7 @@ mod tests {
             .expect("the new press must start a fresh drag");
         assert_eq!(drag.press_col, 3);
         assert!(!drag.moved, "the fresh press is not yet a drag");
-        assert_eq!(drag.rows, state.layout.bottom_panel_height);
+        assert_eq!(drag.size, state.layout.bottom_panel_height);
     }
 
     #[test]
@@ -1587,6 +1590,205 @@ mod tests {
             BottomTab::GitStatus,
             "the new press's unmoved release is the click that selects"
         );
+    }
+
+    // ─── strip press routing ──────────────────────────────────────
+
+    /// A strip state whose frame drew the 120×12, 40-percent layout:
+    /// filter 0..4, agents 4..72, divider 72..74, tabs 74..120. The
+    /// press routing tests read only the drawn `StripLayout`, the way
+    /// the handlers do.
+    fn strip_state() -> AppState {
+        let mut state = AppState::new("%99".into());
+        state.layout_kind = LayoutKind::Strip;
+        state.layout.strip = Some(strip_layout(120, 12, 40));
+        state
+    }
+
+    #[test]
+    fn a_strip_chip_click_selects_the_category() {
+        // The strip filter bar draws one chip per row — row 2 is the
+        // waiting chip on a 12-row bar — and a click on it selects the
+        // category the column's filter row click would.
+        let mut state = strip_state();
+        state.global.status_filter = StatusFilter::All;
+        reset_filter_debounce(&mut state);
+
+        state.handle_terminal_click(2, 1, 12);
+
+        assert_eq!(
+            state.global.status_filter,
+            StatusFilter::Waiting,
+            "the click on row 2 selects the waiting chip"
+        );
+        assert!(state.split_drag.is_none(), "a chip click starts no drag");
+    }
+
+    #[test]
+    fn a_strip_click_on_the_repo_header_row_changes_no_filter() {
+        // The agent panel's first row is the repo header, not a filter
+        // row: a click on it must not touch the status filter — it
+        // routes to the secondary header, where the repo button opens
+        // the repo popup.
+        let mut state = strip_state();
+        state.global.status_filter = StatusFilter::All;
+        state.repo_groups = vec![
+            RepoGroup {
+                name: "alpha".into(),
+                has_focus: true,
+                panes: vec![(test_pane("%1"), PaneGitInfo::default())],
+            },
+            RepoGroup {
+                name: "beta".into(),
+                has_focus: false,
+                panes: vec![(test_pane("%2"), PaneGitInfo::default())],
+            },
+        ];
+        state.layout.repo_button_col = Some(20);
+        reset_filter_debounce(&mut state);
+
+        // agents.y is 0: row 0 is the header. Left of the repo button.
+        state.handle_terminal_click(0, 10, 12);
+        assert_eq!(
+            state.global.status_filter,
+            StatusFilter::All,
+            "the header row must not change the status filter"
+        );
+        assert!(!state.is_repo_popup_open());
+
+        // On the repo button: the header's button column is relative
+        // to the header area (absolute col 24 = agents.x 4 + 20), and
+        // the header click toggles the popup, exactly as row 1 of a
+        // column does.
+        state.handle_terminal_click(0, 24, 12);
+        assert!(state.is_repo_popup_open());
+        assert_eq!(state.global.status_filter, StatusFilter::All);
+    }
+
+    #[test]
+    fn a_strip_click_on_an_agent_row_selects_through_the_scroll_offset() {
+        // List rows start one row under the header (no filter row in a
+        // strip) and are offset by the scroll the frame drew with: row
+        // 2 with offset 2 is line (2 - 0 - 1) + 2 = 3, the third
+        // rendered agent row.
+        let mut state = strip_state();
+        state.layout.pane_row_targets = vec![
+            RowTarget {
+                pane_id: "%1".into(),
+            },
+            RowTarget {
+                pane_id: "%2".into(),
+            },
+            RowTarget {
+                pane_id: "%3".into(),
+            },
+        ];
+        state.layout.line_to_row = vec![None, Some(0), Some(1), Some(2)];
+        state.scrolls.panes.offset = 2;
+        state.global.selected_pane_row = 0;
+
+        state.handle_terminal_click(2, 10, 12);
+
+        assert_eq!(
+            state.global.selected_pane_row, 2,
+            "the clicked list row is the third rendered agent row"
+        );
+        assert!(state.split_drag.is_none());
+    }
+
+    #[test]
+    fn a_strip_click_on_a_spawn_button_opens_the_spawn_input() {
+        // The + spawn buttons are hit-tested in absolute frame
+        // coordinates, before the list-row fallback, so a click on one
+        // opens the spawn modal and never shifts the selection.
+        let mut state = strip_state();
+        // Inside the drawn agent panel (columns 4..72): the + button
+        // on list row 3, hit at its middle column.
+        state.layout.repo_spawn_targets = vec![RepoSpawnTarget {
+            rect: ratatui::layout::Rect::new(50, 3, 3, 1),
+            repo_name: "alpha".into(),
+            repo_root: "/tmp/alpha".into(),
+        }];
+        state.global.selected_pane_row = 0;
+
+        state.handle_terminal_click(3, 51, 12);
+
+        assert!(
+            matches!(state.popup, PopupState::SpawnInput { .. }),
+            "the click on the + button opens the spawn modal"
+        );
+        assert_eq!(state.global.selected_pane_row, 0);
+    }
+
+    #[test]
+    fn a_strip_press_on_the_divider_starts_a_strip_drag() {
+        // The spec's geometry: at 40 percent of 120 columns the
+        // divider sits on columns 72-73 and holds 48 tab columns. A
+        // press anywhere on the drawn divider starts a strip drag with
+        // that size — and touches no column-side value.
+        let mut state = strip_state();
+        state.global.bottom_percent = 30;
+
+        assert!(
+            state.handle_terminal_click(5, 72, 12),
+            "the press on the divider is the press that starts the drag"
+        );
+        let drag = state.split_drag.expect("the press starts the drag");
+        assert_eq!(drag.axis, LayoutKind::Strip);
+        assert!(!drag.moved, "the press is not yet a drag");
+        assert_eq!(drag.size, 48, "the drawn tab columns at the press");
+        assert_eq!(
+            state.global.bottom_percent, 30,
+            "a strip press must not touch the column's percent"
+        );
+        assert!(!state.global.percent_save_pending());
+    }
+
+    #[test]
+    fn a_strip_press_outside_the_divider_starts_no_drag() {
+        // The divider is the only strip region that starts a drag: the
+        // agent panel and the tab panel route to clicks, the filter
+        // column to the chip walk.
+        let mut state = strip_state();
+        for (row, col) in [(5, 10), (5, 80), (5, 0)] {
+            state.handle_terminal_click(row, col, 12);
+            assert!(
+                state.split_drag.is_none(),
+                "a press at ({row}, {col}) must not start a drag"
+            );
+        }
+    }
+
+    #[test]
+    fn a_strip_drag_stale_end_saves_the_tab_percent() {
+        // The stale-drag end on a new press saves the axis's own value:
+        // a strip drag's last tab columns become @sidebar_tab_width,
+        // and the column's bottom percent is never touched. The drag
+        // here is forced moved (its release was lost elsewhere), with
+        // 60 tab columns of the 120-column strip — 50 percent.
+        let mut state = strip_state();
+        state.global.bottom_percent = 30;
+        state.handle_terminal_click(5, 72, 12);
+        let drag = state.split_drag.as_mut().expect("the drag is live");
+        drag.size = 60;
+        drag.moved = true;
+
+        // A new press anywhere ends the stale drag with its save.
+        state.handle_terminal_click(5, 10, 12);
+
+        assert_eq!(
+            state.global.tab_percent, 50,
+            "the stale strip drag saved 60 tab columns of 120 as 50 percent"
+        );
+        assert!(
+            state.global.tab_percent_save_pending(),
+            "the stale release must hand the tab width to the tmux write"
+        );
+        assert_eq!(
+            state.global.bottom_percent, 30,
+            "a strip drag's save must not touch the bottom percent"
+        );
+        assert!(!state.global.percent_save_pending());
     }
 
     // ─── move_pane_selection edge cases ─────────────────────────────

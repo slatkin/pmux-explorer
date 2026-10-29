@@ -392,21 +392,28 @@ pub(crate) fn percent_for_rows(rows: u16, height: u16) -> u8 {
     ((u32::from(rows) * 100 + u32::from(height) / 2) / u32::from(height)).min(100) as u8
 }
 
-/// A press on the rule between the agent list and the bottom panel that
-/// may still become a drag or a tab click. A release with a move saves
-/// the percent `rows` round-trips to (decision 4); a release without one
-/// is a click and selects the tab the press column names.
+/// A press on the column's rule or the strip's divider that may still
+/// become a drag or a tab click. A release with a move saves the
+/// percent `size` round-trips to (decision 4); a release without one
+/// is a click and selects the tab the press names.
 #[derive(Debug, Clone, Copy)]
 pub struct SplitDrag {
+    /// The layout the press belongs to: a column drag resizes the
+    /// bottom panel by rows, a strip drag the two strip panels by tab
+    /// columns — and each axis's release saves its own shared option
+    /// (`@sidebar_bottom_height` for a column, `@sidebar_tab_width` for
+    /// a strip).
+    pub axis: LayoutKind,
     /// Column of the press, kept for the unmoved release's tab click.
     pub press_col: u16,
-    /// Whether a drag event reached a row other than the rule row.
+    /// Whether a drag event reached a row other than the rule row (a
+    /// column) or a column other than the divider's (a strip).
     pub moved: bool,
-    /// The bottom-panel rows the drag shows, already clamped to the
-    /// split minimums (and the floating limit while the sidebar
-    /// floats) — the renderer draws exactly this many rows, rule
-    /// included, for as long as the drag moves.
-    pub rows: u16,
+    /// The panel size the drag shows, already clamped to the split
+    /// minimums — the bottom-panel rows (rule included) for a column,
+    /// the tab columns (divider included) for a strip — the renderer
+    /// draws exactly this much for as long as the drag moves.
+    pub size: u16,
 }
 
 /// Clamp a split drag's row count to the limits decision 4 takes over
@@ -457,23 +464,30 @@ impl AppState {
     }
 
     /// Handle a left mouse press at (`row`, `col`) in a terminal
-    /// `term_height` rows tall. Presses on the rule (the bottom panel's
-    /// first drawn row) start a split drag — any press column can drag,
-    /// and only an unmoved release selects a tab (decision 4). Presses
-    /// above the rule go to the agents panel. Returns `true` when the
-    /// press landed on the rule row.
+    /// `term_height` rows tall. The routing branches on the sidebar's
+    /// layout kind, and the hit test reads only the geometry the last
+    /// frame drew ([`FrameLayout`]), so a press can only ever land on a
+    /// panel that was drawn:
+    ///
+    /// - A column routes by row as before: a press on the rule (the
+    ///   bottom panel's first drawn row) starts a split drag — any
+    ///   press column can drag, and only an unmoved release selects a
+    ///   tab (decision 4) — and a press above the rule goes to the
+    ///   agents panel.
+    /// - A strip routes by the drawn [`StripLayout`]: a press on the
+    ///   divider starts a strip drag, a press in the filter column goes
+    ///   to [`Self::handle_filter_column_click`], and a press in the
+    ///   agent panel to [`Self::handle_strip_agent_click`].
+    ///
+    /// Returns `true` when the press started a split drag (the rule row
+    /// of a column, the divider of a strip).
     ///
     /// A press first ends a live drag whose release never reached this
     /// pane (a Down on another pane consumed it): the stale drag ends
-    /// as if released at its last rows so the instance is not left
+    /// as if released at its last size so the instance is not left
     /// blocked from percent adoption, and only the moved branch of that
     /// stale end runs — the new press, not the lost release, is the
     /// click that may resolve on a label (decision 4).
-    ///
-    /// The bottom-panel height comes from [`FrameLayout`], the height
-    /// the last frame actually drew — while floating that is the
-    /// clamped height — so a press can only ever land on a row that was
-    /// drawn.
     pub fn handle_terminal_click(&mut self, row: u16, col: u16, term_height: u16) -> bool {
         // A stale drag whose release was lost: a moved one saves its
         // rows (the moved branch only); an unmoved one is only a held
@@ -483,8 +497,18 @@ impl AppState {
         if let Some(drag) = self.split_drag.take()
             && drag.moved
         {
-            self.save_split_drag_rows(drag, term_height);
+            self.save_split_drag(drag, term_height);
         }
+        match self.layout_kind {
+            LayoutKind::Column => self.handle_column_click(row, col, term_height),
+            LayoutKind::Strip => self.handle_strip_press(row, col),
+        }
+    }
+
+    /// The column branch of [`Self::handle_terminal_click`]: the row
+    /// routing a column has always had. `true` only on the rule row,
+    /// where the press starts a split drag.
+    fn handle_column_click(&mut self, row: u16, col: u16, term_height: u16) -> bool {
         let bottom_start = term_height.saturating_sub(self.layout.bottom_panel_height);
         if row < bottom_start {
             self.handle_mouse_click(row, col);
@@ -494,13 +518,123 @@ impl AppState {
             // rows, so the release's unmoved click and the drawn rule
             // agree even when the panel floats.
             self.split_drag = Some(SplitDrag {
+                axis: LayoutKind::Column,
                 press_col: col,
                 moved: false,
-                rows: self.layout.bottom_panel_height,
+                size: self.layout.bottom_panel_height,
             });
             true
         } else {
             false
+        }
+    }
+
+    /// The strip branch of [`Self::handle_terminal_click`]: route by
+    /// the drawn [`StripLayout`]. A press on the divider starts a strip
+    /// drag (its `size` is the drawn tab columns, divider included);
+    /// the filter column and the agent panel go to their handlers.
+    /// `true` only on the divider, where the press starts the drag.
+    fn handle_strip_press(&mut self, row: u16, col: u16) -> bool {
+        let Some(strip) = self.layout.strip else {
+            return false;
+        };
+        if let Some(divider) = strip.divider
+            && point_in_rect(row, col, divider)
+        {
+            self.split_drag = Some(SplitDrag {
+                axis: LayoutKind::Strip,
+                press_col: col,
+                moved: false,
+                size: divider.width + strip.tabs.map_or(0, |tabs| tabs.width),
+            });
+            return true;
+        }
+        if point_in_rect(row, col, strip.filter) {
+            self.handle_filter_column_click(row, col);
+            return false;
+        }
+        if point_in_rect(row, col, strip.agents) {
+            self.handle_strip_agent_click(row, col, strip.agents);
+        }
+        false
+    }
+
+    /// Handle a press in the strip's vertical filter bar: the control
+    /// row acts (the side switch at column 0, the pop-out at column 2)
+    /// and a chip row selects its category. The chip layout comes from
+    /// the same pure function the renderer used for the current frame
+    /// ([`filter_column_layout`], keyed on the drawn bar's height), so
+    /// a click can only ever select a chip that is actually drawn.
+    ///
+    /// The same two gates the column's filter row applies stand here:
+    /// a click that lands while this sidebar was not the active pane is
+    /// the click that focuses the sidebar, not a chip selection, and
+    /// rapid clicks are debounced against phantom mouse events from
+    /// tmux pane resize/layout changes.
+    pub fn handle_filter_column_click(&mut self, row: u16, col: u16) {
+        if !self.filter_click_allowed() {
+            return;
+        }
+        let Some(strip) = self.layout.strip else {
+            return;
+        };
+        let (chips, control_row) = filter_column_layout(self.status_counts(), strip.filter.height);
+        if control_row.is_some_and(|control_row| row == control_row) {
+            // The drawn control row: the side switch first (a no-op
+            // while the sidebar floats; the dimmed glyph says so before
+            // the click), then the pop-out one column in.
+            if col == 0 {
+                self.switch_sidebar_side();
+            } else if col == 2 {
+                self.toggle_popout();
+            }
+            return;
+        }
+        // On the vertical bar a chip's `start` is its row.
+        for chip in &chips {
+            if chip.start == row {
+                self.global.status_filter = chip.filter;
+                self.global.save_filter();
+                self.rebuild_row_targets();
+                return;
+            }
+        }
+    }
+
+    /// The strip twin of [`Self::handle_mouse_click`] for a press in
+    /// the drawn agent panel. The panel has no filter row, so the row
+    /// offsets differ: `agents.y` is the repo header, every row below
+    /// it a list row. The popups and the `+`/`×` click targets are
+    /// tested first, in absolute frame coordinates, exactly as the
+    /// column's handler does.
+    fn handle_strip_agent_click(&mut self, row: u16, col: u16, agents: Rect) {
+        if self.handle_notices_popup_click(row, col) {
+            return;
+        }
+        if self.handle_repo_popup_click(row, col) {
+            return;
+        }
+        if self.handle_spawn_input_click(row, col) {
+            return;
+        }
+        if self.handle_remove_confirm_click(row, col) {
+            return;
+        }
+        if self.handle_agent_row_click(row, col) {
+            return;
+        }
+        if row == agents.y {
+            self.handle_secondary_header_click(col - agents.x);
+            return;
+        }
+        // A row below the header is a list row: the first one sits
+        // directly under the header (no filter row in a strip), offset
+        // by the scroll the last frame drew with.
+        let line_index = (row - agents.y - 1) as usize + self.scrolls.panes.offset;
+        if let Some(Some(agent_row)) = self.layout.line_to_row.get(line_index) {
+            self.global.selected_pane_row = *agent_row;
+            self.global.queue_cursor_save();
+            self.activate_selected_pane();
         }
     }
 
@@ -514,15 +648,15 @@ impl AppState {
         let Some(drag) = &mut self.split_drag else {
             return;
         };
-        // Against the row the rule is drawn at: while unmoved `rows`
+        // Against the row the rule is drawn at: while unmoved `size`
         // still holds the drawn rows at the press, while moved the
-        // renderer draws `rows` — in both states the rule sits at
-        // `term_height - rows`.
-        if row == term_height.saturating_sub(drag.rows) {
+        // renderer draws `size` — in both states the rule sits at
+        // `term_height - size`.
+        if row == term_height.saturating_sub(drag.size) {
             return;
         }
         drag.moved = true;
-        drag.rows = clamp_drag_rows(
+        drag.size = clamp_drag_rows(
             term_height.saturating_sub(row),
             term_height,
             self.sidebar_pane.floating,
@@ -530,7 +664,7 @@ impl AppState {
     }
 
     /// Finish a split drag on a button release. A drag that moved saves
-    /// its rows as the shared bottom-panel percent (~a tmux write per
+    /// its size as the shared percent of its axis (~a tmux write per
     /// drag, not per move); an unmoved press resolves as a click and
     /// selects the tab the press column names. No drag: the release
     /// belongs to nothing.
@@ -539,21 +673,40 @@ impl AppState {
             return;
         };
         if drag.moved {
-            self.save_split_drag_rows(drag, term_height);
+            self.save_split_drag(drag, term_height);
         } else {
             self.handle_bottom_tab_click(drag.press_col);
         }
     }
 
-    /// The moved branch of a split-drag ending: adopt the drag's rows
-    /// as the shared bottom-panel percent and hand it to the tmux
-    /// write. Both endings share it verbatim — the real release
-    /// (`end_split_drag`) and the stale-drag end on a new press — and
-    /// each caller gates on `drag.moved`: it runs only for a drag that
-    /// moved.
-    fn save_split_drag_rows(&mut self, drag: SplitDrag, term_height: u16) {
-        self.global.bottom_percent = percent_for_rows(drag.rows, term_height);
-        self.global.save_bottom_percent();
+    /// The moved branch of a split-drag ending: adopt the drag's size
+    /// as the shared percent of its axis and hand it to the tmux write
+    /// — `@sidebar_bottom_height` for a column (the size is rows),
+    /// `@sidebar_tab_width` for a strip (the size is tab columns, and
+    /// the percent is of the drawn strip's width). Both endings share
+    /// it verbatim — the real release (`end_split_drag`) and the
+    /// stale-drag end on a new press — and each caller gates on
+    /// `drag.moved`: it runs only for a drag that moved.
+    fn save_split_drag(&mut self, drag: SplitDrag, term_height: u16) {
+        match drag.axis {
+            LayoutKind::Column => {
+                self.global.bottom_percent = percent_for_rows(drag.size, term_height);
+                self.global.save_bottom_percent();
+            }
+            LayoutKind::Strip => {
+                // The strip width the last frame drew: the drag's tab
+                // columns are a percent of it, divider included.
+                let Some(strip) = self.layout.strip else {
+                    return;
+                };
+                let width = strip.filter.width
+                    + strip.agents.width
+                    + strip.divider.map_or(0, |divider| divider.width)
+                    + strip.tabs.map_or(0, |tabs| tabs.width);
+                self.global.tab_percent = cols_for_percent(drag.size, width);
+                self.global.save_tab_percent();
+            }
+        }
     }
 
     /// Handle mouse scroll event, routing to agents or bottom panel based on Y position.
@@ -572,6 +725,28 @@ impl AppState {
         }
     }
 
+    /// The two gates both filter-click handlers share (the column's
+    /// horizontal row and the strip's vertical bar): the click must
+    /// come from an already-active sidebar and pass the phantom-event
+    /// debounce. `true` when the click may act; the debouncer is
+    /// restamped as a side effect.
+    fn filter_click_allowed(&mut self) -> bool {
+        if !self.sidebar_pane.pane_active {
+            return false;
+        }
+        const DEBOUNCE_MS: u128 = 150;
+        let now = std::time::Instant::now();
+        if now
+            .duration_since(self.timers.last_filter_click)
+            .as_millis()
+            < DEBOUNCE_MS
+        {
+            return false;
+        }
+        self.timers.last_filter_click = now;
+        true
+    }
+
     /// Handle mouse click on the filter bar (row 0).
     /// Determines which filter was clicked based on x coordinate.
     /// Debounces rapid clicks to ignore phantom mouse events from tmux
@@ -584,21 +759,12 @@ impl AppState {
     /// Such a click is ignored; the status filter is a server-wide
     /// setting, so honouring it here would change every window.
     pub fn handle_filter_click(&mut self, col: u16) {
-        if !self.sidebar_pane.pane_active {
+        if !self.filter_click_allowed() {
             return;
         }
-        const DEBOUNCE_MS: u128 = 150;
-        let now = std::time::Instant::now();
-        if now
-            .duration_since(self.timers.last_filter_click)
-            .as_millis()
-            < DEBOUNCE_MS
-        {
-            return;
-        }
-        self.timers.last_filter_click = now;
 
-        // The row's chip layout comes from the same pure function the
+        // The chip walk of the column's filter row: the row's chip
+        // layout comes from the same pure function the
         // renderer used for the current frame, keyed on the width that
         // frame rendered with. Both controls are hit-tested before the
         // chip walk, so a click on either never changes the status
