@@ -10,7 +10,7 @@
 mod test_helpers;
 
 use pmux_explorer::group::{PaneGitInfo, RepoGroup};
-use pmux_explorer::state::{AppState, Focus, PopupState};
+use pmux_explorer::state::{AppState, Focus, LayoutKind, PopupState};
 use pmux_explorer::tmux::{AgentType, PaneStatus, SessionInfo, WindowInfo};
 use ratatui::buffer::Buffer;
 use ratatui::style::Color;
@@ -172,6 +172,93 @@ fn focus_fill_activity_log_bottom_active_top_base() {
      [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]N[fg:#a9b1d6,bg:#24283b]o[fg:#a9b1d6,bg:#24283b] [fg:#a9b1d6,bg:#24283b]t[fg:#a9b1d6,bg:#24283b]o[fg:#a9b1d6,bg:#24283b]o[fg:#a9b1d6,bg:#24283b]l[fg:#a9b1d6,bg:#24283b]s[fg:#a9b1d6,bg:#24283b] [fg:#a9b1d6,bg:#24283b]y[fg:#a9b1d6,bg:#24283b]e[fg:#a9b1d6,bg:#24283b]t[fg:#a9b1d6,bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
      [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
      [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b] [bg:#24283b]
+    ");
+}
+
+// ─── Strip: the left section vs the right section ───────────────────
+//
+// The same two fills on a strip's geometry: the agent section (the
+// vertical filter bar and the agent panel) sits on the left, the tab
+// section (the divider and the tab panel) on the right. Geometry: a
+// 44×8 backend with the default 40% tab width gives
+// `strip_layout(44, 8, 40)` — filter columns 0–3, agent panel columns
+// 4–23, divider columns 24–25, tab panel columns 26–43, each the full
+// 8 rows; the divider's three glyph rows sit on rows 2–4.
+
+/// [`focused_panes_state`] whose sidebar is a strip.
+fn focused_strip_state() -> AppState {
+    let mut state = focused_panes_state();
+    state.layout_kind = LayoutKind::Strip;
+    state
+}
+
+#[test]
+fn focus_fill_strip_panes_left_active_right_base() {
+    let mut state = focused_strip_state();
+    // Default focus is Panes.
+    assert_eq!(state.focus_state.focus, Focus::Panes);
+
+    let buf = render_to_buffer(&mut state, 44, 8);
+
+    // The agent section on the left carries the active fill, the tab
+    // section on the right the base one. The divider band paints the
+    // filter-bar colour over its section fill, the way the column's
+    // rule row does.
+    assert_eq!(buf[(0, 0)].bg, TOP_FILL);
+    assert_eq!(buf[(10, 6)].bg, TOP_FILL);
+    assert_eq!(buf[(24, 0)].bg, FILTER_BAR_BG);
+    assert_eq!(buf[(30, 6)].bg, BASE_FILL);
+    // No section carries the other section's fill: the selected
+    // pane's rows keep their selection colour, which is neither.
+    assert!(
+        !(0..24).any(|x| buf[(x, 6)].bg == BASE_FILL),
+        "no agent-section cell may carry the base fill"
+    );
+    assert!(
+        !(0..8).any(|y| buf[(30, y)].bg == TOP_FILL),
+        "no tab-panel cell may carry the active fill"
+    );
+
+    insta::assert_snapshot!(render_to_string(&mut state, 44, 8), @"
+    󱓯 1 ⓘ                — ▾
+     0 project
+    󰥔 0 ┃ 󰒲                
+    󰒲 1     Waiting for prom    No tools yet
+     0                     󰊢
+    ⇅ ⤢
+    ");
+}
+
+#[test]
+fn focus_fill_strip_activity_log_right_active_left_base() {
+    let mut state = focused_strip_state();
+    state.focus_state.focus = Focus::ActivityLog;
+
+    let buf = render_to_buffer(&mut state, 44, 8);
+
+    // ActivityLog focus moves the active fill to the tab section on
+    // the right; the agent section on the left drops to the base one.
+    // The divider band keeps the filter-bar colour over its fill.
+    assert_eq!(buf[(0, 0)].bg, BASE_FILL);
+    assert_eq!(buf[(10, 6)].bg, BASE_FILL);
+    assert_eq!(buf[(24, 0)].bg, FILTER_BAR_BG);
+    assert_eq!(buf[(30, 6)].bg, TOP_FILL);
+    assert!(
+        !(0..8).any(|y| buf[(30, y)].bg == BASE_FILL),
+        "no tab-panel cell may carry the base fill"
+    );
+    assert!(
+        !(0..24).any(|x| buf[(x, 6)].bg == TOP_FILL),
+        "no agent-section cell may carry the active fill"
+    );
+
+    insta::assert_snapshot!(render_to_string(&mut state, 44, 8), @"
+    󱓯 1 ⓘ                — ▾
+     0 project
+    󰥔 0 ┃ 󰒲                
+    󰒲 1     Waiting for prom    No tools yet
+     0                     󰊢
+    ⇅ ⤢
     ");
 }
 

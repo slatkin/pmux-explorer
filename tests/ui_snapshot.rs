@@ -2480,7 +2480,7 @@ fn snapshot_strip_120x12_with_the_tools_tab() {
      0                                                                     
                                                                                               No tools yet
                                                                             󰊢
-    ⇄ ⤢
+    ⇅ ⤢
     ");
 }
 
@@ -2497,7 +2497,7 @@ fn snapshot_strip_pi_pane_shows_the_thought_glyph() {
                                                                             󰟶                  No tools yet
                                                                             
                                                                             󰊢
-    ⇄ ⤢
+    ⇅ ⤢
     ");
 }
 
@@ -2511,7 +2511,7 @@ fn snapshot_strip_tab_width_zero_hides_the_tab_panel() {
     󰥔 0 ┃ 󰒲 
     󰒲 1     Waiting for prompt…
      0
-    ⇄ ⤢
+    ⇅ ⤢
     ");
 }
 
@@ -2525,6 +2525,56 @@ fn snapshot_strip_40_columns_has_no_tab_panel() {
     󰥔 0 ┃ 󰒲 
     󰒲 1     Waiting for prompt…
      0
-    ⇄ ⤢
+    ⇅ ⤢
     ");
+}
+
+// ─── The strip control row ──────────────────────────────────────────
+//
+// The strip's side switch shows the vertical `⇅` glyph — the column
+// keeps `⇄` (the `sidebar-panel` spec pins one glyph per layout) — and
+// the pop-out glyph keeps following the floating flag. A 40-column
+// strip isolates the bar: no tab panel fits beside the two panel
+// minimums, so the control row is the frame's last row at the left
+// edge. Colours are not visible characters, so the docked and floating
+// switch styles sit as direct cell checks beside the snapshots.
+
+#[test]
+fn snapshot_strip_control_row_docked_shows_the_vertical_switch() {
+    let mut state = make_strip_state(AgentType::Claude, PaneStatus::Idle, 40);
+    let output = render_to_string(&mut state, 40, 6);
+    insta::assert_snapshot!(output, @"
+    󱓯 1 ⓘ                                — ▾
+     0 project
+    󰥔 0 ┃ 󰒲 
+    󰒲 1     Waiting for prompt…
+     0
+    ⇅ ⤢
+    ");
+    let buf = render_to_buffer(&mut state, 40, 6);
+    assert_eq!(buf[(0, 5)].symbol(), "⇅");
+    assert_eq!(buf[(0, 5)].fg, state.theme.status_running);
+    assert_eq!(buf[(2, 5)].symbol(), "⤢");
+    assert_eq!(buf[(2, 5)].fg, state.theme.status_running);
+}
+
+#[test]
+fn snapshot_strip_control_row_floating_dims_the_switch() {
+    let mut state = make_strip_state(AgentType::Claude, PaneStatus::Idle, 40);
+    state.sidebar_pane.floating = true;
+    let output = render_to_string(&mut state, 40, 6);
+    insta::assert_snapshot!(output, @"
+    󱓯 1 ⓘ                                — ▾
+     0 project
+    󰥔 0 ┃ 󰒲 
+    󰒲 1     Waiting for prompt…
+     0
+    ⇅ ⤡
+    ");
+    let buf = render_to_buffer(&mut state, 40, 6);
+    assert_eq!(buf[(0, 5)].symbol(), "⇅");
+    // Dimmed while floating — the control does nothing there.
+    assert_eq!(buf[(0, 5)].fg, state.theme.filter_inactive);
+    assert_eq!(buf[(2, 5)].symbol(), "⤡");
+    assert_eq!(buf[(2, 5)].fg, state.theme.status_running);
 }

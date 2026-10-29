@@ -17,7 +17,13 @@ use crate::ui::text::{display_width, truncate_to_width};
 /// way; while floating it draws dimmed (the control is disabled).
 const POPOUT_GLYPH: &str = "⤢";
 const POPIN_GLYPH: &str = "⤡";
+/// The column's side-switch glyph: a column flips between the left
+/// and the right edge.
 const SIDE_SWITCH_GLYPH: &str = "⇄";
+/// The strip's side-switch glyph: a strip flips between the top and
+/// the bottom edge, so its control shows the vertical arrows
+/// (the `sidebar-panel` spec pins one glyph per layout).
+const STRIP_SIDE_SWITCH_GLYPH: &str = "⇅";
 
 /// The icon glyph and colour a chip for `filter` draws: the status
 /// icon in its status colour, the all chip its own colour. Shared by
@@ -162,6 +168,8 @@ pub(super) fn render_filter_bar<'a>(state: &AppState, width: u16) -> (Line<'a>, 
 ///
 /// Unlike the column's horizontal filter row the bar paints no band of
 /// its own: it keeps the agent section's focus fill it is drawn over.
+/// The side switch shows the strip's `⇅` glyph — dimmed while
+/// floating, the way the column's `⇄` is.
 pub(crate) fn draw_strip_filter_bar(frame: &mut Frame, state: &AppState, area: Rect) {
     let counts = state.status_counts();
     let (chips, control_row) = filter_column_layout(counts, area.height);
@@ -209,17 +217,17 @@ pub(crate) fn draw_strip_filter_bar(frame: &mut Frame, state: &AppState, area: R
         } else {
             POPOUT_GLYPH
         };
-        let row = Rect::new(area.x, area.y + control_row, area.width, 1);
+        let control_row_rect = Rect::new(area.x, area.y + control_row, area.width, 1);
         frame.render_widget(
             Paragraph::new(Line::from(vec![
-                Span::styled(SIDE_SWITCH_GLYPH, switch_style),
+                Span::styled(STRIP_SIDE_SWITCH_GLYPH, switch_style),
                 Span::raw(" "),
                 Span::styled(
                     control_glyph,
                     Style::default().fg(state.theme.status_running),
                 ),
             ])),
-            row,
+            control_row_rect,
         );
     }
 }
