@@ -56,4 +56,4 @@
 ## 9. Integration
 
 - [ ] 9.1 Optional smoke run: start the `ui-showcase` scenario with `@sidebar_position bottom` and record a `tmux capture-pane` of the strip. Acceptance does not depend on this run; it depends on the inline snapshots of 4.2-4.4.
-- [ ] 9.2 Run `cargo fmt`, `cargo clippy`, `cargo test` and `cargo build --release`; all pass.
+- [x] 9.2 Run `cargo fmt`, `cargo clippy`, `cargo test` and `cargo build --release`; all pass.
