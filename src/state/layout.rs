@@ -1,4 +1,36 @@
+use ratatui::layout::Rect;
+
 use super::{AppState, BottomTab, RepoFilter, StatusCounts, StatusFilter, clamp_bottom_height};
+
+/// Whether a sidebar instance is a full-height column or a full-width
+/// strip. The `@sidebar_position` value that made the sidebar picks it
+/// (`Left`/`Right` make a column, `Top`/`Bottom` a strip), and the
+/// layout is fixed for the life of the pane: a later option change, a
+/// resize, a side switch or a pop-out never crosses the kinds (the
+/// `strip-layout` capability). Every code path that differs between the
+/// two shapes branches on this value, never on the pane shape.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LayoutKind {
+    Column,
+    Strip,
+}
+
+impl LayoutKind {
+    /// The layout a `PMUX_SIDEBAR_LAYOUT` process-environment value
+    /// selects: `strip` makes a strip, `column` a column, and a missing,
+    /// empty or unknown value a column — a sidebar that started before
+    /// the strip layout existed (or with a garbage value) keeps the
+    /// column behavior. The value is read once at startup
+    /// (`app/setup.rs`), never from a pane option: `split-window` starts
+    /// the TUI before `toggle` can write `@pane_sidebar_layout`, so the
+    /// environment is the only startup source that cannot lose the race.
+    pub fn from_env_value(value: Option<&str>) -> Self {
+        match value {
+            Some("strip") => LayoutKind::Strip,
+            _ => LayoutKind::Column,
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct RowTarget {
@@ -29,11 +61,17 @@ pub struct SpawnRemoveTarget {
 /// renderer truncates labels that do not fit, so a label pushed off
 /// the rule has a shrunken range — or none — and a click can only ever
 /// land on a label that is drawn.
+///
+/// On the strip's vertical divider the same fields are rows instead
+/// ([`divider_tab_rows`]): `start` is the row the tab's glyph occupies
+/// and `end` the row after it.
 #[derive(Debug, Clone)]
 pub struct BottomTabTarget {
-    /// First column of the drawn label (0-based terminal column).
+    /// First column of the drawn label (0-based terminal column); on
+    /// the strip's divider, the row of the drawn glyph.
     pub start: u16,
-    /// Column after the label's last drawn column.
+    /// Column after the label's last drawn column; on the strip's
+    /// divider, the row after the glyph.
     pub end: u16,
     /// The tab a click in the range selects.
     pub tab: BottomTab,
@@ -98,18 +136,31 @@ pub struct FrameLayout {
     /// frame and while the panel is hidden, when no label is
     /// clickable.
     pub bottom_tab_targets: Vec<BottomTabTarget>,
+    /// The strip's panel geometry as the last frame laid it out. The
+    /// field is `Some` whenever this sidebar is a strip
+    /// ([`LayoutKind::Strip`]) and a frame has drawn — a hidden tab
+    /// panel is `strip.tabs == None`, not a `None` field — and `None`
+    /// before the first frame and on a column. The mouse handlers
+    /// branch on it so a strip press routes by the panels the frame
+    /// actually drew.
+    pub strip: Option<StripLayout>,
 }
 
 pub(super) fn point_in_rect(row: u16, col: u16, rect: ratatui::layout::Rect) -> bool {
     rect.contains(ratatui::layout::Position { x: col, y: row })
 }
 
-/// One chip of the status filter row: its category and the columns it
-/// occupies on screen (icon plus count digits).
+/// One chip of the status filter: its category and the extent it
+/// occupies on screen (icon plus count digits). The meaning of
+/// `start` depends on the layout that produced the chip: on the
+/// horizontal filter row it is the column of the chip's icon
+/// ([`filter_bar_layout`]), on the strip's vertical filter bar it is
+/// the row the chip occupies ([`filter_column_layout`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FilterChip {
     pub filter: StatusFilter,
-    /// Column of the chip's icon.
+    /// Column of the chip's icon, or its row on the strip's vertical
+    /// filter bar.
     pub start: u16,
     /// Number of columns the chip occupies.
     pub width: u16,
@@ -166,6 +217,167 @@ pub(crate) fn filter_bar_layout(
     (chips, switch_col, Some(popout_col))
 }
 
+/// Columns the strip's vertical filter bar occupies at the left edge:
+/// one chip per row, drawn as icon, space and count.
+const STRIP_FILTER_COLS: u16 = 4;
+/// Columns the strip's vertical tab divider occupies between the agent
+/// panel and the tab panel.
+const STRIP_DIVIDER_COLS: u16 = 2;
+/// Columns either strip panel keeps at least: the agent panel and the
+/// tab panel (divider included) each never shrink below this.
+const STRIP_MIN_PANEL_COLS: u16 = 20;
+
+/// The panel geometry of a strip as the last frame laid it out: the
+/// vertical filter bar at the left edge, the agent panel next to it,
+/// and — while the tab panel shows — the tab divider and the tab
+/// panel to the right edge. Every `Rect` spans the full strip height
+/// and is positioned in the strip pane's own coordinates (the TUI's
+/// frame is the whole sidebar pane, so `y` is 0 and the `x` columns
+/// are the frame's absolute columns the mouse handlers test against).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StripLayout {
+    /// The 4-column vertical filter bar, `x 0..4`.
+    pub filter: Rect,
+    /// The agent panel, right of the filter bar.
+    pub agents: Rect,
+    /// The 2-column tab divider, while the tab panel shows.
+    pub divider: Option<Rect>,
+    /// The tab panel, right of the divider, while it shows.
+    pub tabs: Option<Rect>,
+}
+
+/// The geometry of a strip `width` columns wide and `height` rows tall
+/// with the tab panel taking `tab_percent` percent of the strip width,
+/// divider included — the single split geometry the renderer, the hit
+/// test and the divider drag all read, so the drawn panels and the
+/// clickable panels cannot be in different columns.
+///
+/// The filter bar always occupies the left [`STRIP_FILTER_COLS`]
+/// columns. The tab width is the rounded percent clamped so the agent
+/// panel keeps at least [`STRIP_MIN_PANEL_COLS`] columns and the tab
+/// panel with its divider keeps at least [`STRIP_MIN_PANEL_COLS`]. A
+/// percent of 0, or a strip too narrow for the filter bar and both
+/// minimums, hides the divider and the tab panel and gives the agent
+/// panel the columns the filter bar leaves.
+pub fn strip_layout(width: u16, height: u16, tab_percent: u8) -> StripLayout {
+    let wanted = if tab_percent == 0 {
+        0
+    } else {
+        ((u32::from(width) * u32::from(tab_percent) + 50) / 100) as u16
+    };
+    strip_layout_for_tab_cols(width, height, wanted)
+}
+
+/// [`strip_layout`] keyed on tab columns instead of a percent: a moved
+/// divider drag lays the strip out with the drag's live tab columns, so
+/// the drawn divider sits on the mouse column (`draw_strip`). The
+/// clamping is the percent path's own — a count of 0 hides the divider
+/// and the tab panel, and both panels keep their
+/// [`STRIP_MIN_PANEL_COLS`] minimums.
+pub fn strip_layout_for_tab_cols(width: u16, height: u16, tab_cols: u16) -> StripLayout {
+    let filter_width = width.min(STRIP_FILTER_COLS);
+    let filter = Rect::new(0, 0, filter_width, height);
+    let agents_x = filter_width;
+    let mut agents = Rect::new(agents_x, 0, width.saturating_sub(filter_width), height);
+    let mut divider = None;
+    let mut tabs = None;
+    if tab_cols > 0 && width >= STRIP_FILTER_COLS + 2 * STRIP_MIN_PANEL_COLS {
+        let available = width - STRIP_FILTER_COLS;
+        let tab_cols = tab_cols.clamp(STRIP_MIN_PANEL_COLS, available - STRIP_MIN_PANEL_COLS);
+        let agents_width = available - tab_cols;
+        agents.width = agents_width;
+        let divider_x = agents_x + agents_width;
+        divider = Some(Rect::new(divider_x, 0, STRIP_DIVIDER_COLS, height));
+        tabs = Some(Rect::new(
+            divider_x + STRIP_DIVIDER_COLS,
+            0,
+            tab_cols - STRIP_DIVIDER_COLS,
+            height,
+        ));
+    }
+    StripLayout {
+        filter,
+        agents,
+        divider,
+        tabs,
+    }
+}
+
+/// The inverse of [`strip_layout`] for a divider-drag release: tab
+/// columns (divider included) are this percent of a strip `width`
+/// columns wide, rounded to the nearest percent. The result saturates
+/// at 100, the largest percent `@sidebar_tab_width` accepts. A drag
+/// that leaves the divider on column `c` holds `width - c` tab
+/// columns, so re-laying the saved percent out puts the divider back
+/// on the column the user dragged it to.
+pub fn cols_for_percent(cols: u16, width: u16) -> u8 {
+    if width == 0 {
+        return 0;
+    }
+    ((u32::from(cols) * 100 + u32::from(width) / 2) / u32::from(width)).min(100) as u8
+}
+
+/// The layout of the strip's vertical filter bar: one chip per row,
+/// in the [`StatusFilter::VARIANTS`] order from the first row, and
+/// the control row (the side switch at column 0, the pop-out at
+/// column 2) on the last row. A chip that does not fit above the
+/// control row is dropped whole, together with every chip after it.
+///
+/// The counts shape only the chip widths — a chip is its icon, one
+/// space, then the count digits, and a count of 100 or more is drawn
+/// as `99`, so a chip never needs more than the bar's
+/// [`STRIP_FILTER_COLS`] columns (the count is a hint here, the agent
+/// list shows the truth). Both the renderer and the click hit test
+/// run through this function, so a click can only ever select a chip
+/// that is actually drawn.
+///
+/// A strip of fewer than 2 rows cannot hold a chip and the control
+/// row: one row draws only the control, no rows draw neither.
+pub fn filter_column_layout(counts: StatusCounts, height: u16) -> (Vec<FilterChip>, Option<u16>) {
+    let Some(control_row) = height.checked_sub(1) else {
+        return (Vec::new(), None);
+    };
+    let chips = StatusFilter::VARIANTS
+        .iter()
+        .enumerate()
+        .take_while(|(row, _)| u16::try_from(*row).is_ok_and(|row| row < control_row))
+        .map(|(row, filter)| {
+            let digits = count_digits(counts.count(*filter).min(99));
+            FilterChip {
+                filter: *filter,
+                start: row as u16,
+                width: 2 + digits,
+            }
+        })
+        .collect();
+    (chips, Some(control_row))
+}
+
+/// The rows the strip's vertical divider draws its tab glyphs on: one
+/// row per shown tab, in the same order as the horizontal rule of a
+/// column, with the run centered vertically — it starts on row
+/// `floor((height - run) / 2)` — and a run taller than the strip cut
+/// at the bottom (the run start saturates at row 0 and only the first
+/// `height` glyphs survive). Each target's `start`/`end` pair is the
+/// glyph row and the row after it, the hitboxes the tab click test
+/// reads back.
+pub fn divider_tab_rows(tabs: &[BottomTab], height: u16) -> Vec<BottomTabTarget> {
+    let run = tabs.len() as u16;
+    if run == 0 || height == 0 {
+        return Vec::new();
+    }
+    let start = if run < height { (height - run) / 2 } else { 0 };
+    tabs.iter()
+        .take(height as usize)
+        .enumerate()
+        .map(|(i, tab)| BottomTabTarget {
+            start: start + i as u16,
+            end: start + i as u16 + 1,
+            tab: *tab,
+        })
+        .collect()
+}
+
 /// Rows the bottom panel draws for a `percent` of a sidebar `height`
 /// rows tall, rule included — the single split geometry the renderer,
 /// the hit test and the split drag all read, so the drawn rule and the
@@ -194,21 +406,32 @@ pub(crate) fn percent_for_rows(rows: u16, height: u16) -> u8 {
     ((u32::from(rows) * 100 + u32::from(height) / 2) / u32::from(height)).min(100) as u8
 }
 
-/// A press on the rule between the agent list and the bottom panel that
-/// may still become a drag or a tab click. A release with a move saves
-/// the percent `rows` round-trips to (decision 4); a release without one
-/// is a click and selects the tab the press column names.
+/// A press on the column's rule or the strip's divider that may still
+/// become a drag or a tab click. A release with a move saves the
+/// percent `size` round-trips to (decision 4); a release without one
+/// is a click and selects the tab the press names.
 #[derive(Debug, Clone, Copy)]
 pub struct SplitDrag {
+    /// The layout the press belongs to: a column drag resizes the
+    /// bottom panel by rows, a strip drag the two strip panels by tab
+    /// columns — and each axis's release saves its own shared option
+    /// (`@sidebar_bottom_height` for a column, `@sidebar_tab_width` for
+    /// a strip).
+    pub axis: LayoutKind,
     /// Column of the press, kept for the unmoved release's tab click.
     pub press_col: u16,
-    /// Whether a drag event reached a row other than the rule row.
+    /// Row of the press, kept for the unmoved release's tab click on a
+    /// strip: the divider's hitboxes are rows, so the release reads the
+    /// press row, not the press column.
+    pub press_row: u16,
+    /// Whether a drag event reached a row other than the rule row (a
+    /// column) or a column other than the divider's (a strip).
     pub moved: bool,
-    /// The bottom-panel rows the drag shows, already clamped to the
-    /// split minimums (and the floating limit while the sidebar
-    /// floats) — the renderer draws exactly this many rows, rule
-    /// included, for as long as the drag moves.
-    pub rows: u16,
+    /// The panel size the drag shows, already clamped to the split
+    /// minimums — the bottom-panel rows (rule included) for a column,
+    /// the tab columns (divider included) for a strip — the renderer
+    /// draws exactly this much for as long as the drag moves.
+    pub size: u16,
 }
 
 /// Clamp a split drag's row count to the limits decision 4 takes over
@@ -224,6 +447,31 @@ fn clamp_drag_rows(rows: u16, term_height: u16, floating: bool) -> u16 {
     } else {
         rows
     }
+}
+
+/// Clamp a strip drag's tab-column count to the same limits
+/// [`strip_layout`] lays the percent out with: the tab panel with its
+/// divider keeps [`STRIP_MIN_PANEL_COLS`] columns and the agent panel
+/// its own. `available` is the width the filter bar leaves — the drawn
+/// strip's full width minus its filter columns. A strip too narrow for
+/// both minimums draws no divider, so no strip drag can be live on it;
+/// the guard only keeps the clamp away from a `min > max` panic there.
+fn clamp_drag_cols(cols: u16, available: u16) -> u16 {
+    if available < 2 * STRIP_MIN_PANEL_COLS {
+        return cols;
+    }
+    cols.clamp(STRIP_MIN_PANEL_COLS, available - STRIP_MIN_PANEL_COLS)
+}
+
+/// The full width the drawn [`StripLayout`] spans: the four rects tile
+/// the frame without gaps or overlap, so their widths sum to the
+/// strip's width. Both the drag move and the drag release convert a
+/// mouse column against it.
+fn drawn_strip_width(strip: &StripLayout) -> u16 {
+    strip.filter.width
+        + strip.agents.width
+        + strip.divider.map_or(0, |divider| divider.width)
+        + strip.tabs.map_or(0, |tabs| tabs.width)
 }
 
 impl AppState {
@@ -259,23 +507,30 @@ impl AppState {
     }
 
     /// Handle a left mouse press at (`row`, `col`) in a terminal
-    /// `term_height` rows tall. Presses on the rule (the bottom panel's
-    /// first drawn row) start a split drag — any press column can drag,
-    /// and only an unmoved release selects a tab (decision 4). Presses
-    /// above the rule go to the agents panel. Returns `true` when the
-    /// press landed on the rule row.
+    /// `term_height` rows tall. The routing branches on the sidebar's
+    /// layout kind, and the hit test reads only the geometry the last
+    /// frame drew ([`FrameLayout`]), so a press can only ever land on a
+    /// panel that was drawn:
+    ///
+    /// - A column routes by row as before: a press on the rule (the
+    ///   bottom panel's first drawn row) starts a split drag — any
+    ///   press column can drag, and only an unmoved release selects a
+    ///   tab (decision 4) — and a press above the rule goes to the
+    ///   agents panel.
+    /// - A strip routes by the drawn [`StripLayout`]: a press on the
+    ///   divider starts a strip drag, a press in the filter column goes
+    ///   to [`Self::handle_filter_column_click`], and a press in the
+    ///   agent panel to [`Self::handle_strip_agent_click`].
+    ///
+    /// Returns `true` when the press started a split drag (the rule row
+    /// of a column, the divider of a strip).
     ///
     /// A press first ends a live drag whose release never reached this
     /// pane (a Down on another pane consumed it): the stale drag ends
-    /// as if released at its last rows so the instance is not left
+    /// as if released at its last size so the instance is not left
     /// blocked from percent adoption, and only the moved branch of that
     /// stale end runs — the new press, not the lost release, is the
     /// click that may resolve on a label (decision 4).
-    ///
-    /// The bottom-panel height comes from [`FrameLayout`], the height
-    /// the last frame actually drew — while floating that is the
-    /// clamped height — so a press can only ever land on a row that was
-    /// drawn.
     pub fn handle_terminal_click(&mut self, row: u16, col: u16, term_height: u16) -> bool {
         // A stale drag whose release was lost: a moved one saves its
         // rows (the moved branch only); an unmoved one is only a held
@@ -285,8 +540,18 @@ impl AppState {
         if let Some(drag) = self.split_drag.take()
             && drag.moved
         {
-            self.save_split_drag_rows(drag, term_height);
+            self.save_split_drag(drag, term_height);
         }
+        match self.layout_kind {
+            LayoutKind::Column => self.handle_column_click(row, col, term_height),
+            LayoutKind::Strip => self.handle_strip_press(row, col),
+        }
+    }
+
+    /// The column branch of [`Self::handle_terminal_click`]: the row
+    /// routing a column has always had. `true` only on the rule row,
+    /// where the press starts a split drag.
+    fn handle_column_click(&mut self, row: u16, col: u16, term_height: u16) -> bool {
         let bottom_start = term_height.saturating_sub(self.layout.bottom_panel_height);
         if row < bottom_start {
             self.handle_mouse_click(row, col);
@@ -296,9 +561,11 @@ impl AppState {
             // rows, so the release's unmoved click and the drawn rule
             // agree even when the panel floats.
             self.split_drag = Some(SplitDrag {
+                axis: LayoutKind::Column,
                 press_col: col,
+                press_row: row,
                 moved: false,
-                rows: self.layout.bottom_panel_height,
+                size: self.layout.bottom_panel_height,
             });
             true
         } else {
@@ -306,72 +573,276 @@ impl AppState {
         }
     }
 
-    /// Track a held-button move (`Drag(Left)`) at `row` during a split
-    /// drag. A move to another row marks the drag moved and resizes the
-    /// drawn split to the mouse row, clamped to the split minimums (and
-    /// the floating limit while the sidebar floats); over the rule row
-    /// itself the drag stays the unmoved press a release treats as a
-    /// click. No drag: nothing to move.
-    pub fn handle_split_drag_move(&mut self, row: u16, term_height: u16) {
+    /// The strip branch of [`Self::handle_terminal_click`]: route by
+    /// the drawn [`StripLayout`]. A press on the divider starts a strip
+    /// drag (its `size` is the drawn tab columns, divider included);
+    /// the filter column and the agent panel go to their handlers.
+    /// `true` only on the divider, where the press starts the drag.
+    fn handle_strip_press(&mut self, row: u16, col: u16) -> bool {
+        let Some(strip) = self.layout.strip else {
+            return false;
+        };
+        if let Some(divider) = strip.divider
+            && point_in_rect(row, col, divider)
+        {
+            self.split_drag = Some(SplitDrag {
+                axis: LayoutKind::Strip,
+                press_col: col,
+                press_row: row,
+                moved: false,
+                size: divider.width + strip.tabs.map_or(0, |tabs| tabs.width),
+            });
+            return true;
+        }
+        if point_in_rect(row, col, strip.filter) {
+            self.handle_filter_column_click(row, col);
+            return false;
+        }
+        if point_in_rect(row, col, strip.agents) {
+            self.handle_strip_agent_click(row, col, strip.agents);
+        }
+        false
+    }
+
+    /// Handle a press in the strip's vertical filter bar: the control
+    /// row acts (the side switch at column 0, the pop-out at column 2)
+    /// and a chip row selects its category. The chip layout comes from
+    /// the same pure function the renderer used for the current frame
+    /// ([`filter_column_layout`], keyed on the drawn bar's height), so
+    /// a click can only ever select a chip that is actually drawn.
+    ///
+    /// The same two gates the column's filter row applies stand here:
+    /// a click that lands while this sidebar was not the active pane is
+    /// the click that focuses the sidebar, not a chip selection, and
+    /// rapid clicks are debounced against phantom mouse events from
+    /// tmux pane resize/layout changes.
+    pub fn handle_filter_column_click(&mut self, row: u16, col: u16) {
+        if !self.filter_click_allowed() {
+            return;
+        }
+        let Some(strip) = self.layout.strip else {
+            return;
+        };
+        let (chips, control_row) = filter_column_layout(self.status_counts(), strip.filter.height);
+        if control_row.is_some_and(|control_row| row == control_row) {
+            // The drawn control row: the side switch first (a no-op
+            // while the sidebar floats; the dimmed glyph says so before
+            // the click), then the pop-out one column in.
+            if col == 0 {
+                self.switch_sidebar_side();
+            } else if col == 2 {
+                self.toggle_popout();
+            }
+            return;
+        }
+        // On the vertical bar a chip's `start` is its row.
+        for chip in &chips {
+            if chip.start == row {
+                self.global.status_filter = chip.filter;
+                self.global.save_filter();
+                self.rebuild_row_targets();
+                return;
+            }
+        }
+    }
+
+    /// The strip twin of [`Self::handle_mouse_click`] for a press in
+    /// the drawn agent panel. The panel has no filter row, so the row
+    /// offsets differ: `agents.y` is the repo header, every row below
+    /// it a list row. The popups and the `+`/`×` click targets are
+    /// tested first, in absolute frame coordinates, exactly as the
+    /// column's handler does.
+    fn handle_strip_agent_click(&mut self, row: u16, col: u16, agents: Rect) {
+        if self.handle_notices_popup_click(row, col) {
+            return;
+        }
+        if self.handle_repo_popup_click(row, col) {
+            return;
+        }
+        if self.handle_spawn_input_click(row, col) {
+            return;
+        }
+        if self.handle_remove_confirm_click(row, col) {
+            return;
+        }
+        if self.handle_agent_row_click(row, col) {
+            return;
+        }
+        if row == agents.y {
+            self.handle_secondary_header_click(col - agents.x);
+            return;
+        }
+        // A row below the header is a list row: the first one sits
+        // directly under the header (no filter row in a strip), offset
+        // by the scroll the last frame drew with.
+        let line_index = (row - agents.y - 1) as usize + self.scrolls.panes.offset;
+        if let Some(Some(agent_row)) = self.layout.line_to_row.get(line_index) {
+            self.global.selected_pane_row = *agent_row;
+            self.global.queue_cursor_save();
+            self.activate_selected_pane();
+        }
+    }
+
+    /// Track a held-button move (`Drag(Left)`) at `row`/`col` during a
+    /// split drag, on the axis the drag's press started. A column drag
+    /// follows the mouse row: a move to another row marks the drag moved
+    /// and resizes the drawn split to the mouse row, clamped to the
+    /// split minimums (and the floating limit while the sidebar
+    /// floats); over the rule row itself the drag stays the unmoved
+    /// press a release treats as a click. A strip drag follows the
+    /// mouse column the same way: a move off the drawn divider marks
+    /// the drag moved and resizes the drawn split to the tab columns
+    /// the mouse column leaves, clamped to the two panel minimums, and
+    /// the renderer draws exactly this much for as long as the drag
+    /// moves; over the drawn divider itself the drag stays the unmoved
+    /// press. No drag: nothing to move.
+    pub fn handle_split_drag_move(&mut self, row: u16, col: u16, term_height: u16) {
         let Some(drag) = &mut self.split_drag else {
             return;
         };
-        // Against the row the rule is drawn at: while unmoved `rows`
-        // still holds the drawn rows at the press, while moved the
-        // renderer draws `rows` — in both states the rule sits at
-        // `term_height - rows`.
-        if row == term_height.saturating_sub(drag.rows) {
-            return;
+        match drag.axis {
+            LayoutKind::Column => {
+                // Against the row the rule is drawn at: while unmoved
+                // `size` still holds the drawn rows at the press, while
+                // moved the renderer draws `size` — in both states the
+                // rule sits at `term_height - size`.
+                if row == term_height.saturating_sub(drag.size) {
+                    return;
+                }
+                drag.moved = true;
+                drag.size = clamp_drag_rows(
+                    term_height.saturating_sub(row),
+                    term_height,
+                    self.sidebar_pane.floating,
+                );
+            }
+            LayoutKind::Strip => {
+                // Against the divider the last frame drew: while unmoved
+                // that is the press's own divider, while moved the
+                // renderer lays the strip out from `size` — in both
+                // states the divider sits on the columns the mouse is
+                // still over.
+                let Some(strip) = self.layout.strip else {
+                    return;
+                };
+                if strip
+                    .divider
+                    .is_some_and(|divider| point_in_rect(row, col, divider))
+                {
+                    return;
+                }
+                drag.moved = true;
+                let available = drawn_strip_width(&strip) - strip.filter.width;
+                drag.size =
+                    clamp_drag_cols(drawn_strip_width(&strip).saturating_sub(col), available);
+            }
         }
-        drag.moved = true;
-        drag.rows = clamp_drag_rows(
-            term_height.saturating_sub(row),
-            term_height,
-            self.sidebar_pane.floating,
-        );
     }
 
     /// Finish a split drag on a button release. A drag that moved saves
-    /// its rows as the shared bottom-panel percent (~a tmux write per
+    /// its size as the shared percent of its axis (~a tmux write per
     /// drag, not per move); an unmoved press resolves as a click and
-    /// selects the tab the press column names. No drag: the release
-    /// belongs to nothing.
+    /// selects the tab the press names — by column on a column's rule,
+    /// by row on a strip's divider. No drag: the release belongs to
+    /// nothing.
     pub fn end_split_drag(&mut self, term_height: u16) {
         let Some(drag) = self.split_drag.take() else {
             return;
         };
         if drag.moved {
-            self.save_split_drag_rows(drag, term_height);
+            self.save_split_drag(drag, term_height);
         } else {
-            self.handle_bottom_tab_click(drag.press_col);
+            match drag.axis {
+                LayoutKind::Column => self.handle_bottom_tab_click(drag.press_col),
+                LayoutKind::Strip => self.handle_bottom_tab_click_row(drag.press_row),
+            }
         }
     }
 
-    /// The moved branch of a split-drag ending: adopt the drag's rows
-    /// as the shared bottom-panel percent and hand it to the tmux
-    /// write. Both endings share it verbatim — the real release
-    /// (`end_split_drag`) and the stale-drag end on a new press — and
-    /// each caller gates on `drag.moved`: it runs only for a drag that
-    /// moved.
-    fn save_split_drag_rows(&mut self, drag: SplitDrag, term_height: u16) {
-        self.global.bottom_percent = percent_for_rows(drag.rows, term_height);
-        self.global.save_bottom_percent();
+    /// The moved branch of a split-drag ending: adopt the drag's size
+    /// as the shared percent of its axis and hand it to the tmux write
+    /// — `@sidebar_bottom_height` for a column (the size is rows),
+    /// `@sidebar_tab_width` for a strip (the size is tab columns, and
+    /// the percent is of the drawn strip's width). Both endings share
+    /// it verbatim — the real release (`end_split_drag`) and the
+    /// stale-drag end on a new press — and each caller gates on
+    /// `drag.moved`: it runs only for a drag that moved.
+    fn save_split_drag(&mut self, drag: SplitDrag, term_height: u16) {
+        match drag.axis {
+            LayoutKind::Column => {
+                self.global.bottom_percent = percent_for_rows(drag.size, term_height);
+                self.global.save_bottom_percent();
+            }
+            LayoutKind::Strip => {
+                // The strip width the last frame drew: the drag's tab
+                // columns are a percent of it, divider included.
+                let Some(strip) = self.layout.strip else {
+                    return;
+                };
+                let width = drawn_strip_width(&strip);
+                self.global.tab_percent = cols_for_percent(drag.size, width);
+                self.global.save_tab_percent();
+            }
+        }
     }
 
-    /// Handle mouse scroll event, routing to agents or bottom panel based on Y position.
+    /// Handle mouse scroll event. A column routes by row as before: at
+    /// or under the bottom panel's first drawn row the wheel scrolls
+    /// the displayed tab, above it the agent list. A strip routes by
+    /// column over the drawn [`StripLayout`]: the wheel over the agent
+    /// panel scrolls the agent list and over the tab panel the
+    /// displayed tab; the filter bar and the divider have nothing to
+    /// scroll.
     pub fn handle_mouse_scroll(
         &mut self,
         row: u16,
+        col: u16,
         term_height: u16,
         bottom_panel_height: u16,
         delta: isize,
     ) {
-        let bottom_start = term_height.saturating_sub(bottom_panel_height);
-        if row >= bottom_start {
-            self.scroll_bottom(delta);
-        } else {
-            self.scrolls.panes.scroll(delta);
+        match self.layout_kind {
+            LayoutKind::Strip => {
+                let Some(strip) = self.layout.strip else {
+                    return;
+                };
+                if strip.tabs.is_some_and(|tabs| point_in_rect(row, col, tabs)) {
+                    self.scroll_bottom(delta);
+                } else if point_in_rect(row, col, strip.agents) {
+                    self.scrolls.panes.scroll(delta);
+                }
+            }
+            LayoutKind::Column => {
+                let bottom_start = term_height.saturating_sub(bottom_panel_height);
+                if row >= bottom_start {
+                    self.scroll_bottom(delta);
+                } else {
+                    self.scrolls.panes.scroll(delta);
+                }
+            }
         }
+    }
+
+    /// The two gates both filter-click handlers share (the column's
+    /// horizontal row and the strip's vertical bar): the click must
+    /// come from an already-active sidebar and pass the phantom-event
+    /// debounce. `true` when the click may act; the debouncer is
+    /// restamped as a side effect.
+    fn filter_click_allowed(&mut self) -> bool {
+        if !self.sidebar_pane.pane_active {
+            return false;
+        }
+        const DEBOUNCE_MS: u128 = 150;
+        let now = std::time::Instant::now();
+        if now
+            .duration_since(self.timers.last_filter_click)
+            .as_millis()
+            < DEBOUNCE_MS
+        {
+            return false;
+        }
+        self.timers.last_filter_click = now;
+        true
     }
 
     /// Handle mouse click on the filter bar (row 0).
@@ -386,21 +857,12 @@ impl AppState {
     /// Such a click is ignored; the status filter is a server-wide
     /// setting, so honouring it here would change every window.
     pub fn handle_filter_click(&mut self, col: u16) {
-        if !self.sidebar_pane.pane_active {
+        if !self.filter_click_allowed() {
             return;
         }
-        const DEBOUNCE_MS: u128 = 150;
-        let now = std::time::Instant::now();
-        if now
-            .duration_since(self.timers.last_filter_click)
-            .as_millis()
-            < DEBOUNCE_MS
-        {
-            return;
-        }
-        self.timers.last_filter_click = now;
 
-        // The row's chip layout comes from the same pure function the
+        // The chip walk of the column's filter row: the row's chip
+        // layout comes from the same pure function the
         // renderer used for the current frame, keyed on the width that
         // frame rendered with. Both controls are hit-tested before the
         // chip walk, so a click on either never changes the status
@@ -601,6 +1063,7 @@ impl AppState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tmux::{PaneInfo, PaneStatus};
 
     // The numbers are the spec's own scenarios, not free-standing
     // arithmetic: each one pins a documented split case.
@@ -646,6 +1109,319 @@ mod tests {
             split_rows(percent_for_rows(37, 40), 40),
             37,
             "37 rows of 40 must give 37 rows again"
+        );
+    }
+
+    #[test]
+    fn the_environment_value_names_the_layout() {
+        assert_eq!(
+            LayoutKind::from_env_value(Some("strip")),
+            LayoutKind::Strip,
+            "strip makes a strip"
+        );
+        assert_eq!(
+            LayoutKind::from_env_value(Some("column")),
+            LayoutKind::Column,
+            "column makes a column"
+        );
+    }
+
+    #[test]
+    fn an_unknown_or_missing_environment_value_makes_a_column() {
+        // A sidebar that started before the strip layout existed has no
+        // value at all, and a garbage value names no layout: both keep
+        // the column behavior.
+        for value in [None, Some(""), Some("Strip"), Some("vertical")] {
+            assert_eq!(
+                LayoutKind::from_env_value(value),
+                LayoutKind::Column,
+                "the value {value:?} must fall back to a column"
+            );
+        }
+    }
+
+    // ─── strip_layout ─────────────────────────────────────────
+
+    #[test]
+    fn strip_layout_draws_the_rounded_tab_percent() {
+        // The spec's parts scenario: 120 columns, 40 percent — the
+        // filter bar, then the agent panel, then the 2-column divider
+        // on column 72, then the tab panel to the right edge.
+        let layout = strip_layout(120, 12, 40);
+        assert_eq!(layout.filter, Rect::new(0, 0, 4, 12));
+        assert_eq!(layout.agents, Rect::new(4, 0, 68, 12));
+        assert_eq!(layout.divider, Some(Rect::new(72, 0, 2, 12)));
+        assert_eq!(layout.tabs, Some(Rect::new(74, 0, 46, 12)));
+    }
+
+    #[test]
+    fn strip_layout_clamps_to_the_minimum_panel_widths() {
+        // One percent rounds to a single tab column, clamped up to the
+        // 20-column minimum the tab panel keeps with its divider.
+        let small = strip_layout(120, 12, 1);
+        assert_eq!(small.agents, Rect::new(4, 0, 96, 12));
+        assert_eq!(small.divider, Some(Rect::new(100, 0, 2, 12)));
+        assert_eq!(small.tabs, Some(Rect::new(102, 0, 18, 12)));
+        // A hundred percent is clamped down so the agent panel keeps
+        // its own 20-column minimum.
+        let large = strip_layout(120, 12, 100);
+        assert_eq!(large.agents, Rect::new(4, 0, 20, 12));
+        assert_eq!(large.divider, Some(Rect::new(24, 0, 2, 12)));
+        assert_eq!(large.tabs, Some(Rect::new(26, 0, 94, 12)));
+    }
+
+    #[test]
+    fn strip_layout_hides_the_tab_panel() {
+        // 40 columns cannot hold the filter bar and both 20-column
+        // minimums: no divider, no tab panel, the agent panel takes
+        // the columns the filter bar leaves.
+        let narrow = strip_layout(40, 12, 40);
+        assert_eq!(narrow.filter, Rect::new(0, 0, 4, 12));
+        assert_eq!(narrow.agents, Rect::new(4, 0, 36, 12));
+        assert_eq!(narrow.divider, None);
+        assert_eq!(narrow.tabs, None);
+        // A tab width of 0 hides the divider and the tab panel at any
+        // width.
+        let zero = strip_layout(120, 12, 0);
+        assert_eq!(zero.divider, None);
+        assert_eq!(zero.tabs, None);
+        assert_eq!(zero.agents, Rect::new(4, 0, 116, 12));
+    }
+
+    #[test]
+    fn the_drag_round_trip_returns_the_same_divider() {
+        // The spec's drag scenario: a 120-column strip dragged so the
+        // divider lands on column 60. The release converts the tab
+        // columns the drag holds to 50 percent, and re-laying the strip
+        // out from that percent puts the divider back on column 60.
+        let cols = 120u16 - 60;
+        assert_eq!(cols_for_percent(cols, 120), 50);
+        let relaid = strip_layout(120, 12, cols_for_percent(cols, 120));
+        assert_eq!(relaid.divider.map(|rect| rect.x), Some(60));
+        assert_eq!(relaid.agents, Rect::new(4, 0, 56, 12));
+    }
+
+    // ─── filter_column_layout ──────────────────────────────
+
+    /// A pane of the given status, the minimal shape the counts read.
+    fn pane_of_status(status: PaneStatus) -> PaneInfo {
+        PaneInfo {
+            pane_id: String::new(),
+            pane_active: false,
+            status,
+            attention: false,
+            agent: crate::tmux::AgentType::Claude,
+            path: String::new(),
+            current_command: String::new(),
+            prompt: String::new(),
+            prompt_is_response: false,
+            started_at: None,
+            wait_reason: String::new(),
+            permission_mode: crate::tmux::PermissionMode::Default,
+            subagents: vec![],
+            pane_pid: None,
+            worktree: crate::tmux::WorktreeMetadata::default(),
+            session_id: None,
+            sidebar_spawned: false,
+            pane_name: None,
+            bg_shell_cmd: None,
+            subagent: None,
+        }
+    }
+
+    /// The status counts of `statuses` worth of panes.
+    fn counts_of(statuses: &[PaneStatus]) -> StatusCounts {
+        let mut state = AppState::new(String::new());
+        state.repo_groups = vec![crate::group::RepoGroup {
+            name: "project".into(),
+            has_focus: true,
+            panes: statuses
+                .iter()
+                .enumerate()
+                .map(|(i, status)| {
+                    (
+                        PaneInfo {
+                            pane_id: format!("%{i}"),
+                            ..pane_of_status(status.clone())
+                        },
+                        crate::group::PaneGitInfo::default(),
+                    )
+                })
+                .collect(),
+        }];
+        state.status_counts()
+    }
+
+    #[test]
+    fn filter_column_layout_draws_one_chip_per_row_from_the_first() {
+        // The spec's all-chips-fit scenario: 12 rows put the five
+        // chips on rows 0-4 in the variant order and the controls on
+        // the last row.
+        let counts = counts_of(&[PaneStatus::Running, PaneStatus::Waiting, PaneStatus::Idle]);
+        let (chips, control_row) = filter_column_layout(counts, 12);
+        assert_eq!(control_row, Some(11));
+        let rows: Vec<(StatusFilter, u16)> =
+            chips.iter().map(|chip| (chip.filter, chip.start)).collect();
+        assert_eq!(
+            rows,
+            vec![
+                (StatusFilter::All, 0),
+                (StatusFilter::Busy, 1),
+                (StatusFilter::Waiting, 2),
+                (StatusFilter::Idle, 3),
+                (StatusFilter::Error, 4),
+            ]
+        );
+        // A single-digit count shapes a 3-column chip: icon, space,
+        // one digit. The all chip counts 3 panes, the busy chip 1.
+        assert_eq!(chips[0].width, 3);
+        assert_eq!(chips[1].width, 3);
+    }
+
+    #[test]
+    fn filter_column_layout_drops_whole_chips_above_the_control_row() {
+        // The spec's short-strip scenario: 4 rows leave three rows
+        // above the control row, so the idle and error chips are not
+        // drawn at all — never partially.
+        let counts = counts_of(&[]);
+        let (chips, control_row) = filter_column_layout(counts, 4);
+        assert_eq!(control_row, Some(3));
+        let filters: Vec<StatusFilter> = chips.iter().map(|chip| chip.filter).collect();
+        assert_eq!(
+            filters,
+            vec![StatusFilter::All, StatusFilter::Busy, StatusFilter::Waiting,]
+        );
+    }
+
+    #[test]
+    fn filter_column_layout_on_a_one_row_strip() {
+        // A one-row strip cannot hold a chip above the control row:
+        // only the control row itself, on row 0.
+        let counts = counts_of(&[]);
+        let (chips, control_row) = filter_column_layout(counts, 1);
+        assert!(chips.is_empty());
+        assert_eq!(control_row, Some(0));
+    }
+
+    #[test]
+    fn filter_column_layout_on_a_zero_row_strip() {
+        let counts = counts_of(&[]);
+        let (chips, control_row) = filter_column_layout(counts, 0);
+        assert!(chips.is_empty());
+        assert_eq!(control_row, None);
+    }
+
+    #[test]
+    fn a_count_of_100_or_more_keeps_the_chip_inside_its_row() {
+        // 120 running panes: the all and busy chips count 120, drawn
+        // as 99 — two digits, so the chip fills its 4-column row and
+        // never overflows into the agent panel.
+        let counts = counts_of(&vec![PaneStatus::Running; 120]);
+        let (chips, _) = filter_column_layout(counts, 12);
+        assert_eq!(chips[0].width, 4);
+        assert_eq!(chips[1].width, 4);
+        for chip in &chips {
+            assert!(chip.width <= 4, "a chip must fit the 4-column bar");
+        }
+    }
+
+    // ─── divider_tab_rows ───────────────────────────────────
+
+    /// A state whose focused pane runs the given agent, the minimal
+    /// setup `shown_bottom_tabs` reads (the same helper the bottom
+    /// panel's rule tests keep).
+    fn state_with_focused_agent(agent: crate::tmux::AgentType) -> AppState {
+        let pane = PaneInfo {
+            pane_id: "%1".into(),
+            pane_active: true,
+            status: PaneStatus::Running,
+            attention: false,
+            agent,
+            path: "/tmp".into(),
+            current_command: String::new(),
+            prompt: String::new(),
+            prompt_is_response: false,
+            started_at: None,
+            wait_reason: String::new(),
+            permission_mode: crate::tmux::PermissionMode::Default,
+            subagents: vec![],
+            pane_pid: None,
+            worktree: crate::tmux::WorktreeMetadata::default(),
+            session_id: None,
+            sidebar_spawned: false,
+            pane_name: None,
+            bg_shell_cmd: None,
+            subagent: None,
+        };
+        let mut state = AppState::new(String::new());
+        state.repo_groups = vec![crate::group::RepoGroup {
+            name: "project".into(),
+            has_focus: true,
+            panes: vec![(pane, crate::group::PaneGitInfo::default())],
+        }];
+        state.focus_state.focused_pane_id = Some("%1".into());
+        state
+    }
+
+    #[test]
+    fn divider_tab_rows_center_the_run_for_a_claude_pane() {
+        // The spec's Claude scenario: Tools, Tasks and Git on rows 4,
+        // 5 and 6 of a 12-row strip, each a one-row hitbox.
+        let state = state_with_focused_agent(crate::tmux::AgentType::Claude);
+        let rows = divider_tab_rows(&state.shown_bottom_tabs(), 12);
+        let drawn: Vec<(BottomTab, u16, u16)> = rows
+            .iter()
+            .map(|target| (target.tab, target.start, target.end))
+            .collect();
+        assert_eq!(
+            drawn,
+            vec![
+                (BottomTab::Activity, 4, 5),
+                (BottomTab::Tasks, 5, 6),
+                (BottomTab::GitStatus, 6, 7),
+            ]
+        );
+    }
+
+    #[test]
+    fn divider_tab_rows_show_the_thought_tab_for_a_pi_pane() {
+        // The spec's pi scenario: the Thought glyph joins the run, so
+        // the four glyphs sit on rows 4-7.
+        let state = state_with_focused_agent(crate::tmux::AgentType::Pi);
+        let rows = divider_tab_rows(&state.shown_bottom_tabs(), 12);
+        let drawn: Vec<(BottomTab, u16)> = rows
+            .iter()
+            .map(|target| (target.tab, target.start))
+            .collect();
+        assert_eq!(
+            drawn,
+            vec![
+                (BottomTab::Activity, 4),
+                (BottomTab::Thought, 5),
+                (BottomTab::Tasks, 6),
+                (BottomTab::GitStatus, 7),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_run_taller_than_the_strip_is_cut_at_the_bottom() {
+        // A 12-row run on a 3-row strip saturates the centered start
+        // at row 0 and keeps only the first three glyphs; the Git
+        // glyph has no row and no hitbox.
+        let state = state_with_focused_agent(crate::tmux::AgentType::Pi);
+        let rows = divider_tab_rows(&state.shown_bottom_tabs(), 3);
+        let drawn: Vec<(BottomTab, u16)> = rows
+            .iter()
+            .map(|target| (target.tab, target.start))
+            .collect();
+        assert_eq!(
+            drawn,
+            vec![
+                (BottomTab::Activity, 0),
+                (BottomTab::Thought, 1),
+                (BottomTab::Tasks, 2),
+            ]
         );
     }
 }

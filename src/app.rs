@@ -97,11 +97,14 @@ pub fn run(
                 // Keep the sidebar's width inside its band: grow it back
                 // when orchestrator panes squeezed it below
                 // `@sidebar_min_width`, shrink it when tmux's resize
-                // behaviour pushed it past `@sidebar_max_width`.
+                // behaviour pushed it past `@sidebar_max_width`. A strip
+                // is as wide as the window and is never touched here.
                 let pane_width = terminal.size().map(|s| s.width).unwrap_or(0);
-                size_guard::enforce(&state.tmux_pane, pane_width);
-                // Keep a floating panel as tall and as wide as its window,
-                // anchored to the right edge, after the window resized.
+                size_guard::enforce(&state.tmux_pane, pane_width, state.layout_kind);
+                // Keep a floating panel at its size rule and its edge
+                // anchor after the window resized: a column 40 wide at
+                // the right edge, a strip as wide as the window at the
+                // edge it was docked at.
                 panel_guard::enforce(
                     &state.tmux_pane,
                     state.sidebar_pane.window_width,
@@ -109,6 +112,11 @@ pub fn run(
                     &mut last_window_width,
                     &mut last_window_height,
                     state.sidebar_pane.floating,
+                    panel_guard::PanelRule {
+                        layout: state.layout_kind,
+                        edge: state.docked_edge,
+                        docked_size: state.docked_size.unwrap_or(0),
+                    },
                 );
             }
             git_tab_active.store(

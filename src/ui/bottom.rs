@@ -11,7 +11,7 @@ use ratatui::{
     widgets::{Block, Paragraph},
 };
 
-use crate::state::{AppState, BottomTab, BottomTabTarget};
+use crate::state::{AppState, BottomTab, BottomTabTarget, divider_tab_rows};
 
 use super::text::{display_width, truncate_to_width};
 
@@ -80,6 +80,10 @@ pub(crate) fn top_line_border(
     (Line::from(spans), targets)
 }
 
+/// The column bottom panel: the rule row on top, the tab content under
+/// it. The rule is the column's tab bar; a strip keeps its tabs on the
+/// divider instead and calls [`draw_bottom_content`] with the tab
+/// panel's `Rect` directly.
 pub fn draw_bottom(frame: &mut Frame, state: &mut AppState, area: Rect) {
     let theme = &state.theme;
 
@@ -109,11 +113,45 @@ pub fn draw_bottom(frame: &mut Frame, state: &mut AppState, area: Rect) {
     state.layout.bottom_tab_targets = targets;
     frame.render_widget(Paragraph::new(top_line), rule_rect);
 
+    draw_bottom_content(frame, state, content_rect);
+}
+
+/// The strip's vertical tab divider: the 2-column band in the filter
+/// bar's background colour — the same band colour the column's rule
+/// wears, rendered after the focus fill so it wins over it — with each
+/// shown tab glyph on its own row. The run centers vertically and a
+/// run taller than the strip is cut at the bottom ([`divider_tab_rows`],
+/// the same layout the strip tab click test reads); the displayed tab
+/// keeps the bolded accent the rule gives it. The glyph rows are
+/// published as `FrameLayout::bottom_tab_targets` so a click
+/// hit-tests the rows that were drawn.
+pub fn draw_strip_divider(frame: &mut Frame, state: &mut AppState, area: Rect) {
+    frame.render_widget(
+        Block::default().style(Style::default().bg(state.theme.filter_bar_bg)),
+        area,
+    );
+    let targets = divider_tab_rows(&state.shown_bottom_tabs(), area.height);
+    state.layout.bottom_tab_targets = targets;
+    let titles = build_tab_title(state);
+    for target in &state.layout.bottom_tab_targets {
+        let Some(title) = titles.iter().find(|title| title.tab == Some(target.tab)) else {
+            continue;
+        };
+        let row = Rect::new(area.x, area.y + target.start, area.width, 1);
+        frame.render_widget(Paragraph::new(Line::from(title.span.clone())), row);
+    }
+}
+
+/// The tab content the displayed tab selects, drawn over the whole
+/// given `Rect` with no rule row of its own. Both layouts call it: the
+/// column with the rows under its rule, a strip with the right-hand
+/// tab panel.
+pub fn draw_bottom_content(frame: &mut Frame, state: &mut AppState, area: Rect) {
     match state.displayed_bottom_tab() {
-        BottomTab::Activity => activity::draw_activity_content(frame, state, content_rect),
-        BottomTab::Tasks => tasks::draw_tasks_content(frame, state, content_rect),
-        BottomTab::GitStatus => git::draw_git_content(frame, state, content_rect),
-        BottomTab::Thought => thought::draw_thought_content(frame, state, content_rect),
+        BottomTab::Activity => activity::draw_activity_content(frame, state, area),
+        BottomTab::Tasks => tasks::draw_tasks_content(frame, state, area),
+        BottomTab::GitStatus => git::draw_git_content(frame, state, area),
+        BottomTab::Thought => thought::draw_thought_content(frame, state, area),
     }
 }
 
@@ -172,6 +210,16 @@ pub(crate) fn build_tab_title(state: &AppState) -> Vec<TitleSpan> {
 pub(crate) fn draw_tab_targets(state: &mut AppState, width: u16) {
     let (_, targets) = top_line_border(&build_tab_title(state), Style::default(), width);
     state.layout.bottom_tab_targets = targets;
+}
+
+/// Publish the strip divider's tab hitboxes the way `draw_strip_divider`
+/// does: run [`divider_tab_rows`] over the state's shown tabs at
+/// `height` rows and store the drawn rows. Tests use it instead of a
+/// rendered frame so the divider's unmoved-release click hit-tests the
+/// drawn rows, not a re-implemented walk.
+#[cfg(test)]
+pub(crate) fn draw_divider_tab_rows(state: &mut AppState, height: u16) {
+    state.layout.bottom_tab_targets = divider_tab_rows(&state.shown_bottom_tabs(), height);
 }
 
 #[cfg(test)]

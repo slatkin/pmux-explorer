@@ -17,12 +17,14 @@ read from tmux on every refresh tick.
 | `repo_filter` | `@sidebar_repo_filter` | User input (repo popup) | Repository filter (All or specific repo) |
 | `bottom_tab` | `@sidebar_bottom_tab` | On user tab switch (cycle key / tab-title click); tmux write retried when rejected | Selected bottom tab, shared server-wide; each instance adopts a peer's selection on its next refresh tick. The drawn tab run centers one Nerd Font glyph per tab on the rule — wrench for Activity, thought-bubble for Thought, list for Tasks, git-branch for Git — separated by ` │ ` delimiters; the stored values are `activity`, `thought`, `tasks` and `git`, and the Activity tab keeps that variant name while the Tools glyph draws for it. `thought` is drawn only while the focused pane runs pi — a stored Thought falls back to Activity for any other agent, without a write, so the panel returns to Thought when the focus comes back to a pi pane |
 | `bottom_percent` | `@sidebar_bottom_height` | User input (rule drag release); tmux write retried when rejected | Bottom panel height as a percent of the sidebar height (0 hides the panel; unset, empty, or an out-of-range value gives 30); shared server-wide, each instance adopts a peer's value on its next refresh tick (the percent's `SaveLatch` instance follows the same pattern) |
+| `tab_percent` | `@sidebar_tab_width` | User input (strip divider drag release); tmux write retried when rejected | Strip tab-panel width, divider included, as a percent of the strip width (0 hides the divider and the tab panel; unset, empty, or an out-of-range value gives 40); shared server-wide, each instance adopts a peer's value on its next refresh tick (the tab percent's `SaveLatch` instance follows the same pattern); every instance parses and adopts it — a column and a strip on the same server share the one option — and only a strip drag writes it |
 
 Each synced field is guarded so a failed write never loses the user's
-choice: the status filter, the bottom tab and the bottom percent each
-hold one `SaveLatch<T>` instance (`filter_latch`, `tab_latch`,
-`percent_latch` in `GlobalState` — one retry mechanism, written once
-and shared by all three). The cursor and repo filter keep plain
+choice: the status filter, the bottom tab, the bottom percent and the
+strip tab percent each hold one `SaveLatch<T>` instance
+(`filter_latch`, `tab_latch`, `percent_latch`, `tab_percent_latch` in
+`GlobalState` — one retry mechanism, written once and shared by all
+four). The cursor and repo filter keep plain
 `last_saved_cursor` / `last_saved_repo_filter` values instead.
 
 A `SaveLatch` remembers the last value tmux successfully accepted
@@ -39,16 +41,19 @@ retry tmux refuses again leaves the latch set for the next tick. The
 retries run together because retrying only some of the latches would
 let the rest drift from the shared values.
 
-The three instances differ only at their edges. `filter_latch` and
+The instances differ only at their edges. `filter_latch` and
 `tab_latch` parse their single option and adopt nothing while it is
-absent. `percent_latch` parses the whole option map instead: an
-unset, empty or invalid value resolves to the default
-(`DEFAULT_BOTTOM_PERCENT = 30`) and is adopted. The percent is also
-the only latch with an extra adoption gate — `apply_all` receives
-`split_drag_active` (`AppState::split_drag` is `Some`) and holds the
-shared percent unadopted while it stands, so the tick cannot move the
-rule out from under the mouse; the ticks after the release adopt the
-server value again.
+absent. `percent_latch` and `tab_percent_latch` parse the whole option
+map instead: an unset, empty or invalid value resolves to the default
+(`DEFAULT_BOTTOM_PERCENT = 30` and `DEFAULT_TAB_PERCENT = 40`) and is
+adopted. The two percent latches also carry an extra adoption gate —
+`apply_all` receives `split_drag_axis` (the `LayoutKind` of the
+in-progress `AppState::split_drag`, if any) and holds that axis's
+shared value unadopted while the drag stands — a column drag blocks
+only `@sidebar_bottom_height` adoption, a strip drag only
+`@sidebar_tab_width`, and the other axis's value adopts as usual — so
+the tick cannot move the rule or the divider out from under the mouse;
+the ticks after the release adopt the server value again.
 
 ### Per-pane State (keyed by pane ID)
 
@@ -133,7 +138,7 @@ Per-pane file-based state:
 | `git` | Every 2s (bg thread) | Branch, diff stats, ahead/behind, PR number |
 | `theme` | Once at startup | Color theme from tmux `@sidebar_color_*` variables |
 | `popup` | On user input / render | `PopupState` enum: `None` / `Repo { selected, area }` / `Notices { area }`. Enforces "at most one popup open" via the type system |
-| `layout` | Every frame (render) | `FrameLayout` sub-struct bundling the ephemeral fields the UI rewrites every frame for click hit-testing: `pane_row_targets`, `line_to_row`, `repo_button_col`, `repo_spawn_targets`, `spawn_remove_targets`, `hyperlink_overlays`, `filter_bar_width` (the width the filter row was rendered with, which the click hit test uses) |
+| `layout` | Every frame (render) | `FrameLayout` sub-struct bundling the ephemeral fields the UI rewrites every frame for click hit-testing: `pane_row_targets`, `line_to_row`, `repo_button_col`, `repo_spawn_targets`, `spawn_remove_targets`, `hyperlink_overlays`, `filter_bar_width` (the width the filter row was rendered with, which the click hit test uses), `strip` (the drawn strip's `StripLayout` — filter, agents, divider and tab-panel rects — that the strip's mouse routing and scroll routing hit-test against) |
 | `notices` | Once at startup / on copy | `NoticesState` sub-struct: `button_col`, `missing_hook_groups`, `claude_plugin_status`, `claude_plugin_notice`, `copy_targets`, `copied_at` |
 | `timers` | Refresh cycle / on user input | `RefreshTimers` sub-struct gating periodic work: `last_filter_click` (debounce), `last_port_refresh`, `port_scan_initialized` |
 | `pending_osc52_copy` | On successful copy / frame flush | OSC 52 clipboard payload queued for terminal forwarding |
@@ -145,8 +150,10 @@ Per-pane file-based state:
 | `spinner_frame` | Every 200ms (animation) | Spinner animation frame counter |
 | `icons` | Once at startup | `StatusIcons` theme (overridable via tmux options) |
 | `tmux_pane` | Once at startup | This sidebar's own tmux pane ID |
-| `sidebar_pane` | Every 1s (refresh cycle) | This sidebar's own pane info as tmux reported it on the last refresh (`SidebarPaneInfo`): the pane's active flags, the pane's width, the window's size, and the pane's floating flag. The floating flag is the truth for the docked-vs-floating mode — it is read from the pane, never remembered separately |
-| `docked_width` | On pop-out / pop-in (user input) | The pane width captured when the sidebar was popped out, restored by the pop-in with `resize-pane -x` (`src/state/popout.rs`). `None` while docked and when the pane was already floating when the sidebar started |
+| `sidebar_pane` | Every 1s (refresh cycle) | This sidebar's own pane info as tmux reported it on the last refresh (`SidebarPaneInfo`): the pane's active flags, the pane's width and height, the window's size, the pane's floating flag, and whether the pane touches its window's top edge. The floating flag is the truth for the docked-vs-floating mode — it is read from the pane, never remembered separately |
+| `layout_kind` | Once at startup | Whether this sidebar is a full-height column or a full-width strip (`LayoutKind`), read once from the `PMUX_SIDEBAR_LAYOUT` process environment — never from a pane option; a missing or unknown value gives `Column`. Every layout-specific path branches on it |
+| `docked_size` | On pop-out / pop-in (user input) | The pane size captured when the sidebar was popped out, restored by the pop-in (`resize-pane -x` for a column, `-y` for a strip): the width of a column, the height of a strip (`src/state/popout.rs`). `None` while docked and when the pane was already floating when the sidebar started |
+| `docked_edge` | On pop-out / pop-in (user input) | The edge a popped-out strip was docked at, captured with the docked size on the way out — a floating pane is no longer at an edge, so the pop-in cannot read it off the pane. `None` for a column and when the pane was already floating; the strip pop-in then falls back to the bare join |
 | `version_notice` | Once at startup (bg fetch) | GitHub release update notice, `None` when up-to-date |
 
 ---
@@ -180,7 +187,7 @@ Per-pane file-based state:
 │  On user input                                              │
 │  focus_state.focus, scrolls.*, activity.scroll,             │
 │  GlobalState fields, popup (PopupState enum),               │
-│  timers.last_filter_click, pop-out / pop-in (docked_width), │
+│  timers.last_filter_click, pop-out / pop-in (docked_size),  │
 │  immediate selection / active-pane redraw                   │
 ├─────────────────────────────────────────────────────────────┤
 │  Every frame (render)                                       │
@@ -361,6 +368,7 @@ struct FrameLayout {
     spawn_remove_targets: Vec<SpawnRemoveTarget>,
     hyperlink_overlays: Vec<HyperlinkOverlay>,
     filter_bar_width: u16,
+    strip: Option<StripLayout>,
 }
 
 /// Periodic-refresh bookkeeping.

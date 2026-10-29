@@ -2,15 +2,17 @@
 //!
 //! The side lives in the global `@sidebar_position` tmux option — the
 //! one source of truth `cli/toggle.rs` creates sidebars from. The
-//! action reads this pane's own edge (`#{pane_left}` — the option
-//! only as a fallback) so the direction is always "opposite of where
-//! this sidebar sits", even in a mixed layout a skipped earlier
-//! switch left behind. It then moves every window's sidebar pane to
-//! the opposite edge with `join-pane`, in one sweep over a single
-//! `list-panes -a` listing (see `tmux::switch_sidebar_sides`), and
-//! writes the option even when some windows were skipped, so sidebars
-//! created later follow the new side; skipped windows keep their old
-//! side until the next switch.
+//! action reads this pane's own edge by this sidebar's layout kind
+//! (`#{pane_at_top}` for a strip, `#{pane_left}` for a column — the
+//! option only as an axis-checked fallback) so the direction is always
+//! "opposite of where this sidebar sits", even in a mixed layout a
+//! skipped earlier switch left behind. It then moves every window's
+//! sidebar pane to its edge with `join-pane` — the acting axis to the
+//! opposite of this edge, the other axis each sidebar's own opposite —
+//! in one sweep over a single `list-panes -a` listing (see
+//! `tmux::switch_sidebar_sides`), and writes the option even when some
+//! windows were skipped, so sidebars created later follow the new
+//! side; skipped windows keep their old side until the next switch.
 //!
 //! While the sidebar floats the action does nothing: the floating
 //! panel keeps its hard-coded right-edge anchor, the control glyph is
@@ -21,7 +23,34 @@
 //! them without a live tmux.
 
 use crate::cli::toggle::SidebarPosition;
+use crate::state::LayoutKind;
 use crate::tmux;
+
+/// The side the acting sidebar sits on, read by its layout kind:
+/// `#{pane_at_top}` for a strip, `#{pane_left}` for a column — the
+/// pane's own edge, so the direction is always "opposite of where this
+/// sidebar sits", even in a mixed layout a skipped earlier switch left
+/// behind. When the probe does not answer (a dead socket, an older
+/// tmux), the global `@sidebar_position` is the fallback — but only
+/// when it names an edge on the sidebar's own axis, because a value on
+/// the other axis cannot describe this sidebar at all; a strip then
+/// falls back to `Bottom` and a column to the historical `Left`.
+fn acting_side(layout: LayoutKind, pane_probe: &str, option_value: &str) -> SidebarPosition {
+    let from_pane = match layout {
+        LayoutKind::Strip => SidebarPosition::from_pane_at_top(pane_probe),
+        LayoutKind::Column => SidebarPosition::from_pane_left(pane_probe),
+    };
+    from_pane.unwrap_or_else(|| {
+        let setting = SidebarPosition::from_setting(option_value);
+        if setting.axis() == layout {
+            setting
+        } else if layout == LayoutKind::Strip {
+            SidebarPosition::Bottom
+        } else {
+            SidebarPosition::Left
+        }
+    })
+}
 
 /// The flash text for a finished sweep: how many windows moved and,
 /// only when some were skipped, how many. A switch that moved or
@@ -52,23 +81,24 @@ impl AppState {
         if self.sidebar_pane.floating {
             return;
         }
-        // The direction comes off this pane's own edge: a window an
-        // earlier switch skipped still docks on the old side while the
-        // option already names the new one, and "opposite edge" is
-        // the pane's. The option is the fallback for a pane whose
-        // geometry tmux will not say (a dead socket).
-        let current = SidebarPosition::from_pane_left(&tmux::display_message(
-            &self.tmux_pane,
-            "#{pane_left}",
-        ))
-        .unwrap_or_else(|| {
-            SidebarPosition::from_setting(&tmux::display_message(
-                &self.tmux_pane,
-                &format!("#{{{}}}", tmux::SIDEBAR_POSITION),
-            ))
-        });
+        // The direction comes off this pane's own edge, read by this
+        // sidebar's layout kind: a window an earlier switch skipped
+        // still docks on the old side while the option already names
+        // the new one, and "opposite edge" is the pane's. The option is
+        // the fallback for a pane whose geometry tmux will not say (a
+        // dead socket), and only when it names an edge on this
+        // sidebar's own axis.
+        let layout = self.layout_kind;
+        let probe_format = match layout {
+            LayoutKind::Strip => "#{pane_at_top}",
+            LayoutKind::Column => "#{pane_left}",
+        };
+        let pane_probe = tmux::display_message(&self.tmux_pane, probe_format);
+        let option_value =
+            tmux::display_message(&self.tmux_pane, &format!("#{{{}}}", tmux::SIDEBAR_POSITION));
+        let current = acting_side(layout, &pane_probe, &option_value);
         let new_side = current.opposite();
-        let (moved, skipped) = tmux::switch_sidebar_sides(new_side);
+        let (moved, skipped) = tmux::switch_sidebar_sides(layout, new_side);
         tmux::run_tmux(&["set", "-g", tmux::SIDEBAR_POSITION, new_side.as_setting()]);
         self.apply_side_switch(new_side, moved, skipped);
     }
@@ -95,7 +125,80 @@ use super::AppState;
 mod tests {
     use super::*;
 
-    // ─── apply_side_switch ───────────────────────────────────────────
+    // ─── the acting edge, read by layout kind ──────────────────
+
+    #[test]
+    fn a_strip_at_the_top_gives_the_target_bottom() {
+        // pane_at_top 1: the acting strip sits at the top, so the
+        // switch moves it to the bottom edge.
+        assert_eq!(
+            acting_side(LayoutKind::Strip, "1", "top").opposite(),
+            SidebarPosition::Bottom
+        );
+    }
+
+    #[test]
+    fn a_strip_at_the_bottom_gives_the_target_top() {
+        assert_eq!(
+            acting_side(LayoutKind::Strip, "0", "bottom").opposite(),
+            SidebarPosition::Top
+        );
+    }
+
+    #[test]
+    fn a_strip_whose_option_says_left_falls_back_on_its_own_axis() {
+        // The probe did not answer and the option names an edge on the
+        // other axis — it cannot describe this strip, so the fallback
+        // is the strip's own historical bottom edge, never `left`.
+        assert_eq!(
+            acting_side(LayoutKind::Strip, "", "left"),
+            SidebarPosition::Bottom
+        );
+        // The same rule when the option is garbage.
+        assert_eq!(
+            acting_side(LayoutKind::Strip, "x", "middle"),
+            SidebarPosition::Bottom
+        );
+    }
+
+    #[test]
+    fn a_strip_falls_back_to_an_on_axis_option_value() {
+        // The probe failed but the option names a strip edge: it wins.
+        assert_eq!(
+            acting_side(LayoutKind::Strip, "", "top"),
+            SidebarPosition::Top
+        );
+    }
+
+    #[test]
+    fn a_column_reads_its_edge_off_pane_left() {
+        // pane_left 0 is the left edge; anything else the right.
+        assert_eq!(
+            acting_side(LayoutKind::Column, "0", "left"),
+            SidebarPosition::Left
+        );
+        assert_eq!(
+            acting_side(LayoutKind::Column, "40", "left"),
+            SidebarPosition::Right
+        );
+    }
+
+    #[test]
+    fn a_column_whose_option_says_top_falls_back_to_left() {
+        // The probe did not answer and the option names a strip edge —
+        // the column falls back to the historical left, never `top`.
+        assert_eq!(
+            acting_side(LayoutKind::Column, "", "top"),
+            SidebarPosition::Left
+        );
+        // While an on-axis option value is the fallback.
+        assert_eq!(
+            acting_side(LayoutKind::Column, "", "right"),
+            SidebarPosition::Right
+        );
+    }
+
+    // ─── apply_side_switch ────────────────────────────────────────────
 
     #[test]
     fn apply_side_switch_reports_moved_and_skipped_counts() {

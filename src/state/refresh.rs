@@ -176,12 +176,13 @@ impl AppState {
         // sees the filters another instance wrote. `apply_all` guards
         // every field with its matching `last_saved_*` value, so a local
         // change that tmux already holds is not reverted. The live
-        // split drag is the percent's third guard: while the mouse owns
-        // the height, the shared percent stays unadopted, or the tick
-        // would move the rule under the mouse ("a drag in progress is
-        // not reverted").
+        // split drag is the third guard, axis-specific: while the mouse
+        // owns a panel, the shared value of the drag's own axis stays
+        // unadopted (a column drag guards the bottom percent, a strip
+        // drag the tab width), or the tick would move the panel under
+        // the mouse ("a drag in progress is not reverted").
         self.global
-            .apply_all(&reading.options, self.split_drag.is_some());
+            .apply_all(&reading.options, self.split_drag.map(|drag| drag.axis));
         // The flags are read back from the state (not from a local probe
         // copy) so every field the state holds has a reader.
         let focused = self.sidebar_pane.pane_active;
@@ -477,15 +478,21 @@ impl AppState {
     }
 
     /// Read the focused pi pane's thinking feed into `thought.last`
-    /// (design D4) — only while the Thought tab is drawn: a hidden
-    /// bottom panel (a percent of 0, a sidebar too short, the floating
-    /// clamp) draws no tab and reads no feed, and another displayed
-    /// tab leaves the last thought as the previous read left it. The
-    /// feed environment was resolved once at startup into
-    /// `ThoughtState`, so the path helper takes the env as an argument.
+    /// (design D4) — only while the Thought tab is drawn: a hidden tab
+    /// panel draws no tab and reads no feed, and another displayed tab
+    /// leaves the last thought as the previous read left it. On a
+    /// column the panel is the bottom panel, so its drawn height says
+    /// whether a tab shows; on a strip the drawn
+    /// [`StripLayout`](super::StripLayout) decides — its tab panel is a
+    /// side panel, drawn while `strip.tabs` is `Some`. The feed
+    /// environment was resolved once at startup into `ThoughtState`, so
+    /// the path helper takes the env as an argument.
     pub(crate) fn refresh_thought_feed(&mut self) {
-        if self.layout.bottom_panel_height == 0 || self.displayed_bottom_tab() != BottomTab::Thought
-        {
+        let tab_drawn = match self.layout.strip {
+            Some(strip) => strip.tabs.is_some(),
+            None => self.layout.bottom_panel_height > 0,
+        };
+        if !tab_drawn || self.displayed_bottom_tab() != BottomTab::Thought {
             return;
         }
         let session_id = self
@@ -1112,6 +1119,7 @@ mod tests {
 
     // ─── refresh_thought_feed ───────────────────────────────────
 
+    use crate::state::strip_layout;
     use crate::thinking_feed::scratch_env;
 
     /// An AppState focused on a pi pane carrying `session_id`, whose
@@ -1162,6 +1170,68 @@ mod tests {
         assert!(
             state.thought.last.is_empty(),
             "a hidden bottom panel draws no tab and must read no feed"
+        );
+    }
+
+    #[test]
+    fn a_strip_with_a_drawn_tab_panel_reads_the_feed() {
+        // A strip keeps `bottom_panel_height` at 0 — its tab panel is a
+        // side panel, not a bottom one — so the column height must not
+        // gate the read: with the strip's tab panel drawn, the Thought
+        // tab reads the feed.
+        let dir = tempfile::TempDir::new().unwrap();
+        let env = scratch_env(dir.path());
+        let feed = env.feed_path("sess").unwrap();
+        std::fs::create_dir_all(feed.parent().unwrap()).unwrap();
+        std::fs::write(
+            &feed,
+            format!(
+                "{}\n{}\n",
+                r#"{"kind":"start","ts":"t1","producer":"pmux"}"#,
+                r#"{"kind":"delta","ts":"t2","producer":"pmux","text":"strip thought"}"#
+            ),
+        )
+        .unwrap();
+        let mut state = pi_feed_state(&dir, "sess");
+        state.global.bottom_tab = BottomTab::Thought;
+        state.layout.bottom_panel_height = 0;
+        state.layout.strip = Some(strip_layout(120, 12, 40));
+
+        state.refresh_activity_data();
+
+        assert!(
+            !state.thought.last.is_empty(),
+            "a drawn strip tab panel lets the Thought tab read the feed"
+        );
+    }
+
+    #[test]
+    fn a_strip_with_the_tab_panel_hidden_reads_no_feed() {
+        // The strip twin of the hidden-panel gate: a tab width of 0
+        // drew no tab panel, so the feed stays unread.
+        let dir = tempfile::TempDir::new().unwrap();
+        let env = scratch_env(dir.path());
+        let feed = env.feed_path("sess").unwrap();
+        std::fs::create_dir_all(feed.parent().unwrap()).unwrap();
+        std::fs::write(
+            &feed,
+            format!(
+                "{}\n{}\n",
+                r#"{"kind":"start","ts":"t1","producer":"pmux"}"#,
+                r#"{"kind":"delta","ts":"t2","producer":"pmux","text":"unseen"}"#
+            ),
+        )
+        .unwrap();
+        let mut state = pi_feed_state(&dir, "sess");
+        state.global.bottom_tab = BottomTab::Thought;
+        state.layout.bottom_panel_height = 0;
+        state.layout.strip = Some(strip_layout(120, 12, 0));
+
+        state.refresh_activity_data();
+
+        assert!(
+            state.thought.last.is_empty(),
+            "a strip with no drawn tab panel must read no feed"
         );
     }
 

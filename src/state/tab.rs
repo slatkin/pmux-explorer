@@ -73,6 +73,26 @@ impl AppState {
         self.global.set_bottom_tab(tab);
     }
 
+    /// Handle a click on the strip's divider (the unmoved release of a
+    /// divider press). `row` is the terminal row. The hitboxes are the
+    /// glyph rows the last frame actually drew
+    /// (`FrameLayout::bottom_tab_targets`, rows on the divider), so a
+    /// press on a band row with no glyph — and a glyph the strip cut
+    /// off the bottom — are all dead: a click outside a drawn glyph
+    /// must not write the shared value at all.
+    pub fn handle_bottom_tab_click_row(&mut self, row: u16) {
+        let Some(tab) = self
+            .layout
+            .bottom_tab_targets
+            .iter()
+            .find(|target| row >= target.start && row < target.end)
+            .map(|target| target.tab)
+        else {
+            return;
+        };
+        self.global.set_bottom_tab(tab);
+    }
+
     pub fn scroll_bottom(&mut self, delta: isize) {
         match self.displayed_bottom_tab() {
             BottomTab::Activity => self.activity.scroll.scroll(delta),

@@ -15,8 +15,12 @@ use ratatui::{
     widgets::Block,
 };
 
-use crate::state::{AppState, Focus, clamp_bottom_height, split_rows};
+use crate::state::{
+    AppState, Focus, LayoutKind, clamp_bottom_height, split_rows, strip_layout,
+    strip_layout_for_tab_cols,
+};
 use crate::tmux;
+use ratatui::layout::Rect;
 
 /// The bottom panel height used when `@sidebar_bottom_height` is unset,
 /// empty, or not an integer from 0 to 100, as a percent of the sidebar
@@ -41,6 +45,25 @@ pub fn bottom_percent_from_options(opts: &HashMap<String, String>) -> u8 {
         .unwrap_or(DEFAULT_BOTTOM_PERCENT)
 }
 
+/// The strip tab-panel width used when `@sidebar_tab_width` is unset,
+/// empty, or not an integer from 0 to 100, as a percent of the strip
+/// width (divider included).
+pub const DEFAULT_TAB_PERCENT: u8 = 40;
+
+/// Read `@sidebar_tab_width` as a percent of the strip width,
+/// falling back to [`DEFAULT_TAB_PERCENT`]. The same parse rules as
+/// [`bottom_percent_from_options`]: an integer from 0 to 100 is the
+/// percent — an unset option, an empty value, or any other value gives
+/// the default. A percent of 0 hides the strip's divider and tab panel.
+pub fn tab_percent_from_options(opts: &HashMap<String, String>) -> u8 {
+    opts.get(tmux::SIDEBAR_TAB_WIDTH)
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .and_then(|s| s.parse::<u8>().ok())
+        .filter(|p| *p <= 100)
+        .unwrap_or(DEFAULT_TAB_PERCENT)
+}
+
 /// Read `@sidebar_pet` from tmux global options, defaulting to `false` (off).
 /// Accepts `on`/`off`, `true`/`false`, `1`/`0` (case-insensitive).
 pub fn pet_enabled_from_options(opts: &HashMap<String, String>) -> bool {
@@ -60,13 +83,22 @@ pub fn pet_enabled_from_tmux() -> bool {
 pub fn draw(frame: &mut Frame, state: &mut AppState) {
     state.layout.hyperlink_overlays.clear();
     let area = frame.area();
+    match state.layout_kind {
+        LayoutKind::Strip => draw_strip(frame, state, area),
+        LayoutKind::Column => draw_column(frame, state, area),
+    }
+}
 
+/// The column layout: the agent part on top, the bottom panel (rule +
+/// tab content) under it, the pet band between them when the pet is
+/// on. The sidebar's original shape; the strip's twin is [`draw_strip`].
+fn draw_column(frame: &mut Frame, state: &mut AppState, area: Rect) {
     // While a split drag has moved, the frame draws the drag's rows —
     // the rule follows the mouse row and no percent value is adopted
     // during the drag; the release path, not a tick, writes the
     // percent. Before any move the shared percent's geometry stands.
     let bot_h = match &state.split_drag {
-        Some(drag) if drag.moved => drag.rows,
+        Some(drag) if drag.moved => drag.size,
         _ => split_rows(state.global.bottom_percent, area.height),
     };
     let bot_h = if state.sidebar_pane.floating {
@@ -136,7 +168,7 @@ pub fn draw(frame: &mut Frame, state: &mut AppState) {
             (chunks[0], None)
         };
 
-    panes::draw_agents(frame, state, agent_area);
+    panes::draw_agents(frame, state, agent_area, true);
 
     if bot_h > 0 && chunks.len() > 1 {
         bottom::draw_bottom(frame, state, chunks[1]);
@@ -144,6 +176,69 @@ pub fn draw(frame: &mut Frame, state: &mut AppState) {
             let running_count = state.running_count();
             pet::draw_pet(frame, state, pet_area, running_count);
         }
+    }
+}
+
+/// The strip layout: two panels side by side — the vertical filter bar
+/// and the agent panel on the left (the agent section), the tab
+/// divider and the tab panel on the right (the tab section). No pet:
+/// a strip shows none (the `strip-layout` capability). The drawn
+/// geometry goes into `FrameLayout::strip` so the mouse handlers
+/// hit-test the panels the frame actually drew.
+fn draw_strip(frame: &mut Frame, state: &mut AppState, area: Rect) {
+    // While a strip drag has moved, the frame draws the drag's tab
+    // columns — the divider follows the mouse column and no percent
+    // value is adopted during the drag; the release path, not a tick,
+    // writes the percent. Before any move the shared percent's
+    // geometry stands.
+    let strip = match &state.split_drag {
+        Some(drag) if drag.axis == LayoutKind::Strip && drag.moved => {
+            strip_layout_for_tab_cols(area.width, area.height, drag.size)
+        }
+        _ => strip_layout(area.width, area.height, state.global.tab_percent),
+    };
+    state.layout.strip = Some(strip);
+    // The strip has no bottom panel and no horizontal filter row:
+    // clear the column geometry a previous frame may have left, so a
+    // column-shaped hit test can never fire on strip-drawn state.
+    state.layout.bottom_panel_height = 0;
+    state.layout.filter_bar_width = 0;
+    if strip.tabs.is_none() {
+        state.layout.bottom_tab_targets.clear();
+    }
+
+    // The two section fills at all times — the keyboard-owning section
+    // gets the active fill, the other the base one: Filter/Panes focus
+    // owns the agent section on the left, ActivityLog focus the tab
+    // section on the right. Ratatui styles patch: later spans keep
+    // their own `bg` (selection rows, popups), and cells nothing draws
+    // on keep the fill.
+    let theme = &state.theme;
+    let (agent_bg, tab_bg) = if state.focus_state.focus != Focus::ActivityLog {
+        (theme.focus_active_bg, theme.focus_bg)
+    } else {
+        (theme.focus_bg, theme.focus_active_bg)
+    };
+    frame.render_widget(
+        Block::default().style(Style::default().bg(agent_bg)),
+        strip.filter,
+    );
+    frame.render_widget(
+        Block::default().style(Style::default().bg(agent_bg)),
+        strip.agents,
+    );
+    if let Some(divider) = strip.divider {
+        frame.render_widget(Block::default().style(Style::default().bg(tab_bg)), divider);
+    }
+    if let Some(tabs) = strip.tabs {
+        frame.render_widget(Block::default().style(Style::default().bg(tab_bg)), tabs);
+    }
+
+    panes::draw_strip_filter_bar(frame, state, strip.filter);
+    panes::draw_agents(frame, state, strip.agents, false);
+    if let (Some(divider), Some(tabs)) = (strip.divider, strip.tabs) {
+        bottom::draw_strip_divider(frame, state, divider);
+        bottom::draw_bottom_content(frame, state, tabs);
     }
 }
 
@@ -179,6 +274,25 @@ mod tests {
             seeded,
             Some(DEFAULT_BOTTOM_PERCENT),
             "the conf's seeded bottom height must match DEFAULT_BOTTOM_PERCENT"
+        );
+    }
+
+    #[test]
+    fn the_conf_seeds_the_same_tab_percent_the_binary_falls_back_to() {
+        // One number, two homes: the conf seeds `@sidebar_tab_width`
+        // for tmux-side visibility and [`DEFAULT_TAB_PERCENT`] is the
+        // fallback when the option is unset or invalid. A test pins
+        // them together so a change that updates one copy and not the
+        // other fails here instead of drifting in a user's session.
+        let conf = include_str!("../../pmux-explorer.conf");
+        let seeded = conf
+            .lines()
+            .find_map(|line| line.split_once("set -g @sidebar_tab_width "))
+            .and_then(|(_, rest)| rest.trim().trim_matches('\'').parse::<u8>().ok());
+        assert_eq!(
+            seeded,
+            Some(DEFAULT_TAB_PERCENT),
+            "the conf's seeded tab width must match DEFAULT_TAB_PERCENT"
         );
     }
 
@@ -235,6 +349,34 @@ mod tests {
                 bottom_percent_from_options(&opts),
                 DEFAULT_BOTTOM_PERCENT,
                 "expected {value} to fall back to the default"
+            );
+        }
+    }
+
+    #[test]
+    fn tab_percent_parses_valid_values_and_defaults_otherwise() {
+        for (value, expected) in [("40", 40), ("0", 0), ("100", 100)] {
+            let opts = opts_with(tmux::SIDEBAR_TAB_WIDTH, value);
+            assert_eq!(
+                tab_percent_from_options(&opts),
+                expected,
+                "expected {value} to parse as {expected}"
+            );
+        }
+        // Whitespace around the number is tolerated, like the bottom
+        // percent's parse.
+        let opts = opts_with(tmux::SIDEBAR_TAB_WIDTH, "  55  ");
+        assert_eq!(tab_percent_from_options(&opts), 55);
+        // An unset, empty, non-numeric or out-of-range value gives the
+        // default.
+        for value in [None, Some(""), Some("abc"), Some("101")] {
+            let opts = value
+                .map(|v| opts_with(tmux::SIDEBAR_TAB_WIDTH, v))
+                .unwrap_or_default();
+            assert_eq!(
+                tab_percent_from_options(&opts),
+                DEFAULT_TAB_PERCENT,
+                "expected {value:?} to fall back to the default"
             );
         }
     }

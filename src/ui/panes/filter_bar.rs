@@ -1,9 +1,12 @@
 use ratatui::{
+    Frame,
+    layout::Rect,
     style::{Modifier, Style},
     text::{Line, Span},
+    widgets::Paragraph,
 };
 
-use crate::state::{AppState, RepoFilter, StatusFilter, filter_bar_layout};
+use crate::state::{AppState, RepoFilter, StatusFilter, filter_bar_layout, filter_column_layout};
 use crate::tmux::PaneStatus;
 
 use crate::ui::text::{display_width, truncate_to_width};
@@ -14,36 +17,47 @@ use crate::ui::text::{display_width, truncate_to_width};
 /// way; while floating it draws dimmed (the control is disabled).
 const POPOUT_GLYPH: &str = "⤢";
 const POPIN_GLYPH: &str = "⤡";
+/// The column's side-switch glyph: a column flips between the left
+/// and the right edge.
 const SIDE_SWITCH_GLYPH: &str = "⇄";
+/// The strip's side-switch glyph: a strip flips between the top and
+/// the bottom edge, so its control shows the vertical arrows
+/// (the `sidebar-panel` spec pins one glyph per layout).
+const STRIP_SIDE_SWITCH_GLYPH: &str = "⇅";
+
+/// The icon glyph and colour a chip for `filter` draws: the status
+/// icon in its status colour, the all chip its own colour. Shared by
+/// the column's horizontal filter row and the strip's vertical filter
+/// bar, so both draw the same icon per chip.
+fn chip_icon(state: &AppState, filter: StatusFilter) -> (String, ratatui::style::Color) {
+    let theme = &state.theme;
+    let icons = &state.icons;
+    match filter {
+        StatusFilter::All => (icons.all_icon().to_string(), theme.status_all),
+        StatusFilter::Busy => (
+            icons.status_icon(&PaneStatus::Running).to_string(),
+            theme.status_running,
+        ),
+        StatusFilter::Waiting => (
+            icons.status_icon(&PaneStatus::Waiting).to_string(),
+            theme.status_color(&PaneStatus::Waiting, false),
+        ),
+        StatusFilter::Idle => (
+            icons.status_icon(&PaneStatus::Idle).to_string(),
+            theme.status_color(&PaneStatus::Idle, false),
+        ),
+        StatusFilter::Error => (
+            icons.status_icon(&PaneStatus::Error).to_string(),
+            theme.status_color(&PaneStatus::Error, false),
+        ),
+    }
+}
 
 /// Render the status filter bar, returning the line and the column of
 /// the pop-out control at the right edge (for click hit-testing).
 pub(super) fn render_filter_bar<'a>(state: &AppState, width: u16) -> (Line<'a>, Option<u16>) {
     let theme = &state.theme;
-    let icons = &state.icons;
     let counts = state.status_counts();
-
-    let icon_for = |filter: StatusFilter| -> (String, ratatui::style::Color) {
-        match filter {
-            StatusFilter::All => (icons.all_icon().to_string(), theme.status_all),
-            StatusFilter::Busy => (
-                icons.status_icon(&PaneStatus::Running).to_string(),
-                theme.status_running,
-            ),
-            StatusFilter::Waiting => (
-                icons.status_icon(&PaneStatus::Waiting).to_string(),
-                theme.status_color(&PaneStatus::Waiting, false),
-            ),
-            StatusFilter::Idle => (
-                icons.status_icon(&PaneStatus::Idle).to_string(),
-                theme.status_color(&PaneStatus::Idle, false),
-            ),
-            StatusFilter::Error => (
-                icons.status_icon(&PaneStatus::Error).to_string(),
-                theme.status_color(&PaneStatus::Error, false),
-            ),
-        }
-    };
 
     // The chip layout (which chips fit before the controls, and where
     // each starts) comes from the same pure function the click hit test
@@ -75,7 +89,7 @@ pub(super) fn render_filter_bar<'a>(state: &AppState, width: u16) -> (Line<'a>, 
         }
         let filter = chip.filter;
         let count = counts.count(filter);
-        let (icon, icon_color) = icon_for(filter);
+        let (icon, icon_color) = chip_icon(state, filter);
 
         let is_selected = state.global.status_filter == filter;
         let icon_style = if count == 0 {
@@ -141,6 +155,81 @@ pub(super) fn render_filter_bar<'a>(state: &AppState, width: u16) -> (Line<'a>, 
     }
 
     (Line::from(spans), Some(popout_col))
+}
+
+/// The strip's vertical filter bar: one chip per row — icon, space,
+/// count — in the [`StatusFilter::VARIANTS`] order from the first row,
+/// and the control row (the side switch at column 0, the pop-out at
+/// column 2) on the last row. The chip layout comes from the same pure
+/// function the strip click hit test runs ([`filter_column_layout`]),
+/// so a drawn chip and a clickable chip are always the same chip; that
+/// layout caps a count of 100 or more at 99, and the drawn digits
+/// carry the same cap so a chip never overflows its 4-column row.
+///
+/// Unlike the column's horizontal filter row the bar paints no band of
+/// its own: it keeps the agent section's focus fill it is drawn over.
+/// The side switch shows the strip's `⇅` glyph — dimmed while
+/// floating, the way the column's `⇄` is.
+pub(crate) fn draw_strip_filter_bar(frame: &mut Frame, state: &AppState, area: Rect) {
+    let counts = state.status_counts();
+    let (chips, control_row) = filter_column_layout(counts, area.height);
+    for chip in &chips {
+        let raw_count = counts.count(chip.filter);
+        let count = raw_count.min(99);
+        let (icon, icon_color) = chip_icon(state, chip.filter);
+        let icon_style = if raw_count == 0 {
+            Style::default().fg(state.theme.filter_inactive)
+        } else {
+            Style::default().fg(icon_color)
+        };
+        // Selection plays no part in the icon — the active chip is
+        // marked only by its count, drawn in the bolded accent, the
+        // way the horizontal row marks it.
+        let count_style = if state.global.status_filter == chip.filter {
+            Style::default()
+                .fg(state.theme.accent)
+                .add_modifier(Modifier::BOLD)
+        } else if raw_count == 0 {
+            Style::default().fg(state.theme.filter_inactive)
+        } else {
+            Style::default().fg(state.theme.text_active)
+        };
+        let row = Rect::new(area.x, area.y + chip.start, area.width, 1);
+        frame.render_widget(
+            Paragraph::new(Line::from(vec![
+                Span::styled(icon, icon_style),
+                Span::raw(" "),
+                Span::styled(count.to_string(), count_style),
+            ])),
+            row,
+        );
+    }
+    if let Some(control_row) = control_row {
+        // The side switch first, dimmed while floating (the control
+        // does nothing there), then the pop-out one column in.
+        let switch_style = if state.sidebar_pane.floating {
+            Style::default().fg(state.theme.filter_inactive)
+        } else {
+            Style::default().fg(state.theme.status_running)
+        };
+        let control_glyph = if state.sidebar_pane.floating {
+            POPIN_GLYPH
+        } else {
+            POPOUT_GLYPH
+        };
+        let control_row_rect = Rect::new(area.x, area.y + control_row, area.width, 1);
+        frame.render_widget(
+            Paragraph::new(Line::from(vec![
+                Span::styled(STRIP_SIDE_SWITCH_GLYPH, switch_style),
+                Span::raw(" "),
+                Span::styled(
+                    control_glyph,
+                    Style::default().fg(state.theme.status_running),
+                ),
+            ])),
+            control_row_rect,
+        );
+    }
 }
 
 pub(super) fn render_secondary_header<'a>(

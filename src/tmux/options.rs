@@ -62,6 +62,13 @@ pub const PANE_PROMPT_SOURCE: &str = "@pane_prompt_source";
 /// sidebar pane itself) so the TUI can exclude itself from the
 /// agent list.
 pub const PANE_ROLE: &str = "@pane_role";
+/// Layout the sidebar pane was made with (`column` or `strip`), written
+/// by the toggle flow next to [`PANE_ROLE`]. Only the side-switch sweep
+/// reads it, per pane, in its `list-panes -a` format: the sweep runs
+/// long after the pane is made, so the write is always done by then. A
+/// pane without the value is a sidebar from before the strip layout
+/// existed and is treated as a column.
+pub const PANE_SIDEBAR_LAYOUT: &str = "@pane_sidebar_layout";
 /// Agent-provided session id, surfaced in the status line for
 /// quick reference.
 pub const PANE_SESSION_ID: &str = "@pane_session_id";
@@ -133,12 +140,17 @@ pub const NEVER_SWEPT_PANE_OPTIONS: &[&str] = &[
     PANE_OS_NOTIFY_TASK_COMPLETED,
     PANE_OS_NOTIFY_TASK_FAILED,
     PANE_ROLE,
+    PANE_SIDEBAR_LAYOUT,
 ];
 
 // ─── Sidebar global option keys ─────────────────────────────────────
 
 pub const SIDEBAR_PID: &str = "@sidebar_pid";
 pub const SIDEBAR_WIDTH: &str = "@sidebar_width";
+/// Height of a strip sidebar (the `top`/`bottom` positions), as a row
+/// count or a percent of the window height. A column ignores it, and
+/// [`SIDEBAR_WIDTH`] does not size a strip.
+pub const SIDEBAR_HEIGHT: &str = "@sidebar_height";
 /// Floor for the sidebar pane's width in columns. When other panes squeeze
 /// the sidebar below this, the sidebar grows itself back with `resize-pane`.
 /// `0` disables the enforcement.
@@ -157,6 +169,12 @@ pub const SIDEBAR_CURSOR: &str = "@sidebar_cursor";
 pub const SIDEBAR_BOTTOM_TAB: &str = "@sidebar_bottom_tab";
 pub const SIDEBAR_REPO_FILTER: &str = "@sidebar_repo_filter";
 pub const SIDEBAR_BOTTOM_HEIGHT: &str = "@sidebar_bottom_height";
+/// Width of a strip's tab panel, divider included, as a percent of the
+/// strip width. Shared server-wide like the bottom height; `0` hides
+/// the divider and the tab panel. A column ignores it, and a strip
+/// drag never writes [`SIDEBAR_BOTTOM_HEIGHT`], so a column and a
+/// strip on the same server keep their own split.
+pub const SIDEBAR_TAB_WIDTH: &str = "@sidebar_tab_width";
 pub const SIDEBAR_PET: &str = "@sidebar_pet";
 pub const SIDEBAR_NOTIFICATIONS: &str = "@sidebar_notifications";
 pub const SIDEBAR_NOTIFICATIONS_EVENTS: &str = "@sidebar_notifications_events";
@@ -437,6 +455,7 @@ mod tests {
             PANE_PROMPT_SOURCE,
             PANE_ROLE,
             PANE_SESSION_ID,
+            PANE_SIDEBAR_LAYOUT,
             PANE_STARTED_AT,
             PANE_STATUS,
             PANE_SUBAGENTS,
