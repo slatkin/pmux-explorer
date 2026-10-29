@@ -4,6 +4,7 @@ use std::sync::LazyLock;
 use super::commands::{display_message, run_tmux};
 use super::options::{
     SIDEBAR_BOTTOM_HEIGHT, SIDEBAR_BOTTOM_TAB, SIDEBAR_CURSOR, SIDEBAR_FILTER, SIDEBAR_REPO_FILTER,
+    SIDEBAR_TAB_WIDTH,
 };
 
 /// The sidebar's own pane state, read from tmux on every refresh.
@@ -35,11 +36,12 @@ const SIDEBAR_CORE_FIELD_COUNT: usize = 6;
 /// ([`SIDEBAR_PANE_QUERY`]) and the parse split count both derive from
 /// this one list, so adding or reordering a shared option cannot
 /// silently shift the field every later position reads.
-const SHARED_OPTION_FIELDS: [&str; 5] = [
+const SHARED_OPTION_FIELDS: [&str; 6] = [
     SIDEBAR_FILTER,
     SIDEBAR_CURSOR,
     SIDEBAR_BOTTOM_TAB,
     SIDEBAR_BOTTOM_HEIGHT,
+    SIDEBAR_TAB_WIDTH,
     SIDEBAR_REPO_FILTER,
 ];
 
@@ -96,7 +98,8 @@ impl SidebarPaneInfo {
 
 /// Parse the `#{pane_active} #{window_active} #{pane_width} #{window_width}
 /// #{window_height} #{pane_floating_flag} #{@sidebar_filter} #{@sidebar_cursor}
-/// #{@sidebar_bottom_tab} #{@sidebar_bottom_height} #{@sidebar_repo_filter} /eot/` output. Fewer than the three core fields
+/// #{@sidebar_bottom_tab} #{@sidebar_bottom_height} #{@sidebar_tab_width}
+/// #{@sidebar_repo_filter} /eot/` output. Fewer than the three core fields
 /// (the pane is gone, or the query failed) yields
 /// [`SidebarPaneInfo::FALLBACK`] with no options; missing window fields or
 /// a missing floating flag (tmux older than 3.8 has no
@@ -129,6 +132,7 @@ pub(crate) fn parse_sidebar_pane_reading(out: &str) -> SidebarPaneReading {
     let cursor = fields.next().unwrap_or("");
     let bottom_tab = fields.next().unwrap_or("");
     let bottom_height = fields.next().unwrap_or("");
+    let tab_width = fields.next().unwrap_or("");
     let repo_field = fields.next().unwrap_or("");
     // Cut at the terminator so the `trim()` inside `display_message`
     // cannot eat trailing whitespace from the repo name. The field is
@@ -142,11 +146,14 @@ pub(crate) fn parse_sidebar_pane_reading(out: &str) -> SidebarPaneReading {
     };
 
     let mut options = HashMap::new();
-    for (key, value) in
-        SHARED_OPTION_FIELDS
-            .iter()
-            .zip([filter, cursor, bottom_tab, bottom_height, repo_filter])
-    {
+    for (key, value) in SHARED_OPTION_FIELDS.iter().zip([
+        filter,
+        cursor,
+        bottom_tab,
+        bottom_height,
+        tab_width,
+        repo_filter,
+    ]) {
         if !value.is_empty() {
             options.insert(key.to_string(), value.to_string());
         }
@@ -327,7 +334,7 @@ mod tests {
     #[test]
     fn parse_sidebar_pane_reading_parses_all_set_options() {
         let reading =
-            parse_sidebar_pane_reading("1 1 40 100 30 1 waiting 7 tasks 45 my-repo /eot/");
+            parse_sidebar_pane_reading("1 1 40 100 30 1 waiting 7 tasks 45 55 my-repo /eot/");
         assert_eq!(reading.options.get(SIDEBAR_FILTER), Some(&"waiting".into()));
         assert_eq!(reading.options.get(SIDEBAR_CURSOR), Some(&"7".into()));
         assert_eq!(
@@ -338,11 +345,12 @@ mod tests {
             reading.options.get(SIDEBAR_BOTTOM_HEIGHT),
             Some(&"45".into())
         );
+        assert_eq!(reading.options.get(SIDEBAR_TAB_WIDTH), Some(&"55".into()));
         assert_eq!(
             reading.options.get(SIDEBAR_REPO_FILTER),
             Some(&"my-repo".into())
         );
-        assert_eq!(reading.options.len(), 5);
+        assert_eq!(reading.options.len(), 6);
     }
 
     #[test]
@@ -352,12 +360,12 @@ mod tests {
         // `tasks` and `git` must each land on the bottom-tab key without
         // shifting the repo filter.
         for tab in ["activity", "tasks", "git"] {
-            // Faithful wire shape for `{tab}` set with a percent set
-            // and an unset repo: the tab keeps its slot, the percent
-            // takes the slot before the repo, and the empty repo slot
-            // collapses to the two spaces before the terminator.
+            // Faithful wire shape for `{tab}` set with the tab width
+            // set and an unset repo: the tab keeps its slot, the tab
+            // width takes the slot before the repo, and the empty repo
+            // slot collapses to the two spaces before the terminator.
             let reading =
-                parse_sidebar_pane_reading(&format!("0 1 80 120 40 0 all 3 {tab} 25  /eot/"));
+                parse_sidebar_pane_reading(&format!("0 1 80 120 40 0 all 3 {tab} 25 40  /eot/"));
             assert_eq!(
                 reading.options.get(SIDEBAR_BOTTOM_TAB),
                 Some(&tab.to_string()),
@@ -367,6 +375,7 @@ mod tests {
                 reading.options.get(SIDEBAR_BOTTOM_HEIGHT),
                 Some(&"25".into())
             );
+            assert_eq!(reading.options.get(SIDEBAR_TAB_WIDTH), Some(&"40".into()));
             assert_eq!(reading.options.get(SIDEBAR_REPO_FILTER), None);
             assert_eq!(reading.options.get(SIDEBAR_CURSOR), Some(&"3".into()));
         }
@@ -378,29 +387,32 @@ mod tests {
         // option is not set, which collapses to nothing between the
         // spaces — the cursor must keep its position and the filter
         // key must stay out of the map.
-        let reading = parse_sidebar_pane_reading("0 1 80 120 40 0  12   /eot/");
+        let reading = parse_sidebar_pane_reading("0 1 80 120 40 0  12    /eot/");
         assert!(!reading.options.contains_key(SIDEBAR_FILTER));
         assert_eq!(reading.options.get(SIDEBAR_CURSOR), Some(&"12".into()));
         assert!(!reading.options.contains_key(SIDEBAR_BOTTOM_TAB));
         assert!(!reading.options.contains_key(SIDEBAR_BOTTOM_HEIGHT));
+        assert!(!reading.options.contains_key(SIDEBAR_TAB_WIDTH));
         assert!(!reading.options.contains_key(SIDEBAR_REPO_FILTER));
 
         // Trailing empty fields are trimmed away by `display-message`,
         // so a set filter with unset cursor and repo filter must still
         // land on the right key.
-        let only_filter = parse_sidebar_pane_reading("0 1 80 120 40 0 busy    /eot/");
+        let only_filter = parse_sidebar_pane_reading("0 1 80 120 40 0 busy     /eot/");
         assert_eq!(
             only_filter.options.get(SIDEBAR_FILTER),
             Some(&"busy".into())
         );
         assert!(!only_filter.options.contains_key(SIDEBAR_BOTTOM_TAB));
         assert!(!only_filter.options.contains_key(SIDEBAR_BOTTOM_HEIGHT));
+        assert!(!only_filter.options.contains_key(SIDEBAR_TAB_WIDTH));
         assert_eq!(only_filter.options.len(), 1);
     }
 
     #[test]
     fn parse_sidebar_pane_reading_keeps_spaces_in_the_repo_filter() {
-        let reading = parse_sidebar_pane_reading("0 1 80 120 40 0 all 2 git 33 My Repo Dir /eot/");
+        let reading =
+            parse_sidebar_pane_reading("0 1 80 120 40 0 all 2 git 33 40 My Repo Dir /eot/");
         assert_eq!(
             reading.options.get(SIDEBAR_REPO_FILTER),
             Some(&"My Repo Dir".into())
@@ -412,6 +424,7 @@ mod tests {
             reading.options.get(SIDEBAR_BOTTOM_HEIGHT),
             Some(&"33".into())
         );
+        assert_eq!(reading.options.get(SIDEBAR_TAB_WIDTH), Some(&"40".into()));
     }
 
     #[test]
@@ -420,7 +433,7 @@ mod tests {
         // anchors the end of the repo field so a repo name with a
         // trailing space survives the read instead of being corrupted
         // tick after tick.
-        let reading = parse_sidebar_pane_reading("1 1 40 100 30 1 busy 3 git 18 My Repo  /eot/");
+        let reading = parse_sidebar_pane_reading("1 1 40 100 30 1 busy 3 git 18 40 My Repo  /eot/");
         assert_eq!(
             reading.options.get(SIDEBAR_REPO_FILTER),
             Some(&"My Repo ".into())
@@ -431,16 +444,18 @@ mod tests {
             reading.options.get(SIDEBAR_BOTTOM_HEIGHT),
             Some(&"18".into())
         );
+        assert_eq!(reading.options.get(SIDEBAR_TAB_WIDTH), Some(&"40".into()));
     }
 
     #[test]
     fn parse_sidebar_pane_reading_omits_unset_repo_filter_before_terminator() {
         // Repo filter unset: the leftover separator spaces between the
         // tab field and the terminator must not become repo values.
-        let reading = parse_sidebar_pane_reading("1 1 40 100 30 1 waiting 7   /eot/");
+        let reading = parse_sidebar_pane_reading("1 1 40 100 30 1 waiting 7    /eot/");
         assert!(!reading.options.contains_key(SIDEBAR_REPO_FILTER));
         assert!(!reading.options.contains_key(SIDEBAR_BOTTOM_TAB));
         assert!(!reading.options.contains_key(SIDEBAR_BOTTOM_HEIGHT));
+        assert!(!reading.options.contains_key(SIDEBAR_TAB_WIDTH));
         assert_eq!(reading.options.get(SIDEBAR_CURSOR), Some(&"7".into()));
         assert_eq!(reading.options.get(SIDEBAR_FILTER), Some(&"waiting".into()));
     }
@@ -450,11 +465,12 @@ mod tests {
         // Filter unset, cursor unset, tab unset, height unset, repo
         // set: all four empty fields must keep their slots so the repo
         // lands on its own key, not on an earlier one.
-        let reading = parse_sidebar_pane_reading("1 1 40 100 30 1     repo-x /eot/");
+        let reading = parse_sidebar_pane_reading("1 1 40 100 30 1      repo-x /eot/");
         assert!(!reading.options.contains_key(SIDEBAR_FILTER));
         assert!(!reading.options.contains_key(SIDEBAR_CURSOR));
         assert!(!reading.options.contains_key(SIDEBAR_BOTTOM_TAB));
         assert!(!reading.options.contains_key(SIDEBAR_BOTTOM_HEIGHT));
+        assert!(!reading.options.contains_key(SIDEBAR_TAB_WIDTH));
         assert_eq!(
             reading.options.get(SIDEBAR_REPO_FILTER),
             Some(&"repo-x".into())

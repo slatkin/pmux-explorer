@@ -210,6 +210,15 @@ pub struct AppState {
     pub version_notice: Option<crate::version::UpdateNotice>,
     /// Shared state across sidebar instances, persisted to tmux global variables.
     pub global: GlobalState,
+    /// Whether this sidebar is a full-height column or a full-width
+    /// strip. Read once at startup from the `PMUX_SIDEBAR_LAYOUT`
+    /// process environment (`split-window -e`, decision 1 of the
+    /// `add-strip-layout` design) and never from a pane option: the TUI
+    /// starts before `toggle` can write `@pane_sidebar_layout`. A
+    /// missing or unknown value gives [`LayoutKind::Column`], so a
+    /// sidebar from before the strip layout existed keeps its behavior.
+    /// The layout is fixed for the life of the pane.
+    pub layout_kind: LayoutKind,
     /// Whether the pet animation is drawn and ticked. Loaded once at startup
     /// from the `@sidebar_pet` tmux option. Defaults to `false`.
     pub pet_enabled: bool,
@@ -261,6 +270,7 @@ impl AppState {
             pet_working_paper_seed: 1,
             version_notice: None,
             global: GlobalState::new(),
+            layout_kind: LayoutKind::Column,
             pet_enabled: false,
         };
         crate::state::pet::reseed_pet_idle_motion(&mut state);

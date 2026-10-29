@@ -19,9 +19,10 @@ use super::filter::{RepoFilter, StatusFilter};
 /// lands; adoption also skips a shared value equal to `last_saved`,
 /// so a local change waiting for its write stays put.
 ///
-/// The status filter, the bottom tab and the bottom percent each hold
-/// one `SaveLatch` instance, so the save/retry/adopt mechanics below
-/// is written once and the three shared fields share it.
+/// The status filter, the bottom tab, the bottom percent and the
+/// strip tab percent each hold one `SaveLatch` instance, so the
+/// save/retry/adopt mechanics below is written once and the four
+/// shared fields share it.
 struct SaveLatch<T> {
     /// The global option this latch's `set -g` writes go to.
     option: &'static str,
@@ -118,6 +119,12 @@ pub struct GlobalState {
     /// `set -g @sidebar_bottom_height <n>` and adopted from that
     /// option.
     pub bottom_percent: u8,
+    /// The strip tab-panel width (divider included) as a percent of
+    /// the strip width, shared like the filters: written with
+    /// `set -g @sidebar_tab_width <n>` and adopted from that option.
+    /// A column never writes or reads it; a strip drag release is its
+    /// only writer.
+    pub tab_percent: u8,
     /// The status filter's save latch (see `SaveLatch` for the whole
     /// latch rationale; the bottom-tab and bottom-percent latches
     /// below are further instances of the same mechanism).
@@ -128,6 +135,9 @@ pub struct GlobalState {
     /// The bottom percent's save latch, written to and adopted from
     /// `@sidebar_bottom_height`.
     percent_latch: SaveLatch<u8>,
+    /// The strip tab percent's save latch, written to and adopted from
+    /// `@sidebar_tab_width`.
+    tab_percent_latch: SaveLatch<u8>,
     /// Last cursor value successfully written to tmux.
     last_saved_cursor: usize,
     /// Last repo filter value successfully written to tmux.
@@ -150,9 +160,11 @@ impl GlobalState {
             repo_filter: RepoFilter::All,
             bottom_tab: BottomTab::Activity,
             bottom_percent: ui::DEFAULT_BOTTOM_PERCENT,
+            tab_percent: ui::DEFAULT_TAB_PERCENT,
             filter_latch: SaveLatch::new(tmux::SIDEBAR_FILTER, StatusFilter::All),
             tab_latch: SaveLatch::new(tmux::SIDEBAR_BOTTOM_TAB, BottomTab::Activity),
             percent_latch: SaveLatch::new(tmux::SIDEBAR_BOTTOM_HEIGHT, ui::DEFAULT_BOTTOM_PERCENT),
+            tab_percent_latch: SaveLatch::new(tmux::SIDEBAR_TAB_WIDTH, ui::DEFAULT_TAB_PERCENT),
             last_saved_cursor: 0,
             last_saved_repo_filter: RepoFilter::All,
             pending_cursor_save_since: None,
@@ -199,6 +211,21 @@ impl GlobalState {
     #[cfg(test)]
     pub(crate) fn percent_save_pending(&self) -> bool {
         self.percent_latch.save_pending
+    }
+
+    /// Save the strip tab percent to tmux global variable via its
+    /// latch. The strip divider drag's release is the only writer.
+    pub fn save_tab_percent(&mut self) {
+        self.tab_percent_latch
+            .save(self.tab_percent, &self.tab_percent.to_string());
+    }
+
+    /// Whether the strip tab-percent write is waiting for tmux to
+    /// accept it. Read-only test window into the private latch, the
+    /// tab-percent twin of [`Self::percent_save_pending`].
+    #[cfg(test)]
+    pub(crate) fn tab_percent_save_pending(&self) -> bool {
+        self.tab_percent_latch.save_pending
     }
 
     /// Save cursor position to tmux global variable. Returns `true` when
@@ -269,12 +296,13 @@ impl GlobalState {
     }
 
     /// Retry every shared write tmux rejected (filter, bottom tab,
-    /// bottom percent), so an instance cannot drift from the shared
-    /// values (see `SaveLatch::retry` for the latch rationale). Runs
-    /// once per refresh tick, before the tick reads the shared
-    /// options, so a successful retry is what that tick reads back.
-    /// The writes must stay together: retrying only some would let the
-    /// others drift and be adopted back by every other sidebar.
+    /// bottom percent, strip tab percent), so an instance cannot drift
+    /// from the shared values (see `SaveLatch::retry` for the latch
+    /// rationale). Runs once per refresh tick, before the tick reads
+    /// the shared options, so a successful retry is what that tick
+    /// reads back. The writes must stay together: retrying only some
+    /// would let the others drift and be adopted back by every other
+    /// sidebar.
     pub fn retry_pending_saves(&mut self) {
         self.filter_latch
             .retry(self.status_filter, self.status_filter.as_str());
@@ -282,11 +310,13 @@ impl GlobalState {
             .retry(self.bottom_tab, self.bottom_tab.as_str());
         self.percent_latch
             .retry(self.bottom_percent, &self.bottom_percent.to_string());
+        self.tab_percent_latch
+            .retry(self.tab_percent, &self.tab_percent.to_string());
     }
 
     /// Apply the shared options read from tmux (filter, cursor, bottom
-    /// tab, bottom percent, repo filter). Runs once at startup and on
-    /// every refresh tick.
+    /// tab, bottom percent, strip tab percent, repo filter). Runs once
+    /// at startup and on every refresh tick.
     ///
     /// `split_drag_active` says whether the calling instance is mid
     /// split drag (`AppState::split_drag` is `Some`): while it is, the
@@ -296,7 +326,7 @@ impl GlobalState {
     /// gate because the drag lives on `AppState` and this method is a
     /// `GlobalState` method.
     pub fn apply_all(&mut self, opts: &HashMap<String, String>, split_drag_active: bool) {
-        // The three shared fields below adopt through their latches;
+        // The shared fields below adopt through their latches;
         // `SaveLatch::adopt` carries the whole adoption gate once
         // (while a write is pending the shared value stays unadopted,
         // and a landed write's new value is taken in like any other
@@ -326,19 +356,33 @@ impl GlobalState {
         }) {
             self.bottom_tab = adopted;
         }
-        // The percent is the one latch with an extra adoption gate and
-        // a defaulting parse: while a split drag is live the rule
+        // The percent is the latch family with an extra adoption gate
+        // and a defaulting parse: while a split drag is live the rule
         // shows the drag's rows and the mouse owns the height, so the
         // shared percent stays unadopted this tick exactly as for a
         // pending write; after the release the following ticks adopt
         // the server value again. Unlike the label fields the percent
         // parse has a default, so it parses the whole option map: an
         // unset, empty or invalid option resolves to
-        // `DEFAULT_BOTTOM_PERCENT` instead of being skipped.
+        // `DEFAULT_BOTTOM_PERCENT` instead of being skipped. The strip
+        // tab percent below carries the same gate and the same
+        // defaulting parse against `@sidebar_tab_width`.
         if let Some(adopted) = self.percent_latch.adopt(opts, !split_drag_active, |o| {
             Some(ui::bottom_percent_from_options(o))
         }) {
             self.bottom_percent = adopted;
+        }
+        // The strip tab percent shares the split-drag gate: while a
+        // drag is live the strip's divider follows the mouse, so the
+        // shared tab width stays unadopted this tick; after the release
+        // the following ticks adopt the server value again. The parse
+        // defaults like the bottom percent's, so an unset, empty or
+        // invalid `@sidebar_tab_width` resolves to
+        // `DEFAULT_TAB_PERCENT` and is adopted.
+        if let Some(adopted) = self.tab_percent_latch.adopt(opts, !split_drag_active, |o| {
+            Some(ui::tab_percent_from_options(o))
+        }) {
+            self.tab_percent = adopted;
         }
         if let Some(repo_str) = opts.get(tmux::SIDEBAR_REPO_FILTER) {
             let tmux_repo = RepoFilter::from_label(repo_str);
@@ -362,18 +406,13 @@ mod tests {
             .collect()
     }
 
-    // ─── the three shared-value latches (one mechanism, one suite) ───
+    // ─── the four shared-value latches (one mechanism, one suite) ───
     //
-    // The status filter, the bottom tab and the bottom percent ride
-    // the same `SaveLatch` (the pending-write field, the save, the
-    // retry and the adoption), so the latch mechanics are pinned once
-    // with one fixture per latch instead of a cloned test triple per
-    // mechanic. Every fixture keeps its own guard value, local choice
-    // and peer value, and the assertions read the guard and the live
-    // value through the same serialization the `set -g` write uses
-    // (`as_str` for the label fields, `to_string` for the percent), so
-    // the suite also catches a field that stopped serializing its
-    // option.
+    // The status filter, the bottom tab, the bottom percent and the
+    // strip tab percent ride the same `SaveLatch` (the pending-write
+    // field, the save, the retry and the adoption), so the latch
+    // mechanics are pinned once with one fixture per latch instead of
+    // a cloned test quad per mechanic.
     //
     // In these tests every tmux call runs against a socket no server
     // listens on, so the writes deterministically take the rejection
@@ -418,15 +457,16 @@ mod tests {
         apply_other: fn(&mut GlobalState),
         /// Whether this latch's write is pending.
         pending: fn(&GlobalState) -> bool,
-        /// The two other latches' pendings (latch independence).
-        other_pendings: fn(&GlobalState) -> (bool, bool),
+        /// The other latches' pendings (latch independence), one bool
+        /// per other latch.
+        other_pendings: fn(&GlobalState) -> Vec<bool>,
         /// The guard (`last_saved`), serialized like the write.
         guard: fn(&GlobalState) -> String,
         /// The live field value, serialized like the write.
         live: fn(&GlobalState) -> String,
     }
 
-    fn fixtures() -> [LatchFixture; 3] {
+    fn fixtures() -> [LatchFixture; 4] {
         [
             LatchFixture {
                 name: "status filter",
@@ -441,7 +481,13 @@ mod tests {
                 apply_shared: apply_filter,
                 apply_other: apply_tab_key,
                 pending: |g| g.filter_latch.save_pending,
-                other_pendings: |g| (g.tab_latch.save_pending, g.percent_latch.save_pending),
+                other_pendings: |g| {
+                    vec![
+                        g.tab_latch.save_pending,
+                        g.percent_latch.save_pending,
+                        g.tab_percent_latch.save_pending,
+                    ]
+                },
                 guard: |g| g.filter_latch.last_saved.as_str().to_string(),
                 live: |g| g.status_filter.as_str().to_string(),
             },
@@ -458,7 +504,13 @@ mod tests {
                 apply_shared: apply_tab,
                 apply_other: apply_filter_key,
                 pending: |g| g.tab_latch.save_pending,
-                other_pendings: |g| (g.filter_latch.save_pending, g.percent_latch.save_pending),
+                other_pendings: |g| {
+                    vec![
+                        g.filter_latch.save_pending,
+                        g.percent_latch.save_pending,
+                        g.tab_percent_latch.save_pending,
+                    ]
+                },
                 guard: |g| g.tab_latch.last_saved.as_str().to_string(),
                 live: |g| g.bottom_tab.as_str().to_string(),
             },
@@ -475,9 +527,38 @@ mod tests {
                 apply_shared: apply_percent,
                 apply_other: apply_filter_key,
                 pending: |g| g.percent_latch.save_pending,
-                other_pendings: |g| (g.filter_latch.save_pending, g.tab_latch.save_pending),
+                other_pendings: |g| {
+                    vec![
+                        g.filter_latch.save_pending,
+                        g.tab_latch.save_pending,
+                        g.tab_percent_latch.save_pending,
+                    ]
+                },
                 guard: |g| g.percent_latch.last_saved.to_string(),
                 live: |g| g.bottom_percent.to_string(),
+            },
+            LatchFixture {
+                name: "strip tab percent",
+                old: "40",
+                local: "60",
+                peer: "25",
+                default: "40",
+                hold: hold_tab_percent,
+                set_pending: flag_tab_percent_pending,
+                save: save_tab_percent,
+                retry: retry_all,
+                apply_shared: apply_tab_percent,
+                apply_other: apply_filter_key,
+                pending: |g| g.tab_percent_save_pending(),
+                other_pendings: |g| {
+                    vec![
+                        g.filter_latch.save_pending,
+                        g.tab_latch.save_pending,
+                        g.percent_latch.save_pending,
+                    ]
+                },
+                guard: |g| g.tab_percent_latch.last_saved.to_string(),
+                live: |g| g.tab_percent.to_string(),
             },
         ]
     }
@@ -497,6 +578,11 @@ mod tests {
         g.bottom_percent = 50;
     }
 
+    fn hold_tab_percent(g: &mut GlobalState) {
+        g.tab_percent_latch.last_saved = 40;
+        g.tab_percent = 60;
+    }
+
     fn flag_filter_pending(g: &mut GlobalState) {
         g.filter_latch.save_pending = true;
     }
@@ -509,6 +595,10 @@ mod tests {
         g.percent_latch.save_pending = true;
     }
 
+    fn flag_tab_percent_pending(g: &mut GlobalState) {
+        g.tab_percent_latch.save_pending = true;
+    }
+
     fn save_filter(g: &mut GlobalState) {
         g.save_filter();
     }
@@ -519,6 +609,10 @@ mod tests {
 
     fn save_bottom_percent(g: &mut GlobalState) {
         g.save_bottom_percent();
+    }
+
+    fn save_tab_percent(g: &mut GlobalState) {
+        g.save_tab_percent();
     }
 
     fn retry_all(g: &mut GlobalState) {
@@ -535,6 +629,10 @@ mod tests {
 
     fn apply_percent(g: &mut GlobalState, value: &str) {
         g.apply_all(&opts(&[(tmux::SIDEBAR_BOTTOM_HEIGHT, value)]), false);
+    }
+
+    fn apply_tab_percent(g: &mut GlobalState, value: &str) {
+        g.apply_all(&opts(&[(tmux::SIDEBAR_TAB_WIDTH, value)]), false);
     }
 
     fn apply_tab_key(g: &mut GlobalState) {
@@ -594,9 +692,9 @@ mod tests {
                 "{}: a rejected retry keeps the latch set",
                 f.name
             );
-            let (other_0, other_1) = (f.other_pendings)(&g);
+            let others = (f.other_pendings)(&g);
             assert!(
-                !other_0 && !other_1,
+                others.into_iter().all(|pending| !pending),
                 "{}: the latches are independent",
                 f.name
             );
@@ -771,6 +869,72 @@ mod tests {
             g.bottom_percent, 65,
             "after the release the shared value is adopted again"
         );
+    }
+
+    // ─── the strip tab percent's own gates ─────────────────────────
+
+    #[test]
+    fn a_live_split_drag_blocks_the_tab_percent_adoption_and_it_resumes() {
+        // The tab percent's twin of the percent gate: while a drag is
+        // live the strip's divider follows the mouse, so a tick
+        // adopting the server's tab width would move it under the
+        // mouse. After the release the next ticks adopt again.
+        let mut g = GlobalState::new();
+        g.tab_percent_latch.last_saved = 40;
+        g.tab_percent = 40;
+
+        g.apply_all(&opts(&[(tmux::SIDEBAR_TAB_WIDTH, "65")]), true);
+
+        assert_eq!(
+            g.tab_percent, 40,
+            "a tick during a live drag must not adopt the shared tab width"
+        );
+        assert_eq!(
+            g.tab_percent_latch.last_saved, 40,
+            "the blocked adoption must not advance the last_saved guard"
+        );
+
+        g.apply_all(&opts(&[(tmux::SIDEBAR_TAB_WIDTH, "65")]), false);
+
+        assert_eq!(
+            g.tab_percent, 65,
+            "after the release the shared value is adopted again"
+        );
+    }
+
+    #[test]
+    fn an_invalid_shared_tab_width_adopts_the_default() {
+        // The tab-percent parse has a default: an option value outside
+        // 0..=100 or not an integer resolves to `DEFAULT_TAB_PERCENT`
+        // and is adopted like any other shared value.
+        for value in ["abc", "150", ""] {
+            let mut g = GlobalState::new();
+            g.tab_percent_latch.last_saved = 50;
+            g.tab_percent = 50;
+
+            g.apply_all(&opts(&[(tmux::SIDEBAR_TAB_WIDTH, value)]), false);
+
+            assert_eq!(
+                g.tab_percent,
+                ui::DEFAULT_TAB_PERCENT,
+                "an invalid shared value {value:?} must adopt the default"
+            );
+        }
+    }
+
+    #[test]
+    fn a_cleared_tab_width_option_resets_to_the_default() {
+        // With the option gone from the shared map the tab percent
+        // resolves to the default, so clearing the option server-wide
+        // brings every strip back to `DEFAULT_TAB_PERCENT`.
+        let mut g = GlobalState::new();
+        g.tab_percent_latch.last_saved = 50;
+        g.tab_percent = 50;
+
+        g.apply_all(&opts(&[]), false);
+
+        assert_eq!(g.tab_percent, ui::DEFAULT_TAB_PERCENT);
+        assert_eq!(g.tab_percent_latch.last_saved, ui::DEFAULT_TAB_PERCENT);
     }
 
     #[test]

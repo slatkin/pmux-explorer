@@ -41,6 +41,25 @@ pub fn bottom_percent_from_options(opts: &HashMap<String, String>) -> u8 {
         .unwrap_or(DEFAULT_BOTTOM_PERCENT)
 }
 
+/// The strip tab-panel width used when `@sidebar_tab_width` is unset,
+/// empty, or not an integer from 0 to 100, as a percent of the strip
+/// width (divider included).
+pub const DEFAULT_TAB_PERCENT: u8 = 40;
+
+/// Read `@sidebar_tab_width` as a percent of the strip width,
+/// falling back to [`DEFAULT_TAB_PERCENT`]. The same parse rules as
+/// [`bottom_percent_from_options`]: an integer from 0 to 100 is the
+/// percent — an unset option, an empty value, or any other value gives
+/// the default. A percent of 0 hides the strip's divider and tab panel.
+pub fn tab_percent_from_options(opts: &HashMap<String, String>) -> u8 {
+    opts.get(tmux::SIDEBAR_TAB_WIDTH)
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .and_then(|s| s.parse::<u8>().ok())
+        .filter(|p| *p <= 100)
+        .unwrap_or(DEFAULT_TAB_PERCENT)
+}
+
 /// Read `@sidebar_pet` from tmux global options, defaulting to `false` (off).
 /// Accepts `on`/`off`, `true`/`false`, `1`/`0` (case-insensitive).
 pub fn pet_enabled_from_options(opts: &HashMap<String, String>) -> bool {
@@ -183,6 +202,25 @@ mod tests {
     }
 
     #[test]
+    fn the_conf_seeds_the_same_tab_percent_the_binary_falls_back_to() {
+        // One number, two homes: the conf seeds `@sidebar_tab_width`
+        // for tmux-side visibility and [`DEFAULT_TAB_PERCENT`] is the
+        // fallback when the option is unset or invalid. A test pins
+        // them together so a change that updates one copy and not the
+        // other fails here instead of drifting in a user's session.
+        let conf = include_str!("../../pmux-explorer.conf");
+        let seeded = conf
+            .lines()
+            .find_map(|line| line.split_once("set -g @sidebar_tab_width "))
+            .and_then(|(_, rest)| rest.trim().trim_matches('\'').parse::<u8>().ok());
+        assert_eq!(
+            seeded,
+            Some(DEFAULT_TAB_PERCENT),
+            "the conf's seeded tab width must match DEFAULT_TAB_PERCENT"
+        );
+    }
+
+    #[test]
     fn the_conf_seeds_the_same_pet_default_the_binary_falls_back_to() {
         // One switch, two homes: the conf seeds `@sidebar_pet` for
         // tmux-side visibility and the binary falls back to `off`
@@ -235,6 +273,34 @@ mod tests {
                 bottom_percent_from_options(&opts),
                 DEFAULT_BOTTOM_PERCENT,
                 "expected {value} to fall back to the default"
+            );
+        }
+    }
+
+    #[test]
+    fn tab_percent_parses_valid_values_and_defaults_otherwise() {
+        for (value, expected) in [("40", 40), ("0", 0), ("100", 100)] {
+            let opts = opts_with(tmux::SIDEBAR_TAB_WIDTH, value);
+            assert_eq!(
+                tab_percent_from_options(&opts),
+                expected,
+                "expected {value} to parse as {expected}"
+            );
+        }
+        // Whitespace around the number is tolerated, like the bottom
+        // percent's parse.
+        let opts = opts_with(tmux::SIDEBAR_TAB_WIDTH, "  55  ");
+        assert_eq!(tab_percent_from_options(&opts), 55);
+        // An unset, empty, non-numeric or out-of-range value gives the
+        // default.
+        for value in [None, Some(""), Some("abc"), Some("101")] {
+            let opts = value
+                .map(|v| opts_with(tmux::SIDEBAR_TAB_WIDTH, v))
+                .unwrap_or_default();
+            assert_eq!(
+                tab_percent_from_options(&opts),
+                DEFAULT_TAB_PERCENT,
+                "expected {value:?} to fall back to the default"
             );
         }
     }

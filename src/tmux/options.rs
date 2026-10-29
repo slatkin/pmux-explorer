@@ -169,6 +169,12 @@ pub const SIDEBAR_CURSOR: &str = "@sidebar_cursor";
 pub const SIDEBAR_BOTTOM_TAB: &str = "@sidebar_bottom_tab";
 pub const SIDEBAR_REPO_FILTER: &str = "@sidebar_repo_filter";
 pub const SIDEBAR_BOTTOM_HEIGHT: &str = "@sidebar_bottom_height";
+/// Width of a strip's tab panel, divider included, as a percent of the
+/// strip width. Shared server-wide like the bottom height; `0` hides
+/// the divider and the tab panel. A column ignores it, and a strip
+/// drag never writes [`SIDEBAR_BOTTOM_HEIGHT`], so a column and a
+/// strip on the same server keep their own split.
+pub const SIDEBAR_TAB_WIDTH: &str = "@sidebar_tab_width";
 pub const SIDEBAR_PET: &str = "@sidebar_pet";
 pub const SIDEBAR_NOTIFICATIONS: &str = "@sidebar_notifications";
 pub const SIDEBAR_NOTIFICATIONS_EVENTS: &str = "@sidebar_notifications_events";

@@ -13,6 +13,23 @@ pub enum LayoutKind {
     Strip,
 }
 
+impl LayoutKind {
+    /// The layout a `PMUX_SIDEBAR_LAYOUT` process-environment value
+    /// selects: `strip` makes a strip, `column` a column, and a missing,
+    /// empty or unknown value a column — a sidebar that started before
+    /// the strip layout existed (or with a garbage value) keeps the
+    /// column behavior. The value is read once at startup
+    /// (`app/setup.rs`), never from a pane option: `split-window` starts
+    /// the TUI before `toggle` can write `@pane_sidebar_layout`, so the
+    /// environment is the only startup source that cannot lose the race.
+    pub fn from_env_value(value: Option<&str>) -> Self {
+        match value {
+            Some("strip") => LayoutKind::Strip,
+            _ => LayoutKind::Column,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct RowTarget {
     pub pane_id: String,
@@ -660,5 +677,33 @@ mod tests {
             37,
             "37 rows of 40 must give 37 rows again"
         );
+    }
+
+    #[test]
+    fn the_environment_value_names_the_layout() {
+        assert_eq!(
+            LayoutKind::from_env_value(Some("strip")),
+            LayoutKind::Strip,
+            "strip makes a strip"
+        );
+        assert_eq!(
+            LayoutKind::from_env_value(Some("column")),
+            LayoutKind::Column,
+            "column makes a column"
+        );
+    }
+
+    #[test]
+    fn an_unknown_or_missing_environment_value_makes_a_column() {
+        // A sidebar that started before the strip layout existed has no
+        // value at all, and a garbage value names no layout: both keep
+        // the column behavior.
+        for value in [None, Some(""), Some("Strip"), Some("vertical")] {
+            assert_eq!(
+                LayoutKind::from_env_value(value),
+                LayoutKind::Column,
+                "the value {value:?} must fall back to a column"
+            );
+        }
     }
 }

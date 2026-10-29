@@ -1,5 +1,5 @@
 use crate::cli::plugin_state;
-use crate::state::AppState;
+use crate::state::{AppState, LayoutKind};
 use crate::tmux;
 use crate::ui;
 
@@ -11,6 +11,13 @@ use crate::ui;
 /// the first refresh pass.
 pub(super) fn init_state(tmux_pane: String) -> AppState {
     let mut state = AppState::new(tmux_pane);
+    // The layout is read once, from the process environment `toggle`
+    // handed the pane (`-e PMUX_SIDEBAR_LAYOUT=strip|column`) — never
+    // from a pane option, which the TUI could read before `toggle`
+    // writes it (decision 1 of the `add-strip-layout` design). A
+    // missing or unknown value keeps the column behavior.
+    state.layout_kind =
+        LayoutKind::from_env_value(std::env::var("PMUX_SIDEBAR_LAYOUT").ok().as_deref());
     state.theme = ui::colors::ColorTheme::from_tmux();
     // Loud border while the sidebar pane is the active tmux pane: a
     // per-pane `pane-active-border-style` write, once at startup. tmux
