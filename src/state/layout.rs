@@ -221,8 +221,9 @@ pub(crate) fn filter_bar_layout(
 /// one chip per row, drawn as icon, space and count.
 const STRIP_FILTER_COLS: u16 = 4;
 /// Columns the strip's vertical tab divider occupies between the agent
-/// panel and the tab panel.
-const STRIP_DIVIDER_COLS: u16 = 2;
+/// panel and the tab panel: a leading spacing column before the glyphs
+/// and the two columns the glyphs draw on.
+const STRIP_DIVIDER_COLS: u16 = 3;
 /// Columns either strip panel keeps at least: the agent panel and the
 /// tab panel (divider included) each never shrink below this.
 const STRIP_MIN_PANEL_COLS: u16 = 20;
@@ -240,7 +241,7 @@ pub struct StripLayout {
     pub filter: Rect,
     /// The agent panel, right of the filter bar.
     pub agents: Rect,
-    /// The 2-column tab divider, while the tab panel shows.
+    /// The 3-column tab divider, while the tab panel shows.
     pub divider: Option<Rect>,
     /// The tab panel, right of the divider, while it shows.
     pub tabs: Option<Rect>,
@@ -355,24 +356,21 @@ pub fn filter_column_layout(counts: StatusCounts, height: u16) -> (Vec<FilterChi
 
 /// The rows the strip's vertical divider draws its tab glyphs on: one
 /// row per shown tab, in the same order as the horizontal rule of a
-/// column, with the run centered vertically — it starts on row
-/// `floor((height - run) / 2)` — and a run taller than the strip cut
-/// at the bottom (the run start saturates at row 0 and only the first
-/// `height` glyphs survive). Each target's `start`/`end` pair is the
-/// glyph row and the row after it, the hitboxes the tab click test
-/// reads back.
+/// column, with the run starting on the first row — matching the
+/// filter bar's chips on the strip's other side — and a run taller
+/// than the strip cut at the bottom (only the first `height` glyphs
+/// survive). Each target's `start`/`end` pair is the glyph row and the
+/// row after it, the hitboxes the tab click test reads back.
 pub fn divider_tab_rows(tabs: &[BottomTab], height: u16) -> Vec<BottomTabTarget> {
-    let run = tabs.len() as u16;
-    if run == 0 || height == 0 {
+    if tabs.is_empty() || height == 0 {
         return Vec::new();
     }
-    let start = if run < height { (height - run) / 2 } else { 0 };
     tabs.iter()
         .take(height as usize)
         .enumerate()
         .map(|(i, tab)| BottomTabTarget {
-            start: start + i as u16,
-            end: start + i as u16 + 1,
+            start: i as u16,
+            end: i as u16 + 1,
             tab: *tab,
         })
         .collect()
@@ -1145,13 +1143,13 @@ mod tests {
     #[test]
     fn strip_layout_draws_the_rounded_tab_percent() {
         // The spec's parts scenario: 120 columns, 40 percent — the
-        // filter bar, then the agent panel, then the 2-column divider
+        // filter bar, then the agent panel, then the 3-column divider
         // on column 72, then the tab panel to the right edge.
         let layout = strip_layout(120, 12, 40);
         assert_eq!(layout.filter, Rect::new(0, 0, 4, 12));
         assert_eq!(layout.agents, Rect::new(4, 0, 68, 12));
-        assert_eq!(layout.divider, Some(Rect::new(72, 0, 2, 12)));
-        assert_eq!(layout.tabs, Some(Rect::new(74, 0, 46, 12)));
+        assert_eq!(layout.divider, Some(Rect::new(72, 0, 3, 12)));
+        assert_eq!(layout.tabs, Some(Rect::new(75, 0, 45, 12)));
     }
 
     #[test]
@@ -1160,14 +1158,14 @@ mod tests {
         // 20-column minimum the tab panel keeps with its divider.
         let small = strip_layout(120, 12, 1);
         assert_eq!(small.agents, Rect::new(4, 0, 96, 12));
-        assert_eq!(small.divider, Some(Rect::new(100, 0, 2, 12)));
-        assert_eq!(small.tabs, Some(Rect::new(102, 0, 18, 12)));
+        assert_eq!(small.divider, Some(Rect::new(100, 0, 3, 12)));
+        assert_eq!(small.tabs, Some(Rect::new(103, 0, 17, 12)));
         // A hundred percent is clamped down so the agent panel keeps
         // its own 20-column minimum.
         let large = strip_layout(120, 12, 100);
         assert_eq!(large.agents, Rect::new(4, 0, 20, 12));
-        assert_eq!(large.divider, Some(Rect::new(24, 0, 2, 12)));
-        assert_eq!(large.tabs, Some(Rect::new(26, 0, 94, 12)));
+        assert_eq!(large.divider, Some(Rect::new(24, 0, 3, 12)));
+        assert_eq!(large.tabs, Some(Rect::new(27, 0, 93, 12)));
     }
 
     #[test]
@@ -1364,9 +1362,10 @@ mod tests {
     }
 
     #[test]
-    fn divider_tab_rows_center_the_run_for_a_claude_pane() {
-        // The spec's Claude scenario: Tools, Tasks and Git on rows 4,
-        // 5 and 6 of a 12-row strip, each a one-row hitbox.
+    fn divider_tab_rows_start_the_run_on_the_first_row_for_a_claude_pane() {
+        // The spec's Claude scenario: Tools, Tasks and Git on rows 0,
+        // 1 and 2 of a 12-row strip — the filter bar's chips start on
+        // the first row too — each a one-row hitbox.
         let state = state_with_focused_agent(crate::tmux::AgentType::Claude);
         let rows = divider_tab_rows(&state.shown_bottom_tabs(), 12);
         let drawn: Vec<(BottomTab, u16, u16)> = rows
@@ -1376,9 +1375,9 @@ mod tests {
         assert_eq!(
             drawn,
             vec![
-                (BottomTab::Activity, 4, 5),
-                (BottomTab::Tasks, 5, 6),
-                (BottomTab::GitStatus, 6, 7),
+                (BottomTab::Activity, 0, 1),
+                (BottomTab::Tasks, 1, 2),
+                (BottomTab::GitStatus, 2, 3),
             ]
         );
     }
@@ -1386,7 +1385,7 @@ mod tests {
     #[test]
     fn divider_tab_rows_show_the_thought_tab_for_a_pi_pane() {
         // The spec's pi scenario: the Thought glyph joins the run, so
-        // the four glyphs sit on rows 4-7.
+        // the four glyphs sit on rows 0-3.
         let state = state_with_focused_agent(crate::tmux::AgentType::Pi);
         let rows = divider_tab_rows(&state.shown_bottom_tabs(), 12);
         let drawn: Vec<(BottomTab, u16)> = rows
@@ -1396,19 +1395,19 @@ mod tests {
         assert_eq!(
             drawn,
             vec![
-                (BottomTab::Activity, 4),
-                (BottomTab::Thought, 5),
-                (BottomTab::Tasks, 6),
-                (BottomTab::GitStatus, 7),
+                (BottomTab::Activity, 0),
+                (BottomTab::Thought, 1),
+                (BottomTab::Tasks, 2),
+                (BottomTab::GitStatus, 3),
             ]
         );
     }
 
     #[test]
     fn a_run_taller_than_the_strip_is_cut_at_the_bottom() {
-        // A 12-row run on a 3-row strip saturates the centered start
-        // at row 0 and keeps only the first three glyphs; the Git
-        // glyph has no row and no hitbox.
+        // A 12-row run on a 3-row strip keeps only the first three
+        // glyphs from the first row; the Git glyph has no row and no
+        // hitbox.
         let state = state_with_focused_agent(crate::tmux::AgentType::Pi);
         let rows = divider_tab_rows(&state.shown_bottom_tabs(), 3);
         let drawn: Vec<(BottomTab, u16)> = rows

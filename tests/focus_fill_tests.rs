@@ -182,8 +182,8 @@ fn focus_fill_activity_log_bottom_active_top_base() {
 // section (the divider and the tab panel) on the right. Geometry: a
 // 44×8 backend with the default 40% tab width gives
 // `strip_layout(44, 8, 40)` — filter columns 0–3, agent panel columns
-// 4–23, divider columns 24–25, tab panel columns 26–43, each the full
-// 8 rows; the divider's three glyph rows sit on rows 2–4.
+// 4–23, divider columns 24–26, tab panel columns 27–43, each the full
+// 8 rows; the divider's three glyph rows sit on rows 0–2.
 
 /// [`focused_panes_state`] whose sidebar is a strip.
 fn focused_strip_state() -> AppState {
@@ -220,11 +220,11 @@ fn focus_fill_strip_panes_left_active_right_base() {
     );
 
     insta::assert_snapshot!(render_to_string(&mut state, 44, 8), @"
-    󱓯 1 ⓘ                — ▾
-     0 project
-    󰥔 0 ┃ 󰒲                
-    󰒲 1     Waiting for prom    No tools yet
-     0                     󰊢
+    󱓯 1 ⓘ                — ▾ 
+     0 project              
+    󰥔 0 ┃ 󰒲                 󰊢
+    󰒲 1     Waiting for prom     No tools yet
+     0
     ⇅ ⤢
     ");
 }
@@ -253,11 +253,11 @@ fn focus_fill_strip_activity_log_right_active_left_base() {
     );
 
     insta::assert_snapshot!(render_to_string(&mut state, 44, 8), @"
-    󱓯 1 ⓘ                — ▾
-     0 project
-    󰥔 0 ┃ 󰒲                
-    󰒲 1     Waiting for prom    No tools yet
-     0                     󰊢
+    󱓯 1 ⓘ                — ▾ 
+     0 project              
+    󰥔 0 ┃ 󰒲                 󰊢
+    󰒲 1     Waiting for prom     No tools yet
+     0
     ⇅ ⤢
     ");
 }

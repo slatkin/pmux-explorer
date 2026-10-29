@@ -116,15 +116,18 @@ pub fn draw_bottom(frame: &mut Frame, state: &mut AppState, area: Rect) {
     draw_bottom_content(frame, state, content_rect);
 }
 
-/// The strip's vertical tab divider: the 2-column band in the filter
+/// The strip's vertical tab divider: the 3-column band in the filter
 /// bar's background colour — the same band colour the column's rule
-/// wears, rendered after the focus fill so it wins over it — with each
-/// shown tab glyph on its own row. The run centers vertically and a
-/// run taller than the strip is cut at the bottom ([`divider_tab_rows`],
-/// the same layout the strip tab click test reads); the displayed tab
-/// keeps the bolded accent the rule gives it. The glyph rows are
-/// published as `FrameLayout::bottom_tab_targets` so a click
-/// hit-tests the rows that were drawn.
+/// wears, rendered after the focus fill so it wins over it. The
+/// band's first column is a spacing gutter before the glyphs; each
+/// shown tab glyph draws on its own row in the two columns after it.
+/// The run starts on the first row, matching the filter bar's chips on
+/// the strip's other side, and a run taller than the strip is cut at
+/// the bottom ([`divider_tab_rows`], the same layout the strip tab
+/// click test reads); the displayed tab keeps the bolded accent the
+/// rule gives it. The glyph rows are published as
+/// `FrameLayout::bottom_tab_targets` so a click hit-tests the rows
+/// that were drawn.
 pub fn draw_strip_divider(frame: &mut Frame, state: &mut AppState, area: Rect) {
     frame.render_widget(
         Block::default().style(Style::default().bg(state.theme.filter_bar_bg)),
@@ -137,7 +140,12 @@ pub fn draw_strip_divider(frame: &mut Frame, state: &mut AppState, area: Rect) {
         let Some(title) = titles.iter().find(|title| title.tab == Some(target.tab)) else {
             continue;
         };
-        let row = Rect::new(area.x, area.y + target.start, area.width, 1);
+        let row = Rect::new(
+            area.x + 1,
+            area.y + target.start,
+            area.width.saturating_sub(1),
+            1,
+        );
         frame.render_widget(Paragraph::new(Line::from(title.span.clone())), row);
     }
 }

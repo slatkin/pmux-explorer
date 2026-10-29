@@ -73,7 +73,7 @@ agent list does in a column. The pet SHALL NOT show in a strip.
 
 #### Scenario: the parts of a strip
 - **WHEN** a strip 120 columns wide and 12 rows high shows the Tools tab
-- **THEN** columns 0-3 are the filter bar, the agent panel follows, then the 2-column divider, then the tab panel to the right edge, and each part is 12 rows high
+- **THEN** columns 0-3 are the filter bar, the agent panel follows, then the 3-column divider, then the tab panel to the right edge, and each part is 12 rows high
 
 #### Scenario: more agents than rows
 - **WHEN** a strip shows more agent rows than its agent panel can hold
@@ -107,23 +107,25 @@ click on a chip SHALL select its category.
 ### Requirement: the strip divider holds the tabs
 
 In a strip, the divider between the agent panel and the tab panel SHALL be
-a vertical band 2 columns wide in the filter bar's background colour. It
-SHALL draw each shown tab glyph on its own row, in the same order as the
+a vertical band 3 columns wide in the filter bar's background colour: its
+first column a spacing gutter before the glyphs, each shown tab glyph
+drawn on its own row in the two columns after it, in the same order as the
 horizontal rule of a column, with the displayed tab in the accent colour.
-The run of glyphs SHALL be centered vertically, and a run taller than the
-strip SHALL be cut at the bottom.
+The run of glyphs SHALL start on the strip's first row — matching the
+filter bar's chips — and a run taller than the strip SHALL be cut at the
+bottom.
 
-#### Scenario: the run centers on the divider
+#### Scenario: the run starts on the first row
 - **WHEN** the strip is `H` rows high and the run has `R` glyph rows
-- **THEN** the run starts on row `floor((H - R) / 2)`
+- **THEN** the run draws on rows 0 to `R - 1`
 
 #### Scenario: the tabs for a Claude pane
 - **WHEN** a strip is 12 rows high and the focused pane runs Claude
-- **THEN** the divider draws the Tools, Tasks and Git glyphs on rows 4, 5 and 6
+- **THEN** the divider draws the Tools, Tasks and Git glyphs on rows 0, 1 and 2
 
 #### Scenario: the tabs for a pi pane
 - **WHEN** a strip is 12 rows high and the focused pane runs pi
-- **THEN** the divider draws the Tools, Thought, Tasks and Git glyphs on rows 4, 5, 6 and 7
+- **THEN** the divider draws the Tools, Thought, Tasks and Git glyphs on rows 0, 1, 2 and 3
 
 ### Requirement: a click on the divider selects a tab
 
