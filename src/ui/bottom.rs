@@ -11,7 +11,7 @@ use ratatui::{
     widgets::{Block, Paragraph},
 };
 
-use crate::state::{AppState, BottomTab, BottomTabTarget, divider_tab_rows};
+use crate::state::{AppState, BottomTab, BottomTabTarget};
 
 use super::text::{display_width, truncate_to_width};
 
@@ -81,9 +81,9 @@ pub(crate) fn top_line_border(
 }
 
 /// The column bottom panel: the rule row on top, the tab content under
-/// it. The rule is the column's tab bar; a strip keeps its tabs on the
-/// divider instead and calls [`draw_bottom_content`] with the tab
-/// panel's `Rect` directly.
+/// it. The rule is the column's tab bar; a strip keeps its tabs on a
+/// footer row instead and calls [`draw_bottom_content`] with the tab
+/// panel's content `Rect` directly.
 pub fn draw_bottom(frame: &mut Frame, state: &mut AppState, area: Rect) {
     let theme = &state.theme;
 
@@ -116,38 +116,56 @@ pub fn draw_bottom(frame: &mut Frame, state: &mut AppState, area: Rect) {
     draw_bottom_content(frame, state, content_rect);
 }
 
-/// The strip's vertical tab divider: the 3-column band in the filter
-/// bar's background colour — the same band colour the column's rule
-/// wears, rendered after the focus fill so it wins over it. The
-/// band's first column is a spacing gutter before the glyphs; each
-/// shown tab glyph draws on its own row in the two columns after it.
-/// The run starts on the first row, matching the filter bar's chips on
-/// the strip's other side, and a run taller than the strip is cut at
-/// the bottom ([`divider_tab_rows`], the same layout the strip tab
-/// click test reads); the displayed tab keeps the bolded accent the
-/// rule gives it. The glyph rows are published as
-/// `FrameLayout::bottom_tab_targets` so a click hit-tests the rows
-/// that were drawn.
-pub fn draw_strip_divider(frame: &mut Frame, state: &mut AppState, area: Rect) {
-    frame.render_widget(
-        Block::default().style(Style::default().bg(state.theme.filter_bar_bg)),
-        area,
-    );
-    let targets = divider_tab_rows(&state.shown_bottom_tabs(), area.height);
+/// The thin line drawn in the strip's 1-column divider — the left
+/// one-quarter block on the sidebar's own background, hugging the
+/// agent panel's edge. No band: the glyph alone is the splitter.
+const THIN_DIVIDER: &str = "\u{258e}";
+
+/// The strip's tab bar geometry: the 1-column divider line and the
+/// footer row at the bottom of the tab section. The divider is the
+/// [`THIN_DIVIDER`] glyph over whatever fill the sidebar paints — it
+/// carries no band of its own — while the footer is a band in the
+/// filter bar's background colour, the same band colour the column's
+/// rule wears — rendered after the focus fill so they win over it. The
+/// shown tab glyphs run horizontally on the footer, centred and
+/// truncated exactly as the column's rule draws them
+/// ([`top_line_border`], the same layout the rule and the tab click
+/// test read); the displayed tab keeps the bolded accent the rule
+/// gives it. The glyph columns are shifted by the footer's left edge
+/// and published as `FrameLayout::bottom_tab_targets` so a click
+/// hit-tests the columns that were drawn.
+pub fn draw_strip_divider(frame: &mut Frame, state: &mut AppState, divider: Rect, footer: Rect) {
+    // The divider column gets no band — just the glyph, foreground
+    // only, in the band's own colour, so it reads as a thin line over
+    // the sidebar's own fill.
+    let line_style = Style::default().fg(state.theme.filter_bar_bg);
+    let thin_line = std::iter::repeat_n(THIN_DIVIDER, divider.height as usize)
+        .collect::<Vec<_>>()
+        .join("\n");
+    frame.render_widget(Paragraph::new(thin_line).style(line_style), divider);
+    let band = Block::default().style(Style::default().bg(state.theme.filter_bar_bg));
+    frame.render_widget(band, footer);
+    let (line, targets) = strip_footer_line(state, footer);
     state.layout.bottom_tab_targets = targets;
-    let titles = build_tab_title(state);
-    for target in &state.layout.bottom_tab_targets {
-        let Some(title) = titles.iter().find(|title| title.tab == Some(target.tab)) else {
-            continue;
-        };
-        let row = Rect::new(
-            area.x + 1,
-            area.y + target.start,
-            area.width.saturating_sub(1),
-            1,
-        );
-        frame.render_widget(Paragraph::new(Line::from(title.span.clone())), row);
-    }
+    frame.render_widget(Paragraph::new(line), footer);
+}
+
+/// The footer's drawn line and its tab hitboxes: the rule's own
+/// centred run laid out over `footer`'s columns, with each hitbox
+/// shifted from run-relative to frame-absolute columns by `footer.x`.
+/// Both the renderer and the `#[cfg(test)]` publisher run through
+/// this, so a click can only ever land on a glyph actually drawn.
+fn strip_footer_line(state: &AppState, footer: Rect) -> (Line<'static>, Vec<BottomTabTarget>) {
+    let (line, targets) = top_line_border(&build_tab_title(state), Style::default(), footer.width);
+    let targets = targets
+        .into_iter()
+        .map(|mut target| {
+            target.start += footer.x;
+            target.end += footer.x;
+            target
+        })
+        .collect();
+    (line, targets)
 }
 
 /// The tab content the displayed tab selects, drawn over the whole
@@ -220,14 +238,15 @@ pub(crate) fn draw_tab_targets(state: &mut AppState, width: u16) {
     state.layout.bottom_tab_targets = targets;
 }
 
-/// Publish the strip divider's tab hitboxes the way `draw_strip_divider`
-/// does: run [`divider_tab_rows`] over the state's shown tabs at
-/// `height` rows and store the drawn rows. Tests use it instead of a
-/// rendered frame so the divider's unmoved-release click hit-tests the
-/// drawn rows, not a re-implemented walk.
+/// Publish the strip footer's tab hitboxes the way `draw_strip_divider`
+/// does: run [`strip_footer_line`] over a synthetic footer `x`/`width`
+/// and store the drawn column ranges. Tests use it instead of a
+/// rendered frame so the footer's unmoved-release click hit-tests the
+/// drawn columns, not a re-implemented walk.
 #[cfg(test)]
-pub(crate) fn draw_divider_tab_rows(state: &mut AppState, height: u16) {
-    state.layout.bottom_tab_targets = divider_tab_rows(&state.shown_bottom_tabs(), height);
+pub(crate) fn draw_strip_tab_targets(state: &mut AppState, x: u16, width: u16) {
+    let (_, targets) = strip_footer_line(state, Rect::new(x, 0, width, 1));
+    state.layout.bottom_tab_targets = targets;
 }
 
 #[cfg(test)]

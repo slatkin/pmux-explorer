@@ -19,6 +19,11 @@ pub(super) struct RowCtx<'a> {
     pub(super) theme: &'a ColorTheme,
     pub(super) bg: Option<Color>,
     pub(super) active: bool,
+    /// The branch label lifted onto the status row (strip only): the
+    /// strip's agent list has no row to spare for a dedicated branch
+    /// line, so the branch name rides after the pane name instead.
+    /// `None` on every other row and in the column layout.
+    pub(super) inline_branch: Option<String>,
 }
 
 impl RowCtx<'_> {

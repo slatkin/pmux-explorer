@@ -21,6 +21,11 @@ use status::status_row;
 
 pub(super) use branch::sidebar_remove_marker_col;
 
+/// The column-layout entry point — and the test-facing wrapper the
+/// row tests call: production callers go through
+/// [`render_pane_lines_with_repo_tag`] so the strip's inline repo tag
+/// has a way in, and this one always passes `None`.
+#[cfg(test)]
 #[allow(clippy::too_many_arguments)]
 pub(super) fn render_pane_lines_with_ports(
     pane: &crate::tmux::PaneInfo,
@@ -35,6 +40,76 @@ pub(super) fn render_pane_lines_with_ports(
     spinner_frame: usize,
     now: u64,
 ) -> Vec<Line<'static>> {
+    render_pane_lines(
+        pane,
+        git_info,
+        ports,
+        task_progress,
+        selected,
+        active,
+        width,
+        icons,
+        theme,
+        spinner_frame,
+        now,
+        false,
+    )
+}
+
+/// [`render_pane_lines_with_ports`] plus the strip's branch lift:
+/// `inline_branch` hands a non-empty branch label to the status row,
+/// so a strip's agent list needs no dedicated branch line.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn render_pane_lines_inline_branch(
+    pane: &crate::tmux::PaneInfo,
+    git_info: &crate::group::PaneGitInfo,
+    ports: Option<&[u16]>,
+    task_progress: Option<&crate::activity::TaskProgress>,
+    selected: bool,
+    active: bool,
+    width: usize,
+    icons: &StatusIcons,
+    theme: &ColorTheme,
+    spinner_frame: usize,
+    now: u64,
+    inline_branch: bool,
+) -> Vec<Line<'static>> {
+    render_pane_lines(
+        pane,
+        git_info,
+        ports,
+        task_progress,
+        selected,
+        active,
+        width,
+        icons,
+        theme,
+        spinner_frame,
+        now,
+        inline_branch,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn render_pane_lines(
+    pane: &crate::tmux::PaneInfo,
+    git_info: &crate::group::PaneGitInfo,
+    ports: Option<&[u16]>,
+    task_progress: Option<&crate::activity::TaskProgress>,
+    selected: bool,
+    active: bool,
+    width: usize,
+    icons: &StatusIcons,
+    theme: &ColorTheme,
+    spinner_frame: usize,
+    now: u64,
+    inline_branch: bool,
+) -> Vec<Line<'static>> {
+    // A strip lifts the branch label onto the status row; the branch
+    // row below then only renders for ports or the remove marker.
+    let lifted_branch = inline_branch
+        .then(|| crate::ui::text::branch_label(git_info))
+        .filter(|label| !label.is_empty());
     let bg = if selected {
         Some(theme.selection_bg)
     } else {
@@ -61,6 +136,7 @@ pub(super) fn render_pane_lines_with_ports(
         theme,
         bg,
         active,
+        inline_branch: lifted_branch,
     };
     let plain_ctx = RowCtx {
         marker_char: " ",
@@ -69,6 +145,7 @@ pub(super) fn render_pane_lines_with_ports(
         theme,
         bg: None,
         active,
+        inline_branch: None,
     };
 
     let mut out: Vec<Line<'static>> = Vec::with_capacity(8);
@@ -163,6 +240,7 @@ mod tests {
             theme,
             bg: None,
             active,
+            inline_branch: None,
         }
     }
 
@@ -1270,6 +1348,32 @@ mod tests {
         let p = pi_pane();
         let line = status_row(&p, &ctx, &StatusIcons::default(), 0, 0);
         insta::assert_snapshot!(line_text(&line), @"   ");
+    }
+
+    #[test]
+    fn status_row_lifted_branch_shows_after_pane_name() {
+        // The strip's lifted branch: the label after the pane name in
+        // the branch colour — the dedicated branch row is gone.
+        let theme = ColorTheme::default();
+        let mut ctx = test_ctx(&theme, 40, false);
+        ctx.inline_branch = Some("feat/auth".into());
+        let mut p = pi_pane();
+        p.pane_name = Some("my-task".into());
+        let line = status_row(&p, &ctx, &StatusIcons::default(), 0, 0);
+        insta::assert_snapshot!(line_text(&line), @"    my-task feat/auth");
+    }
+
+    #[test]
+    fn status_row_lifted_branch_truncates_to_fit() {
+        // A tight row cuts the branch with an ellipsis — the pane
+        // name is the row's identity, the branch only its context.
+        let theme = ColorTheme::default();
+        let mut ctx = test_ctx(&theme, 20, false);
+        ctx.inline_branch = Some("feat/auth".into());
+        let mut p = pi_pane();
+        p.pane_name = Some("my-task".into());
+        let line = status_row(&p, &ctx, &StatusIcons::default(), 0, 0);
+        insta::assert_snapshot!(line_text(&line), @"    my-task feat/au…");
     }
 
     #[test]

@@ -6,8 +6,45 @@ use ratatui::{
 use super::ctx::RowCtx;
 use crate::pmux_task::PmuxTaskKind;
 use crate::tmux::PaneStatus;
+use crate::ui::colors::ColorTheme;
 use crate::ui::icons::StatusIcons;
 use crate::ui::text::{display_width, elapsed_label, truncate_to_width};
+
+/// The badge's colour: a subagent badge carries its own override,
+/// otherwise the permission mode's colour — the same table the
+/// status row has always used.
+fn badge_color(
+    pane: &crate::tmux::PaneInfo,
+    badge_override: Option<Color>,
+    theme: &ColorTheme,
+) -> Color {
+    use crate::tmux::PermissionMode;
+    badge_override.unwrap_or(match pane.permission_mode {
+        PermissionMode::BypassPermissions => theme.badge_danger,
+        PermissionMode::Auto => theme.badge_auto,
+        PermissionMode::DontAsk => theme.badge_auto,
+        PermissionMode::Plan => theme.badge_plan,
+        PermissionMode::AcceptEdits => theme.badge_auto,
+        PermissionMode::Defer => theme.badge_auto,
+        PermissionMode::Default => theme.text_muted,
+    })
+}
+
+/// The lifted branch label for the status row: the branch name after
+/// the pane name, sharing the pane name's budget — the pane name is
+/// the row's identity, the branch only its context, so the branch is
+/// the first thing a tight row drops.
+fn inline_branch_label(
+    ctx: &RowCtx,
+    pane_name: Option<&str>,
+    title_budget: usize,
+) -> Option<String> {
+    let branch = ctx.inline_branch.as_deref()?;
+    let used = pane_name.map_or(0, |name| 1 + display_width(name));
+    let budget = title_budget.saturating_sub(used + 1);
+    let text = (budget > 0).then(|| truncate_to_width(branch, budget))?;
+    (!text.is_empty()).then_some(text)
+}
 
 pub(super) fn status_row(
     pane: &crate::tmux::PaneInfo,
@@ -16,7 +53,6 @@ pub(super) fn status_row(
     spinner_frame: usize,
     now: u64,
 ) -> Line<'static> {
-    use crate::tmux::PermissionMode;
     let theme = ctx.theme;
 
     let (icon, pulse_color) = running_icon_for(&pane.status, spinner_frame, icons);
@@ -57,10 +93,11 @@ pub(super) fn status_row(
         1 + display_width(agent_label)
     };
     let fixed_width = display_width(icon) + agent_width + badge_extra + display_width(badge);
-    // Reserve room for the icon, the agent label, the badge, and the
-    // elapsed label; the pane name gets what remains and takes the
-    // ellipsis when cut. The agent label itself is never truncated, and
-    // the elapsed-truncation fallback below stays in place.
+    // Reserve room for the icon, the agent label, the badge and the
+    // elapsed label; the pane name and the lifted branch share what
+    // remains and take the ellipsis when cut. The agent label itself
+    // is never truncated, and the elapsed-truncation fallback below
+    // stays in place.
     let elapsed_width = display_width(&elapsed);
     let elapsed_gap = usize::from(elapsed_width > 0);
     let title_budget = ctx
@@ -72,10 +109,14 @@ pub(super) fn status_row(
         .as_deref()
         .filter(|_| name_budget > 0)
         .map(|name| truncate_to_width(name, name_budget));
+    let branch_label = inline_branch_label(ctx, pane_name.as_deref(), title_budget);
 
     let mut left_width = fixed_width;
     if let Some(name) = &pane_name {
         left_width += 1 + display_width(name);
+    }
+    if let Some(label) = &branch_label {
+        left_width += 1 + display_width(label);
     }
     let available_for_elapsed = ctx.inner_width.saturating_sub(left_width);
     let elapsed = truncate_to_width(&elapsed, available_for_elapsed);
@@ -106,24 +147,21 @@ pub(super) fn status_row(
         ));
     }
     if !badge.is_empty() {
-        let badge_color = badge_override.unwrap_or(match pane.permission_mode {
-            PermissionMode::BypassPermissions => theme.badge_danger,
-            PermissionMode::Auto => theme.badge_auto,
-            PermissionMode::DontAsk => theme.badge_auto,
-            PermissionMode::Plan => theme.badge_plan,
-            PermissionMode::AcceptEdits => theme.badge_auto,
-            PermissionMode::Defer => theme.badge_auto,
-            PermissionMode::Default => theme.text_muted,
-        });
         left_spans.push(Span::styled(
             format!(" {}", badge),
-            ctx.apply_bg(Style::default().fg(badge_color)),
+            ctx.apply_bg(Style::default().fg(badge_color(pane, badge_override, theme))),
         ));
     }
     if let Some(name) = &pane_name {
         left_spans.push(Span::styled(
             format!(" {name}"),
             ctx.apply_bg(Style::default().fg(title_fg)),
+        ));
+    }
+    if let Some(label) = &branch_label {
+        left_spans.push(Span::styled(
+            format!(" {label}"),
+            ctx.apply_bg(Style::default().fg(theme.branch)),
         ));
     }
 

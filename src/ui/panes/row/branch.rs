@@ -65,19 +65,22 @@ pub(super) fn branch_ports_row(
     let branch = crate::ui::text::branch_label(git_info);
     let port_text = port_display_text(ports);
 
-    if branch.is_empty() && port_text.is_none() {
+    // The sidebar-spawned remove affordance is pinned to the right
+    // edge, mirroring the repo header's right-aligned `+` spawn
+    // button. When ports are also present they stack to the left of
+    // the `×`, separated by a single space.
+    let emit_remove_marker = sidebar_spawned && branch.starts_with("+ ");
+
+    // A strip lifts the branch onto the status row (`ctx.inline_branch`);
+    // this row then renders only for ports or the remove marker.
+    let show_branch = !branch.is_empty() && ctx.inline_branch.is_none();
+    if !show_branch && port_text.is_none() && !emit_remove_marker {
         return None;
     }
 
     let theme = ctx.theme;
     let left_prefix = BRANCH_ROW_LEFT_PREFIX;
     let right_prefix = BRANCH_ROW_PORT_PREFIX;
-
-    // The sidebar-spawned remove affordance is pinned to the right
-    // edge, mirroring the repo header's right-aligned `+` spawn
-    // button. When ports are also present they stack to the left of
-    // the `×`, separated by a single space.
-    let emit_remove_marker = sidebar_spawned && branch.starts_with("+ ");
 
     let mut right_spans: Vec<Span<'static>> = Vec::new();
     let mut right_width: usize = 0;
@@ -105,7 +108,7 @@ pub(super) fn branch_ports_row(
         right_width += 1;
     }
 
-    let (left_spans, left_width) = if branch.is_empty() {
+    let (left_spans, left_width) = if !show_branch {
         (vec![], 0)
     } else {
         let left_room = ctx.inner_width.saturating_sub(right_width);

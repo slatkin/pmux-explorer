@@ -180,8 +180,9 @@ fn draw_column(frame: &mut Frame, state: &mut AppState, area: Rect) {
 }
 
 /// The strip layout: two panels side by side — the vertical filter bar
-/// and the agent panel on the left (the agent section), the tab
-/// divider and the tab panel on the right (the tab section). No pet:
+/// and the agent panel on the left (the agent section), the thin
+/// divider line and the tab panel on the right (the tab section), with
+/// the tab bar as a footer row across the tab section's bottom. No pet:
 /// a strip shows none (the `strip-layout` capability). The drawn
 /// geometry goes into `FrameLayout::strip` so the mouse handlers
 /// hit-test the panels the frame actually drew.
@@ -203,7 +204,7 @@ fn draw_strip(frame: &mut Frame, state: &mut AppState, area: Rect) {
     // column-shaped hit test can never fire on strip-drawn state.
     state.layout.bottom_panel_height = 0;
     state.layout.filter_bar_width = 0;
-    if strip.tabs.is_none() {
+    if strip.footer.is_none() {
         state.layout.bottom_tab_targets.clear();
     }
 
@@ -236,9 +237,11 @@ fn draw_strip(frame: &mut Frame, state: &mut AppState, area: Rect) {
 
     panes::draw_strip_filter_bar(frame, state, strip.filter);
     panes::draw_agents(frame, state, strip.agents, false);
-    if let (Some(divider), Some(tabs)) = (strip.divider, strip.tabs) {
-        bottom::draw_strip_divider(frame, state, divider);
-        bottom::draw_bottom_content(frame, state, tabs);
+    if let (Some(divider), Some(footer), Some(tabs)) = (strip.divider, strip.footer, strip.tabs) {
+        bottom::draw_strip_divider(frame, state, divider, footer);
+        // The footer's row belongs to the tab bar, not the content.
+        let content = Rect::new(tabs.x, tabs.y, tabs.width, tabs.height.saturating_sub(1));
+        bottom::draw_bottom_content(frame, state, content);
     }
 }
 

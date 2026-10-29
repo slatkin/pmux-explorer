@@ -31,10 +31,7 @@ pub use layout::{
     BottomTabTarget, FrameLayout, HyperlinkOverlay, LayoutKind, RepoSpawnTarget, RowTarget,
     SpawnRemoveTarget, SplitDrag, StripLayout,
 };
-pub use layout::{
-    cols_for_percent, divider_tab_rows, filter_column_layout, strip_layout,
-    strip_layout_for_tab_cols,
-};
+pub use layout::{cols_for_percent, filter_column_layout, strip_layout, strip_layout_for_tab_cols};
 pub(crate) use layout::{filter_bar_layout, split_rows};
 pub(crate) use notices::debug_forced_display;
 pub use notices::{ClaudePluginNotice, NoticesCopyTarget, NoticesMissingHookGroup, NoticesState};
@@ -1608,7 +1605,8 @@ mod tests {
     // ─── strip press routing ──────────────────────────────────────
 
     /// A strip state whose frame drew the 120×12, 40-percent layout:
-    /// filter 0..4, agents 4..72, divider 72..75, tabs 75..120. The
+    /// filter 0..4, agents 4..72, the divider line on column 72, tabs
+    /// 73..120, and the footer tab bar on row 11 spanning 72..120. The
     /// press routing tests read only the drawn `StripLayout`, the way
     /// the handlers do.
     fn strip_state() -> AppState {
@@ -1736,7 +1734,7 @@ mod tests {
     #[test]
     fn a_strip_press_on_the_divider_starts_a_strip_drag() {
         // The spec's geometry: at 40 percent of 120 columns the
-        // divider sits on columns 72-74 and holds 48 tab columns. A
+        // divider line sits on column 72 and holds 48 tab columns. A
         // press anywhere on the drawn divider starts a strip drag with
         // that size — and touches no column-side value.
         let mut state = strip_state();
@@ -1807,7 +1805,7 @@ mod tests {
     #[test]
     fn a_strip_drag_to_column_60_saves_50_percent() {
         // Spec "a drag to the left": a 120-column strip with the
-        // divider on columns 72-74 dragged to column 60 relays the
+        // divider on column 72 dragged to column 60 relays the
         // divider there and saves the 60 tab columns as 50 percent on
         // release — the column's bottom percent is never touched.
         let mut state = strip_state();
@@ -1866,19 +1864,32 @@ mod tests {
         );
     }
 
+    /// The footer column the Git glyph's drawn hitbox starts on: read
+    /// back off the published targets, the same values the frame's own
+    /// centering produced.
+    fn drawn_glyph_col(state: &AppState, tab: BottomTab) -> u16 {
+        state
+            .layout
+            .bottom_tab_targets
+            .iter()
+            .find(|target| target.tab == tab)
+            .map(|target| target.start)
+            .expect("the tab glyph is drawn on the footer")
+    }
+
     #[test]
     fn a_strip_drag_from_a_glyph_resizes_without_selecting_the_tab() {
-        // Spec "a drag that starts on a glyph": pressing the divider on
-        // the Git glyph's row and dragging to another column resizes
+        // Spec "a drag that starts on a glyph": pressing the footer on
+        // the Git glyph's column and dragging to another column resizes
         // the two panels; the tab selection must not follow the press.
         let mut state = strip_state();
         state.global.bottom_tab = BottomTab::GitStatus;
-        crate::ui::bottom::draw_divider_tab_rows(&mut state, 12);
+        crate::ui::bottom::draw_strip_tab_targets(&mut state, 72, 48);
+        let git_col = drawn_glyph_col(&state, BottomTab::GitStatus);
 
-        // Row 2 is the Git glyph's row (the run draws Tools, Tasks
-        // and Git on rows 0, 1 and 2).
-        state.handle_terminal_click(2, 72, 12);
-        state.handle_split_drag_move(2, 60, 12);
+        // Row 11 is the footer row of the drawn 12-row strip.
+        state.handle_terminal_click(11, git_col, 12);
+        state.handle_split_drag_move(11, 60, 12);
         state.end_split_drag(12);
 
         assert_eq!(
@@ -1893,21 +1904,22 @@ mod tests {
     }
 
     #[test]
-    fn an_unmoved_release_on_a_divider_glyph_selects_its_tab() {
+    fn an_unmoved_release_on_a_footer_glyph_selects_its_tab() {
         // Spec "a click on a glyph": press and release on the Git
-        // glyph's row with no move — the release selects the tab and
-        // the panel widths do not change.
+        // glyph's column of the footer with no move — the release
+        // selects the tab and the panel widths do not change.
         let mut state = strip_state();
         state.global.bottom_tab = BottomTab::Activity;
-        crate::ui::bottom::draw_divider_tab_rows(&mut state, 12);
+        crate::ui::bottom::draw_strip_tab_targets(&mut state, 72, 48);
+        let git_col = drawn_glyph_col(&state, BottomTab::GitStatus);
 
-        state.handle_terminal_click(2, 72, 12);
+        state.handle_terminal_click(11, git_col, 12);
         state.end_split_drag(12);
 
         assert_eq!(
             state.global.bottom_tab,
             BottomTab::GitStatus,
-            "row 2 is the Git glyph's row"
+            "the press column is the Git glyph's"
         );
         assert_eq!(
             state.global.tab_percent, 40,
@@ -1917,14 +1929,18 @@ mod tests {
     }
 
     #[test]
-    fn a_click_on_the_divider_band_changes_nothing() {
-        // Spec "a click on the band": a divider row with no glyph —
-        // row 5, below the run — is outside every hitbox, so neither
-        // the tab nor the panel widths may change.
+    fn a_click_on_the_footer_band_changes_nothing() {
+        // Spec "a click on the band": a footer column with no glyph —
+        // the footer's left edge, before the centered run — is outside
+        // every hitbox, so neither the tab nor the panel widths may
+        // change. The thin divider line keeps the same rule: a press
+        // released on the line above the footer selects nothing.
         let mut state = strip_state();
         state.global.bottom_tab = BottomTab::Tasks;
-        crate::ui::bottom::draw_divider_tab_rows(&mut state, 12);
+        crate::ui::bottom::draw_strip_tab_targets(&mut state, 72, 48);
 
+        state.handle_terminal_click(11, 72, 12);
+        state.end_split_drag(12);
         state.handle_terminal_click(5, 72, 12);
         state.end_split_drag(12);
 
@@ -1960,23 +1976,25 @@ mod tests {
 
     #[test]
     fn a_strip_move_within_the_divider_columns_stays_unmoved() {
-        // The divider is three columns wide: a move that stays inside
-        // it (press on column 72, drag event on column 73) is still the
-        // held press a release treats as a tab click — the same rule
-        // the column keeps for moves along its one-row rule.
+        // The divider is one column wide: a move that stays inside
+        // it (press on column 72, drag event still on column 72,
+        // another row) is still the held press a release treats as a
+        // click — and the line holds no glyphs, so that click selects
+        // nothing — the same rule the column keeps for moves along
+        // its one-row rule.
         let mut state = strip_state();
         state.global.bottom_tab = BottomTab::GitStatus;
-        crate::ui::bottom::draw_divider_tab_rows(&mut state, 12);
+        crate::ui::bottom::draw_strip_tab_targets(&mut state, 72, 48);
 
         state.handle_terminal_click(2, 72, 12);
-        state.handle_split_drag_move(2, 73, 12);
+        state.handle_split_drag_move(7, 72, 12);
         state.end_split_drag(12);
 
         assert!(!state.global.tab_percent_save_pending());
         assert_eq!(
             state.global.bottom_tab,
             BottomTab::GitStatus,
-            "the unmoved release is the click that selects"
+            "an unmoved release on the line selects no tab"
         );
     }
 
@@ -2008,8 +2026,8 @@ mod tests {
     #[test]
     fn a_strip_wheel_over_the_tab_panel_scrolls_the_tab() {
         // Column routing: column 80 is inside the drawn tab panel
-        // (75..120), so the wheel scrolls the displayed tab and never
-        // the agent list; the divider (columns 72-74) scrolls nothing.
+        // (73..120), so the wheel scrolls the displayed tab and never
+        // the agent list; the divider line (column 72) scrolls nothing.
         let mut state = strip_state();
         state.scrolls.panes = ScrollState {
             offset: 0,
@@ -2026,7 +2044,7 @@ mod tests {
         assert_eq!(state.activity.scroll.offset, 3);
         assert_eq!(state.scrolls.panes.offset, 0);
 
-        state.handle_mouse_scroll(7, 73, 12, 0, 3);
+        state.handle_mouse_scroll(7, 72, 12, 0, 3);
         assert_eq!(
             state.activity.scroll.offset, 3,
             "the divider has nothing to scroll"

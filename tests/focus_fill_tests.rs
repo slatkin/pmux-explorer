@@ -182,8 +182,8 @@ fn focus_fill_activity_log_bottom_active_top_base() {
 // section (the divider and the tab panel) on the right. Geometry: a
 // 44×8 backend with the default 40% tab width gives
 // `strip_layout(44, 8, 40)` — filter columns 0–3, agent panel columns
-// 4–23, divider columns 24–26, tab panel columns 27–43, each the full
-// 8 rows; the divider's three glyph rows sit on rows 0–2.
+// 4–23, the divider line on column 24, tab panel columns 25–43, each
+// the full 8 rows; the footer tab bar sits on row 7 spanning 24–43.
 
 /// [`focused_panes_state`] whose sidebar is a strip.
 fn focused_strip_state() -> AppState {
@@ -201,12 +201,14 @@ fn focus_fill_strip_panes_left_active_right_base() {
     let buf = render_to_buffer(&mut state, 44, 8);
 
     // The agent section on the left carries the active fill, the tab
-    // section on the right the base one. The divider band paints the
-    // filter-bar colour over its section fill, the way the column's
-    // rule row does.
+    // section on the right the base one. The divider column paints
+    // only the `▎` glyph — no band — so its cells carry the tab
+    // section's fill; the footer band still claims the column on its
+    // own row.
     assert_eq!(buf[(0, 0)].bg, TOP_FILL);
     assert_eq!(buf[(10, 6)].bg, TOP_FILL);
-    assert_eq!(buf[(24, 0)].bg, FILTER_BAR_BG);
+    assert_eq!(buf[(24, 0)].bg, BASE_FILL);
+    assert_eq!(buf[(24, 7)].bg, FILTER_BAR_BG);
     assert_eq!(buf[(30, 6)].bg, BASE_FILL);
     // No section carries the other section's fill: the selected
     // pane's rows keep their selection colour, which is neither.
@@ -220,12 +222,14 @@ fn focus_fill_strip_panes_left_active_right_base() {
     );
 
     insta::assert_snapshot!(render_to_string(&mut state, 44, 8), @"
-    󱓯 1 ⓘ                — ▾ 
-     0 project              
-    󰥔 0 ┃ 󰒲                 󰊢
-    󰒲 1     Waiting for prom     No tools yet
-     0
-    ⇅ ⤢
+    󱓯 1 ⓘ                — ▾▎
+     0 project             ▎
+    󰥔 0 ┃ 󰒲                ▎
+    󰒲 1     Waiting for prom▎   No tools yet
+     0                     ▎
+                            ▎
+                            ▎
+    ⇅ ⤢                           │  │ 󰊢
     ");
 }
 
@@ -238,10 +242,12 @@ fn focus_fill_strip_activity_log_right_active_left_base() {
 
     // ActivityLog focus moves the active fill to the tab section on
     // the right; the agent section on the left drops to the base one.
-    // The divider band keeps the filter-bar colour over its fill.
+    // The glyph-only divider column follows the tab section's fill;
+    // the footer band still claims the column on its own row.
     assert_eq!(buf[(0, 0)].bg, BASE_FILL);
     assert_eq!(buf[(10, 6)].bg, BASE_FILL);
-    assert_eq!(buf[(24, 0)].bg, FILTER_BAR_BG);
+    assert_eq!(buf[(24, 0)].bg, TOP_FILL);
+    assert_eq!(buf[(24, 7)].bg, FILTER_BAR_BG);
     assert_eq!(buf[(30, 6)].bg, TOP_FILL);
     assert!(
         !(0..8).any(|y| buf[(30, y)].bg == BASE_FILL),
@@ -253,12 +259,14 @@ fn focus_fill_strip_activity_log_right_active_left_base() {
     );
 
     insta::assert_snapshot!(render_to_string(&mut state, 44, 8), @"
-    󱓯 1 ⓘ                — ▾ 
-     0 project              
-    󰥔 0 ┃ 󰒲                 󰊢
-    󰒲 1     Waiting for prom     No tools yet
-     0
-    ⇅ ⤢
+    󱓯 1 ⓘ                — ▾▎
+     0 project             ▎
+    󰥔 0 ┃ 󰒲                ▎
+    󰒲 1     Waiting for prom▎   No tools yet
+     0                     ▎
+                            ▎
+                            ▎
+    ⇅ ⤢                           │  │ 󰊢
     ");
 }
 

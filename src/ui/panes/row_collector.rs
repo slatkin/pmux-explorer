@@ -5,7 +5,7 @@ use ratatui::{
 
 use super::SPAWN_BUTTON;
 use super::row;
-use crate::state::{AppState, Focus};
+use crate::state::{AppState, Focus, LayoutKind};
 use crate::ui::text::display_width;
 
 /// Build a repo group's header: the repo name at column 0, with the spawn
@@ -55,6 +55,9 @@ pub(super) fn collect(state: &AppState, width: u16) -> CollectedRows {
 
     let mut collected = CollectedRows::default();
     let filter = state.global.status_filter;
+    // A strip has no rows to spare for a dedicated branch line: the
+    // branch label rides the pane's status row instead.
+    let inline_branch = state.layout_kind == LayoutKind::Strip;
     let mut first_group = true;
     let mut row_index: usize = 0;
 
@@ -102,56 +105,81 @@ pub(super) fn collect(state: &AppState, width: u16) -> CollectedRows {
         collected.line_to_row.push(None);
 
         for (pane, git_info) in filtered_panes.iter() {
-            let is_selected = state.focus_state.focus == Focus::Panes
-                && row_index == state.global.selected_pane_row;
-
-            let is_active = state.focus_state.focused_pane_id.as_ref() == Some(&pane.pane_id);
-
-            let pane_state = state.pane_state(&pane.pane_id);
-            let ports = pane_state.map(|s| s.ports.as_slice());
-            let task_progress = pane_state.and_then(|s| s.task_progress.as_ref());
-            let status_line_idx = collected.lines.len();
-            let pane_lines = row::render_pane_lines_with_ports(
+            collect_pane(
+                &mut collected,
+                state,
                 pane,
                 git_info,
-                ports,
-                task_progress,
-                is_selected,
-                is_active,
+                row_index,
                 width,
-                &state.icons,
-                theme,
-                state.spinner_frame,
-                state.now,
+                inline_branch,
             );
-            let pane_line_count = pane_lines.len();
-            collected.lines.extend(pane_lines);
-            for _ in 0..pane_line_count {
-                collected.line_to_row.push(Some(row_index));
-            }
-
-            // The branch row is always `status_line_idx + 1` when
-            // `branch_ports_row` emits a line (which requires a
-            // non-empty branch). Look up the exact column of the
-            // trailing `×` from the row helper so the click target
-            // lines up with the rendered glyph even when the branch
-            // name truncates.
-            if pane.sidebar_spawned
-                && git_info.is_worktree
-                && pane_line_count >= 2
-                && let Some(x) =
-                    row::sidebar_remove_marker_col(git_info, ports, true, width.saturating_sub(2))
-            {
-                collected
-                    .pending_remove
-                    .push((status_line_idx + 1, x, pane.pane_id.clone()));
-            }
-
             row_index += 1;
         }
     }
 
     collected
+}
+
+/// Emit one pane's rows into `collected`: the status/branch/body
+/// lines with their `line_to_row` mappings, plus the pane-level
+/// click target the drawn glyph carries — the `×` remove marker on a
+/// spawn-created worktree's branch row.
+fn collect_pane(
+    collected: &mut CollectedRows,
+    state: &AppState,
+    pane: &crate::tmux::PaneInfo,
+    git_info: &crate::group::PaneGitInfo,
+    row_index: usize,
+    width: usize,
+    inline_branch: bool,
+) {
+    let theme = &state.theme;
+    let is_selected =
+        state.focus_state.focus == Focus::Panes && row_index == state.global.selected_pane_row;
+
+    let is_active = state.focus_state.focused_pane_id.as_ref() == Some(&pane.pane_id);
+
+    let pane_state = state.pane_state(&pane.pane_id);
+    let ports = pane_state.map(|s| s.ports.as_slice());
+    let task_progress = pane_state.and_then(|s| s.task_progress.as_ref());
+    let status_line_idx = collected.lines.len();
+    let pane_lines = row::render_pane_lines_inline_branch(
+        pane,
+        git_info,
+        ports,
+        task_progress,
+        is_selected,
+        is_active,
+        width,
+        &state.icons,
+        theme,
+        state.spinner_frame,
+        state.now,
+        inline_branch,
+    );
+    let pane_line_count = pane_lines.len();
+    collected.lines.extend(pane_lines);
+    for _ in 0..pane_line_count {
+        collected.line_to_row.push(Some(row_index));
+    }
+
+    // The branch row is always `status_line_idx + 1` when
+    // `branch_ports_row` emits a line (which requires a
+    // non-empty branch). Look up the exact column of the
+    // trailing `×` from the row helper so the click target
+    // lines up with the rendered glyph even when the branch
+    // name truncates.
+    if pane.sidebar_spawned
+        && git_info.is_worktree
+        && pane_line_count >= 2
+        && let Some(x) =
+            row::sidebar_remove_marker_col(git_info, ports, true, width.saturating_sub(2))
+    {
+        collected
+            .pending_remove
+            .push((status_line_idx + 1, x, pane.pane_id.clone()));
+    }
 }
 
 #[cfg(test)]
@@ -249,6 +277,70 @@ mod tests {
         assert!(
             collected.pending_spawn.is_empty(),
             "groups without repo_root must not produce spawn targets"
+        );
+    }
+
+    #[test]
+    fn collect_in_a_strip_lifts_the_branch_onto_the_status_row() {
+        // A strip draws no dedicated branch line: the status row
+        // carries the branch label, so a branch-only pane emits a
+        // single line under the repo header.
+        let mut state = AppState::new("%0".into());
+        state.layout_kind = crate::state::LayoutKind::Strip;
+        let git_info = PaneGitInfo {
+            repo_root: Some("/tmp/repo".into()),
+            branch: Some("main".into()),
+            is_worktree: false,
+            worktree_name: None,
+        };
+        state.repo_groups = vec![RepoGroup {
+            name: "repo".into(),
+            has_focus: false,
+            panes: vec![(make_pane("%1", PaneStatus::Running), git_info)],
+        }];
+        let collected = collect(&state, 40);
+        let line_text = |line: &Line<'_>| -> String {
+            line.spans
+                .iter()
+                .map(|span| span.content.as_ref())
+                .collect()
+        };
+        assert_eq!(collected.lines.len(), 2, "header + status row only");
+        let status = line_text(&collected.lines[1]);
+        assert!(
+            status.contains("main"),
+            "the status row carries the branch: {status:?}"
+        );
+    }
+
+    #[test]
+    fn collect_in_a_strip_keeps_the_ports_row() {
+        // Only the branch name lifts: a pane with listening ports
+        // still emits its second row for them.
+        let mut state = AppState::new("%0".into());
+        state.layout_kind = crate::state::LayoutKind::Strip;
+        let git_info = PaneGitInfo {
+            repo_root: Some("/tmp/repo".into()),
+            branch: Some("main".into()),
+            is_worktree: false,
+            worktree_name: None,
+        };
+        state.repo_groups = vec![RepoGroup {
+            name: "repo".into(),
+            has_focus: false,
+            panes: vec![(make_pane("%1", PaneStatus::Running), git_info)],
+        }];
+        state.pane_state_mut("%1").ports.extend_from_slice(&[8080]);
+        let collected = collect(&state, 40);
+        assert_eq!(collected.lines.len(), 3, "header + status row + ports row");
+        let ports_line: String = collected.lines[2]
+            .spans
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect();
+        assert!(
+            ports_line.contains(":8080"),
+            "the ports row still renders: {ports_line:?}"
         );
     }
 

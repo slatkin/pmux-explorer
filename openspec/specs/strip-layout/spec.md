@@ -66,14 +66,19 @@ option is not set or is empty, the height SHALL be `30%`.
 ### Requirement: a strip shows two panels side by side
 
 A strip SHALL show, from left to right: the vertical filter bar, the agent
-panel, the tab divider, and the tab panel. Each part SHALL use the full
-height of the strip. The agent panel SHALL show the repo header on its
-first row and the agent rows below it, and SHALL scroll vertically as the
-agent list does in a column. The pet SHALL NOT show in a strip.
+panel, the tab divider, and the tab panel. Each part except the footer
+SHALL use the full height of the strip. The agent panel SHALL show the
+repo header on its first row and the agent rows below it, and SHALL
+scroll vertically as the agent list does in a column. In a strip's
+agent list the branch name SHALL ride the pane's status row after the
+pane name instead of a dedicated branch row; that row SHALL still
+render when it keeps content of its own — listening ports or the
+remove `×` of a spawn-created worktree. The pet SHALL NOT show in a
+strip.
 
 #### Scenario: the parts of a strip
 - **WHEN** a strip 120 columns wide and 12 rows high shows the Tools tab
-- **THEN** columns 0-3 are the filter bar, the agent panel follows, then the 3-column divider, then the tab panel to the right edge, and each part is 12 rows high
+- **THEN** columns 0-3 are the filter bar, the agent panel follows, then the 1-column divider line, then the tab panel to the right edge, and the tab section's bottom row is the footer tab bar
 
 #### Scenario: more agents than rows
 - **WHEN** a strip shows more agent rows than its agent panel can hold
@@ -104,42 +109,44 @@ click on a chip SHALL select its category.
 - **WHEN** the user clicks the waiting chip in the strip filter bar
 - **THEN** the waiting category is selected and the agent panel shows only waiting agents
 
-### Requirement: the strip divider holds the tabs
+### Requirement: the strip's tab bar is a footer row
 
-In a strip, the divider between the agent panel and the tab panel SHALL be
-a vertical band 3 columns wide in the filter bar's background colour: its
-first column a spacing gutter before the glyphs, each shown tab glyph
-drawn on its own row in the two columns after it, in the same order as the
-horizontal rule of a column, with the displayed tab in the accent colour.
-The run of glyphs SHALL start on the strip's first row — matching the
-filter bar's chips — and a run taller than the strip SHALL be cut at the
-bottom.
+In a strip, the tab bar SHALL be the bottom row of the tab section — the
+divider column included — a horizontal band in the filter bar's
+background colour. It SHALL draw the shown tab glyphs in a centred
+horizontal run, in the same order and with the same styles as the
+column's rule — the displayed tab in the accent colour — and a run wider
+than the band SHALL be truncated. The divider between the agent panel
+and the tab panel SHALL be a single column drawing the left
+one-quarter block glyph on every row over the sidebar's own fill: a
+thin vertical line that carries no band and holds no tabs.
 
-#### Scenario: the run starts on the first row
-- **WHEN** the strip is `H` rows high and the run has `R` glyph rows
-- **THEN** the run draws on rows 0 to `R - 1`
+#### Scenario: the run is centred on the footer
+- **WHEN** the strip shows `R` tab glyphs
+- **THEN** the footer draws them centred horizontally on the tab section's bottom row
 
 #### Scenario: the tabs for a Claude pane
-- **WHEN** a strip is 12 rows high and the focused pane runs Claude
-- **THEN** the divider draws the Tools, Tasks and Git glyphs on rows 0, 1 and 2
+- **WHEN** a strip shows the tab section and the focused pane runs Claude
+- **THEN** the footer draws the Tools, Tasks and Git glyphs in that order
 
 #### Scenario: the tabs for a pi pane
-- **WHEN** a strip is 12 rows high and the focused pane runs pi
-- **THEN** the divider draws the Tools, Thought, Tasks and Git glyphs on rows 0, 1, 2 and 3
+- **WHEN** a strip shows the tab section and the focused pane runs pi
+- **THEN** the footer draws the Tools, Thought, Tasks and Git glyphs in that order
 
-### Requirement: a click on the divider selects a tab
+### Requirement: a click on the footer selects a tab
 
-When the user presses and releases the left mouse button on the divider
-without a move to a different column, a press on a glyph row SHALL select
-that tab on release. A press on another row of the divider SHALL change
-nothing. The hitboxes SHALL be the rows the divider draws.
+When the user presses and releases the left mouse button on the footer
+without a move to a different column, a press on a glyph's drawn columns
+SHALL select that tab on release. A press on a footer column with no
+glyph, or on the thin divider line, SHALL change nothing. The hitboxes
+SHALL be the columns the footer draws.
 
 #### Scenario: a click on a glyph
-- **WHEN** the Tools tab is selected and the user presses and releases on the Git glyph row of the divider
+- **WHEN** the Tools tab is selected and the user presses and releases on the Git glyph's columns of the footer
 - **THEN** the Git tab is selected and the panel widths do not change
 
 #### Scenario: a click on the band
-- **WHEN** the user presses and releases on a divider row that has no glyph
+- **WHEN** the user presses and releases on a footer column that has no glyph
 - **THEN** the tab and the panel widths do not change
 
 ### Requirement: the strip tab width is a percent of the strip width
@@ -184,12 +191,13 @@ show.
 
 ### Requirement: the user resizes the strip by dragging the divider
 
-When the user presses the left mouse button on the divider and moves the
-mouse to a different column before release, the divider SHALL follow the
-mouse column on each move, within the minimum widths. On release, the
-sidebar SHALL keep the new width and save it to `@sidebar_tab_width` as a
-percent of the strip width, rounded to the nearest percent. A drag that
-starts on a glyph SHALL resize and SHALL NOT change the tab.
+When the user presses the left mouse button on the divider line or the
+footer and moves the mouse to a different column before release, the
+divider SHALL follow the mouse column on each move, within the minimum
+widths. On release, the sidebar SHALL keep the new width and save it to
+`@sidebar_tab_width` as a percent of the strip width, rounded to the
+nearest percent. A drag that starts on a glyph SHALL resize and SHALL
+NOT change the tab.
 
 #### Scenario: a drag to the left
 - **WHEN** a strip is 120 columns wide and the divider starts at column 72
