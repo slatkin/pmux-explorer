@@ -477,11 +477,6 @@ mod tests {
         line.iter().map(|(text, _)| text.as_str()).collect()
     }
 
-    /// All (text, class) runs of one classified line.
-    fn runs(line: &[(String, Class)]) -> &[(String, Class)] {
-        line
-    }
-
     #[test]
     fn wrap_classified_string_token_keeps_class_across_lines() {
         // The quoted string wraps (the space inside it is a split point);

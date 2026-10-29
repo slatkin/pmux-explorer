@@ -1,5 +1,18 @@
 use super::{AppState, BottomTab, RepoFilter, StatusCounts, StatusFilter, clamp_bottom_height};
 
+/// Whether a sidebar instance is a full-height column or a full-width
+/// strip. The `@sidebar_position` value that made the sidebar picks it
+/// (`Left`/`Right` make a column, `Top`/`Bottom` a strip), and the
+/// layout is fixed for the life of the pane: a later option change, a
+/// resize, a side switch or a pop-out never crosses the kinds (the
+/// `strip-layout` capability). Every code path that differs between the
+/// two shapes branches on this value, never on the pane shape.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LayoutKind {
+    Column,
+    Strip,
+}
+
 #[derive(Debug, Clone)]
 pub struct RowTarget {
     pub pane_id: String,

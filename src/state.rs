@@ -27,8 +27,8 @@ pub use filter::{RepoFilter, StatusCounts, StatusFilter};
 pub use focus::{Focus, FocusState};
 pub use global::GlobalState;
 pub use layout::{
-    BottomTabTarget, FrameLayout, HyperlinkOverlay, RepoSpawnTarget, RowTarget, SpawnRemoveTarget,
-    SplitDrag,
+    BottomTabTarget, FrameLayout, HyperlinkOverlay, LayoutKind, RepoSpawnTarget, RowTarget,
+    SpawnRemoveTarget, SplitDrag,
 };
 pub(crate) use layout::{filter_bar_layout, split_rows};
 pub(crate) use notices::debug_forced_display;
