@@ -22,10 +22,10 @@
 
 ## 4. Strip drawing
 
-- [ ] 4.1 Split `bottom::draw_bottom` into the column rule and `draw_bottom_content`, and let `panes::draw_agents` draw without the filter row; verify that the whole column snapshot suite passes with no accepted snapshot change.
-- [ ] 4.2 Add the `Strip` branch to `ui::draw`: the two section fills, `draw_strip_filter_bar`, the agent panel, `draw_strip_divider` (band in the filter-bar background, glyphs, accent on the displayed tab, `bottom_tab_targets` written as rows) and the tab content; no pet. Store the drawn `StripLayout` in `FrameLayout`. Verify with inline `insta` snapshots in `tests/ui_snapshot.rs` for a 120x12 strip with the Tools tab, a pi pane, `@sidebar_tab_width 0`, and a 40-column strip.
-- [ ] 4.3 Draw the side-switch glyph `⇅` in a strip (dimmed while floating) and keep `⇄` in a column; verify with inline snapshots of the strip control row, docked and floating.
-- [ ] 4.4 Verify the strip fills with inline snapshots in `tests/focus_fill_tests.rs` for `Panes` focus and `ActivityLog` focus.
+- [x] 4.1 Split `bottom::draw_bottom` into the column rule and `draw_bottom_content`, and let `panes::draw_agents` draw without the filter row; verify that the whole column snapshot suite passes with no accepted snapshot change.
+- [x] 4.2 Add the `Strip` branch to `ui::draw`: the two section fills, `draw_strip_filter_bar`, the agent panel, `draw_strip_divider` (band in the filter-bar background, glyphs, accent on the displayed tab, `bottom_tab_targets` written as rows) and the tab content; no pet. Store the drawn `StripLayout` in `FrameLayout`. Verify with inline `insta` snapshots in `tests/ui_snapshot.rs` for a 120x12 strip with the Tools tab, a pi pane, `@sidebar_tab_width 0`, and a 40-column strip.
+- [x] 4.3 Draw the side-switch glyph `⇅` in a strip (dimmed while floating) and keep `⇄` in a column; verify with inline snapshots of the strip control row, docked and floating.
+- [x] 4.4 Verify the strip fills with inline snapshots in `tests/focus_fill_tests.rs` for `Panes` focus and `ActivityLog` focus.
 
 ## 5. Strip mouse input
 
