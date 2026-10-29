@@ -136,6 +136,13 @@ pub struct FrameLayout {
     /// frame and while the panel is hidden, when no label is
     /// clickable.
     pub bottom_tab_targets: Vec<BottomTabTarget>,
+    /// The strip's panel geometry as the last frame laid it out, while
+    /// this sidebar is a strip ([`LayoutKind::Strip`]). `None` before
+    /// the first frame, for a column (the field stays `None` there),
+    /// and while the tab panel is hidden — the mouse handlers branch on
+    /// it so a strip press routes by the panels the frame actually
+    /// drew.
+    pub strip: Option<StripLayout>,
 }
 
 pub(super) fn point_in_rect(row: u16, col: u16, rect: ratatui::layout::Rect) -> bool {

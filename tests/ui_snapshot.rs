@@ -4,7 +4,7 @@ mod test_helpers;
 use pmux_explorer::activity::{ActivityEntry, TaskProgress, TaskStatus};
 use pmux_explorer::group::{PaneGitInfo, RepoGroup};
 use pmux_explorer::pmux_task::PmuxTaskKind;
-use pmux_explorer::state::{Focus, PopupState, RepoFilter, StatusFilter};
+use pmux_explorer::state::{AppState, Focus, LayoutKind, PopupState, RepoFilter, StatusFilter};
 use pmux_explorer::tmux::{
     AgentType, PaneInfo, PaneStatus, PermissionMode, SessionInfo, SubagentInfo, SubagentParent,
     WindowInfo, WorktreeMetadata,
@@ -2436,5 +2436,95 @@ fn snapshot_subagent_identity_survives_repo_filter_hiding_parent() {
       ▷ orchestrator
                             │ 󰟶 │  │ 󰊢
                             No tools yet
+    ");
+}
+
+// ─── Strip snapshots ────────────────────────────────────────────────
+//
+// The strip's own shape: the vertical filter bar, the agent panel, the
+// 2-column tab divider and the tab panel side by side, each the full
+// strip height. The snapshots below pin the `strip-layout` spec's
+// scenarios — the parts of a 120-column strip, the Thought glyph a pi
+// pane adds to the divider run, a tab width of 0 (no divider, no tab
+// panel) and a strip too narrow for both panel minimums.
+
+/// A one-agent state whose sidebar is a strip `tab_percent` wide split.
+fn make_strip_state(agent: AgentType, status: PaneStatus, tab_percent: u8) -> AppState {
+    let pane = make_pane(agent, status);
+    let mut state = make_state(vec![SessionInfo {
+        session_name: "main".into(),
+        windows: vec![WindowInfo {
+            window_id: "@1".into(),
+            window_name: "project".into(),
+            window_active: true,
+            auto_rename: false,
+            panes: vec![pane.clone()],
+        }],
+    }]);
+    state.repo_groups = vec![make_repo_group("project", vec![pane])];
+    state.layout_kind = LayoutKind::Strip;
+    state.global.tab_percent = tab_percent;
+    state.rebuild_row_targets();
+    state
+}
+
+#[test]
+fn snapshot_strip_120x12_with_the_tools_tab() {
+    let mut state = make_strip_state(AgentType::Claude, PaneStatus::Idle, 40);
+    let output = render_to_string(&mut state, 120, 12);
+    insta::assert_snapshot!(output, @"
+    󱓯 1 ⓘ                                                                — ▾
+     0 project
+    󰥔 0 ┃ 󰒲 
+    󰒲 1     Waiting for prompt…
+     0                                                                     
+                                                                                              No tools yet
+                                                                            󰊢
+    ⇄ ⤢
+    ");
+}
+
+#[test]
+fn snapshot_strip_pi_pane_shows_the_thought_glyph() {
+    let mut state = make_strip_state(AgentType::Pi, PaneStatus::Running, 40);
+    let output = render_to_string(&mut state, 120, 12);
+    insta::assert_snapshot!(output, @"
+    󱓯 1 ⓘ                                                                — ▾
+     1 project
+    󰥔 0 ┃  
+    󰒲 0
+     0                                                                     
+                                                                            󰟶                  No tools yet
+                                                                            
+                                                                            󰊢
+    ⇄ ⤢
+    ");
+}
+
+#[test]
+fn snapshot_strip_tab_width_zero_hides_the_tab_panel() {
+    let mut state = make_strip_state(AgentType::Claude, PaneStatus::Idle, 0);
+    let output = render_to_string(&mut state, 120, 12);
+    insta::assert_snapshot!(output, @"
+    󱓯 1 ⓘ                                                                                                                — ▾
+     0 project
+    󰥔 0 ┃ 󰒲 
+    󰒲 1     Waiting for prompt…
+     0
+    ⇄ ⤢
+    ");
+}
+
+#[test]
+fn snapshot_strip_40_columns_has_no_tab_panel() {
+    let mut state = make_strip_state(AgentType::Claude, PaneStatus::Idle, 40);
+    let output = render_to_string(&mut state, 40, 12);
+    insta::assert_snapshot!(output, @"
+    󱓯 1 ⓘ                                — ▾
+     0 project
+    󰥔 0 ┃ 󰒲 
+    󰒲 1     Waiting for prompt…
+     0
+    ⇄ ⤢
     ");
 }

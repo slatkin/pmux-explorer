@@ -14,6 +14,8 @@ use ratatui::{
 
 use crate::state::{AppState, Focus, PopupState, RepoFilter, SpawnField};
 
+pub(crate) use filter_bar::draw_strip_filter_bar;
+
 pub(super) const SPAWN_BUTTON: &str = "+";
 
 /// Width of the clickable region around the `×` marker. One column of

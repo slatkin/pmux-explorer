@@ -15,8 +15,9 @@ use ratatui::{
     widgets::Block,
 };
 
-use crate::state::{AppState, Focus, clamp_bottom_height, split_rows};
+use crate::state::{AppState, Focus, LayoutKind, clamp_bottom_height, split_rows, strip_layout};
 use crate::tmux;
+use ratatui::layout::Rect;
 
 /// The bottom panel height used when `@sidebar_bottom_height` is unset,
 /// empty, or not an integer from 0 to 100, as a percent of the sidebar
@@ -79,7 +80,16 @@ pub fn pet_enabled_from_tmux() -> bool {
 pub fn draw(frame: &mut Frame, state: &mut AppState) {
     state.layout.hyperlink_overlays.clear();
     let area = frame.area();
+    match state.layout_kind {
+        LayoutKind::Strip => draw_strip(frame, state, area),
+        LayoutKind::Column => draw_column(frame, state, area),
+    }
+}
 
+/// The column layout: the agent part on top, the bottom panel (rule +
+/// tab content) under it, the pet band between them when the pet is
+/// on. The sidebar's original shape; the strip's twin is [`draw_strip`].
+fn draw_column(frame: &mut Frame, state: &mut AppState, area: Rect) {
     // While a split drag has moved, the frame draws the drag's rows —
     // the rule follows the mouse row and no percent value is adopted
     // during the drag; the release path, not a tick, writes the
@@ -163,6 +173,59 @@ pub fn draw(frame: &mut Frame, state: &mut AppState) {
             let running_count = state.running_count();
             pet::draw_pet(frame, state, pet_area, running_count);
         }
+    }
+}
+
+/// The strip layout: two panels side by side — the vertical filter bar
+/// and the agent panel on the left (the agent section), the tab
+/// divider and the tab panel on the right (the tab section). No pet:
+/// a strip shows none (the `strip-layout` capability). The drawn
+/// geometry goes into `FrameLayout::strip` so the mouse handlers
+/// hit-test the panels the frame actually drew.
+fn draw_strip(frame: &mut Frame, state: &mut AppState, area: Rect) {
+    let strip = strip_layout(area.width, area.height, state.global.tab_percent);
+    state.layout.strip = Some(strip);
+    // The strip has no bottom panel and no horizontal filter row:
+    // clear the column geometry a previous frame may have left, so a
+    // column-shaped hit test can never fire on strip-drawn state.
+    state.layout.bottom_panel_height = 0;
+    state.layout.filter_bar_width = 0;
+    if strip.tabs.is_none() {
+        state.layout.bottom_tab_targets.clear();
+    }
+
+    // The two section fills at all times — the keyboard-owning section
+    // gets the active fill, the other the base one: Filter/Panes focus
+    // owns the agent section on the left, ActivityLog focus the tab
+    // section on the right. Ratatui styles patch: later spans keep
+    // their own `bg` (selection rows, popups), and cells nothing draws
+    // on keep the fill.
+    let theme = &state.theme;
+    let (agent_bg, tab_bg) = if state.focus_state.focus != Focus::ActivityLog {
+        (theme.focus_active_bg, theme.focus_bg)
+    } else {
+        (theme.focus_bg, theme.focus_active_bg)
+    };
+    frame.render_widget(
+        Block::default().style(Style::default().bg(agent_bg)),
+        strip.filter,
+    );
+    frame.render_widget(
+        Block::default().style(Style::default().bg(agent_bg)),
+        strip.agents,
+    );
+    if let Some(divider) = strip.divider {
+        frame.render_widget(Block::default().style(Style::default().bg(tab_bg)), divider);
+    }
+    if let Some(tabs) = strip.tabs {
+        frame.render_widget(Block::default().style(Style::default().bg(tab_bg)), tabs);
+    }
+
+    panes::draw_strip_filter_bar(frame, state, strip.filter);
+    panes::draw_agents(frame, state, strip.agents, false);
+    if let (Some(divider), Some(tabs)) = (strip.divider, strip.tabs) {
+        bottom::draw_strip_divider(frame, state, divider);
+        bottom::draw_bottom_content(frame, state, tabs);
     }
 }
 
