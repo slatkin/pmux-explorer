@@ -10,9 +10,9 @@
 
 ## 2. Layout kind and shared tab width
 
-- [ ] 2.1 Add `LayoutKind { Column, Strip }` and `AppState::layout_kind`, read once at startup from the `PMUX_SIDEBAR_LAYOUT` environment variable in `src/app/setup.rs`, never from the pane option (missing or unknown value gives `Column`); verify with a unit test of the pure parse for `strip`, `column`, an unknown value and a missing value.
-- [ ] 2.2 Add `@sidebar_tab_width` (`SIDEBAR_TAB_WIDTH`) as a shared field in `GlobalState` with `last_saved_tab_percent`, `tab_percent_save_pending`, a save, a retry and adoption in `apply_all` blocked during a drag, placed before `SIDEBAR_REPO_FILTER` in `SHARED_OPTION_FIELDS`; verify with tests that copy the `bottom_percent` latch tests and a parse test for the reading format.
-- [ ] 2.3 Add `DEFAULT_TAB_PERCENT = 40` and the `@sidebar_tab_width 40` seed in `pmux-explorer.conf`; verify with a seed test. Add the option to `docs/state-management.md` and the website tmux-option page.
+- [x] 2.1 Add `LayoutKind { Column, Strip }` and `AppState::layout_kind`, read once at startup from the `PMUX_SIDEBAR_LAYOUT` environment variable in `src/app/setup.rs`, never from the pane option (missing or unknown value gives `Column`); verify with a unit test of the pure parse for `strip`, `column`, an unknown value and a missing value.
+- [x] 2.2 Add `@sidebar_tab_width` (`SIDEBAR_TAB_WIDTH`) as a shared field in `GlobalState` with `last_saved_tab_percent`, `tab_percent_save_pending`, a save, a retry and adoption in `apply_all` blocked during a drag, placed before `SIDEBAR_REPO_FILTER` in `SHARED_OPTION_FIELDS`; verify with tests that copy the `bottom_percent` latch tests and a parse test for the reading format.
+- [x] 2.3 Add `DEFAULT_TAB_PERCENT = 40` and the `@sidebar_tab_width 40` seed in `pmux-explorer.conf`; verify with a seed test. Add the option to `docs/state-management.md` and the website tmux-option page.
 
 ## 3. Strip geometry
 
