@@ -14,7 +14,8 @@
 //! tick, so a panel the user resized by hand is not fought while the
 //! window stays the same size.
 
-use crate::state::{PanelGeometry, panel_geometry};
+use crate::cli::toggle::SidebarPosition;
+use crate::state::{LayoutKind, PanelGeometry, panel_geometry};
 use crate::tmux;
 
 /// Width and position to re-assert for the floating panel, or `None` to
@@ -38,7 +39,15 @@ pub fn position_target(
     if window_width == last {
         return None;
     }
-    Some(panel_geometry(window_width, window_height))
+    // The guard is the column guard until the strip's own re-assert
+    // lands: a floating strip is not touched here yet.
+    Some(panel_geometry(
+        LayoutKind::Column,
+        SidebarPosition::Left,
+        window_width,
+        window_height,
+        0,
+    ))
 }
 
 /// The guard acts only while the pane is floating, only once the previous

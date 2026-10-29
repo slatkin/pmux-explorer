@@ -4,12 +4,12 @@ mod panes;
 mod query;
 mod types;
 
-pub(crate) use commands::switch_sidebar_sides;
 pub use commands::{
-    display_message, dock_pane, float_pane, isolate_from_live_server, kill_window, move_pane,
-    new_window, pane_active_border_args, pane_session_name, run_tmux, run_tmux_capture,
+    display_message, dock_pane, dock_strip_pane, float_pane, isolate_from_live_server, kill_window,
+    move_pane, new_window, pane_active_border_args, pane_session_name, run_tmux, run_tmux_capture,
     select_pane, send_command, set_pane_active_border_style, set_window_option, tmux_command,
 };
+pub(crate) use commands::{strip_dock_target, switch_sidebar_sides};
 pub use options::{
     AGENT_SESSION_PANE_OPTIONS, BG_CMD_PLACEHOLDER, NEVER_SWEPT_PANE_OPTIONS, PANE_AGENT,
     PANE_ATTENTION, PANE_BG_CMD, PANE_CWD, PANE_NAME, PANE_NOTIFICATION_RUN_ID,

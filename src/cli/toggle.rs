@@ -216,7 +216,7 @@ fn unique_window_paths(output: &str) -> Vec<(String, String)> {
 /// full-height column; `Top` and `Bottom` make a full-width strip (the
 /// `strip-layout` capability).
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum SidebarPosition {
+pub enum SidebarPosition {
     Left,
     Right,
     Top,

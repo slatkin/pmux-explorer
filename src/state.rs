@@ -1,5 +1,6 @@
 use std::time::Instant;
 
+use crate::cli::toggle::SidebarPosition;
 use crate::tmux::SidebarPaneInfo;
 use crate::ui::colors::ColorTheme;
 use crate::ui::icons::StatusIcons;
@@ -149,11 +150,19 @@ pub struct AppState {
     /// docked-vs-floating mode is read from this, never remembered
     /// separately.
     pub sidebar_pane: SidebarPaneInfo,
-    /// Docked width captured when the sidebar was popped out, restored
-    /// by the pop-in with `resize-pane -x`. `None` while docked and when
-    /// the pane was already floating when the sidebar started (nothing
-    /// to restore).
-    pub docked_width: Option<u16>,
+    /// Docked size captured when the sidebar was popped out, restored
+    /// by the pop-in (`resize-pane -x` for a column, `-y` for a strip):
+    /// the width of a column, the height of a strip. `None` while
+    /// docked and when the pane was already floating when the sidebar
+    /// started (nothing to restore).
+    pub docked_size: Option<u16>,
+    /// The edge a popped-out strip was docked at, captured with the
+    /// docked size on the way out — a floating pane is no longer at an
+    /// edge, so the pop-in cannot read the edge off the pane. `None`
+    /// for a column and when the pane was already floating when the
+    /// sidebar started; the strip pop-in then falls back to the bare
+    /// join.
+    pub docked_edge: Option<SidebarPosition>,
     /// Scroll offsets for the agents list and git tab. The Activity
     /// tab's scroll lives in [`ActivityState::scroll`], the Tasks tab's
     /// in [`TasksState::scroll`].
@@ -250,7 +259,8 @@ impl AppState {
             icons: StatusIcons::default(),
             git: crate::git::GitData::default(),
             sidebar_pane: SidebarPaneInfo::FALLBACK,
-            docked_width: None,
+            docked_size: None,
+            docked_edge: None,
             pane_states: PaneRuntimeMap::new(),
             timers: RefreshTimers::default(),
             popup: PopupState::None,

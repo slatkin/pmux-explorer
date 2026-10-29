@@ -191,6 +191,67 @@ fn join_pane_strip_move_args(pane: &str, target: &str, position: SidebarPosition
     args
 }
 
+/// Pure builder for the pop-in of a floating strip: the edge join of
+/// the side switch ([`join_pane_strip_move_args`]) when `edge_target`
+/// names the workspace pane to dock against, else the bare join the
+/// column pop-in uses ([`join_pane_dock_args`]) — a fallback that does
+/// not restore the full width, which is why a strip prefers the edge
+/// join.
+pub(crate) fn strip_dock_args(
+    pane: &str,
+    edge_target: Option<&str>,
+    edge: SidebarPosition,
+) -> Vec<String> {
+    match edge_target {
+        Some(target) => join_pane_strip_move_args(pane, target, edge),
+        None => join_pane_dock_args(pane),
+    }
+}
+
+/// Dock floating strip `pane` at `edge` against `edge_target` (see
+/// [`strip_dock_args`]); the caller restores the docked height with
+/// `resize-pane -y` after the join succeeds.
+pub fn dock_strip_pane(pane: &str, edge_target: &str, edge: SidebarPosition) -> Result<(), String> {
+    let owned = strip_dock_args(pane, Some(edge_target), edge);
+    let args: Vec<&str> = owned.iter().map(String::as_str).collect();
+    run_tmux_capture(&args).map(|_| ())
+}
+
+/// The workspace lines of `output` (a `#{pane_top} #{pane_height}
+/// #{pane_id}` listing) whose pane is not `sidebar` itself, in
+/// encounter order — the input [`target_pane_for_strip_position`] picks
+/// a strip's edge target from.
+fn strip_workspace_listing(output: &str, sidebar: &str) -> String {
+    output
+        .lines()
+        .filter(|line| line.split_whitespace().nth(2) != Some(sidebar))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// The workspace pane to dock a floating strip against at `edge`, read
+/// from the sidebar pane's own window (tmux resolves a pane target of
+/// `list-panes` to its window): the panes' vertical geometry, the
+/// floating sidebar itself excluded. `None` when tmux cannot be
+/// reached or no other pane parses — the pop-in then falls back to the
+/// bare join.
+pub(crate) fn strip_dock_target(sidebar: &str, edge: SidebarPosition) -> Option<String> {
+    let output = run_tmux(&[
+        "list-panes",
+        "-t",
+        sidebar,
+        "-F",
+        "#{pane_top} #{pane_height} #{pane_id}",
+    ])?;
+    strip_dock_target_from(&output, sidebar, edge)
+}
+
+/// [`strip_dock_target`]'s choice over an already-fetched listing —
+/// split out so the target choice is unit-testable without a live tmux.
+fn strip_dock_target_from(output: &str, sidebar: &str, edge: SidebarPosition) -> Option<String> {
+    target_pane_for_strip_position(&strip_workspace_listing(output, sidebar), edge)
+}
+
 /// Move `pane` (a window's sidebar) to the edge `position` names: a
 /// column joins left or right (the horizontal builder), a strip joins
 /// top or bottom (the vertical twin). The pane's process is untouched
@@ -647,6 +708,69 @@ mod tests {
         assert_eq!(
             join_pane_strip_move_args("%5", "%2", SidebarPosition::Bottom),
             vec!["join-pane", "-v", "-f", "-d", "-s", "%5", "-t", "%2"]
+        );
+    }
+
+    #[test]
+    fn strip_dock_args_take_the_edge_join_when_a_target_exists() {
+        // The strip pop-in reuses the side switch's edge join verbatim.
+        assert_eq!(
+            strip_dock_args("%5", Some("%2"), SidebarPosition::Bottom),
+            join_pane_strip_move_args("%5", "%2", SidebarPosition::Bottom)
+        );
+        assert_eq!(
+            strip_dock_args("%5", Some("%2"), SidebarPosition::Top),
+            join_pane_strip_move_args("%5", "%2", SidebarPosition::Top)
+        );
+    }
+
+    #[test]
+    fn strip_dock_args_fall_back_to_the_bare_join_without_a_target() {
+        assert_eq!(
+            strip_dock_args("%5", None, SidebarPosition::Bottom),
+            join_pane_dock_args("%5")
+        );
+        assert_eq!(
+            strip_dock_args("%5", None, SidebarPosition::Top),
+            vec!["join-pane", "-s", "%5"]
+        );
+    }
+
+    #[test]
+    fn strip_workspace_listing_drops_the_sidebar_itself() {
+        // The floating sidebar is a pane of its own window, so the
+        // listing must lose its line before the edge target is picked —
+        // otherwise the strip could dock against itself.
+        let listing = "0 24 %1\n24 6 %2\n";
+        assert_eq!(strip_workspace_listing(listing, "%2"), "0 24 %1");
+        // Only the sidebar: an empty workspace, the no-target case the
+        // bare-join fallback covers.
+        assert_eq!(strip_workspace_listing(listing, "%1"), "24 6 %2");
+        assert_eq!(strip_workspace_listing("0 30 %7", "%7"), "");
+    }
+
+    #[test]
+    fn strip_dock_target_picks_the_outermost_workspace_pane_from_the_listing() {
+        let listing = "0 24 %1\n24 6 %2\n0 10 %3\n";
+        // The floating sidebar %2 excluded, the largest bottom edge is
+        // %1 (0+24) for a bottom dock, the topmost pane %1 too (top 0).
+        assert_eq!(
+            strip_dock_target_from(listing, "%2", SidebarPosition::Bottom),
+            Some("%1".to_string())
+        );
+        assert_eq!(
+            strip_dock_target_from(listing, "%2", SidebarPosition::Top),
+            Some("%1".to_string())
+        );
+        // A listing of the sidebar alone names no target.
+        assert_eq!(
+            strip_dock_target_from("24 6 %2", "%2", SidebarPosition::Bottom),
+            None
+        );
+        // Malformed geometry lines are skipped like the sweep skips them.
+        assert_eq!(
+            strip_dock_target_from("0 x %1\n24 6 %2", "%2", SidebarPosition::Bottom),
+            None
         );
     }
 
