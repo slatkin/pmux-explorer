@@ -217,14 +217,29 @@ pub fn dock_strip_pane(pane: &str, edge_target: &str, edge: SidebarPosition) -> 
     run_tmux_capture(&args).map(|_| ())
 }
 
-/// The workspace lines of `output` (a `#{pane_top} #{pane_height}
-/// #{pane_id}` listing) whose pane is not `sidebar` itself, in
-/// encounter order — the input [`target_pane_for_strip_position`] picks
-/// a strip's edge target from.
+/// The workspace lines of `output` — a `#{pane_floating_flag}
+/// #{pane_top} #{pane_height} #{pane_id}` listing, or the same without
+/// the leading flag when tmux could not expand it — whose pane is
+/// neither `sidebar` itself nor floating, in encounter order: the
+/// input [`target_pane_for_strip_position`] picks a strip's edge
+/// target from. A floating pane is never a join target — `join-pane`
+/// onto one is refused — so another pane's scratch float must not be
+/// picked even when it sits outermost.
 fn strip_workspace_listing(output: &str, sidebar: &str) -> String {
     output
         .lines()
-        .filter(|line| line.split_whitespace().nth(2) != Some(sidebar))
+        .filter_map(|line| {
+            let fields: Vec<&str> = line.split_whitespace().collect();
+            // `flag top height pane_id`; a flag tmux could not expand
+            // (older than 3.8) collapses its slot, leaving three fields.
+            let (floating, workspace) = match fields.as_slice() {
+                [flag, top, height, pane] => (*flag == "1", [*top, *height, *pane]),
+                [top, height, pane] => (false, [*top, *height, *pane]),
+                _ => return None,
+            };
+            let keep = !floating && workspace[2] != sidebar;
+            keep.then(|| workspace.join(" "))
+        })
         .collect::<Vec<_>>()
         .join("\n")
 }
@@ -232,16 +247,16 @@ fn strip_workspace_listing(output: &str, sidebar: &str) -> String {
 /// The workspace pane to dock a floating strip against at `edge`, read
 /// from the sidebar pane's own window (tmux resolves a pane target of
 /// `list-panes` to its window): the panes' vertical geometry, the
-/// floating sidebar itself excluded. `None` when tmux cannot be
-/// reached or no other pane parses — the pop-in then falls back to the
-/// bare join.
+/// floating sidebar itself and any other floating pane excluded.
+/// `None` when tmux cannot be reached or no workspace pane parses —
+/// the pop-in then falls back to the bare join.
 pub(crate) fn strip_dock_target(sidebar: &str, edge: SidebarPosition) -> Option<String> {
     let output = run_tmux(&[
         "list-panes",
         "-t",
         sidebar,
         "-F",
-        "#{pane_top} #{pane_height} #{pane_id}",
+        "#{pane_floating_flag} #{pane_top} #{pane_height} #{pane_id}",
     ])?;
     strip_dock_target_from(&output, sidebar, edge)
 }
@@ -737,21 +752,47 @@ mod tests {
     }
 
     #[test]
-    fn strip_workspace_listing_drops_the_sidebar_itself() {
+    fn strip_workspace_listing_drops_the_sidebar_and_floating_panes() {
         // The floating sidebar is a pane of its own window, so the
         // listing must lose its line before the edge target is picked —
-        // otherwise the strip could dock against itself.
-        let listing = "0 24 %1\n24 6 %2\n";
+        // otherwise the strip could dock against itself. Any other
+        // floating pane is dropped too: joining onto a floating pane
+        // is refused.
+        let listing = "0 0 24 %1\n1 29 5 %3\n0 24 6 %2\n";
         assert_eq!(strip_workspace_listing(listing, "%2"), "0 24 %1");
         // Only the sidebar: an empty workspace, the no-target case the
         // bare-join fallback covers.
         assert_eq!(strip_workspace_listing(listing, "%1"), "24 6 %2");
-        assert_eq!(strip_workspace_listing("0 30 %7", "%7"), "");
+        assert_eq!(strip_workspace_listing("0 0 30 %7", "%7"), "");
+        // A flag tmux could not expand (older than 3.8) collapses its
+        // slot: the three-field shape keeps parsing, unflagged.
+        assert_eq!(
+            strip_workspace_listing("0 24 %1\n24 6 %2\n", "%2"),
+            "0 24 %1"
+        );
+    }
+
+    #[test]
+    fn strip_dock_target_skips_a_floating_pane_sitting_outermost() {
+        // The scratch float %3 sits outermost at the bottom edge
+        // (bottom 34 beats %1's 24) — but joining onto a floating pane
+        // is refused, so the edge target must skip past it to %1.
+        let listing = "0 0 24 %1\n1 29 5 %3\n0 24 6 %2\n";
+        assert_eq!(
+            strip_dock_target_from(listing, "%2", SidebarPosition::Bottom),
+            Some("%1".to_string())
+        );
+        // All workspace panes floating: no target at all — the bare
+        // join fallback.
+        assert_eq!(
+            strip_dock_target_from("1 0 24 %1\n0 24 6 %2", "%2", SidebarPosition::Bottom),
+            None
+        );
     }
 
     #[test]
     fn strip_dock_target_picks_the_outermost_workspace_pane_from_the_listing() {
-        let listing = "0 24 %1\n24 6 %2\n0 10 %3\n";
+        let listing = "0 0 24 %1\n0 24 6 %2\n0 0 10 %3\n";
         // The floating sidebar %2 excluded, the largest bottom edge is
         // %1 (0+24) for a bottom dock, the topmost pane %1 too (top 0).
         assert_eq!(
@@ -764,12 +805,12 @@ mod tests {
         );
         // A listing of the sidebar alone names no target.
         assert_eq!(
-            strip_dock_target_from("24 6 %2", "%2", SidebarPosition::Bottom),
+            strip_dock_target_from("0 24 6 %2", "%2", SidebarPosition::Bottom),
             None
         );
         // Malformed geometry lines are skipped like the sweep skips them.
         assert_eq!(
-            strip_dock_target_from("0 x %1\n24 6 %2", "%2", SidebarPosition::Bottom),
+            strip_dock_target_from("0 0 x %1\n0 24 6 %2", "%2", SidebarPosition::Bottom),
             None
         );
     }

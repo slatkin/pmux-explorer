@@ -80,6 +80,19 @@ pub fn panel_geometry(
 /// The edge a docked strip sits on, read off the pane probe's
 /// `#{pane_at_top}`: a pane touching the top edge is a top strip, any
 /// other reading a bottom strip. A column has no strip edge — `None`.
+/// The docked size a pop-out captures for the pop-in to restore: the
+/// size on the axis the layout docks along — the width of a column,
+/// the height of a strip. The other axis's size is the window's, not
+/// the sidebar's, and restoring it would size the pane wrong (a
+/// 40-column sidebar in a 30-row window would pop back in 30 columns
+/// wide).
+fn capture_docked_size(layout: LayoutKind, info: &SidebarPaneInfo) -> u16 {
+    match layout {
+        LayoutKind::Column => info.width,
+        LayoutKind::Strip => info.height,
+    }
+}
+
 fn strip_docked_edge(layout: LayoutKind, at_top: bool) -> Option<SidebarPosition> {
     match layout {
         LayoutKind::Strip => Some(if at_top {
@@ -213,7 +226,8 @@ impl AppState {
         // the docked size back from it, so the state's copy is the one
         // the pop-out acts on.
         self.sidebar_pane = info;
-        self.apply_pop_out(info.height, docked_edge, result);
+        let docked_size = capture_docked_size(self.layout_kind, &info);
+        self.apply_pop_out(docked_size, docked_edge, result);
     }
 
     fn pop_in_with(&mut self, info: SidebarPaneInfo) {
@@ -383,6 +397,22 @@ mod tests {
             panel_geometry(LayoutKind::Strip, SidebarPosition::Bottom, 120, 40, 30).height,
             30
         );
+    }
+
+    // ─── capture_docked_size ─────────────────────────────────────────
+
+    #[test]
+    fn capture_docked_size_takes_the_width_of_a_column_and_the_height_of_a_strip() {
+        // A 40-column sidebar in a 30-row window docks along the width
+        // axis: the pop-in's `resize-pane -x` must get 40 back, not the
+        // 30-row pane height the probe also carries (which would pop
+        // the column back in 30 columns wide). The strip's docked size
+        // is the height — the same probe, the other axis.
+        let mut info = SidebarPaneInfo::FALLBACK;
+        info.width = 40;
+        info.height = 30;
+        assert_eq!(capture_docked_size(LayoutKind::Column, &info), 40);
+        assert_eq!(capture_docked_size(LayoutKind::Strip, &info), 30);
     }
 
     // ─── apply_pop_out ───────────────────────────────────────────────
