@@ -10,6 +10,7 @@
 //! it grows past the maximum. Within the band the pane is left alone, so a
 //! manual size inside the band sticks.
 
+use crate::state::LayoutKind;
 use crate::tmux;
 
 /// Minimum width applied when `@sidebar_min_width` is unset.
@@ -33,6 +34,32 @@ fn parse_width(raw: Option<&str>) -> Option<u32> {
     raw.map(str::trim)
         .filter(|s| !s.is_empty())
         .and_then(|s| s.parse::<u32>().ok())
+}
+
+/// Width to request for the sidebar pane, or `None` to leave it alone.
+///
+/// A strip is never resized here: it is as wide as the window, so a
+/// `@sidebar_max_width` would shrink it into a narrow strip in a corner
+/// (design decision 10 of `add-strip-layout`). [`LayoutKind::Strip`]
+/// always returns `None`; a column gets the band rule below.
+///
+/// `min` is the parsed `@sidebar_min_width`: `None` (unset/invalid) means
+/// [`DEFAULT_MIN_WIDTH`] applies, `0` disables the floor. `max` is the
+/// parsed `@sidebar_max_width`: `None` or `0` disables the ceiling, and a
+/// maximum at or below the effective minimum is ignored — the two bounds
+/// would fight every tick, so the floor wins.
+///
+/// Returns `None` when the pane already sits inside the band.
+pub fn guard_target(
+    layout: LayoutKind,
+    pane_width: u16,
+    min: Option<u32>,
+    max: Option<u32>,
+) -> Option<u32> {
+    match layout {
+        LayoutKind::Strip => None,
+        LayoutKind::Column => resize_target(pane_width, min, max),
+    }
 }
 
 /// Width to request for the sidebar pane, or `None` to leave it alone.
@@ -61,14 +88,15 @@ pub fn resize_target(pane_width: u16, min: Option<u32>, max: Option<u32>) -> Opt
 /// sidebar's window is active: grow it back to `@sidebar_min_width` when
 /// squeezed below the minimum, shrink it to `@sidebar_max_width` when it
 /// grew past the maximum. A width of 0 (terminal size unknown) is ignored
-/// so a bad probe can never trigger a resize.
-pub fn enforce(pane_id: &str, pane_width: u16) {
+/// so a bad probe can never trigger a resize. A strip is never touched —
+/// see [`guard_target`].
+pub fn enforce(pane_id: &str, pane_width: u16, layout: LayoutKind) {
     if pane_width == 0 {
         return;
     }
     let min = parse_min_width(tmux::get_option(tmux::SIDEBAR_MIN_WIDTH).as_deref());
     let max = parse_max_width(tmux::get_option(tmux::SIDEBAR_MAX_WIDTH).as_deref());
-    if let Some(width) = resize_target(pane_width, min, max) {
+    if let Some(width) = guard_target(layout, pane_width, min, max) {
         let _ = tmux::run_tmux(&["resize-pane", "-t", pane_id, "-x", &width.to_string()]);
     }
 }
@@ -76,6 +104,25 @@ pub fn enforce(pane_id: &str, pane_width: u16) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn guard_target_leaves_a_strip_alone_at_any_width() {
+        // A strip is as wide as the window: the band rule would shrink it
+        // into a narrow strip in a corner, so no width is ever requested,
+        // not even for a pane far outside the band.
+        assert_eq!(guard_target(LayoutKind::Strip, 8, None, None), None);
+        assert_eq!(guard_target(LayoutKind::Strip, 8, Some(35), Some(60)), None);
+        assert_eq!(guard_target(LayoutKind::Strip, 200, None, Some(60)), None);
+    }
+
+    #[test]
+    fn guard_target_gives_a_column_the_band_rule() {
+        assert_eq!(
+            guard_target(LayoutKind::Column, 8, None, None),
+            resize_target(8, None, None)
+        );
+        assert_eq!(guard_target(LayoutKind::Column, 60, None, None), None);
+    }
 
     #[test]
     fn resize_target_applies_default_when_unset() {
