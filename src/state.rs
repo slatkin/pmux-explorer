@@ -28,8 +28,9 @@ pub use focus::{Focus, FocusState};
 pub use global::GlobalState;
 pub use layout::{
     BottomTabTarget, FrameLayout, HyperlinkOverlay, LayoutKind, RepoSpawnTarget, RowTarget,
-    SpawnRemoveTarget, SplitDrag,
+    SpawnRemoveTarget, SplitDrag, StripLayout,
 };
+pub use layout::{cols_for_percent, divider_tab_rows, filter_column_layout, strip_layout};
 pub(crate) use layout::{filter_bar_layout, split_rows};
 pub(crate) use notices::debug_forced_display;
 pub use notices::{ClaudePluginNotice, NoticesCopyTarget, NoticesMissingHookGroup, NoticesState};
