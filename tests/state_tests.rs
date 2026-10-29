@@ -1398,12 +1398,12 @@ fn floating_panel_clicks_hit_the_clamped_bottom_panel_geometry() {
         total_lines: 30,
         visible_height: 10,
     };
-    state.handle_mouse_scroll(24, TERM_HEIGHT, state.layout.bottom_panel_height, 3);
+    state.handle_mouse_scroll(24, 5, TERM_HEIGHT, state.layout.bottom_panel_height, 3);
     assert_eq!(
         state.scrolls.panes.offset, 3,
         "row 24 is a drawn agent row: the wheel scrolls the agents list"
     );
-    state.handle_mouse_scroll(28, TERM_HEIGHT, state.layout.bottom_panel_height, 3);
+    state.handle_mouse_scroll(28, 5, TERM_HEIGHT, state.layout.bottom_panel_height, 3);
     assert_eq!(
         state.activity.scroll.offset, 3,
         "row 28 is inside the drawn panel: the wheel scrolls the panel"

@@ -212,6 +212,16 @@ pub(crate) fn draw_tab_targets(state: &mut AppState, width: u16) {
     state.layout.bottom_tab_targets = targets;
 }
 
+/// Publish the strip divider's tab hitboxes the way `draw_strip_divider`
+/// does: run [`divider_tab_rows`] over the state's shown tabs at
+/// `height` rows and store the drawn rows. Tests use it instead of a
+/// rendered frame so the divider's unmoved-release click hit-tests the
+/// drawn rows, not a re-implemented walk.
+#[cfg(test)]
+pub(crate) fn draw_divider_tab_rows(state: &mut AppState, height: u16) {
+    state.layout.bottom_tab_targets = divider_tab_rows(&state.shown_bottom_tabs(), height);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

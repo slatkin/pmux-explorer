@@ -30,7 +30,10 @@ pub use layout::{
     BottomTabTarget, FrameLayout, HyperlinkOverlay, LayoutKind, RepoSpawnTarget, RowTarget,
     SpawnRemoveTarget, SplitDrag, StripLayout,
 };
-pub use layout::{cols_for_percent, divider_tab_rows, filter_column_layout, strip_layout};
+pub use layout::{
+    cols_for_percent, divider_tab_rows, filter_column_layout, strip_layout,
+    strip_layout_for_tab_cols,
+};
 pub(crate) use layout::{filter_bar_layout, split_rows};
 pub(crate) use notices::debug_forced_display;
 pub use notices::{ClaudePluginNotice, NoticesCopyTarget, NoticesMissingHookGroup, NoticesState};
@@ -1160,7 +1163,7 @@ mod tests {
         };
         // term_height=50, bottom_panel=20 → bottom starts at row 30
         // mouse at row 35 → in bottom panel
-        state.handle_mouse_scroll(35, 50, 20, 3);
+        state.handle_mouse_scroll(35, 5, 50, 20, 3);
         assert_eq!(state.activity.scroll.offset, 3);
         assert_eq!(state.scrolls.panes.offset, 0);
     }
@@ -1175,7 +1178,7 @@ mod tests {
         };
         // term_height=50, bottom_panel=20 → bottom starts at row 30
         // mouse at row 10 → in agents panel
-        state.handle_mouse_scroll(10, 50, 20, 3);
+        state.handle_mouse_scroll(10, 5, 50, 20, 3);
         assert_eq!(state.scrolls.panes.offset, 3);
         assert_eq!(state.activity.scroll.offset, 0);
     }
@@ -1188,7 +1191,7 @@ mod tests {
             total_lines: 40,
             visible_height: 20,
         };
-        state.handle_mouse_scroll(10, 50, 20, -3);
+        state.handle_mouse_scroll(10, 5, 50, 20, -3);
         assert_eq!(state.scrolls.panes.offset, 2);
     }
 
@@ -1203,7 +1206,7 @@ mod tests {
         };
         // term_height=50, bottom_panel=20 → bottom starts at row 30
         // mouse at exactly row 30 → in bottom panel
-        state.handle_mouse_scroll(30, 50, 20, 3);
+        state.handle_mouse_scroll(30, 5, 50, 20, 3);
         assert_eq!(state.scrolls.git.offset, 3);
         assert_eq!(state.scrolls.panes.offset, 0);
     }
@@ -1217,7 +1220,7 @@ mod tests {
             visible_height: 20,
         };
         // row 29, just above bottom_start=30
-        state.handle_mouse_scroll(29, 50, 20, 3);
+        state.handle_mouse_scroll(29, 5, 50, 20, 3);
         assert_eq!(state.scrolls.panes.offset, 3);
         assert_eq!(state.activity.scroll.offset, 0);
     }
@@ -1234,7 +1237,7 @@ mod tests {
             visible_height: 10,
         };
 
-        state.handle_mouse_scroll(35, 50, 20, 3);
+        state.handle_mouse_scroll(35, 5, 50, 20, 3);
         assert_eq!(state.tasks.scroll.offset, 3);
         assert_eq!(state.scrolls.panes.offset, 0);
     }
@@ -1343,9 +1346,9 @@ mod tests {
             total_lines: 30,
             visible_height: 10,
         };
-        state.handle_mouse_scroll(24, 38, state.layout.bottom_panel_height, 3);
+        state.handle_mouse_scroll(24, 5, 38, state.layout.bottom_panel_height, 3);
         assert_eq!(state.scrolls.panes.offset, 3);
-        state.handle_mouse_scroll(28, 38, state.layout.bottom_panel_height, 3);
+        state.handle_mouse_scroll(28, 5, 38, state.layout.bottom_panel_height, 3);
         assert_eq!(state.activity.scroll.offset, 3);
         assert_eq!(state.scrolls.panes.offset, 3);
     }
@@ -1372,7 +1375,7 @@ mod tests {
         );
         assert!(state.split_drag.is_some(), "the press starts the drag");
 
-        state.handle_split_drag_move(20, 40);
+        state.handle_split_drag_move(20, 30, 40);
         let drag = state.split_drag.expect("the drag must still be live");
         assert!(drag.moved, "moving to row 20 is a drag, not a held press");
         assert_eq!(drag.size, 20, "the rule follows the mouse row");
@@ -1398,7 +1401,7 @@ mod tests {
         state.layout.bottom_panel_height = 12;
 
         assert!(state.handle_terminal_click(28, 30, 40));
-        state.handle_split_drag_move(1, 40);
+        state.handle_split_drag_move(1, 30, 40);
 
         let drag = state.split_drag.expect("the drag must still be live");
         assert_eq!(drag.size, 37, "37 bottom rows put the drawn rule on row 3");
@@ -1469,7 +1472,7 @@ mod tests {
 
         // Press on col 19, the Tasks glyph, then drag.
         state.handle_terminal_click(28, 19, 40);
-        state.handle_split_drag_move(20, 40);
+        state.handle_split_drag_move(20, 30, 40);
         state.end_split_drag(40);
 
         assert_eq!(
@@ -1491,7 +1494,7 @@ mod tests {
         let mut state = AppState::new("%99".into());
         state.layout.bottom_panel_height = 12;
 
-        state.handle_split_drag_move(20, 40);
+        state.handle_split_drag_move(20, 30, 40);
         state.end_split_drag(40);
 
         assert!(state.split_drag.is_none());
@@ -1517,7 +1520,7 @@ mod tests {
         // Drag: press on the rule at row 28, move to row 35 (5 rows),
         // no release reaches the pane.
         state.handle_terminal_click(28, 30, 40);
-        state.handle_split_drag_move(35, 40);
+        state.handle_split_drag_move(35, 30, 40);
 
         // A new press on the rule (row 28 — the frame never redrew, so
         // the drawn geometry is unchanged) ends the stale drag and
@@ -1789,6 +1792,235 @@ mod tests {
             "a strip drag's save must not touch the bottom percent"
         );
         assert!(!state.global.percent_save_pending());
+    }
+
+    #[test]
+    fn a_strip_drag_to_column_60_saves_50_percent() {
+        // Spec "a drag to the left": a 120-column strip with the
+        // divider on columns 72-73 dragged to column 60 relays the
+        // divider there and saves the 60 tab columns as 50 percent on
+        // release — the column's bottom percent is never touched.
+        let mut state = strip_state();
+        state.global.bottom_percent = 30;
+        state.global.tab_percent = 40;
+
+        assert!(state.handle_terminal_click(5, 72, 12));
+        state.handle_split_drag_move(5, 60, 12);
+
+        let drag = state.split_drag.expect("the drag must still be live");
+        assert!(drag.moved, "moving to column 60 is a drag, not a hold");
+        assert_eq!(drag.size, 60, "the divider follows the mouse column");
+        assert_eq!(
+            state.global.tab_percent, 40,
+            "the drag itself must not write the tab width"
+        );
+
+        state.end_split_drag(12);
+        assert_eq!(
+            state.global.tab_percent, 50,
+            "60 tab columns of a 120-column strip are 50 percent"
+        );
+        assert!(
+            state.global.tab_percent_save_pending(),
+            "the release must hand the tab width to the tmux write"
+        );
+        assert_eq!(
+            state.global.bottom_percent, 30,
+            "a strip drag's save must not touch the bottom percent"
+        );
+        assert!(!state.global.percent_save_pending());
+    }
+
+    #[test]
+    fn a_strip_drag_writes_the_tab_width_only_on_release() {
+        // Spec "no tmux write during the drag": moves across several
+        // columns leave the tab width and its save latch alone; the
+        // single write happens on release.
+        let mut state = strip_state();
+        state.global.tab_percent = 40;
+
+        state.handle_terminal_click(5, 72, 12);
+        state.handle_split_drag_move(5, 60, 12);
+        assert!(!state.global.tab_percent_save_pending());
+        state.handle_split_drag_move(5, 65, 12);
+        assert!(!state.global.tab_percent_save_pending());
+        assert_eq!(
+            state.global.tab_percent, 40,
+            "no move may write the tab width"
+        );
+
+        state.end_split_drag(12);
+        assert!(
+            state.global.tab_percent_save_pending(),
+            "the release is the one write"
+        );
+    }
+
+    #[test]
+    fn a_strip_drag_from_a_glyph_resizes_without_selecting_the_tab() {
+        // Spec "a drag that starts on a glyph": pressing the divider on
+        // the Git glyph's row and dragging to another column resizes
+        // the two panels; the tab selection must not follow the press.
+        let mut state = strip_state();
+        state.global.bottom_tab = BottomTab::GitStatus;
+        crate::ui::bottom::draw_divider_tab_rows(&mut state, 12);
+
+        // Row 6 is the Git glyph's row (the centered run draws Tools,
+        // Tasks and Git on rows 4, 5 and 6).
+        state.handle_terminal_click(6, 72, 12);
+        state.handle_split_drag_move(6, 60, 12);
+        state.end_split_drag(12);
+
+        assert_eq!(
+            state.global.tab_percent, 50,
+            "the drag resized the two panels"
+        );
+        assert_eq!(
+            state.global.bottom_tab,
+            BottomTab::GitStatus,
+            "the drag selected no tab"
+        );
+    }
+
+    #[test]
+    fn an_unmoved_release_on_a_divider_glyph_selects_its_tab() {
+        // Spec "a click on a glyph": press and release on the Git
+        // glyph's row with no move — the release selects the tab and
+        // the panel widths do not change.
+        let mut state = strip_state();
+        state.global.bottom_tab = BottomTab::Activity;
+        crate::ui::bottom::draw_divider_tab_rows(&mut state, 12);
+
+        state.handle_terminal_click(6, 72, 12);
+        state.end_split_drag(12);
+
+        assert_eq!(
+            state.global.bottom_tab,
+            BottomTab::GitStatus,
+            "row 6 is the Git glyph's row"
+        );
+        assert_eq!(
+            state.global.tab_percent, 40,
+            "a click must not resize the panels"
+        );
+        assert!(!state.global.tab_percent_save_pending());
+    }
+
+    #[test]
+    fn a_click_on_the_divider_band_changes_nothing() {
+        // Spec "a click on the band": a divider row with no glyph —
+        // row 0, above the centered run — is outside every hitbox, so
+        // neither the tab nor the panel widths may change.
+        let mut state = strip_state();
+        state.global.bottom_tab = BottomTab::Tasks;
+        crate::ui::bottom::draw_divider_tab_rows(&mut state, 12);
+
+        state.handle_terminal_click(0, 72, 12);
+        state.end_split_drag(12);
+
+        assert_eq!(state.global.bottom_tab, BottomTab::Tasks);
+        assert_eq!(
+            state.global.tab_percent, 40,
+            "a click on the band must not resize the panels"
+        );
+        assert!(!state.global.tab_percent_save_pending());
+    }
+
+    #[test]
+    fn a_column_drag_saves_only_the_bottom_height() {
+        // The two axes keep their own saves: a column drag's release
+        // writes @sidebar_bottom_height and never @sidebar_tab_width.
+        let mut state = AppState::new("%99".into());
+        state.layout.bottom_panel_height = 12;
+        state.global.bottom_percent = 30;
+        state.global.tab_percent = 40;
+
+        assert!(state.handle_terminal_click(28, 30, 40));
+        state.handle_split_drag_move(20, 30, 40);
+        state.end_split_drag(40);
+
+        assert_eq!(state.global.bottom_percent, 50);
+        assert!(state.global.percent_save_pending());
+        assert_eq!(
+            state.global.tab_percent, 40,
+            "a column drag must not touch the tab width"
+        );
+        assert!(!state.global.tab_percent_save_pending());
+    }
+
+    #[test]
+    fn a_strip_move_within_the_divider_columns_stays_unmoved() {
+        // The divider is two columns wide: a move that stays inside it
+        // (press on column 72, drag event on column 73) is still the
+        // held press a release treats as a tab click — the same rule
+        // the column keeps for moves along its one-row rule.
+        let mut state = strip_state();
+        state.global.bottom_tab = BottomTab::GitStatus;
+        crate::ui::bottom::draw_divider_tab_rows(&mut state, 12);
+
+        state.handle_terminal_click(6, 72, 12);
+        state.handle_split_drag_move(6, 73, 12);
+        state.end_split_drag(12);
+
+        assert!(!state.global.tab_percent_save_pending());
+        assert_eq!(
+            state.global.bottom_tab,
+            BottomTab::GitStatus,
+            "the unmoved release is the click that selects"
+        );
+    }
+
+    // ─── strip mouse scroll routing ──────────────────────────────
+
+    #[test]
+    fn a_strip_wheel_over_the_agent_panel_scrolls_the_agents() {
+        // Column routing: column 10 is inside the drawn agent panel
+        // (4..72), so the wheel scrolls the agent list and never the
+        // tab panel — on any row, the strip has no bottom band.
+        let mut state = strip_state();
+        state.scrolls.panes = ScrollState {
+            offset: 0,
+            total_lines: 40,
+            visible_height: 20,
+        };
+        state.activity.scroll = ScrollState {
+            offset: 0,
+            total_lines: 30,
+            visible_height: 10,
+        };
+
+        state.handle_mouse_scroll(7, 10, 12, 0, 3);
+
+        assert_eq!(state.scrolls.panes.offset, 3);
+        assert_eq!(state.activity.scroll.offset, 0);
+    }
+
+    #[test]
+    fn a_strip_wheel_over_the_tab_panel_scrolls_the_tab() {
+        // Column routing: column 80 is inside the drawn tab panel
+        // (74..120), so the wheel scrolls the displayed tab and never
+        // the agent list; the divider (columns 72-73) scrolls nothing.
+        let mut state = strip_state();
+        state.scrolls.panes = ScrollState {
+            offset: 0,
+            total_lines: 40,
+            visible_height: 20,
+        };
+        state.activity.scroll = ScrollState {
+            offset: 0,
+            total_lines: 30,
+            visible_height: 10,
+        };
+
+        state.handle_mouse_scroll(7, 80, 12, 0, 3);
+        assert_eq!(state.activity.scroll.offset, 3);
+        assert_eq!(state.scrolls.panes.offset, 0);
+
+        state.handle_mouse_scroll(7, 73, 12, 0, 3);
+        assert_eq!(
+            state.activity.scroll.offset, 3,
+            "the divider has nothing to scroll"
+        );
     }
 
     // ─── move_pane_selection edge cases ─────────────────────────────

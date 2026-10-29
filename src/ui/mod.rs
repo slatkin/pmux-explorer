@@ -15,7 +15,10 @@ use ratatui::{
     widgets::Block,
 };
 
-use crate::state::{AppState, Focus, LayoutKind, clamp_bottom_height, split_rows, strip_layout};
+use crate::state::{
+    AppState, Focus, LayoutKind, clamp_bottom_height, split_rows, strip_layout,
+    strip_layout_for_tab_cols,
+};
 use crate::tmux;
 use ratatui::layout::Rect;
 
@@ -183,7 +186,17 @@ fn draw_column(frame: &mut Frame, state: &mut AppState, area: Rect) {
 /// geometry goes into `FrameLayout::strip` so the mouse handlers
 /// hit-test the panels the frame actually drew.
 fn draw_strip(frame: &mut Frame, state: &mut AppState, area: Rect) {
-    let strip = strip_layout(area.width, area.height, state.global.tab_percent);
+    // While a strip drag has moved, the frame draws the drag's tab
+    // columns — the divider follows the mouse column and no percent
+    // value is adopted during the drag; the release path, not a tick,
+    // writes the percent. Before any move the shared percent's
+    // geometry stands.
+    let strip = match &state.split_drag {
+        Some(drag) if drag.axis == LayoutKind::Strip && drag.moved => {
+            strip_layout_for_tab_cols(area.width, area.height, drag.size)
+        }
+        _ => strip_layout(area.width, area.height, state.global.tab_percent),
+    };
     state.layout.strip = Some(strip);
     // The strip has no bottom panel and no horizontal filter row:
     // clear the column geometry a previous frame may have left, so a

@@ -260,16 +260,30 @@ pub struct StripLayout {
 /// minimums, hides the divider and the tab panel and gives the agent
 /// panel the columns the filter bar leaves.
 pub fn strip_layout(width: u16, height: u16, tab_percent: u8) -> StripLayout {
+    let wanted = if tab_percent == 0 {
+        0
+    } else {
+        ((u32::from(width) * u32::from(tab_percent) + 50) / 100) as u16
+    };
+    strip_layout_for_tab_cols(width, height, wanted)
+}
+
+/// [`strip_layout`] keyed on tab columns instead of a percent: a moved
+/// divider drag lays the strip out with the drag's live tab columns, so
+/// the drawn divider sits on the mouse column (`draw_strip`). The
+/// clamping is the percent path's own — a count of 0 hides the divider
+/// and the tab panel, and both panels keep their
+/// [`STRIP_MIN_PANEL_COLS`] minimums.
+pub fn strip_layout_for_tab_cols(width: u16, height: u16, tab_cols: u16) -> StripLayout {
     let filter_width = width.min(STRIP_FILTER_COLS);
     let filter = Rect::new(0, 0, filter_width, height);
     let agents_x = filter_width;
     let mut agents = Rect::new(agents_x, 0, width.saturating_sub(filter_width), height);
     let mut divider = None;
     let mut tabs = None;
-    if tab_percent > 0 && width >= STRIP_FILTER_COLS + 2 * STRIP_MIN_PANEL_COLS {
+    if tab_cols > 0 && width >= STRIP_FILTER_COLS + 2 * STRIP_MIN_PANEL_COLS {
         let available = width - STRIP_FILTER_COLS;
-        let wanted = ((u32::from(width) * u32::from(tab_percent) + 50) / 100) as u16;
-        let tab_cols = wanted.clamp(STRIP_MIN_PANEL_COLS, available - STRIP_MIN_PANEL_COLS);
+        let tab_cols = tab_cols.clamp(STRIP_MIN_PANEL_COLS, available - STRIP_MIN_PANEL_COLS);
         let agents_width = available - tab_cols;
         agents.width = agents_width;
         let divider_x = agents_x + agents_width;
@@ -406,6 +420,10 @@ pub struct SplitDrag {
     pub axis: LayoutKind,
     /// Column of the press, kept for the unmoved release's tab click.
     pub press_col: u16,
+    /// Row of the press, kept for the unmoved release's tab click on a
+    /// strip: the divider's hitboxes are rows, so the release reads the
+    /// press row, not the press column.
+    pub press_row: u16,
     /// Whether a drag event reached a row other than the rule row (a
     /// column) or a column other than the divider's (a strip).
     pub moved: bool,
@@ -429,6 +447,31 @@ fn clamp_drag_rows(rows: u16, term_height: u16, floating: bool) -> u16 {
     } else {
         rows
     }
+}
+
+/// Clamp a strip drag's tab-column count to the same limits
+/// [`strip_layout`] lays the percent out with: the tab panel with its
+/// divider keeps [`STRIP_MIN_PANEL_COLS`] columns and the agent panel
+/// its own. `available` is the width the filter bar leaves — the drawn
+/// strip's full width minus its filter columns. A strip too narrow for
+/// both minimums draws no divider, so no strip drag can be live on it;
+/// the guard only keeps the clamp away from a `min > max` panic there.
+fn clamp_drag_cols(cols: u16, available: u16) -> u16 {
+    if available < 2 * STRIP_MIN_PANEL_COLS {
+        return cols;
+    }
+    cols.clamp(STRIP_MIN_PANEL_COLS, available - STRIP_MIN_PANEL_COLS)
+}
+
+/// The full width the drawn [`StripLayout`] spans: the four rects tile
+/// the frame without gaps or overlap, so their widths sum to the
+/// strip's width. Both the drag move and the drag release convert a
+/// mouse column against it.
+fn drawn_strip_width(strip: &StripLayout) -> u16 {
+    strip.filter.width
+        + strip.agents.width
+        + strip.divider.map_or(0, |divider| divider.width)
+        + strip.tabs.map_or(0, |tabs| tabs.width)
 }
 
 impl AppState {
@@ -520,6 +563,7 @@ impl AppState {
             self.split_drag = Some(SplitDrag {
                 axis: LayoutKind::Column,
                 press_col: col,
+                press_row: row,
                 moved: false,
                 size: self.layout.bottom_panel_height,
             });
@@ -544,6 +588,7 @@ impl AppState {
             self.split_drag = Some(SplitDrag {
                 axis: LayoutKind::Strip,
                 press_col: col,
+                press_row: row,
                 moved: false,
                 size: divider.width + strip.tabs.map_or(0, |tabs| tabs.width),
             });
@@ -638,36 +683,68 @@ impl AppState {
         }
     }
 
-    /// Track a held-button move (`Drag(Left)`) at `row` during a split
-    /// drag. A move to another row marks the drag moved and resizes the
-    /// drawn split to the mouse row, clamped to the split minimums (and
-    /// the floating limit while the sidebar floats); over the rule row
-    /// itself the drag stays the unmoved press a release treats as a
-    /// click. No drag: nothing to move.
-    pub fn handle_split_drag_move(&mut self, row: u16, term_height: u16) {
+    /// Track a held-button move (`Drag(Left)`) at `row`/`col` during a
+    /// split drag, on the axis the drag's press started. A column drag
+    /// follows the mouse row: a move to another row marks the drag moved
+    /// and resizes the drawn split to the mouse row, clamped to the
+    /// split minimums (and the floating limit while the sidebar
+    /// floats); over the rule row itself the drag stays the unmoved
+    /// press a release treats as a click. A strip drag follows the
+    /// mouse column the same way: a move off the drawn divider marks
+    /// the drag moved and resizes the drawn split to the tab columns
+    /// the mouse column leaves, clamped to the two panel minimums, and
+    /// the renderer draws exactly this much for as long as the drag
+    /// moves; over the drawn divider itself the drag stays the unmoved
+    /// press. No drag: nothing to move.
+    pub fn handle_split_drag_move(&mut self, row: u16, col: u16, term_height: u16) {
         let Some(drag) = &mut self.split_drag else {
             return;
         };
-        // Against the row the rule is drawn at: while unmoved `size`
-        // still holds the drawn rows at the press, while moved the
-        // renderer draws `size` — in both states the rule sits at
-        // `term_height - size`.
-        if row == term_height.saturating_sub(drag.size) {
-            return;
+        match drag.axis {
+            LayoutKind::Column => {
+                // Against the row the rule is drawn at: while unmoved
+                // `size` still holds the drawn rows at the press, while
+                // moved the renderer draws `size` — in both states the
+                // rule sits at `term_height - size`.
+                if row == term_height.saturating_sub(drag.size) {
+                    return;
+                }
+                drag.moved = true;
+                drag.size = clamp_drag_rows(
+                    term_height.saturating_sub(row),
+                    term_height,
+                    self.sidebar_pane.floating,
+                );
+            }
+            LayoutKind::Strip => {
+                // Against the divider the last frame drew: while unmoved
+                // that is the press's own divider, while moved the
+                // renderer lays the strip out from `size` — in both
+                // states the divider sits on the columns the mouse is
+                // still over.
+                let Some(strip) = self.layout.strip else {
+                    return;
+                };
+                if strip
+                    .divider
+                    .is_some_and(|divider| point_in_rect(row, col, divider))
+                {
+                    return;
+                }
+                drag.moved = true;
+                let available = drawn_strip_width(&strip) - strip.filter.width;
+                drag.size =
+                    clamp_drag_cols(drawn_strip_width(&strip).saturating_sub(col), available);
+            }
         }
-        drag.moved = true;
-        drag.size = clamp_drag_rows(
-            term_height.saturating_sub(row),
-            term_height,
-            self.sidebar_pane.floating,
-        );
     }
 
     /// Finish a split drag on a button release. A drag that moved saves
     /// its size as the shared percent of its axis (~a tmux write per
     /// drag, not per move); an unmoved press resolves as a click and
-    /// selects the tab the press column names. No drag: the release
-    /// belongs to nothing.
+    /// selects the tab the press names — by column on a column's rule,
+    /// by row on a strip's divider. No drag: the release belongs to
+    /// nothing.
     pub fn end_split_drag(&mut self, term_height: u16) {
         let Some(drag) = self.split_drag.take() else {
             return;
@@ -675,7 +752,10 @@ impl AppState {
         if drag.moved {
             self.save_split_drag(drag, term_height);
         } else {
-            self.handle_bottom_tab_click(drag.press_col);
+            match drag.axis {
+                LayoutKind::Column => self.handle_bottom_tab_click(drag.press_col),
+                LayoutKind::Strip => self.handle_bottom_tab_click_row(drag.press_row),
+            }
         }
     }
 
@@ -699,29 +779,47 @@ impl AppState {
                 let Some(strip) = self.layout.strip else {
                     return;
                 };
-                let width = strip.filter.width
-                    + strip.agents.width
-                    + strip.divider.map_or(0, |divider| divider.width)
-                    + strip.tabs.map_or(0, |tabs| tabs.width);
+                let width = drawn_strip_width(&strip);
                 self.global.tab_percent = cols_for_percent(drag.size, width);
                 self.global.save_tab_percent();
             }
         }
     }
 
-    /// Handle mouse scroll event, routing to agents or bottom panel based on Y position.
+    /// Handle mouse scroll event. A column routes by row as before: at
+    /// or under the bottom panel's first drawn row the wheel scrolls
+    /// the displayed tab, above it the agent list. A strip routes by
+    /// column over the drawn [`StripLayout`]: the wheel over the agent
+    /// panel scrolls the agent list and over the tab panel the
+    /// displayed tab; the filter bar and the divider have nothing to
+    /// scroll.
     pub fn handle_mouse_scroll(
         &mut self,
         row: u16,
+        col: u16,
         term_height: u16,
         bottom_panel_height: u16,
         delta: isize,
     ) {
-        let bottom_start = term_height.saturating_sub(bottom_panel_height);
-        if row >= bottom_start {
-            self.scroll_bottom(delta);
-        } else {
-            self.scrolls.panes.scroll(delta);
+        match self.layout_kind {
+            LayoutKind::Strip => {
+                let Some(strip) = self.layout.strip else {
+                    return;
+                };
+                if strip.tabs.is_some_and(|tabs| point_in_rect(row, col, tabs)) {
+                    self.scroll_bottom(delta);
+                } else if point_in_rect(row, col, strip.agents) {
+                    self.scrolls.panes.scroll(delta);
+                }
+            }
+            LayoutKind::Column => {
+                let bottom_start = term_height.saturating_sub(bottom_panel_height);
+                if row >= bottom_start {
+                    self.scroll_bottom(delta);
+                } else {
+                    self.scrolls.panes.scroll(delta);
+                }
+            }
         }
     }
 

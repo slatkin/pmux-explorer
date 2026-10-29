@@ -39,9 +39,10 @@ pub(super) fn handle_event(
                 }
                 MouseEventKind::Drag(MouseButton::Left) => {
                     // Held-button motion: while a split drag is live,
-                    // resize the drawn split to the mouse row; without
-                    // a drag this is a no-op.
-                    state.handle_split_drag_move(mouse.row, term_height);
+                    // resize the drawn split on the drag's axis — to
+                    // the mouse row for a column, to the mouse column
+                    // for a strip; without a drag this is a no-op.
+                    state.handle_split_drag_move(mouse.row, mouse.column, term_height);
                 }
                 MouseEventKind::Up(MouseButton::Left) => {
                     // The release resolves a split drag — a moved drag
@@ -58,10 +59,10 @@ pub(super) fn handle_event(
                     );
                 }
                 MouseEventKind::ScrollDown => {
-                    state.handle_mouse_scroll(mouse.row, term_height, bottom_h, 3);
+                    state.handle_mouse_scroll(mouse.row, mouse.column, term_height, bottom_h, 3);
                 }
                 MouseEventKind::ScrollUp => {
-                    state.handle_mouse_scroll(mouse.row, term_height, bottom_h, -3);
+                    state.handle_mouse_scroll(mouse.row, mouse.column, term_height, bottom_h, -3);
                 }
                 _ => {}
             }
