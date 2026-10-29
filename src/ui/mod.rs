@@ -155,7 +155,7 @@ pub fn draw(frame: &mut Frame, state: &mut AppState) {
             (chunks[0], None)
         };
 
-    panes::draw_agents(frame, state, agent_area);
+    panes::draw_agents(frame, state, agent_area, true);
 
     if bot_h > 0 && chunks.len() > 1 {
         bottom::draw_bottom(frame, state, chunks[1]);
