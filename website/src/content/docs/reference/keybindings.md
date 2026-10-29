@@ -21,6 +21,27 @@ description: Every shortcut in the sidebar, the worktree spawn modal, and the cl
 | `prefix + Ctrl+O` | Switch the sidebar's side (every window) while the sidebar has focus |
 | `Esc`          | Return focus or close the popup                                     |
 
+### Strip sidebar (top / bottom position)
+
+When the sidebar is a top or bottom strip, the keys change shape: Left/Right
+(`h`/`l`) walk the focus between the three parts — filter bar, agent panel,
+tab panel — and stop at the ends, while Up/Down (`j`/`k`) act inside the
+focused part.
+
+| Key            | Action                                                              |
+| -------------- | ------------------------------------------------------------------- |
+| `h` / `Left`   | Move focus one part to the left (stops at the filter bar)           |
+| `l` / `Right`  | Move focus one part to the right (stops at the tab panel)           |
+| `k` / `Up`     | Filter bar: previous status filter · Agent panel: select the pane above · Tab panel: scroll up |
+| `j` / `Down`   | Filter bar: next status filter · Agent panel: select the pane below · Tab panel: scroll down |
+| `r`            | Open repo filter popup                                              |
+| `Enter`        | Jump to the selected pane                                           |
+| `Tab`          | Cycle status filter (while the filter bar has focus)                |
+| `Shift+Tab`    | Cycle bottom panel tab (Tools, Thought (pi panes only), Tasks, Git) |
+| `prefix + Ctrl+P` | Pop the sidebar out / back in while the sidebar has focus        |
+| `prefix + Ctrl+O` | Switch the sidebar's side (every window) while the sidebar has focus |
+| `Esc`          | Return focus or close the popup                                     |
+
 For pop-out/pop-in, press the tmux prefix, release it, then press `Ctrl+P`.
 Bare `p` does nothing. `Ctrl+P` without the prefix still moves the selection up.
 Outside the sidebar, `prefix + Ctrl+P` keeps tmux's previous-window action.
