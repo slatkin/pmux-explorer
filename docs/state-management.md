@@ -17,12 +17,14 @@ read from tmux on every refresh tick.
 | `repo_filter` | `@sidebar_repo_filter` | User input (repo popup) | Repository filter (All or specific repo) |
 | `bottom_tab` | `@sidebar_bottom_tab` | On user tab switch (cycle key / tab-title click); tmux write retried when rejected | Selected bottom tab, shared server-wide; each instance adopts a peer's selection on its next refresh tick. The drawn tab run centers one Nerd Font glyph per tab on the rule — wrench for Activity, thought-bubble for Thought, list for Tasks, git-branch for Git — separated by ` │ ` delimiters; the stored values are `activity`, `thought`, `tasks` and `git`, and the Activity tab keeps that variant name while the Tools glyph draws for it. `thought` is drawn only while the focused pane runs pi — a stored Thought falls back to Activity for any other agent, without a write, so the panel returns to Thought when the focus comes back to a pi pane |
 | `bottom_percent` | `@sidebar_bottom_height` | User input (rule drag release); tmux write retried when rejected | Bottom panel height as a percent of the sidebar height (0 hides the panel; unset, empty, or an out-of-range value gives 30); shared server-wide, each instance adopts a peer's value on its next refresh tick (the percent's `SaveLatch` instance follows the same pattern) |
+| `tab_percent` | `@sidebar_tab_width` | User input (strip divider drag release); tmux write retried when rejected | Strip tab-panel width, divider included, as a percent of the strip width (0 hides the divider and the tab panel; unset, empty, or an out-of-range value gives 40); shared server-wide, each instance adopts a peer's value on its next refresh tick (the tab percent's `SaveLatch` instance follows the same pattern); a column never reads or writes it, so a column and a strip on the same server keep their own split |
 
 Each synced field is guarded so a failed write never loses the user's
-choice: the status filter, the bottom tab and the bottom percent each
-hold one `SaveLatch<T>` instance (`filter_latch`, `tab_latch`,
-`percent_latch` in `GlobalState` — one retry mechanism, written once
-and shared by all three). The cursor and repo filter keep plain
+choice: the status filter, the bottom tab, the bottom percent and the
+strip tab percent each hold one `SaveLatch<T>` instance
+(`filter_latch`, `tab_latch`, `percent_latch`, `tab_percent_latch` in
+`GlobalState` — one retry mechanism, written once and shared by all
+four). The cursor and repo filter keep plain
 `last_saved_cursor` / `last_saved_repo_filter` values instead.
 
 A `SaveLatch` remembers the last value tmux successfully accepted
@@ -39,15 +41,16 @@ retry tmux refuses again leaves the latch set for the next tick. The
 retries run together because retrying only some of the latches would
 let the rest drift from the shared values.
 
-The three instances differ only at their edges. `filter_latch` and
+The instances differ only at their edges. `filter_latch` and
 `tab_latch` parse their single option and adopt nothing while it is
-absent. `percent_latch` parses the whole option map instead: an
-unset, empty or invalid value resolves to the default
-(`DEFAULT_BOTTOM_PERCENT = 30`) and is adopted. The percent is also
-the only latch with an extra adoption gate — `apply_all` receives
-`split_drag_active` (`AppState::split_drag` is `Some`) and holds the
-shared percent unadopted while it stands, so the tick cannot move the
-rule out from under the mouse; the ticks after the release adopt the
+absent. `percent_latch` and `tab_percent_latch` parse the whole option
+map instead: an unset, empty or invalid value resolves to the default
+(`DEFAULT_BOTTOM_PERCENT = 30` and `DEFAULT_TAB_PERCENT = 40`) and is
+adopted. The two percent latches also carry an extra adoption gate —
+`apply_all` receives `split_drag_active` (`AppState::split_drag` is
+`Some`) and holds the shared value unadopted while it stands, so the
+tick cannot move the rule or the divider out from under the mouse; the
+ticks after the release adopt the
 server value again.
 
 ### Per-pane State (keyed by pane ID)
