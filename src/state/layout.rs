@@ -136,12 +136,13 @@ pub struct FrameLayout {
     /// frame and while the panel is hidden, when no label is
     /// clickable.
     pub bottom_tab_targets: Vec<BottomTabTarget>,
-    /// The strip's panel geometry as the last frame laid it out, while
-    /// this sidebar is a strip ([`LayoutKind::Strip`]). `None` before
-    /// the first frame, for a column (the field stays `None` there),
-    /// and while the tab panel is hidden — the mouse handlers branch on
-    /// it so a strip press routes by the panels the frame actually
-    /// drew.
+    /// The strip's panel geometry as the last frame laid it out. The
+    /// field is `Some` whenever this sidebar is a strip
+    /// ([`LayoutKind::Strip`]) and a frame has drawn — a hidden tab
+    /// panel is `strip.tabs == None`, not a `None` field — and `None`
+    /// before the first frame and on a column. The mouse handlers
+    /// branch on it so a strip press routes by the panels the frame
+    /// actually drew.
     pub strip: Option<StripLayout>,
 }
 
