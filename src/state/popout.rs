@@ -77,9 +77,6 @@ pub fn panel_geometry(
     }
 }
 
-/// The edge a docked strip sits on, read off the pane probe's
-/// `#{pane_at_top}`: a pane touching the top edge is a top strip, any
-/// other reading a bottom strip. A column has no strip edge — `None`.
 /// The docked size a pop-out captures for the pop-in to restore: the
 /// size on the axis the layout docks along — the width of a column,
 /// the height of a strip. The other axis's size is the window's, not
@@ -93,6 +90,9 @@ fn capture_docked_size(layout: LayoutKind, info: &SidebarPaneInfo) -> u16 {
     }
 }
 
+/// The edge a docked strip sits on, read off the pane probe's
+/// `#{pane_at_top}`: a pane touching the top edge is a top strip, any
+/// other reading a bottom strip. A column has no strip edge — `None`.
 fn strip_docked_edge(layout: LayoutKind, at_top: bool) -> Option<SidebarPosition> {
     match layout {
         LayoutKind::Strip => Some(if at_top {
