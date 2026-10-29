@@ -16,9 +16,9 @@
 
 ## 3. Strip geometry
 
-- [ ] 3.1 Add the pure `strip_layout(width, height, tab_percent)` and `cols_for_percent` in `src/state/layout.rs`: filter 4 columns, divider 2 columns, each panel at least 20 columns, no tab panel below 44 columns or at 0 percent; verify with unit tests for the spec scenarios (120 columns at 40, 1 and 100 percent; 40 columns; 0 percent) and the drag round trip (120 columns, divider to column 60 gives 50).
-- [ ] 3.2 Add the pure `filter_column_layout(counts, height)`: one chip for each row from row 0, controls on the last row, chips dropped whole, counts of 100 or more drawn as `99`; verify with unit tests for heights 12, 4, 1 and 0.
-- [ ] 3.3 Add the pure `divider_tab_rows(tabs, height)`: glyph rows centered at `floor((H - R) / 2)` and cut at the bottom; verify with unit tests for a Claude pane and a pi pane at 12 rows, and a run taller than the strip.
+- [x] 3.1 Add the pure `strip_layout(width, height, tab_percent)` and `cols_for_percent` in `src/state/layout.rs`: filter 4 columns, divider 2 columns, each panel at least 20 columns, no tab panel below 44 columns or at 0 percent; verify with unit tests for the spec scenarios (120 columns at 40, 1 and 100 percent; 40 columns; 0 percent) and the drag round trip (120 columns, divider to column 60 gives 50).
+- [x] 3.2 Add the pure `filter_column_layout(counts, height)`: one chip for each row from row 0, controls on the last row, chips dropped whole, counts of 100 or more drawn as `99`; verify with unit tests for heights 12, 4, 1 and 0.
+- [x] 3.3 Add the pure `divider_tab_rows(tabs, height)`: glyph rows centered at `floor((H - R) / 2)` and cut at the bottom; verify with unit tests for a Claude pane and a pi pane at 12 rows, and a run taller than the strip.
 
 ## 4. Strip drawing
 
