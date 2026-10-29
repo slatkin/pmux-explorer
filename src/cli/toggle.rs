@@ -268,6 +268,20 @@ impl SidebarPosition {
         }
     }
 
+    /// The side a strip pane docks on, read off its own
+    /// `#{pane_at_top}`: a pane touching the window's top edge is a top
+    /// strip, a `0` flag a bottom strip. `None` when tmux did not answer
+    /// with the flag (a dead socket in tests, an older tmux), so the
+    /// caller can fall back — the same contract as [`Self::from_pane_left`]
+    /// for a column.
+    pub(crate) fn from_pane_at_top(at_top: &str) -> Option<Self> {
+        match at_top.trim() {
+            "1" => Some(Self::Top),
+            "0" => Some(Self::Bottom),
+            _ => None,
+        }
+    }
+
     /// The option value this side writes back to `@sidebar_position`
     /// (the lowercase spelling the config seeds and `from_setting`
     /// parses).
