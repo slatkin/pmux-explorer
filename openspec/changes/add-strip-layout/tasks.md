@@ -46,12 +46,12 @@
 
 ## 8. Pop-out and pop-in of a strip
 
-- [ ] 8.1 Add `height` (`#{pane_height}`) and `at_top` (`#{pane_at_top}`) to `SidebarPaneInfo` before the shared options; verify with the reading-parse tests.
-- [ ] 8.2 Make `panel_geometry` take the layout kind and the docked edge, capture `docked_size` and the edge on pop-out, and skip `clamp_bottom_height` in a strip; verify with unit tests for the column (unchanged), a top strip and a bottom strip.
-- [ ] 8.3 Pop a strip in with the edge join and `resize-pane -y <h>`; fall back to the bare join when there is no edge target; verify with outcome tests in `src/state/popout.rs`.
-- [ ] 8.4 Make `panel_guard` keep a floating strip as wide as the window and at its anchor after a window resize; verify with unit tests in the style of `position_target_reasserts_after_a_window_width_change`.
-- [ ] 8.5 Make `size_guard::enforce` do nothing for a strip; verify with a unit test.
-- [ ] 8.6 Verify in a scratch tmux 3.8 server: pop out a 10-row bottom strip, resize the window, pop it back in; the strip floats full width at the bottom edge, stays flush after the resize, and docks again as a 10-row full-width strip at the bottom. Record the output.
+- [x] 8.1 Add `height` (`#{pane_height}`) and `at_top` (`#{pane_at_top}`) to `SidebarPaneInfo` before the shared options; verify with the reading-parse tests.
+- [x] 8.2 Make `panel_geometry` take the layout kind and the docked edge, capture `docked_size` and the edge on pop-out, and skip `clamp_bottom_height` in a strip; verify with unit tests for the column (unchanged), a top strip and a bottom strip.
+- [x] 8.3 Pop a strip in with the edge join and `resize-pane -y <h>`; fall back to the bare join when there is no edge target; verify with outcome tests in `src/state/popout.rs`.
+- [x] 8.4 Make `panel_guard` keep a floating strip as wide as the window and at its anchor after a window resize; verify with unit tests in the style of `position_target_reasserts_after_a_window_width_change`.
+- [x] 8.5 Make `size_guard::enforce` do nothing for a strip; verify with a unit test.
+- [x] 8.6 Verify in a scratch tmux 3.8 server: pop out a 10-row bottom strip, resize the window, pop it back in; the strip floats full width at the bottom edge, stays flush after the resize, and docks again as a 10-row full-width strip at the bottom. Record the output.
 
 ## 9. Integration
 
