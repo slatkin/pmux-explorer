@@ -110,6 +110,10 @@ fn render_pane_lines(
     let lifted_branch = inline_branch
         .then(|| crate::ui::text::branch_label(git_info))
         .filter(|label| !label.is_empty());
+    // The same strip-vs-column split caps the prompt preview: a strip
+    // keeps the last-conversation marker to one truncated line, a
+    // column keeps the three-line wrap.
+    let prompt_max_lines = if inline_branch { 1 } else { 3 };
     let bg = if selected {
         Some(theme.selection_bg)
     } else {
@@ -137,6 +141,7 @@ fn render_pane_lines(
         bg,
         active,
         inline_branch: lifted_branch,
+        prompt_max_lines,
     };
     let plain_ctx = RowCtx {
         marker_char: " ",
@@ -146,6 +151,7 @@ fn render_pane_lines(
         bg: None,
         active,
         inline_branch: None,
+        prompt_max_lines,
     };
 
     let mut out: Vec<Line<'static>> = Vec::with_capacity(8);
@@ -241,6 +247,7 @@ mod tests {
             bg: None,
             active,
             inline_branch: None,
+            prompt_max_lines: 3,
         }
     }
 

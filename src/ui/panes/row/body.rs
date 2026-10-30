@@ -212,7 +212,7 @@ pub(super) fn prompt_rows(pane: &crate::tmux::PaneInfo, ctx: &RowCtx) -> Vec<Lin
         theme.text_inactive
     };
     let wrap_width = ctx.inner_width.saturating_sub(2);
-    let wrapped = wrap_text(&pane.prompt, wrap_width, 3);
+    let wrapped = wrap_text(&pane.prompt, wrap_width, ctx.prompt_max_lines);
 
     let mut out = Vec::with_capacity(wrapped.len());
     for (li, wl) in wrapped.iter().enumerate() {

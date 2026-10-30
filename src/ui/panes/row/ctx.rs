@@ -24,6 +24,11 @@ pub(super) struct RowCtx<'a> {
     /// line, so the branch name rides after the pane name instead.
     /// `None` on every other row and in the column layout.
     pub(super) inline_branch: Option<String>,
+    /// Line cap for the prompt/response preview: 3 in a column, 1 in a
+    /// strip — a top/bottom strip cannot spend three rows on the
+    /// last-conversation marker, so it truncates to a single
+    /// ellipsis-closed line.
+    pub(super) prompt_max_lines: usize,
 }
 
 impl RowCtx<'_> {

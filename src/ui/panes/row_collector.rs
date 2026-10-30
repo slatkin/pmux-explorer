@@ -345,6 +345,38 @@ mod tests {
     }
 
     #[test]
+    fn collect_in_a_strip_clamps_the_prompt_to_one_truncated_line() {
+        // A strip has no rows to spare for a tall preview: the
+        // last-conversation marker renders one ellipsis-closed line
+        // where a column would wrap to three.
+        let mut state = AppState::new("%0".into());
+        state.layout_kind = crate::state::LayoutKind::Strip;
+        let mut pane = make_pane("%1", PaneStatus::Running);
+        pane.prompt =
+            "a very long prompt that would wrap across several lines in the column layout".into();
+        state.repo_groups = vec![RepoGroup {
+            name: "repo".into(),
+            has_focus: false,
+            panes: vec![(pane, PaneGitInfo::default())],
+        }];
+        let collected = collect(&state, 40);
+        assert_eq!(
+            collected.lines.len(),
+            3,
+            "header + status row + one prompt line"
+        );
+        let prompt_line: String = collected.lines[2]
+            .spans
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect();
+        assert!(
+            prompt_line.contains('\u{2026}'),
+            "the single prompt line must close with an ellipsis: {prompt_line:?}"
+        );
+    }
+
+    #[test]
     fn collect_pending_spawn_grows_with_repo_root_bearing_groups() {
         let mut state = AppState::new("%0".into());
         let with_root = |root: &str, name: &str, pane_id: &str| RepoGroup {
