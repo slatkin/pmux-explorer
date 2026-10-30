@@ -54,9 +54,8 @@ pub struct SubagentInfo {
     pub parent: SubagentParent,
 }
 
-/// The parent of a subagent: the label (tmux title, or pane id when the
-/// title is empty) of the live agent pane with the recorded session id, or
-/// `Orphaned` when no pane reports that session id.
+/// The parent of a subagent: the pane id of the live agent pane with the
+/// recorded session id, or `Orphaned` when no pane reports that session id.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SubagentParent {
     Pane(String),

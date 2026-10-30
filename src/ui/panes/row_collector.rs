@@ -73,6 +73,14 @@ pub(super) fn collect(state: &AppState, width: u16) -> CollectedRows {
         if filtered_panes.is_empty() {
             continue;
         }
+        // The nesting order comes from the group itself, while the indent
+        // is decided against the panes this filter kept: a child whose
+        // root is hidden draws as a top-level row.
+        let roots = crate::group::nest_roots(&group.panes);
+        let visible_ids: std::collections::HashSet<&str> = filtered_panes
+            .iter()
+            .map(|(pane, _)| pane.pane_id.as_str())
+            .collect();
 
         if !first_group {
             // Separate repo groups, but do not add a leading blank before
@@ -105,6 +113,7 @@ pub(super) fn collect(state: &AppState, width: u16) -> CollectedRows {
         collected.line_to_row.push(None);
 
         for (pane, git_info) in filtered_panes.iter() {
+            let nested = crate::group::nested_under(&roots, &visible_ids, &pane.pane_id);
             collect_pane(
                 &mut collected,
                 state,
@@ -113,6 +122,7 @@ pub(super) fn collect(state: &AppState, width: u16) -> CollectedRows {
                 row_index,
                 width,
                 inline_branch,
+                nested,
             );
             row_index += 1;
         }
@@ -125,6 +135,7 @@ pub(super) fn collect(state: &AppState, width: u16) -> CollectedRows {
 /// lines with their `line_to_row` mappings, plus the pane-level
 /// click target the drawn glyph carries — the `×` remove marker on a
 /// spawn-created worktree's branch row.
+#[allow(clippy::too_many_arguments)]
 fn collect_pane(
     collected: &mut CollectedRows,
     state: &AppState,
@@ -133,8 +144,10 @@ fn collect_pane(
     row_index: usize,
     width: usize,
     inline_branch: bool,
+    nested: bool,
 ) {
     let theme = &state.theme;
+    let indent = if nested { row::NEST_INDENT } else { 0 };
     let is_selected =
         state.focus_state.focus == Focus::Panes && row_index == state.global.selected_pane_row;
 
@@ -157,6 +170,7 @@ fn collect_pane(
         state.spinner_frame,
         state.now,
         inline_branch,
+        nested,
     );
     let pane_line_count = pane_lines.len();
     collected.lines.extend(pane_lines);
@@ -173,8 +187,13 @@ fn collect_pane(
     if pane.sidebar_spawned
         && git_info.is_worktree
         && pane_line_count >= 2
-        && let Some(x) =
-            row::sidebar_remove_marker_col(git_info, ports, true, width.saturating_sub(2))
+        && let Some(x) = row::sidebar_remove_marker_col(
+            git_info,
+            ports,
+            true,
+            width.saturating_sub(2 + indent),
+            indent,
+        )
     {
         collected
             .pending_remove
@@ -399,5 +418,106 @@ mod tests {
         ];
         let collected = collect(&state, 40);
         assert_eq!(collected.pending_spawn.len(), 3);
+    }
+
+    fn line_text(line: &Line<'_>) -> String {
+        line.spans
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect()
+    }
+
+    fn subagent_parent(pane: &mut PaneInfo, parent: &str) {
+        pane.subagent = Some(crate::tmux::SubagentInfo {
+            kind: crate::pmux_task::PmuxTaskKind::Spawned,
+            task: None,
+            parent: crate::tmux::SubagentParent::Pane(parent.into()),
+        });
+    }
+
+    #[test]
+    fn collect_puts_a_nested_remove_marker_on_the_drawn_x() {
+        // A spawned worktree nested under its parent keeps the `×` pinned
+        // to the rightmost column: the indent must not shift the click
+        // target off the drawn glyph.
+        let mut state = AppState::new("%0".into());
+        let mut parent = make_pane("%0", PaneStatus::Running);
+        parent.pane_name = Some("orchestrator".into());
+        let mut child = make_pane("%1", PaneStatus::Running);
+        child.pane_name = Some("worker".into());
+        child.sidebar_spawned = true;
+        subagent_parent(&mut child, "%0");
+        let child_git = PaneGitInfo {
+            repo_root: Some("/tmp/repo".into()),
+            branch: Some("feat/x".into()),
+            is_worktree: true,
+            worktree_name: None,
+        };
+        state.repo_groups = vec![RepoGroup {
+            name: "repo".into(),
+            has_focus: false,
+            panes: vec![(parent, PaneGitInfo::default()), (child, child_git)],
+        }];
+        let width = 40;
+        let collected = collect(&state, width);
+
+        assert_eq!(collected.pending_remove.len(), 1, "one spawned worktree");
+        let (line_index, click_col, pane_id) = &collected.pending_remove[0];
+        assert_eq!(pane_id, "%1");
+        let branch_row = line_text(&collected.lines[*line_index]);
+        let x_byte = branch_row
+            .find('\u{d7}')
+            .expect("the branch row draws the ×");
+        let drawn_col = crate::ui::text::display_width(&branch_row[..x_byte]) as u16;
+        assert_eq!(
+            *click_col, drawn_col,
+            "the click column lines up with the drawn ×: {branch_row:?}"
+        );
+        assert_eq!(
+            *click_col as usize,
+            width as usize - 1,
+            "the × stays in the last column through the indent"
+        );
+    }
+
+    #[test]
+    fn collect_maps_each_nested_child_line_to_its_own_row() {
+        let mut state = AppState::new("%0".into());
+        let mut parent = make_pane("%0", PaneStatus::Running);
+        parent.pane_name = Some("orchestrator".into());
+        let mut first = make_pane("%1", PaneStatus::Running);
+        first.pane_name = Some("unit1".into());
+        subagent_parent(&mut first, "%0");
+        let mut second = make_pane("%2", PaneStatus::Running);
+        second.pane_name = Some("unit2".into());
+        subagent_parent(&mut second, "%0");
+        state.repo_groups = vec![RepoGroup {
+            name: "repo".into(),
+            has_focus: false,
+            panes: vec![
+                (parent, PaneGitInfo::default()),
+                (first, PaneGitInfo::default()),
+                (second, PaneGitInfo::default()),
+            ],
+        }];
+        let collected = collect(&state, 40);
+
+        let joined = collected
+            .lines
+            .iter()
+            .map(|line| line_text(line).trim_end().to_string())
+            .collect::<Vec<_>>()
+            .join("\n");
+        insta::assert_snapshot!(joined, @"
+        repo
+            orchestrator
+              ♟ unit1
+              ♟ unit2
+        ");
+        assert_eq!(
+            collected.line_to_row,
+            vec![None, Some(0), Some(1), Some(2)],
+            "each child row belongs to its own row index"
+        );
     }
 }

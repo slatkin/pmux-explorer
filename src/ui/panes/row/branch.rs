@@ -47,13 +47,16 @@ pub fn sidebar_remove_marker_col(
     _ports: Option<&[u16]>,
     sidebar_spawned: bool,
     inner_width: usize,
+    indent: usize,
 ) -> Option<u16> {
     if !should_emit_remove_marker(git_info, sidebar_spawned) {
         return None;
     }
-    // Row total width = marker(1) + space(1) + inner_width, so the
-    // last column (0-indexed) is `inner_width + 1`.
-    Some((inner_width + 1) as u16)
+    // Row total width = marker(1) + space(1) + indent + inner_width, so
+    // the last column (0-indexed) is `indent + inner_width + 1`. The
+    // indent is added back here because the `×` stays pinned to the
+    // rightmost column of the row whatever the indent is.
+    Some((indent + inner_width + 1) as u16)
 }
 
 pub(super) fn branch_ports_row(

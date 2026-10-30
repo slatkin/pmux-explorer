@@ -99,8 +99,10 @@ there is none). The task is the `<name>` part of the file name, that is the
 stem without its `-YYYY-MM-DDTHH-MM-SS` timestamp, with each hyphen turned
 into a space, so `unit1-idle-collapse` gives `unit1 idle collapse`. The task
 is stored, not drawn: the pane name the status row shows already carries the
-same launch name, so the identity row below the status row names only the
-parent (or `ORPHANED`).
+same launch name. The parent link is drawn by position: the subagent is
+nested under its parent, indented by two columns, with no row that names the
+parent. A subagent whose parent pane is not live (or not in its repo group)
+cannot nest and carries an `ORPHANED` tag on its status row instead.
 pmux writes the fallback stems `subagent` (a spawned subagent) and `resume`
 (a resumed subagent) when it has no usable name, and those give no task at
 all. A later recognised prompt replaces them. The identity stays

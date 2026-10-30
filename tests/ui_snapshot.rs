@@ -2386,11 +2386,10 @@ fn snapshot_background_long_command_truncates_with_ellipsis() {
     ");
 }
 
-// Row 4.3: a subagent pane must keep its identity row even when the parent
-// pane's own row is hidden by the repository filter — the parent label lives
-// on the subagent pane, not on the parent's row.
+// A subagent whose parent lives in another repo group cannot nest: it stays
+// a top-level row of its own group, with no indent and no tag.
 #[test]
-fn snapshot_subagent_identity_survives_repo_filter_hiding_parent() {
+fn snapshot_subagent_with_parent_in_another_group_is_a_top_level_row() {
     let parent = {
         let mut p = make_pane(AgentType::Pi, PaneStatus::Running);
         p.pane_id = "%1".into();
@@ -2404,7 +2403,7 @@ fn snapshot_subagent_identity_survives_repo_filter_hiding_parent() {
         p.subagent = Some(SubagentInfo {
             kind: PmuxTaskKind::Spawned,
             task: Some("unit1 idle collapse".into()),
-            parent: SubagentParent::Pane("orchestrator".into()),
+            parent: SubagentParent::Pane("%1".into()),
         });
         p
     };
@@ -2433,7 +2432,35 @@ fn snapshot_subagent_identity_survives_repo_filter_hiding_parent() {
     ⓘ                                              project-sub ▾
     project-sub
         ♟
-      ▷ orchestrator
+                            │ 󰟶 │  │ 󰊢
+                            No tools yet
+    ");
+}
+
+// The status filter can hide a child's root too: the child keeps its slot in
+// the group order but draws as a top-level row, without indent or tag.
+#[test]
+fn snapshot_subagent_whose_root_the_status_filter_hides() {
+    let mut parent = make_pane(AgentType::Pi, PaneStatus::Idle);
+    parent.pane_id = "%1".into();
+    let mut subagent = make_pane(AgentType::Pi, PaneStatus::Running);
+    subagent.pane_id = "%2".into();
+    subagent.pane_active = false;
+    subagent.subagent = Some(SubagentInfo {
+        kind: PmuxTaskKind::Spawned,
+        task: Some("unit1 idle collapse".into()),
+        parent: SubagentParent::Pane("%1".into()),
+    });
+
+    let mut state =
+        make_state_with_groups(vec![make_repo_group("project", vec![parent, subagent])]);
+    state.global.status_filter = StatusFilter::Busy;
+    let output = render_to_string(&mut state, 60, 25);
+    insta::assert_snapshot!(output, @"
+     󱓯 2  1 󰥔 0 󰒲 1  0                                    ⇄ ⤢
+    ⓘ                                                        — ▾
+    project
+        ♟
                             │ 󰟶 │  │ 󰊢
                             No tools yet
     ");
@@ -2497,6 +2524,79 @@ fn snapshot_strip_pi_pane_shows_the_thought_glyph() {
      1 project                                                             ▎
     󰥔 0 ┃                                                                 ▎
     󰒲 0                                                                     ▎
+     0                                                                     ▎
+                                                                            ▎                 No tools yet
+                                                                            ▎
+                                                                            ▎
+                                                                            ▎
+                                                                            ▎
+                                                                            ▎
+    ⇅ ⤢                                                                                       │ 󰟶 │  │ 󰊢
+    ");
+}
+
+#[test]
+fn snapshot_strip_nests_a_subagent_under_its_parent() {
+    // The strip shares the row functions with the column, so a nested
+    // subagent indents here too — and the branch stays lifted onto the
+    // status row, one line for the whole child.
+    let mut parent = make_pane(AgentType::Pi, PaneStatus::Running);
+    parent.pane_id = "%1".into();
+    parent.pane_name = Some("orchestrator".into());
+    let mut child = make_pane(AgentType::Pi, PaneStatus::Running);
+    child.pane_id = "%2".into();
+    child.pane_active = false;
+    child.pane_name = Some("unit1".into());
+    child.subagent = Some(SubagentInfo {
+        kind: PmuxTaskKind::Spawned,
+        task: Some("unit1 idle collapse".into()),
+        parent: SubagentParent::Pane("%1".into()),
+    });
+
+    let mut state = make_state(vec![SessionInfo {
+        session_name: "main".into(),
+        windows: vec![WindowInfo {
+            window_id: "@1".into(),
+            window_name: "project".into(),
+            window_active: true,
+            auto_rename: false,
+            panes: vec![parent.clone(), child.clone()],
+        }],
+    }]);
+    state.repo_groups = vec![RepoGroup {
+        name: "project".into(),
+        has_focus: true,
+        panes: vec![
+            (
+                parent,
+                PaneGitInfo {
+                    repo_root: Some("/home/user/project".into()),
+                    branch: Some("main".into()),
+                    is_worktree: false,
+                    worktree_name: None,
+                },
+            ),
+            (
+                child,
+                PaneGitInfo {
+                    repo_root: Some("/home/user/project".into()),
+                    branch: Some("pmux/unit1".into()),
+                    is_worktree: true,
+                    worktree_name: None,
+                },
+            ),
+        ],
+    }];
+    state.layout_kind = LayoutKind::Strip;
+    state.global.tab_percent = 40;
+    state.rebuild_row_targets();
+
+    let output = render_to_string(&mut state, 120, 12);
+    insta::assert_snapshot!(output, @"
+    󱓯 2 ⓘ                                                                — ▾▎
+     2 project                                                            +▎
+    󰥔 0 ┃   orchestrator main                                             ▎
+    󰒲 0       ♟ unit1 + pmux/unit1                                        ▎
      0                                                                     ▎
                                                                             ▎                 No tools yet
                                                                             ▎

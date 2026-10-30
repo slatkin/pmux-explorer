@@ -125,10 +125,9 @@ type CodexPidEntry = (String, usize, u32);
 /// applied by [`resolve_subagent_parents`] once every line is seen.
 #[derive(Default)]
 struct SubagentResolution {
-    /// `@pane_session_id` -> parent label (`pane_title`, or the pane id when
-    /// the title is empty) for every parsed agent pane. The first pane that
-    /// reports a session id wins.
-    parent_labels: HashMap<String, String>,
+    /// `@pane_session_id` -> pane id for every parsed agent pane. The first
+    /// pane that reports a session id wins.
+    parent_panes: HashMap<String, String>,
     /// pane_id -> recorded parent session id for every parsed subagent pane.
     pending: HashMap<String, String>,
 }
@@ -138,18 +137,9 @@ impl SubagentResolution {
     /// its pending parent lookup when it is a subagent.
     fn observe(&mut self, pane: &PaneInfo, pane_fields: &[String]) {
         if let Some(session_id) = &pane.session_id {
-            let title = &pane_fields[pane_line_field::PANE_TITLE];
-            // Use the same trimmed pane name the parent's own status row
-            // shows, so the parent label is consistent across rows; fall
-            // back to the raw title, then the pane id, as before.
-            let label = match &pane.pane_name {
-                Some(name) => name.clone(),
-                None if title.is_empty() => pane.pane_id.clone(),
-                None => title.clone(),
-            };
-            self.parent_labels
+            self.parent_panes
                 .entry(session_id.clone())
-                .or_insert(label);
+                .or_insert_with(|| pane.pane_id.clone());
         }
         if pane.subagent.is_some() {
             self.pending.insert(
@@ -252,7 +242,7 @@ fn build_session_hierarchy(
     (sessions_map, codex_pids, subagent_resolution)
 }
 
-/// Set each subagent pane's parent from the collected session-id -> label
+/// Set each subagent pane's parent from the collected session-id -> pane id
 /// map, or `Orphaned` when no live pane reports the recorded session id.
 /// Runs before any repository filter, so a parent row the filter hides still
 /// resolves.
@@ -265,7 +255,7 @@ fn resolve_subagent_parents(sessions_map: &mut SessionMap, resolution: &Subagent
                 };
                 if let Some(info) = &mut pane.subagent {
                     info.parent = resolution
-                        .parent_labels
+                        .parent_panes
                         .get(parent_session_id)
                         .cloned()
                         .map_or(SubagentParent::Orphaned, SubagentParent::Pane);
@@ -1813,7 +1803,7 @@ mod tests {
     }
 
     #[test]
-    fn resolve_subagent_parents_uses_the_parent_title() {
+    fn resolve_subagent_parents_uses_the_parent_pane_id() {
         let input = format!(
             "{}\n{}",
             make_hierarchy_line("main", "%0", "P1", "orchestrator", None),
@@ -1822,13 +1812,13 @@ mod tests {
         let panes = resolve_in(&input);
         assert_eq!(
             subagent_parent_of(&panes, "%1"),
-            SubagentParent::Pane("orchestrator".to_string()),
-            "a live parent with a title resolves to that title"
+            SubagentParent::Pane("%0".to_string()),
+            "a live parent resolves to its pane id, not its title"
         );
     }
 
     #[test]
-    fn resolve_subagent_parents_falls_back_to_the_pane_id_without_a_title() {
+    fn resolve_subagent_parents_ignores_the_parent_title() {
         let input = format!(
             "{}\n{}",
             make_hierarchy_line("main", "%0", "P1", "", None),
@@ -1838,7 +1828,7 @@ mod tests {
         assert_eq!(
             subagent_parent_of(&panes, "%1"),
             SubagentParent::Pane("%0".to_string()),
-            "a live parent with an empty title resolves to its pane id"
+            "an empty title makes no difference to the resolved pane id"
         );
     }
 
@@ -1863,7 +1853,7 @@ mod tests {
         let panes = resolve_in(&input);
         assert_eq!(
             subagent_parent_of(&panes, "%1"),
-            SubagentParent::Pane("orchestrator".to_string()),
+            SubagentParent::Pane("%0".to_string()),
             "the parent lookup spans every session in the list-panes output"
         );
     }

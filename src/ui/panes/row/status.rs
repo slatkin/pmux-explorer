@@ -5,7 +5,7 @@ use ratatui::{
 
 use super::ctx::RowCtx;
 use crate::pmux_task::PmuxTaskKind;
-use crate::tmux::PaneStatus;
+use crate::tmux::{PaneStatus, SubagentParent};
 use crate::ui::colors::ColorTheme;
 use crate::ui::icons::StatusIcons;
 use crate::ui::text::{display_width, elapsed_label, truncate_to_width};
@@ -87,12 +87,22 @@ pub(super) fn status_row(
     };
 
     let badge_extra = if badge.is_empty() { 0 } else { 1 };
+    // An orphaned subagent is the only subagent state that carries a tag:
+    // it could not nest under its parent, so the row says so, and the tag
+    // takes its width out of the title budget before the pane name is cut.
+    let orphan_tag = matches!(
+        pane.subagent.as_ref().map(|info| &info.parent),
+        Some(SubagentParent::Orphaned)
+    )
+    .then_some(" ORPHANED");
+    let orphan_width = orphan_tag.map_or(0, display_width);
     let agent_width = if agent_is_opencode {
         1 + display_width(crate::ui::icons::OPENCODE_AGENT_GLYPH)
     } else {
         1 + display_width(agent_label)
     };
-    let fixed_width = display_width(icon) + agent_width + badge_extra + display_width(badge);
+    let fixed_width =
+        display_width(icon) + agent_width + badge_extra + display_width(badge) + orphan_width;
     // Reserve room for the icon, the agent label, the badge and the
     // elapsed label; the pane name and the lifted branch share what
     // remains and take the ellipsis when cut. The agent label itself
@@ -150,6 +160,12 @@ pub(super) fn status_row(
         left_spans.push(Span::styled(
             format!(" {}", badge),
             ctx.apply_bg(Style::default().fg(badge_color(pane, badge_override, theme))),
+        ));
+    }
+    if let Some(tag) = orphan_tag {
+        left_spans.push(Span::styled(
+            tag,
+            ctx.apply_bg(Style::default().fg(theme.status_error)),
         ));
     }
     if let Some(name) = &pane_name {

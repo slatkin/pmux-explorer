@@ -14,7 +14,12 @@ pub(super) struct RowCtx<'a> {
     pub(super) marker_char: &'static str,
     /// Style for the left marker (fg + optional bg already applied).
     pub(super) marker_style: Style,
-    /// Usable inner width for content after the marker and its trailing space.
+    /// Extra blank columns after the marker and its trailing space, which
+    /// push a nested subagent's content right by that many columns. The
+    /// inner width already has this indent subtracted.
+    pub(super) indent: usize,
+    /// Usable inner width for content after the marker, its trailing space
+    /// and the indent.
     pub(super) inner_width: usize,
     pub(super) theme: &'a ColorTheme,
     pub(super) bg: Option<Color>,
@@ -47,9 +52,12 @@ impl RowCtx<'_> {
     ) -> Line<'static> {
         let padding = pad_to(content_width, self.inner_width);
         let bg_default = self.apply_bg(Style::default());
-        let mut spans = Vec::with_capacity(content_spans.len() + 3);
+        let mut spans = Vec::with_capacity(content_spans.len() + 4);
         spans.push(Span::styled(self.marker_char, self.marker_style));
         spans.push(Span::styled(" ", bg_default));
+        if self.indent > 0 {
+            spans.push(Span::styled(" ".repeat(self.indent), bg_default));
+        }
         spans.extend(content_spans);
         spans.push(Span::styled(padding, bg_default));
         Line::from(spans)
@@ -64,9 +72,12 @@ impl RowCtx<'_> {
     ) -> Line<'static> {
         let padding = self.inner_width.saturating_sub(left_width + right_width);
         let bg_default = self.apply_bg(Style::default());
-        let mut spans = Vec::with_capacity(left_spans.len() + right_spans.len() + 3);
+        let mut spans = Vec::with_capacity(left_spans.len() + right_spans.len() + 4);
         spans.push(Span::styled(self.marker_char, self.marker_style));
         spans.push(Span::styled(" ", bg_default));
+        if self.indent > 0 {
+            spans.push(Span::styled(" ".repeat(self.indent), bg_default));
+        }
         spans.extend(left_spans);
         spans.push(Span::styled(" ".repeat(padding), bg_default));
         spans.extend(right_spans);

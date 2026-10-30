@@ -1067,7 +1067,12 @@ impl AppState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tmux::{PaneInfo, PaneStatus};
+    use crate::group::group_panes_by_repo;
+    use crate::pmux_task::PmuxTaskKind;
+    use crate::tmux::{
+        AgentType, PaneInfo, PaneStatus, PermissionMode, SessionInfo, SubagentInfo, SubagentParent,
+        WindowInfo, WorktreeMetadata,
+    };
 
     // The numbers are the spec's own scenarios, not free-standing
     // arithmetic: each one pins a documented split case.
@@ -1329,5 +1334,111 @@ mod tests {
         for chip in &chips {
             assert!(chip.width <= 4, "a chip must fit the 4-column bar");
         }
+    }
+
+    // ─── rebuild_row_targets ──────────────────────────────────
+
+    fn pane(id: &str, status: PaneStatus, parent: Option<SubagentParent>) -> PaneInfo {
+        PaneInfo {
+            pane_id: id.into(),
+            pane_active: false,
+            status,
+            attention: false,
+            agent: AgentType::Pi,
+            path: env!("CARGO_MANIFEST_DIR").into(),
+            current_command: String::new(),
+            prompt: String::new(),
+            prompt_is_response: false,
+            started_at: None,
+            wait_reason: String::new(),
+            permission_mode: PermissionMode::Default,
+            subagents: vec![],
+            pane_pid: None,
+            worktree: WorktreeMetadata::default(),
+            session_id: None,
+            sidebar_spawned: false,
+            pane_name: None,
+            bg_shell_cmd: None,
+            subagent: parent.map(|parent| SubagentInfo {
+                kind: PmuxTaskKind::Spawned,
+                task: None,
+                parent,
+            }),
+        }
+    }
+
+    /// Run the panes through the same grouping the sidebar uses, then
+    /// rebuild the selection targets.
+    fn targets_for(panes: Vec<PaneInfo>, filter: StatusFilter) -> Vec<String> {
+        let sessions = vec![SessionInfo {
+            session_name: "main".into(),
+            windows: vec![WindowInfo {
+                window_id: "@0".into(),
+                window_name: "main".into(),
+                window_active: true,
+                auto_rename: false,
+                panes,
+            }],
+        }];
+        let mut state = AppState::new(String::new());
+        state.repo_groups = group_panes_by_repo(&sessions);
+        state.global.status_filter = filter;
+        state.rebuild_row_targets();
+        state
+            .layout
+            .pane_row_targets
+            .iter()
+            .map(|target| target.pane_id.clone())
+            .collect()
+    }
+
+    #[test]
+    fn rebuild_row_targets_visits_a_parent_then_its_children() {
+        let targets = targets_for(
+            vec![
+                pane("%0", PaneStatus::Running, None),
+                pane(
+                    "%1",
+                    PaneStatus::Running,
+                    Some(SubagentParent::Pane("%0".into())),
+                ),
+                pane(
+                    "%2",
+                    PaneStatus::Running,
+                    Some(SubagentParent::Pane("%0".into())),
+                ),
+                pane("%3", PaneStatus::Running, None),
+            ],
+            StatusFilter::All,
+        );
+
+        assert_eq!(targets, vec!["%0", "%1", "%2", "%3"]);
+    }
+
+    #[test]
+    fn a_status_filter_hiding_the_root_keeps_its_children_together() {
+        let targets = targets_for(
+            vec![
+                pane("%0", PaneStatus::Idle, None),
+                pane(
+                    "%1",
+                    PaneStatus::Running,
+                    Some(SubagentParent::Pane("%0".into())),
+                ),
+                pane(
+                    "%2",
+                    PaneStatus::Running,
+                    Some(SubagentParent::Pane("%0".into())),
+                ),
+                pane("%3", PaneStatus::Running, None),
+            ],
+            StatusFilter::Busy,
+        );
+
+        assert_eq!(
+            targets,
+            vec!["%1", "%2", "%3"],
+            "the children stay clustered in the hidden root's slot"
+        );
     }
 }
