@@ -14,7 +14,8 @@ use body::{
     wait_reason_row,
 };
 use branch::branch_ports_row;
-use ctx::{RowCtx, SELECTION_MARKER};
+use ctx::RowCtx;
+pub(super) use ctx::SELECTION_MARKER;
 #[cfg(test)]
 use status::running_icon_for;
 use status::status_row;

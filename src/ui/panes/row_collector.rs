@@ -4,7 +4,7 @@ use ratatui::{
 };
 
 use super::SPAWN_BUTTON;
-use super::row;
+use super::row::{self, SELECTION_MARKER};
 use crate::state::{AppState, LayoutKind};
 use crate::ui::text::display_width;
 
@@ -71,22 +71,34 @@ fn box_bottom_line(width: usize, color: ratatui::style::Color) -> Line<'static> 
     ])
 }
 
-/// Frame one rendered row (drawn `BOX_FRAME` columns narrower): the marker
-/// and its space stay at the left edge, then `│ ` opens the box and ` │`
-/// closes it, then one blank column keeps the box off the panel border.
-/// Each border takes the background beside it, so the active
-/// row's highlight runs unbroken across the frame.
+/// Frame one rendered row (drawn `BOX_FRAME` columns narrower): the two
+/// gutter columns stay blank, then `│ ` opens the box and ` │` closes it,
+/// and one blank column keeps the box off the panel border. A selected row
+/// keeps its highlight inside the box: the `┃` marker and the selection
+/// background move onto the left border instead of washing the gutter.
 fn frame_row(line: &mut Line<'static>, color: ratatui::style::Color) {
     let border = Style::default().fg(color);
-    let left_bg = line.spans.get(1).and_then(|span| span.style.bg);
-    let right_bg = line.spans.last().and_then(|span| span.style.bg);
     let with_bg = |style: Style, bg: Option<ratatui::style::Color>| match bg {
         Some(c) => style.bg(c),
         None => style,
     };
+    let right_bg = line.spans.last().and_then(|span| span.style.bg);
+    let left_bg = line.spans.get(1).and_then(|span| span.style.bg);
+    let marker = line
+        .spans
+        .first()
+        .filter(|span| span.content.as_ref() == SELECTION_MARKER)
+        .map(|span| span.style);
+    let left = match marker {
+        Some(style) => Span::styled(format!("{SELECTION_MARKER} "), style),
+        None => Span::styled("│ ", with_bg(border, left_bg)),
+    };
+    for span in line.spans.iter_mut().take(2) {
+        span.content = " ".into();
+        span.style = Style::default();
+    }
     let at = line.spans.len().min(2);
-    line.spans
-        .insert(at, Span::styled("│ ", with_bg(border, left_bg)));
+    line.spans.insert(at, left);
     line.spans
         .push(Span::styled(" │", with_bg(border, right_bg)));
 }
@@ -595,6 +607,42 @@ mod tests {
             collected.line_to_row,
             vec![None, Some(0), None, Some(1), Some(2), None],
             "each child row belongs to its own row index; the box edges map to none"
+        );
+    }
+
+    #[test]
+    fn collect_keeps_a_selected_subagent_highlight_inside_the_box() {
+        let mut state = AppState::new("%0".into());
+        state.global.cursor_pane_id = Some("%1".into());
+        let parent = make_pane("%0", PaneStatus::Running);
+        let mut child = make_pane("%1", PaneStatus::Running);
+        child.pane_name = Some("unit1".into());
+        subagent_parent(&mut child, "%0");
+        state.repo_groups = vec![RepoGroup {
+            name: "repo".into(),
+            has_focus: false,
+            panes: vec![
+                (parent, PaneGitInfo::default()),
+                (child, PaneGitInfo::default()),
+            ],
+        }];
+        let collected = collect(&state, 40);
+
+        let status = collected
+            .lines
+            .iter()
+            .find(|line| line_text(line).contains("unit1"))
+            .expect("the child's status row");
+        insta::assert_snapshot!(line_text(status), @"  ┃   unit1                         │");
+        let selection = state.theme.selection_bg;
+        assert!(
+            status.spans[..2].iter().all(|span| span.style.bg.is_none()),
+            "the gutter outside the box carries no highlight"
+        );
+        assert_eq!(
+            status.spans[2].style.bg,
+            Some(selection),
+            "the highlight starts at the box's left border"
         );
     }
 }
