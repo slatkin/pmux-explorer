@@ -22,10 +22,8 @@ pub struct ColorTheme {
     pub status_unknown: Color,
     pub filter_inactive: Color,
     /// Filter bar row background. Painted at all times, so it sits over
-    /// the focus fill while the sidebar pane is the active one. The
-    /// same colour bands the bottom panel's tab bar, draws the strip's
-    /// `▎` splitter line, and paints the strip's tab header.
-    /// Default `#23283d`, a slate just above both section fills.
+    /// the focus fill while the sidebar pane is the active one.
+    /// Default Tokyo Night line highlight (`#414868`).
     pub filter_bar_bg: Color,
     pub agent_claude: Color,
     pub agent_codex: Color,
@@ -125,7 +123,7 @@ impl Default for ColorTheme {
             status_error: Color::Rgb(0xf7, 0x76, 0x8e),
             status_unknown: Color::Rgb(0x56, 0x5f, 0x89),
             filter_inactive: Color::Rgb(0x9a, 0xa5, 0xce),
-            filter_bar_bg: Color::Rgb(0x23, 0x28, 0x3d),
+            filter_bar_bg: Color::Rgb(0x41, 0x48, 0x68),
             agent_claude: Color::Rgb(0xff, 0x9e, 0x64),
             agent_codex: Color::Rgb(0xbb, 0x9a, 0xf7),
             agent_opencode: Color::Rgb(0x7d, 0xcf, 0xff),
