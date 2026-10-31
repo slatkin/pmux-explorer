@@ -222,7 +222,7 @@ fn focus_fill_strip_panes_left_active_right_base() {
     );
 
     insta::assert_snapshot!(render_to_string(&mut state, 44, 8), @"
-    󱓯 1 ⓘ                — ▾            │  │ 󰊢
+    󱓯 1 ⓘ                — ▾ %1        │  │ 󰊢
      0 project             ▎
     󰥔 0 ┃ 󰒲                ▎
     󰒲 1     Waiting for prom▎
@@ -259,7 +259,7 @@ fn focus_fill_strip_activity_log_right_active_left_base() {
     );
 
     insta::assert_snapshot!(render_to_string(&mut state, 44, 8), @"
-    󱓯 1 ⓘ                — ▾            │  │ 󰊢
+    󱓯 1 ⓘ                — ▾ %1        │  │ 󰊢
      0 project             ▎
     󰥔 0 ┃ 󰒲                ▎
     󰒲 1     Waiting for prom▎

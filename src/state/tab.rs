@@ -13,6 +13,16 @@ impl AppState {
             .is_some_and(|pane| pane.agent == AgentType::Pi)
     }
 
+    /// The focused pane's identity for a tab bar with room to label
+    /// itself: its pane id and, when the pane carries one, its own
+    /// name. `None` when no focused pane resolves. The id is the part
+    /// a cramped bar keeps whole, the name the part it truncates, so
+    /// the two come back apart rather than pre-joined.
+    pub fn focused_pane_identity(&self) -> Option<(&str, Option<&str>)> {
+        let pane = self.pane_by_id(self.focus_state.focused_pane_id.as_deref()?)?;
+        Some((pane.pane_id.as_str(), pane.pane_name.as_deref()))
+    }
+
     /// The tabs the rule shows for the focused pane: Tools, then
     /// Thought while the focused pane runs pi, then Tasks and Git.
     /// The cycle steps this list and the rule's labels are built from
@@ -272,6 +282,27 @@ mod tests {
                 BottomTab::GitStatus
             ]
         );
+    }
+
+    #[test]
+    fn the_tab_bar_identity_is_the_pane_id_then_its_name() {
+        // A named pane labels the strip's tab bar with the id first, so
+        // a cramping bar always keeps the identity and cuts the name.
+        let mut named = test_pane("%1");
+        named.pane_name = Some("my-task".into());
+        let state = state_with_groups(vec![group_with(vec![named])], Some("%1"));
+        assert_eq!(state.focused_pane_identity(), Some(("%1", Some("my-task"))));
+
+        // An unnamed pane labels itself with the id alone.
+        let state = state_with_groups(vec![agent_group("%1")], Some("%1"));
+        assert_eq!(state.focused_pane_identity(), Some(("%1", None)));
+
+        // No focused pane — or one that no longer resolves — labels
+        // nothing.
+        let state = state_with_groups(vec![agent_group("%1")], Some("%5"));
+        assert_eq!(state.focused_pane_identity(), None);
+        let state = state_with_groups(vec![agent_group("%1")], None);
+        assert_eq!(state.focused_pane_identity(), None);
     }
 
     #[test]

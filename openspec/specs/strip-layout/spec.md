@@ -116,14 +116,17 @@ divider column included — a horizontal band in the filter bar's
 background colour. It SHALL draw the shown tab glyphs in a
 right-aligned horizontal run, in the same order and with the same
 styles as the column's rule — the displayed tab in the accent colour —
-and a run wider than the band SHALL be truncated. The divider between the agent panel
+and a run wider than the band SHALL be truncated. The run SHALL keep
+one column free at the band's right edge, so the glyphs' two-cell
+rendering never has its last glyph clipped by the sidebar's edge. The
+divider between the agent panel
 and the tab panel SHALL be a single column drawing the left
 one-quarter block glyph on every row over the sidebar's own fill: a
 thin vertical line that carries no band and holds no tabs.
 
 #### Scenario: the run is right-aligned on the tab bar
 - **WHEN** the strip shows `R` tab glyphs
-- **THEN** the tab bar draws them right-aligned horizontally on the tab section's top row
+- **THEN** the tab bar draws them right-aligned horizontally on the tab section's top row, with one free column between the last glyph and the band's right edge
 
 #### Scenario: the tabs for a Claude pane
 - **WHEN** a strip shows the tab section and the focused pane runs Claude
@@ -132,6 +135,34 @@ thin vertical line that carries no band and holds no tabs.
 #### Scenario: the tabs for a pi pane
 - **WHEN** a strip shows the tab section and the focused pane runs pi
 - **THEN** the tab bar draws the Tools, Thought, Tasks and Git glyphs in that order
+
+### Requirement: the strip's tab bar names the focused pane
+
+The pad the right-aligned tab run leaves on the tab bar's left SHALL
+carry the focused pane's identity: its pane id, then its own name when
+the pane has one, one column in from the band's left edge and one
+column short of the run. The id SHALL come first and SHALL never be
+cut: a pad that cannot hold it whole draws no label at all, and a pad
+that holds it but not the whole name SHALL truncate the name with an
+ellipsis. A sidebar with no focused pane — or one whose focused pane
+no longer resolves — SHALL draw no label. The label SHALL wear the
+band's bright text colour and SHALL NOT be a tab click target.
+
+#### Scenario: a wide tab bar names the pane
+- **WHEN** the strip's tab bar leaves the run more pad than the focused pane's id and name need
+- **THEN** the bar draws the id and the whole name at its left end and the rest of the pad stays empty
+
+#### Scenario: a narrow tab bar cuts the name
+- **WHEN** the pad holds the focused pane's id and part of its name
+- **THEN** the bar draws the id whole and the name with an ellipsis, and the tab run keeps its columns
+
+#### Scenario: a tab bar too narrow for the id
+- **WHEN** the pad cannot hold the focused pane's id
+- **THEN** the bar draws no label at all
+
+#### Scenario: an unnamed pane
+- **WHEN** the focused pane carries no name of its own
+- **THEN** the label is the pane id alone
 
 ### Requirement: a click on the tab bar selects a tab
 

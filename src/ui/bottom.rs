@@ -35,22 +35,88 @@ pub(crate) struct TitleSpan {
     tab: Option<BottomTab>,
 }
 
-/// The row a tab bar draws on: the tab run placed by `align` and
-/// space fill beside it — a solid band the caller paints in
-/// `filter_bar_bg`. No left, right or bottom border character exists
-/// around it. `Alignment::Center` — the column's rule — pads
-/// `floor((width - run) / 2)` columns on the left and the remainder on
-/// the right; `Alignment::Right` — the strip's tab bar — leaves the
-/// whole pad on the left so the run hugs the band's right edge. Either
-/// way the row stays exactly `width` long; a run wider than `width`
-/// gets no pad and each title span truncates against the remaining
-/// budget, so the row never overflows.
+/// Columns a right-aligned run keeps free on the band's right edge.
+/// The Nerd Font tab glyphs render two cells wide while the layout
+/// measures them as one (their code points are single width), so a run
+/// that ended on the last column would have its final glyph clipped by
+/// the sidebar's edge. One free column is the width the glyph's second
+/// cell needs.
+const RIGHT_INSET: usize = 1;
+
+/// Columns the strip's tab bar keeps between its left edge and the
+/// pane label: the band's first column stays empty, so the label never
+/// sits on the divider line's own column.
+const LEAD_INSET: usize = 1;
+
+/// Columns the pane label keeps between itself and the tab run, so the
+/// label's last character and the first glyph never touch.
+const LEAD_GAP: usize = 1;
+
+/// The pane label a tab bar may draw at its left end: the focused
+/// pane's id, then its own name when the pane has one — `%12 my-task`.
+/// A bar too narrow for both cuts the name (the id is the identity,
+/// the name only context); one too narrow for the id draws no label at
+/// all rather than a clipped id.
+struct TabBarLead<'a> {
+    id: &'a str,
+    name: Option<&'a str>,
+    style: Style,
+}
+
+/// The lead label's spans and their drawn width, fitted into a `pad`
+/// of columns left of the tab run. Empty spans when the pad cannot hold
+/// the id whole.
+fn lead_spans(lead: &TabBarLead<'_>, pad: usize) -> (Vec<Span<'static>>, usize) {
+    let room = pad.saturating_sub(LEAD_INSET + LEAD_GAP);
+    let id_width = display_width(lead.id);
+    if id_width == 0 || room < id_width {
+        return (Vec::new(), 0);
+    }
+    let mut spans = vec![
+        Span::styled(" ".repeat(LEAD_INSET), lead.style),
+        Span::styled(lead.id.to_string(), lead.style),
+    ];
+    let mut used = LEAD_INSET + id_width;
+    let name_room = room - id_width;
+    // The name takes a gap column first. It draws only when what is
+    // left holds it whole or holds a character plus the ellipsis: a
+    // lone `…` after the id reads as a glitch, not as a truncation.
+    let name_budget = name_room.saturating_sub(1);
+    if let Some(name) = lead.name.filter(|name| !name.is_empty())
+        && (display_width(name) <= name_budget || name_budget >= 2)
+    {
+        let text = truncate_to_width(name, name_budget);
+        used += 1 + display_width(&text);
+        spans.push(Span::styled(" ".to_string(), lead.style));
+        spans.push(Span::styled(text, lead.style));
+    }
+    (spans, used)
+}
+
+/// The row a tab bar draws on: an optional left-aligned `lead` label,
+/// then the tab run placed by `align` and space fill beside it — a
+/// solid band the caller paints in `filter_bar_bg`. No left, right or
+/// bottom border character exists around it. `Alignment::Center` — the
+/// column's rule — pads `floor((width - run) / 2)` columns on the left
+/// and the remainder on the right; `Alignment::Right` — the strip's
+/// tab bar — leaves the whole pad on the left so the run hugs the
+/// band's right edge, less the [`RIGHT_INSET`] column a right-aligned
+/// run keeps free. Either way the row stays exactly `width` long; a run
+/// wider than `width` gets no pad and each title span truncates against
+/// the remaining budget, so the row never overflows.
+///
+/// The lead takes the columns of the left pad, one [`LEAD_INSET`]
+/// column in from the bar's edge and one [`LEAD_GAP`] short of the run,
+/// and is dropped when the pad cannot hold its id whole. Only the
+/// strip's tab bar passes one: the column's rule centers its run and
+/// labels itself nowhere.
 ///
 /// The walk also produces each label's drawn column range — the click
 /// hitboxes are this layout read back, so a label the bar truncates
 /// away has a shrunken range or none and can never be clicked where it
 /// is not drawn.
-pub(crate) fn top_line_border(
+fn tab_bar_line(
+    lead: Option<TabBarLead<'_>>,
     title_spans: &[TitleSpan],
     rule_style: Style,
     width: u16,
@@ -61,11 +127,17 @@ pub(crate) fn top_line_border(
         .map(|title| display_width(&title.span.content))
         .sum();
     let leading = match align {
-        Alignment::Right => (width as usize).saturating_sub(run_width),
+        Alignment::Right => (width as usize)
+            .saturating_sub(run_width)
+            .saturating_sub(RIGHT_INSET),
         _ => (width as usize).saturating_sub(run_width) / 2,
     };
     let mut remaining = (width as usize).saturating_sub(leading);
-    let mut spans = vec![Span::styled(" ".repeat(leading), rule_style)];
+    let (mut spans, lead_used) = match lead {
+        Some(lead) => lead_spans(&lead, leading),
+        None => (Vec::new(), 0),
+    };
+    spans.push(Span::styled(" ".repeat(leading - lead_used), rule_style));
     let mut col = leading as u16; // the first span starts after the pad
     let mut targets = Vec::new();
     for title in title_spans {
@@ -84,6 +156,17 @@ pub(crate) fn top_line_border(
     }
     spans.push(Span::styled(" ".repeat(remaining), rule_style));
     (Line::from(spans), targets)
+}
+
+/// [`tab_bar_line`] without a lead label: the column's rule, whose
+/// centered run leaves no pad for one.
+pub(crate) fn top_line_border(
+    title_spans: &[TitleSpan],
+    rule_style: Style,
+    width: u16,
+    align: Alignment,
+) -> (Line<'static>, Vec<BottomTabTarget>) {
+    tab_bar_line(None, title_spans, rule_style, width, align)
 }
 
 /// The column bottom panel: the rule row on top, the tab content under
@@ -139,11 +222,15 @@ const THIN_DIVIDER: &str = "\u{258e}";
 /// rule wears — rendered after the focus fill so they win over it. The
 /// shown tab glyphs run horizontally on the header, right-aligned and
 /// truncated exactly as the column's rule lays a run out
-/// ([`top_line_border`], the same layout the rule and the tab click
+/// ([`tab_bar_line`], the same layout the rule and the tab click
 /// test read); the displayed tab keeps the bolded accent the rule
-/// gives it. The glyph columns are shifted by the header's left edge
-/// and published as `FrameLayout::bottom_tab_targets` so a click
-/// hit-tests the columns that were drawn.
+/// gives it. The pad the right-aligned run leaves on the header's left
+/// carries the focused pane's id and name — the tab panel's subject,
+/// which a strip puts a screen away in the agent panel — cut from the
+/// name end when the pad is short. The glyph columns are shifted by the
+/// header's left edge and published as
+/// `FrameLayout::bottom_tab_targets` so a click hit-tests the columns
+/// that were drawn.
 pub fn draw_strip_divider(frame: &mut Frame, state: &mut AppState, divider: Rect, tab_bar: Rect) {
     // The divider column gets no band — just the glyph, foreground
     // only, in the band's own colour, so it reads as a thin line over
@@ -160,13 +247,20 @@ pub fn draw_strip_divider(frame: &mut Frame, state: &mut AppState, divider: Rect
     frame.render_widget(Paragraph::new(line), tab_bar);
 }
 
-/// The tab bar's drawn line and its tab hitboxes: the rule's own run
-/// right-aligned over `tab_bar`'s columns, with each hitbox shifted
-/// from run-relative to frame-absolute columns by `tab_bar.x`. Both
-/// the renderer and the `#[cfg(test)]` publisher run through this, so
-/// a click can only ever land on a glyph actually drawn.
+/// The tab bar's drawn line and its tab hitboxes: the lead label and
+/// the rule's own run right-aligned over `tab_bar`'s columns, with each
+/// hitbox shifted from run-relative to frame-absolute columns by
+/// `tab_bar.x`. Both the renderer and the `#[cfg(test)]` publisher run
+/// through this, so a click can only ever land on a glyph actually
+/// drawn.
 fn strip_tab_bar_line(state: &AppState, tab_bar: Rect) -> (Line<'static>, Vec<BottomTabTarget>) {
-    let (line, targets) = top_line_border(
+    let lead = state.focused_pane_identity().map(|(id, name)| TabBarLead {
+        id,
+        name,
+        style: Style::default().fg(state.theme.text_active),
+    });
+    let (line, targets) = tab_bar_line(
+        lead,
         &build_tab_title(state),
         Style::default(),
         tab_bar.width,
@@ -365,25 +459,117 @@ mod tests {
         insta::assert_snapshot!(rule_text(rule_line), @" │ 󰟶…");
     }
 
+    /// The lead label a strip's tab bar draws for a pane: the id, then
+    /// its name when it has one.
+    fn lead_for(name: Option<&str>) -> Option<TabBarLead<'_>> {
+        Some(TabBarLead {
+            id: "%1",
+            name,
+            style: Style::default(),
+        })
+    }
+
+    #[test]
+    fn the_strip_bar_labels_itself_with_the_focused_pane() {
+        // The pad the right-aligned run leaves on the bar's left holds
+        // the pane's id and name. The 13-column pi run leaves a 16-column
+        // pad on a 30-column bar: one inset column, the id, a gap, and
+        // the name whole, the rest of the pad staying empty.
+        let rule = Style::default().fg(Color::Indexed(240));
+        let pi = state_with_focused_agent(AgentType::Pi);
+        let (bar_line, targets) = tab_bar_line(
+            lead_for(Some("my-task")),
+            &build_tab_title(&pi),
+            rule,
+            30,
+            Alignment::Right,
+        );
+        insta::assert_snapshot!(rule_text(bar_line), @" %1 my-task     \u{f0ad} \u{2502} \u{f07f6} \u{2502} \u{f0ae} \u{2502} \u{f02a2} ");
+
+        // An unnamed pane carries its id alone, and the tab hitboxes
+        // never move: the lead takes only the pad the run leaves free.
+        let (bar_line, unnamed) = tab_bar_line(
+            lead_for(None),
+            &build_tab_title(&pi),
+            rule,
+            30,
+            Alignment::Right,
+        );
+        insta::assert_snapshot!(rule_text(bar_line), @" %1             \u{f0ad} \u{2502} \u{f07f6} \u{2502} \u{f0ae} \u{2502} \u{f02a2} ");
+        let (_, unlabelled) = tab_bar_line(None, &build_tab_title(&pi), rule, 30, Alignment::Right);
+        let ranges = |targets: &[BottomTabTarget]| -> Vec<(u16, u16)> {
+            targets.iter().map(|t| (t.start, t.end)).collect()
+        };
+        assert_eq!(ranges(&unnamed), ranges(&unlabelled));
+        assert_eq!(ranges(&targets), ranges(&unlabelled));
+    }
+
+    #[test]
+    fn a_narrow_strip_bar_truncates_the_pane_name_first() {
+        // A 20-column bar leaves the 13-column pi run a 6-column pad:
+        // the id keeps its columns and the name is cut — here all of
+        // it, since one column cannot say more than `\u{2026}`.
+        let rule = Style::default().fg(Color::Indexed(240));
+        let pi = state_with_focused_agent(AgentType::Pi);
+        let (bar_line, _) = tab_bar_line(
+            lead_for(Some("my-task")),
+            &build_tab_title(&pi),
+            rule,
+            20,
+            Alignment::Right,
+        );
+        insta::assert_snapshot!(rule_text(bar_line), @" %1   \u{f0ad} \u{2502} \u{f07f6} \u{2502} \u{f0ae} \u{2502} \u{f02a2} ");
+
+        // Two name columns keep the first character beside the
+        // ellipsis; the id keeps its own columns throughout.
+        let (bar_line, _) = tab_bar_line(
+            lead_for(Some("my-task")),
+            &build_tab_title(&pi),
+            rule,
+            22,
+            Alignment::Right,
+        );
+        insta::assert_snapshot!(rule_text(bar_line), @" %1 my\u{2026} \u{f0ad} \u{2502} \u{f07f6} \u{2502} \u{f0ae} \u{2502} \u{f02a2} ");
+    }
+
+    #[test]
+    fn a_bar_without_room_for_the_pane_id_draws_no_label() {
+        // A 17-column bar leaves the pi run a 3-column pad: one inset
+        // column and one gap column leave too little for the two-column
+        // id, so the bar stays unlabelled rather than showing `%\u{2026}`.
+        let rule = Style::default().fg(Color::Indexed(240));
+        let pi = state_with_focused_agent(AgentType::Pi);
+        let (bar_line, _) = tab_bar_line(
+            lead_for(Some("my-task")),
+            &build_tab_title(&pi),
+            rule,
+            17,
+            Alignment::Right,
+        );
+        insta::assert_snapshot!(rule_text(bar_line), @"   \u{f0ad} \u{2502} \u{f07f6} \u{2502} \u{f0ae} \u{2502} \u{f02a2} ");
+    }
+
     #[test]
     fn top_line_border_right_aligns_the_tab_run() {
-        // The strip's tab bar: the whole pad goes left so the run hugs
-        // the band's right edge — the 13-column pi run leaves 7 pad
-        // columns on a 20-column bar and none on a 6-column one.
+        // The strip's tab bar: the whole pad goes left, less the one
+        // column the last two-cell glyph needs to stay inside the
+        // band, so the 13-column pi run leaves 6 pad columns and a
+        // free column on the right of a 20-column bar, and none on a
+        // 6-column one.
         let rule = Style::default().fg(Color::Indexed(240));
         let pi = state_with_focused_agent(AgentType::Pi);
         let (bar_line, targets) =
             top_line_border(&build_tab_title(&pi), rule, 20, Alignment::Right);
-        insta::assert_snapshot!(rule_text(bar_line), @"        │ 󰟶 │  │ 󰊢");
+        insta::assert_snapshot!(rule_text(bar_line), @"       │ 󰟶 │  │ 󰊢 ");
         let ranges: Vec<(u16, u16, BottomTab)> =
             targets.iter().map(|t| (t.start, t.end, t.tab)).collect();
         assert_eq!(
             ranges,
             vec![
-                (7, 8, BottomTab::Activity),
-                (11, 12, BottomTab::Thought),
-                (15, 16, BottomTab::Tasks),
-                (19, 20, BottomTab::GitStatus),
+                (6, 7, BottomTab::Activity),
+                (10, 11, BottomTab::Thought),
+                (14, 15, BottomTab::Tasks),
+                (18, 19, BottomTab::GitStatus),
             ]
         );
         let (bar_line, _) = top_line_border(&build_tab_title(&pi), rule, 6, Alignment::Right);

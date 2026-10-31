@@ -2500,7 +2500,7 @@ fn snapshot_strip_120x12_with_the_tools_tab() {
     let mut state = make_strip_state(AgentType::Claude, PaneStatus::Idle, 40);
     let output = render_to_string(&mut state, 120, 12);
     insta::assert_snapshot!(output, @"
-    󱓯 1 ⓘ                                                                — ▾                                        │  │ 󰊢
+    󱓯 1 ⓘ                                                                — ▾ %1                                    │  │ 󰊢
      0 project                                                             ▎
     󰥔 0 ┃ 󰒲                                                                ▎
     󰒲 1     Waiting for prompt…                                             ▎
@@ -2520,7 +2520,7 @@ fn snapshot_strip_pi_pane_shows_the_thought_glyph() {
     let mut state = make_strip_state(AgentType::Pi, PaneStatus::Running, 40);
     let output = render_to_string(&mut state, 120, 12);
     insta::assert_snapshot!(output, @"
-    󱓯 1 ⓘ                                                                — ▾                                    │ 󰟶 │  │ 󰊢
+    󱓯 1 ⓘ                                                                — ▾ %1                                │ 󰟶 │  │ 󰊢
      1 project                                                             ▎
     󰥔 0 ┃                                                                 ▎
     󰒲 0                                                                     ▎
@@ -2593,7 +2593,7 @@ fn snapshot_strip_nests_a_subagent_under_its_parent() {
 
     let output = render_to_string(&mut state, 120, 12);
     insta::assert_snapshot!(output, @"
-    󱓯 2 ⓘ                                                                — ▾                                    │ 󰟶 │  │ 󰊢
+    󱓯 2 ⓘ                                                                — ▾ %1 orchestrator                   │ 󰟶 │  │ 󰊢
      2 project                                                            +▎
     󰥔 0 ┃   orchestrator main                                             ▎
     󰒲 0       ♟ unit1 + pmux/unit1                                        ▎
