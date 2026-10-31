@@ -41,16 +41,16 @@ fn repo_header_line(
     ])
 }
 
-/// Columns a boxed subagent row loses to its frame: `│ ` on the left and
-/// ` │` on the right.
-const BOX_FRAME: usize = 4;
+/// Columns a boxed subagent row loses to its frame: `│ ` on the left, ` │`
+/// on the right and one blank column of margin before the panel border.
+const BOX_FRAME: usize = 5;
 
 /// Top edge of a subagent box: `╭─ N subagents ───╮`, starting at the
 /// parent's content column and ending in the last column.
 fn box_top_line(count: usize, width: usize, color: ratatui::style::Color) -> Line<'static> {
     let noun = if count == 1 { "subagent" } else { "subagents" };
     let head = format!("╭─ {count} {noun} ");
-    let fill = width.saturating_sub(2 + display_width(&head) + 1).max(1);
+    let fill = width.saturating_sub(2 + display_width(&head) + 2).max(1);
     Line::from(vec![
         Span::raw("  "),
         Span::styled(
@@ -61,7 +61,7 @@ fn box_top_line(count: usize, width: usize, color: ratatui::style::Color) -> Lin
 }
 
 fn box_bottom_line(width: usize, color: ratatui::style::Color) -> Line<'static> {
-    let fill = width.saturating_sub(4);
+    let fill = width.saturating_sub(5);
     Line::from(vec![
         Span::raw("  "),
         Span::styled(
@@ -73,7 +73,8 @@ fn box_bottom_line(width: usize, color: ratatui::style::Color) -> Line<'static> 
 
 /// Frame one rendered row (drawn `BOX_FRAME` columns narrower): the marker
 /// and its space stay at the left edge, then `│ ` opens the box and ` │`
-/// closes it. Each border takes the background beside it, so the active
+/// closes it, then one blank column keeps the box off the panel border.
+/// Each border takes the background beside it, so the active
 /// row's highlight runs unbroken across the frame.
 fn frame_row(line: &mut Line<'static>, color: ratatui::style::Color) {
     let border = Style::default().fg(color);
@@ -549,7 +550,7 @@ mod tests {
         );
         assert_eq!(
             *click_col as usize,
-            width as usize - 3,
+            width as usize - 4,
             "the × stays in the last column inside the box frame"
         );
     }
@@ -585,10 +586,10 @@ mod tests {
         insta::assert_snapshot!(joined, @"
         repo
             orchestrator
-          ╭─ 2 subagents ──────────────────────╮
-          │   unit1                          │
-          │   unit2                          │
-          ╰────────────────────────────────────╯
+          ╭─ 2 subagents ─────────────────────╮
+          │   unit1                         │
+          │   unit2                         │
+          ╰───────────────────────────────────╯
         ");
         assert_eq!(
             collected.line_to_row,
