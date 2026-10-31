@@ -40,13 +40,27 @@ Of the two sections, the one that owns keyboard input SHALL be painted with the 
 - **WHEN** the sidebar is a strip and focus is `ActivityLog`
 - **THEN** the divider and the tab panel on the right are painted with the active focus background colour, and the filter bar and the agent panel on the left with the base focus background colour
 
-### Requirement: the selected pane row overrides the fill
+### Requirement: the active agent's row overrides the fill
 
-The selection background on the selected pane's marker rows SHALL still take precedence over any focus fill, so the selected pane remains the most prominent row.
+The sidebar SHALL mark exactly one row as the active agent, and it SHALL
+mark it with both signals at once: the row starts with the `┃` grabber and
+its status and branch rows carry the selection background instead of the
+focus fill. This SHALL hold whichever section owns the keyboard — the active
+row keeps both marks while the tab section owns it. The active agent SHALL be
+the pane the cursor names, and the cursor SHALL follow the tmux focus, so a
+click on an agent pane moves the marks without a second click in the list.
 
-#### Scenario: a selected row inside a filled section
-- **WHEN** focus is `Panes` and a pane row is selected
-- **THEN** that row's status and branch rows show the selection background, not the focus fill
+#### Scenario: an active row inside a filled section
+- **WHEN** a pane row is the active agent
+- **THEN** that row's status and branch rows show the selection background and start with the grabber, not the focus fill
+
+#### Scenario: the tab section owns the keyboard
+- **WHEN** focus is `ActivityLog`
+- **THEN** the active agent's row still shows both the grabber and the selection background
+
+#### Scenario: the tmux focus moves to another pane
+- **WHEN** the user clicks another agent pane, or focuses it with a tmux key
+- **THEN** the cursor, the grabber and the selection background all move to that pane
 
 ### Requirement: the two fills are configurable colours
 

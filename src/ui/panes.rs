@@ -12,7 +12,7 @@ use ratatui::{
     widgets::{Block, BorderType, Borders, Clear, Paragraph},
 };
 
-use crate::state::{AppState, Focus, PopupState, RepoFilter, SpawnField};
+use crate::state::{AppState, PopupState, RepoFilter, SpawnField};
 
 pub(crate) use filter_bar::draw_strip_filter_bar;
 
@@ -461,9 +461,10 @@ fn compute_scroll_offset(state: &mut AppState, total_lines: usize, list_area: Re
     state.scrolls.panes.total_lines = total_lines;
     state.scrolls.panes.visible_height = list_area.height as usize;
 
-    // Auto-scroll to keep selected agent visible — the selection is
-    // drawn at all times, so the scroll follows it at all times.
-    if state.focus_state.focus == Focus::Panes {
+    // Auto-scroll to keep the active agent visible: the active row is
+    // drawn at all times, whichever panel owns the keyboard, so the
+    // scroll follows it at all times.
+    {
         let mut first_line: Option<usize> = None;
         let mut last_line: Option<usize> = None;
         for (i, mapping) in state.layout.line_to_row.iter().enumerate() {

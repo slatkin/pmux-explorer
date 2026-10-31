@@ -1014,9 +1014,9 @@ fn snapshot_three_groups_middle_focused_ui() {
      󱓯 3  1 󰥔 0 󰒲 2  0    ⇄ ⤢
     ⓘ                        — ▾
     repo-a
-       
+    ┃  
     repo-b
-    ┃ 󰒲 codex
+      󰒲 codex
         Waiting for prompt…
     repo-c
       󰒲 
@@ -2146,8 +2146,8 @@ fn snapshot_sidebar_spawned_long_branch_truncates_and_keeps_x() {
      󱓯 1  0 󰥔 0 󰒲 1  0⇄ ⤢
     ⓘ                    — ▾
     proj                   +
-      󰒲 
-         + feature/really…×
+    ┃ 󰒲 
+    ┃    + feature/really…×
         Waiting for prompt…
             │  │ 󰊢
           No tools yet
@@ -2189,8 +2189,8 @@ fn snapshot_sidebar_spawned_coexists_with_port_display() {
      󱓯 1  0 󰥔 0 󰒲 1  0      ⇄ ⤢
     ⓘ                          — ▾
     proj                         +
-      󰒲 
-         + feat/srv       :3000 ×
+    ┃ 󰒲 
+    ┃    + feat/srv       :3000 ×
         Waiting for prompt…
                │  │ 󰊢
              No tools yet
@@ -2430,7 +2430,7 @@ fn snapshot_subagent_with_parent_in_another_group_is_a_top_level_row() {
      󱓯 1  1 󰥔 0 󰒲 0  0                                    ⇄ ⤢
     ⓘ                                              project-sub ▾
     project-sub
-        ♟
+    ┃   ♟
                             │ 󰟶 │  │ 󰊢
                             No tools yet
     ");

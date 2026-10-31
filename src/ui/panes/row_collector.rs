@@ -5,7 +5,7 @@ use ratatui::{
 
 use super::SPAWN_BUTTON;
 use super::row;
-use crate::state::{AppState, Focus, LayoutKind};
+use crate::state::{AppState, LayoutKind};
 use crate::ui::text::display_width;
 
 /// Build a repo group's header: the repo name at column 0, with the spawn
@@ -148,10 +148,11 @@ fn collect_pane(
 ) {
     let theme = &state.theme;
     let indent = if nested { row::NEST_INDENT } else { 0 };
-    let is_selected =
-        state.focus_state.focus == Focus::Panes && row_index == state.global.selected_pane_row;
-
-    let is_active = state.focus_state.focused_pane_id.as_ref() == Some(&pane.pane_id);
+    // One active agent per sidebar: the pane the cursor names gets both the
+    // left `┃` and the selection background, always — whichever panel
+    // owns the keyboard. The cursor follows the tmux focus, so a click on an
+    // agent pane marks it here without a second click in the list.
+    let is_active = state.global.cursor_pane_id.as_deref() == Some(pane.pane_id.as_str());
 
     let pane_state = state.pane_state(&pane.pane_id);
     let ports = pane_state.map(|s| s.ports.as_slice());
@@ -162,7 +163,6 @@ fn collect_pane(
         git_info,
         ports,
         task_progress,
-        is_selected,
         is_active,
         width,
         &state.icons,

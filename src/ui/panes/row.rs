@@ -35,7 +35,6 @@ pub(super) fn render_pane_lines_with_ports(
     git_info: &crate::group::PaneGitInfo,
     ports: Option<&[u16]>,
     task_progress: Option<&crate::activity::TaskProgress>,
-    selected: bool,
     active: bool,
     width: usize,
     icons: &StatusIcons,
@@ -48,7 +47,6 @@ pub(super) fn render_pane_lines_with_ports(
         git_info,
         ports,
         task_progress,
-        selected,
         active,
         width,
         icons,
@@ -69,7 +67,6 @@ pub(super) fn render_pane_lines_inline_branch(
     git_info: &crate::group::PaneGitInfo,
     ports: Option<&[u16]>,
     task_progress: Option<&crate::activity::TaskProgress>,
-    selected: bool,
     active: bool,
     width: usize,
     icons: &StatusIcons,
@@ -84,7 +81,6 @@ pub(super) fn render_pane_lines_inline_branch(
         git_info,
         ports,
         task_progress,
-        selected,
         active,
         width,
         icons,
@@ -102,7 +98,6 @@ fn render_pane_lines(
     git_info: &crate::group::PaneGitInfo,
     ports: Option<&[u16]>,
     task_progress: Option<&crate::activity::TaskProgress>,
-    selected: bool,
     active: bool,
     width: usize,
     icons: &StatusIcons,
@@ -125,7 +120,7 @@ fn render_pane_lines(
     // the width left for its content shrinks with the indent.
     let indent = if nested { NEST_INDENT } else { 0 };
     let inner_width = width.saturating_sub(2 + indent);
-    let bg = if selected {
+    let bg = if active {
         Some(theme.selection_bg)
     } else {
         None
@@ -134,12 +129,12 @@ fn render_pane_lines(
         Some(c) => style.bg(c),
         None => style,
     };
-    // The left marker `┃` highlights the pane that is currently focused in
-    // tmux (`active`). To keep the active accent compact, it only appears on
-    // the status row and the branch/ports row (when present) — never on
-    // deeper details like task progress or prompt wrapping. The sidebar
-    // cursor position (`selected`) still paints the full pane with the
-    // selection background.
+    // One active agent, one mark: the left `┃` grabs the eye and the
+    // selection background washes the row, both on the same pane — the
+    // pane the cursor names, which is the tmux-focused pane as soon as the
+    // cursor has followed it. To keep the accent compact the marker and
+    // the fill appear only on the status row and the branch/ports row,
+    // never on deeper details like task progress or prompt wrapping.
     let marker_ctx = RowCtx {
         marker_char: if active { SELECTION_MARKER } else { " " },
         marker_style: if active {
@@ -272,7 +267,6 @@ mod tests {
             None,
             None,
             false,
-            false,
             width,
             &StatusIcons::default(),
             &theme,
@@ -292,7 +286,6 @@ mod tests {
             &PaneGitInfo::default(),
             None,
             None,
-            false,
             false,
             40,
             &StatusIcons::default(),
@@ -314,7 +307,6 @@ mod tests {
             &PaneGitInfo::default(),
             None,
             None,
-            false,
             false,
             40,
             &StatusIcons::default(),
@@ -347,7 +339,6 @@ mod tests {
             &PaneGitInfo::default(),
             None,
             None,
-            false,
             false,
             30,
             &StatusIcons::default(),
@@ -384,7 +375,6 @@ mod tests {
             Some(&ports),
             None,
             false,
-            false,
             40,
             &StatusIcons::default(),
             &theme,
@@ -414,7 +404,6 @@ mod tests {
             },
             Some(&ports),
             None,
-            false,
             false,
             40,
             &StatusIcons::default(),
@@ -446,7 +435,6 @@ mod tests {
             &PaneGitInfo::default(),
             None,
             None,
-            false,
             false,
             40,
             &StatusIcons::default(),
@@ -498,7 +486,6 @@ mod tests {
             None,
             None,
             false,
-            false,
             40,
             &StatusIcons::default(),
             &theme,
@@ -526,7 +513,6 @@ mod tests {
             None,
             None,
             false,
-            false,
             40,
             &StatusIcons::default(),
             &theme,
@@ -552,7 +538,6 @@ mod tests {
             None,
             None,
             false,
-            false,
             40,
             &StatusIcons::default(),
             &theme,
@@ -577,7 +562,6 @@ mod tests {
             &PaneGitInfo::default(),
             None,
             None,
-            false,
             false,
             40,
             &StatusIcons::default(),
@@ -606,7 +590,6 @@ mod tests {
             &PaneGitInfo::default(),
             None,
             None,
-            false,
             false,
             20,
             &StatusIcons::default(),
@@ -639,7 +622,6 @@ mod tests {
             None,
             None,
             false,
-            false,
             18,
             &StatusIcons::default(),
             &theme,
@@ -664,7 +646,6 @@ mod tests {
             None,
             None,
             false,
-            false,
             40,
             &StatusIcons::default(),
             &theme,
@@ -688,7 +669,6 @@ mod tests {
             &PaneGitInfo::default(),
             None,
             None,
-            false,
             false,
             40,
             &StatusIcons::default(),
@@ -717,7 +697,6 @@ mod tests {
             &PaneGitInfo::default(),
             None,
             None,
-            false,
             false,
             40,
             &StatusIcons::default(),
@@ -748,7 +727,6 @@ mod tests {
             None,
             None,
             false,
-            false,
             40,
             &StatusIcons::default(),
             &theme,
@@ -777,7 +755,6 @@ mod tests {
             None,
             None,
             false,
-            false,
             20,
             &StatusIcons::default(),
             &theme,
@@ -802,7 +779,6 @@ mod tests {
             &PaneGitInfo::default(),
             None,
             None,
-            false,
             false,
             40,
             &StatusIcons::default(),
@@ -835,7 +811,6 @@ mod tests {
             None,
             Some(&progress),
             false,
-            false,
             40,
             &StatusIcons::default(),
             &theme,
@@ -860,7 +835,6 @@ mod tests {
             &PaneGitInfo::default(),
             None,
             Some(&progress),
-            false,
             false,
             40,
             &StatusIcons::default(),
@@ -1172,7 +1146,7 @@ mod tests {
     }
 
     #[test]
-    fn render_pane_lines_selected_applies_background_to_spans() {
+    fn render_pane_lines_active_marks_the_row_twice() {
         let theme = ColorTheme::default();
         let pane = pane(PermissionMode::Auto, PaneStatus::Running, "do work");
         let lines = render_pane_lines_with_ports(
@@ -1180,8 +1154,7 @@ mod tests {
             &PaneGitInfo::default(),
             None,
             None,
-            true, // selected
-            false,
+            true, // active
             40,
             &StatusIcons::default(),
             &theme,
@@ -1189,21 +1162,33 @@ mod tests {
             0,
         );
 
-        // Every inner (non-marker) span on the status line must carry the selection bg.
-        // The left marker uses marker_style only.
+        // The active agent wears both marks on the same row: the `┃`
+        // grabber and the selection background. One signal, so the two can
+        // never point at different panes.
         let status = &lines[0];
-        let has_bg = status
+        assert_eq!(
+            status.spans[0].content, SELECTION_MARKER,
+            "the active row starts with the grabber"
+        );
+        assert_eq!(
+            status.spans[0].style.bg,
+            Some(theme.selection_bg),
+            "the grabber sits inside the selection background, not beside it"
+        );
+        let inner_with_bg = status
             .spans
             .iter()
-            .any(|s| s.style.bg == Some(theme.selection_bg));
+            .skip(1)
+            .filter(|s| s.style.bg == Some(theme.selection_bg))
+            .count();
         assert!(
-            has_bg,
-            "selected row should apply selection_bg to inner spans"
+            inner_with_bg > 0,
+            "the row's content carries the selection background too"
         );
     }
 
     #[test]
-    fn render_pane_lines_selected_leaves_content_rows_unhighlighted() {
+    fn render_pane_lines_active_leaves_content_rows_unhighlighted() {
         let theme = ColorTheme::default();
         let pane = pane(PermissionMode::Auto, PaneStatus::Running, "do work");
         let lines = render_pane_lines_with_ports(
@@ -1211,8 +1196,7 @@ mod tests {
             &PaneGitInfo::default(),
             None,
             None,
-            true, // selected
-            false,
+            true, // active
             40,
             &StatusIcons::default(),
             &theme,
@@ -1226,7 +1210,7 @@ mod tests {
                 .skip(1)
                 .flat_map(|line| &line.spans)
                 .all(|span| span.style.bg != Some(theme.selection_bg)),
-            "content rows should not carry the selection background"
+            "only the status and branch rows wear the selection background"
         );
     }
 
@@ -1239,7 +1223,6 @@ mod tests {
             &PaneGitInfo::default(),
             None,
             None,
-            false,
             true, // active
             40,
             &StatusIcons::default(),
@@ -1635,7 +1618,6 @@ mod tests {
             },
             None,
             None,
-            false,
             false,
             40,
             &StatusIcons::default(),

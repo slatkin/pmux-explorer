@@ -59,8 +59,24 @@ impl AppState {
         // When the sidebar has focus, find_active_pane returns None — preserve
         // the previously focused pane so bottom panel data stays stable.
         if let Some((id, _)) = tmux::find_active_pane(&self.tmux_pane) {
-            self.focus_state.focused_pane_id = Some(id);
+            self.adopt_focused_pane(id);
         }
+    }
+
+    /// The cursor and the tmux focus are one agent, so a focus change from
+    /// outside the sidebar — a click on an agent pane, a tmux navigation
+    /// key — takes the cursor with it: the marked row is the pane the user
+    /// just entered, and one click is enough. The row itself follows from
+    /// `cursor_pane_id` the next time the targets are rebuilt.
+    ///
+    /// This only ever runs for a pane tmux reports as focused; while the
+    /// sidebar holds the keyboard [`tmux::find_active_pane`] reports
+    /// nothing, so browsing with `j`/`k` keeps the cursor it moved.
+    fn adopt_focused_pane(&mut self, pane_id: String) {
+        if self.focus_state.focused_pane_id.as_deref() != Some(pane_id.as_str()) {
+            self.global.cursor_pane_id = Some(pane_id.clone());
+        }
+        self.focus_state.focused_pane_id = Some(pane_id);
     }
 
     /// Put the cursor on `row` and name the pane it lands on, so the row
@@ -237,6 +253,32 @@ mod tests {
         // Out-of-range cursor → None (not a panic).
         state.global.selected_pane_row = 99;
         assert!(state.selected_pane().is_none());
+    }
+
+    #[test]
+    fn adopt_focused_pane_moves_the_cursor_onto_the_focused_pane() {
+        let mut state = AppState::new("%99".into());
+        state.global.cursor_pane_id = Some("%1".into());
+
+        state.adopt_focused_pane("%3".into());
+
+        assert_eq!(state.focus_state.focused_pane_id.as_deref(), Some("%3"));
+        assert_eq!(
+            state.global.cursor_pane_id.as_deref(),
+            Some("%3"),
+            "the cursor and the tmux focus are one agent"
+        );
+    }
+
+    #[test]
+    fn adopt_focused_pane_keeps_its_cursor_for_the_same_pane() {
+        let mut state = AppState::new("%99".into());
+        state.focus_state.focused_pane_id = Some("%2".into());
+        state.global.cursor_pane_id = Some("%2".into());
+
+        state.adopt_focused_pane("%2".into());
+
+        assert_eq!(state.global.cursor_pane_id.as_deref(), Some("%2"));
     }
 
     #[test]
