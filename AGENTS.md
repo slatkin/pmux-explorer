@@ -22,6 +22,15 @@ CI runs `cargo test`, `cargo clippy`, and `cargo fmt --check` on every push/PR.
 
 After implementation is complete, run `cargo build --release`. The plugin directory is usually a symlink to this repo, so the binary is picked up automatically; only a worktree build needs a manual copy (see "Debugging" section below).
 
+## Commits
+
+- Commit the work you finish, in the session that finishes it. Never leave the
+  checkout dirty: run `git status` before reporting a task done and commit
+  whatever is left — code, specs, docs and tests together.
+- One concern per commit. Unrelated leftovers found in the tree get their own
+  commit, with a message that says what they are.
+- Work lands on `main` here. Do not push or open a PR unless asked.
+
 ## Architecture
 
 ### Entry Points
