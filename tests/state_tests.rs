@@ -561,6 +561,136 @@ fn test_cursor_sync_clamped_by_rebuild() {
     assert_eq!(state.global.selected_pane_row, 0);
 }
 
+// ─── Cursor identity tests ─────────────────────────────────────────
+//
+// The cursor names a pane (`GlobalState::cursor_pane_id`) and the row
+// is only a cache into the filtered list, so a filter change or a
+// closing pane moves the row without moving the cursor to a stranger.
+
+/// One repo group of agent panes `%1`, `%2`, … with the given statuses,
+/// rebuilt once so the cursor has resolved.
+fn state_with_statuses(statuses: &[PaneStatus]) -> AppState {
+    let panes: Vec<_> = statuses
+        .iter()
+        .enumerate()
+        .map(|(index, status)| {
+            let mut pane = make_pane(AgentType::Claude, status.clone());
+            pane.pane_id = format!("%{}", index + 1);
+            pane.pane_active = index == 0;
+            pane
+        })
+        .collect();
+    let mut state = make_state(vec![]);
+    state.repo_groups = vec![make_repo_group("project", panes)];
+    state.rebuild_row_targets();
+    state
+}
+
+#[test]
+fn rebuild_row_targets_keeps_the_cursor_on_its_pane_when_rows_shift() {
+    let mut state =
+        state_with_statuses(&[PaneStatus::Idle, PaneStatus::Running, PaneStatus::Running]);
+    state.select_row(1);
+    assert_eq!(state.global.cursor_pane_id.as_deref(), Some("%2"));
+
+    // Busy hides %1, so the pane the cursor names moves up one row.
+    state.global.status_filter = StatusFilter::Busy;
+    state.rebuild_row_targets();
+
+    assert_eq!(
+        state.layout.pane_row_targets.len(),
+        2,
+        "the filter keeps %2 and %3"
+    );
+    assert_eq!(
+        state.global.selected_pane_row, 0,
+        "the cursor row follows its pane instead of staying on index 1"
+    );
+    assert_eq!(state.global.cursor_pane_id.as_deref(), Some("%2"));
+}
+
+#[test]
+fn the_highlighted_row_is_the_marked_pane_after_a_filter_change() {
+    // The user pressed Enter on %2, so the left marker `┃` draws on
+    // %2. The filter then hides a row above it. The cursor must end up
+    // on %2 again, or the row highlight paints one pane while the
+    // marker marks another.
+    let mut state =
+        state_with_statuses(&[PaneStatus::Idle, PaneStatus::Running, PaneStatus::Running]);
+    state.select_row(1);
+    state.focus_state.focused_pane_id = Some("%2".into());
+
+    state.global.status_filter = StatusFilter::Busy;
+    state.rebuild_row_targets();
+
+    assert_eq!(
+        state.selected_pane().map(|pane| pane.pane_id.as_str()),
+        Some("%2"),
+        "the highlighted row is the pane the marker marks"
+    );
+    assert_eq!(state.focus_state.focused_pane_id.as_deref(), Some("%2"));
+}
+
+#[test]
+fn rebuild_row_targets_falls_back_to_the_focused_pane_row() {
+    let mut state =
+        state_with_statuses(&[PaneStatus::Idle, PaneStatus::Running, PaneStatus::Running]);
+    state.select_row(0);
+    state.focus_state.focused_pane_id = Some("%3".into());
+
+    // The filter hides the pane the cursor names; the focused pane is
+    // the row the left marker draws, so the cursor lands there.
+    state.global.status_filter = StatusFilter::Busy;
+    state.rebuild_row_targets();
+
+    assert_eq!(state.global.selected_pane_row, 1);
+    assert_eq!(state.global.cursor_pane_id.as_deref(), Some("%3"));
+}
+
+#[test]
+fn rebuild_row_targets_names_the_row_it_lands_on() {
+    let mut state =
+        state_with_statuses(&[PaneStatus::Running, PaneStatus::Running, PaneStatus::Idle]);
+    state.select_row(1);
+    // Neither the cursor's pane nor the focused pane is listed: the
+    // filter keeps only %3, and the pane behind the focus is not an
+    // agent pane.
+    state.focus_state.focused_pane_id = Some("%99".into());
+
+    state.global.status_filter = StatusFilter::Idle;
+    state.rebuild_row_targets();
+
+    assert_eq!(
+        state.global.selected_pane_row, 0,
+        "the row is clamped into the only row there is"
+    );
+    assert_eq!(
+        state.global.cursor_pane_id.as_deref(),
+        Some("%3"),
+        "the cursor names the pane its row landed on, not the one it lost"
+    );
+}
+
+#[test]
+fn a_fresh_cursor_lands_on_the_focused_pane() {
+    let mut state = state_with_statuses(&[
+        PaneStatus::Running,
+        PaneStatus::Running,
+        PaneStatus::Running,
+    ]);
+    // A brand-new instance: no shared cursor read yet, the cursor row at
+    // its default. The first rebuild resolves it from tmux focus, so the
+    // highlight and the left marker start on the same pane.
+    state.global.cursor_pane_id = None;
+    state.global.selected_pane_row = 0;
+    state.focus_state.focused_pane_id = Some("%3".into());
+
+    state.rebuild_row_targets();
+
+    assert_eq!(state.global.selected_pane_row, 2);
+    assert_eq!(state.global.cursor_pane_id.as_deref(), Some("%3"));
+}
+
 // ─── GlobalState tests ──────────────────────────────────────────────
 
 fn make_opts(pairs: &[(&str, &str)]) -> std::collections::HashMap<String, String> {
@@ -611,10 +741,27 @@ fn apply_all_applies_filter_from_tmux() {
 fn apply_all_applies_cursor_from_tmux() {
     let mut g = make_global();
 
+    let opts = make_opts(&[(tmux::SIDEBAR_CURSOR, "%3")]);
+    g.apply_all(&opts, None);
+
+    assert_eq!(g.cursor_pane_id.as_deref(), Some("%3"));
+}
+
+#[test]
+fn apply_all_ignores_a_legacy_row_index_cursor() {
+    // A value written by a version that shared the cursor as a row
+    // position names no pane. Adopting it as an index would put the
+    // cursor on whatever row that number happens to be here.
+    let mut g = make_global();
+
     let opts = make_opts(&[(tmux::SIDEBAR_CURSOR, "3")]);
     g.apply_all(&opts, None);
 
-    assert_eq!(g.selected_pane_row, 3);
+    assert_eq!(g.cursor_pane_id, None);
+    assert_eq!(
+        g.selected_pane_row, 0,
+        "a row index in the shared option must not move the cursor"
+    );
 }
 
 #[test]
@@ -673,13 +820,13 @@ fn apply_all_applies_all_three_from_tmux() {
 
     let opts = make_opts(&[
         (tmux::SIDEBAR_FILTER, "error"),
-        (tmux::SIDEBAR_CURSOR, "7"),
+        (tmux::SIDEBAR_CURSOR, "%7"),
         (tmux::SIDEBAR_REPO_FILTER, "my-app"),
     ]);
     g.apply_all(&opts, None);
 
     assert_eq!(g.status_filter, StatusFilter::Error);
-    assert_eq!(g.selected_pane_row, 7);
+    assert_eq!(g.cursor_pane_id.as_deref(), Some("%7"));
     assert_eq!(g.repo_filter, RepoFilter::Repo("my-app".into()));
 }
 
@@ -711,58 +858,61 @@ fn apply_all_picks_up_change_from_another_instance() {
 fn apply_all_picks_up_cursor_from_another_instance() {
     let mut g = make_global();
 
-    g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "3")]), None);
-    assert_eq!(g.selected_pane_row, 3);
-    // last_saved_cursor is now 3
+    g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "%3")]), None);
+    assert_eq!(g.cursor_pane_id.as_deref(), Some("%3"));
+    // last_saved_cursor is now %3
 
-    // Another instance moves cursor to 7
-    g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "7")]), None);
+    // Another instance moves cursor to %7
+    g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "%7")]), None);
 
     assert_eq!(
-        g.selected_pane_row, 7,
+        g.cursor_pane_id.as_deref(),
+        Some("%7"),
         "apply_all should pick up a cursor changed by another instance"
     );
 }
 
 #[test]
 fn apply_all_does_not_revert_pending_cursor_save() {
-    // The user navigates to row 5 but the debounced save has not fired
-    // yet, so tmux still holds 2 (= last_saved_cursor). Ticks that run
-    // before the flush must not drag the cursor back to 2.
+    // The user moves the cursor to %5 but the debounced save has not
+    // fired yet, so tmux still holds %2 (= last_saved_cursor). Ticks
+    // that run before the flush must not drag the cursor back to %2.
     let mut g = make_global();
 
-    g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "2")]), None);
-    assert_eq!(g.selected_pane_row, 2);
-    g.selected_pane_row = 5;
+    g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "%2")]), None);
+    assert_eq!(g.cursor_pane_id.as_deref(), Some("%2"));
+    g.cursor_pane_id = Some("%5".into());
     g.queue_cursor_save();
 
     // Ticks run while the save is still pending (tmux value unchanged).
-    g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "2")]), None);
-    g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "2")]), None);
+    g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "%2")]), None);
+    g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "%2")]), None);
 
     assert_eq!(
-        g.selected_pane_row, 5,
+        g.cursor_pane_id.as_deref(),
+        Some("%5"),
         "apply_all must not revert a cursor whose save is pending"
     );
 }
 
 #[test]
 fn apply_all_does_not_clobber_a_pending_cursor_move_with_a_remote_value() {
-    // The user navigates to row 5; before the debounced write lands,
-    // another instance writes row 9 to tmux. The pending local move
-    // must win — adopting 9 now would both show the wrong row and make
-    // the flush persist the peer's value instead of the user's.
+    // The user moves the cursor to %5; before the debounced write lands,
+    // another instance writes %9 to tmux. The pending local move must
+    // win — adopting %9 now would both show the wrong pane and make the
+    // flush persist the peer's value instead of the user's.
     let mut g = make_global();
 
-    g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "2")]), None);
-    assert_eq!(g.selected_pane_row, 2);
-    g.selected_pane_row = 5;
+    g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "%2")]), None);
+    assert_eq!(g.cursor_pane_id.as_deref(), Some("%2"));
+    g.cursor_pane_id = Some("%5".into());
     g.queue_cursor_save();
 
-    g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "9")]), None);
+    g.apply_all(&make_opts(&[(tmux::SIDEBAR_CURSOR, "%9")]), None);
 
     assert_eq!(
-        g.selected_pane_row, 5,
+        g.cursor_pane_id.as_deref(),
+        Some("%5"),
         "a remote cursor value must not clobber a pending local move"
     );
 }
@@ -776,24 +926,25 @@ fn apply_all_picks_up_cursor_and_repo_filter_from_another_instance() {
 
     g.apply_all(
         &make_opts(&[
-            (tmux::SIDEBAR_CURSOR, "1"),
+            (tmux::SIDEBAR_CURSOR, "%1"),
             (tmux::SIDEBAR_REPO_FILTER, "app"),
         ]),
         None,
     );
-    assert_eq!(g.selected_pane_row, 1);
+    assert_eq!(g.cursor_pane_id.as_deref(), Some("%1"));
     assert_eq!(g.repo_filter, RepoFilter::Repo("app".into()));
 
     g.apply_all(
         &make_opts(&[
-            (tmux::SIDEBAR_CURSOR, "6"),
+            (tmux::SIDEBAR_CURSOR, "%6"),
             (tmux::SIDEBAR_REPO_FILTER, "other"),
         ]),
         None,
     );
 
     assert_eq!(
-        g.selected_pane_row, 6,
+        g.cursor_pane_id.as_deref(),
+        Some("%6"),
         "one tick should pick up the other instance's cursor"
     );
     assert_eq!(

@@ -13,7 +13,7 @@ read from tmux on every refresh tick.
 | Field | Tmux Variable | Update Trigger | Description |
 |-------|--------------|----------------|-------------|
 | `status_filter` | `@sidebar_filter` | User input (left/right key) | Active status filter (All/Busy/Waiting/Idle/Error) |
-| `selected_pane_row` | `@sidebar_cursor` | User input (j/k key); tmux write flushed after a short debounce | Cursor position in agent list |
+| `selected_pane_row` / `cursor_pane_id` | `@sidebar_cursor` | User input (j/k key, agent-list click) through `select_row`; tmux write flushed after a short debounce | Cursor in the agent list: the row it draws on and the pane it names. The option carries the pane id; the row is a cache re-derived from it by `rebuild_row_targets()`, so a filter change, a repo reorder or a closing pane moves the row under the same pane |
 | `repo_filter` | `@sidebar_repo_filter` | User input (repo popup) | Repository filter (All or specific repo) |
 | `bottom_tab` | `@sidebar_bottom_tab` | On user tab switch (cycle key / tab-title click); tmux write retried when rejected | Selected bottom tab, shared server-wide; each instance adopts a peer's selection on its next refresh tick. The drawn tab run shows one Nerd Font glyph per tab — centered on the column's rule, right-aligned on the strip's tab bar — wrench for Activity, thought-bubble for Thought, list for Tasks, git-branch for Git — separated by ` │ ` delimiters; the stored values are `activity`, `thought`, `tasks` and `git`, and the Activity tab keeps that variant name while the Tools glyph draws for it. `thought` is drawn only while the focused pane runs pi — a stored Thought falls back to Activity for any other agent, without a write, so the panel returns to Thought when the focus comes back to a pi pane |
 | `bottom_percent` | `@sidebar_bottom_height` | User input (rule drag release); tmux write retried when rejected | Bottom panel height as a percent of the sidebar height (0 hides the panel; unset, empty, or an out-of-range value gives 30); shared server-wide, each instance adopts a peer's value on its next refresh tick (the percent's `SaveLatch` instance follows the same pattern) |
@@ -393,7 +393,7 @@ struct NoticesState {
 
 ## State Invariants
 
-1. `selected_pane_row` is always < `layout.pane_row_targets.len()` — clamped in `rebuild_row_targets()`
+1. `selected_pane_row` is always < `layout.pane_row_targets.len()` unless the list is empty — clamped in `rebuild_row_targets()` — and `cursor_pane_id` names the pane on that row (or is `None` when the row holds no pane). The two are resolved together by `resolve_cursor_row()`: the named pane's row when it is listed, else the tmux-focused pane's row, else the clamped row; whichever row wins renames the cursor
 2. `activity.entries` contains only the focused pane's entries — cleared on focus change
 3. The bottom tab is shared server-wide through `@sidebar_bottom_tab` and changes only on an explicit user selection (cycle key / tab-title click) or the per-tick adoption of a peer's selection — never on focus change, and relaunching an agent does not change it. A stored `thought` is displayed as Activity (the `Tools` label) while the focused pane is not pi, again without a write
 4. Git fetching respects the `git_tab_active` flag — stops when tab is hidden

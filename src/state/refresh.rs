@@ -88,8 +88,11 @@ impl AppState {
         self.focus_state.sidebar_focused = sidebar_focused;
         self.repo_groups = crate::group::group_panes_by_repo(&sessions);
         self.prune_pane_states_to_current_panes();
-        self.rebuild_row_targets();
+        // Focus before the rebuild: the cursor's fallback row is the
+        // focused pane's, so the rebuild must see this tick's focus and
+        // not the previous one's.
         self.find_focused_pane();
+        self.rebuild_row_targets();
     }
 
     fn clear_dead_agent_metadata(

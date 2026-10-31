@@ -63,6 +63,20 @@ impl AppState {
         }
     }
 
+    /// Put the cursor on `row` and name the pane it lands on, so the row
+    /// and the shared cursor identity move together. Every cursor move
+    /// goes through here — a direct row write would leave the two
+    /// behind each other, and the next rebuild would resolve the row
+    /// back onto the stale pane.
+    pub fn select_row(&mut self, row: usize) {
+        self.global.selected_pane_row = row;
+        self.global.cursor_pane_id = self
+            .layout
+            .pane_row_targets
+            .get(row)
+            .map(|target| target.pane_id.clone());
+    }
+
     /// Move agent selection. Returns true if moved, false if at boundary.
     pub fn move_pane_selection(&mut self, delta: isize) -> bool {
         if self.layout.pane_row_targets.is_empty() {
@@ -71,7 +85,7 @@ impl AppState {
         let len = self.layout.pane_row_targets.len() as isize;
         let next = self.global.selected_pane_row as isize + delta;
         if next >= 0 && next < len {
-            self.global.selected_pane_row = next as usize;
+            self.select_row(next as usize);
             true
         } else {
             false

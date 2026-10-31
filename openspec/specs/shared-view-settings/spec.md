@@ -9,7 +9,7 @@ share, and how fast an instance shows a change made in another instance.
 ### Requirement: six view settings are shared
 
 All sidebar instances on one tmux server SHALL share the status filter, the
-repo filter, the cursor position in the agent list, the selected bottom
+repo filter, the cursor's agent pane in the agent list, the selected bottom
 tab, the bottom panel height, and the strip tab width. A change to one of
 these settings in one instance SHALL apply to every other instance on the
 same tmux server.
@@ -25,7 +25,7 @@ same tmux server.
 
 #### Scenario: a cursor move applies to another window
 - **WHEN** the user moves the cursor to the third agent row in the sidebar of window A
-- **THEN** the sidebar of window B selects the third agent row
+- **THEN** the sidebar of window B puts its cursor on the same agent pane, at whatever row that pane occupies in window B's own list
 
 #### Scenario: a bottom tab change applies to another window
 - **WHEN** the user switches the bottom panel of the sidebar of window A to the Tasks tab
@@ -68,6 +68,33 @@ replace it with the older value that tmux still holds.
 - **AND** the write of the new filter to tmux fails
 - **THEN** the sidebar continues to show the running filter after the next refresh tick
 
+### Requirement: the shared cursor names a pane, not a row
+
+The cursor SHALL be shared as the tmux pane it names, not as its row
+number, because each instance's list holds its own rows for the same
+panes. On every refresh tick an instance SHALL resolve the cursor's row
+from the shared pane id, and SHALL NOT keep naming a pane other than the
+one on its row.
+
+#### Scenario: the peer's list differs from this instance's
+- **WHEN** the cursor in the sidebar of window A is on pane `%7`, which is row 5 there
+- **AND** the sidebar of window B lists that pane at row 2
+- **THEN** the cursor in window B is on row 2
+
+#### Scenario: a filter change keeps the cursor on its pane
+- **WHEN** the cursor is on pane `%7`
+- **AND** the user changes the status filter so that two panes above `%7` are hidden
+- **THEN** the cursor moves up two rows and stays on pane `%7`
+
+#### Scenario: the cursor's pane is not listed
+- **WHEN** the cursor is on pane `%7`
+- **AND** the instance's list does not hold `%7`, because a filter hides it or it has closed
+- **THEN** the cursor moves to the tmux-focused pane's row when that pane is listed, and otherwise stays on its own clamped row
+
+#### Scenario: a value that names no pane
+- **WHEN** the shared cursor option holds something other than a pane id, such as a bare row number written by an older version
+- **THEN** the instance ignores it and resolves its cursor from the tmux-focused pane
+
 ### Requirement: a pending cursor move is not reverted
 
 While a cursor move in an instance waits for its delayed write to tmux, the
@@ -77,7 +104,7 @@ tmux still holds.
 #### Scenario: the user moves the cursor quickly
 - **WHEN** the user moves the cursor down two rows
 - **AND** a refresh tick runs before the cursor write reaches tmux
-- **THEN** the cursor stays on the row that the user selected
+- **THEN** the cursor stays on the pane the user selected
 
 ### Requirement: the rest of the view state stays local
 

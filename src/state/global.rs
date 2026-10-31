@@ -105,6 +105,19 @@ impl<T: Copy + PartialEq> SaveLatch<T> {
     }
 }
 
+/// Read the shared cursor option as the pane it names.
+///
+/// The cursor travels as a tmux pane id (`%3`). A value that is not one
+/// — a bare row index written by a version that shared the cursor as a
+/// position, or garbage from a hand-edited option — names no pane and
+/// adopts nothing, so the cursor resolves from the tmux-focused pane
+/// instead of landing on whatever row that number happens to be.
+pub(crate) fn parse_shared_cursor(raw: &str) -> Option<String> {
+    let raw = raw.trim();
+    let digits = raw.strip_prefix('%')?;
+    (!digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit())).then(|| raw.to_string())
+}
+
 /// State shared across all sidebar instances via tmux global variables.
 /// Read once at startup and re-applied from the shared options on every
 /// refresh tick.
@@ -139,8 +152,14 @@ pub struct GlobalState {
     /// The strip tab percent's save latch, written to and adopted from
     /// `@sidebar_tab_width`.
     tab_percent_latch: SaveLatch<u8>,
+    /// The pane the cursor names — the identity behind
+    /// `selected_pane_row`. The row is only a cache into the filtered
+    /// list and moves when a filter hides a pane, when a repo group
+    /// reorders, or when a pane above it closes; this value does not,
+    /// so the cursor keeps naming the pane the user picked.
+    pub cursor_pane_id: Option<String>,
     /// Last cursor value successfully written to tmux.
-    last_saved_cursor: usize,
+    last_saved_cursor: Option<String>,
     /// Last repo filter value successfully written to tmux.
     last_saved_repo_filter: RepoFilter,
     /// When the selected cursor was last changed and still needs persisting.
@@ -166,7 +185,8 @@ impl GlobalState {
             tab_latch: SaveLatch::new(tmux::SIDEBAR_BOTTOM_TAB, BottomTab::Activity),
             percent_latch: SaveLatch::new(tmux::SIDEBAR_BOTTOM_HEIGHT, ui::DEFAULT_BOTTOM_PERCENT),
             tab_percent_latch: SaveLatch::new(tmux::SIDEBAR_TAB_WIDTH, ui::DEFAULT_TAB_PERCENT),
-            last_saved_cursor: 0,
+            cursor_pane_id: None,
+            last_saved_cursor: None,
             last_saved_repo_filter: RepoFilter::All,
             pending_cursor_save_since: None,
         }
@@ -229,19 +249,17 @@ impl GlobalState {
         self.tab_percent_latch.save_pending
     }
 
-    /// Save cursor position to tmux global variable. Returns `true` when
-    /// tmux accepted the write so callers can decide whether to clear a
-    /// queued save or keep retrying.
+    /// Save the cursor's pane to tmux global variable. Returns `true`
+    /// when tmux accepted the write so callers can decide whether to
+    /// clear a queued save or keep retrying; a cursor that names no pane
+    /// (an empty agent list) has nothing to write and counts as saved,
+    /// so a queued save is not retried forever.
     pub fn save_cursor(&mut self) -> bool {
-        if tmux::run_tmux(&[
-            "set",
-            "-g",
-            tmux::SIDEBAR_CURSOR,
-            &self.selected_pane_row.to_string(),
-        ])
-        .is_some()
-        {
-            self.last_saved_cursor = self.selected_pane_row;
+        let Some(pane_id) = self.cursor_pane_id.clone() else {
+            return true;
+        };
+        if tmux::run_tmux(&["set", "-g", tmux::SIDEBAR_CURSOR, &pane_id]).is_some() {
+            self.last_saved_cursor = Some(pane_id);
             true
         } else {
             false
@@ -347,17 +365,21 @@ impl GlobalState {
         }) {
             self.status_filter = adopted;
         }
+        // The cursor is shared as the pane it names, not as a row: each
+        // instance's list holds its own rows for the same panes, so a
+        // row number would land the peer's cursor on an unrelated pane.
+        // The row follows from the id when the targets are rebuilt.
         if let Some(cursor_str) = opts.get(tmux::SIDEBAR_CURSOR)
-            && let Ok(n) = cursor_str.parse::<usize>()
-            && n != self.last_saved_cursor
+            && let Some(pane_id) = parse_shared_cursor(cursor_str)
+            && self.last_saved_cursor.as_deref() != Some(pane_id.as_str())
             // A local move whose debounced write has not landed yet wins
             // over anything another instance writes during that window;
-            // the flush persists the user's row and the ticks after it
+            // the flush persists the user's pane and the ticks after it
             // adopt from tmux again.
             && self.pending_cursor_save_since.is_none()
         {
-            self.selected_pane_row = n;
-            self.last_saved_cursor = n;
+            self.last_saved_cursor = Some(pane_id.clone());
+            self.cursor_pane_id = Some(pane_id);
         }
         if let Some(adopted) = self.tab_latch.adopt(opts, true, |o| {
             o.get(tmux::SIDEBAR_BOTTOM_TAB)
@@ -1037,5 +1059,41 @@ mod tests {
 
         assert_eq!(g.bottom_percent, ui::DEFAULT_BOTTOM_PERCENT);
         assert_eq!(g.percent_latch.last_saved, ui::DEFAULT_BOTTOM_PERCENT);
+    }
+
+    // ─── the shared cursor travels as a pane id ───────────────────
+
+    #[test]
+    fn a_shared_cursor_parses_as_a_pane_id() {
+        assert_eq!(parse_shared_cursor("%3"), Some("%3".into()));
+        assert_eq!(parse_shared_cursor(" %42 "), Some("%42".into()));
+    }
+
+    #[test]
+    fn a_row_index_shared_cursor_names_no_pane() {
+        // Versions before the cursor became an identity wrote the row
+        // number into the same option. Reading it as an id would put
+        // every instance's cursor on whatever row the number hits.
+        for raw in ["3", "0", "", "  ", "%", "%x", "%3a", "%3 4", "$"] {
+            assert_eq!(parse_shared_cursor(raw), None, "{raw:?} names no pane");
+        }
+    }
+
+    #[test]
+    fn an_adopted_cursor_is_not_written_back_over_itself() {
+        // Adoption records the value it read, so the next tick sees its
+        // own shared value and leaves the cursor alone.
+        let mut g = GlobalState::new();
+        g.apply_all(&opts(&[(tmux::SIDEBAR_CURSOR, "%7")]), None);
+        assert_eq!(g.cursor_pane_id.as_deref(), Some("%7"));
+
+        g.cursor_pane_id = Some("%9".into());
+        g.apply_all(&opts(&[(tmux::SIDEBAR_CURSOR, "%7")]), None);
+
+        assert_eq!(
+            g.cursor_pane_id.as_deref(),
+            Some("%9"),
+            "a value this instance already read must not overwrite a newer local cursor"
+        );
     }
 }

@@ -1659,7 +1659,6 @@ fn snapshot_filter_bar_stays_fixed_on_scroll() {
     insta::assert_snapshot!(output, @"
      󱓯 6  6 󰥔 0 󰒲 0  0      ⇄ ⤢
     ⓘ                          — ▾
-    project
        
     ┃  
        

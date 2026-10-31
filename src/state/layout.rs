@@ -489,6 +489,37 @@ impl AppState {
         {
             self.global.selected_pane_row = self.layout.pane_row_targets.len() - 1;
         }
+        self.resolve_cursor_row();
+    }
+
+    /// Put the cursor on the row its named pane occupies, and name the
+    /// pane of whatever row it lands on.
+    ///
+    /// [`GlobalState::selected_pane_row`] is only a cache into the
+    /// filtered list, so a filter change, a repo reorder or a pane above
+    /// the cursor closing moves the row out from under the pane the user
+    /// picked. The cursor is resolved from its pane id every time the
+    /// targets are rebuilt: the named pane's row when it is listed, else
+    /// the tmux-focused pane's row (the row the left `┃` marker marks,
+    /// so a cursor with no listed pane agrees with the marker instead of
+    /// highlighting a stranger), else the clamped row. Whichever row
+    /// wins names its pane, so the cursor never silently means a pane
+    /// the user did not pick.
+    pub(crate) fn resolve_cursor_row(&mut self) {
+        let targets = &self.layout.pane_row_targets;
+        let named = self
+            .global
+            .cursor_pane_id
+            .as_deref()
+            .and_then(|pane_id| targets.iter().position(|target| target.pane_id == pane_id));
+        let focused = self
+            .focus_state
+            .focused_pane_id
+            .as_deref()
+            .and_then(|pane_id| targets.iter().position(|target| target.pane_id == pane_id));
+        let row = named.or(focused).unwrap_or(self.global.selected_pane_row);
+        self.global.selected_pane_row = row;
+        self.global.cursor_pane_id = targets.get(row).map(|target| target.pane_id.clone());
     }
 
     /// Handle a left mouse press at (`row`, `col`) in a terminal
@@ -666,7 +697,7 @@ impl AppState {
         // by the scroll the last frame drew with.
         let line_index = (row - agents.y - 1) as usize + self.scrolls.panes.offset;
         if let Some(Some(agent_row)) = self.layout.line_to_row.get(line_index) {
-            self.global.selected_pane_row = *agent_row;
+            self.select_row(*agent_row);
             self.global.queue_cursor_save();
             self.activate_selected_pane();
         }
@@ -945,7 +976,7 @@ impl AppState {
         }
         let line_index = (row as usize - 2) + self.scrolls.panes.offset;
         if let Some(Some(agent_row)) = self.layout.line_to_row.get(line_index) {
-            self.global.selected_pane_row = *agent_row;
+            self.select_row(*agent_row);
             self.global.queue_cursor_save();
             self.activate_selected_pane();
         }
