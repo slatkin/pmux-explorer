@@ -51,6 +51,22 @@ keep the order tmux lists them in.
 - **WHEN** a repo group holds pane `%0` and a subagent `%1` whose parent is `%0`
 - **THEN** `%1` is drawn directly after `%0`, indented by 2 columns, with no parent line
 
+### Requirement: a nested subagent is drawn as a block
+
+Every row of a nested subagent SHALL carry the subagent block background
+across the row's whole width — the indent and the marker column included — so
+a child reads as one block under its parent rather than as another sibling.
+The active agent's status and branch rows SHALL keep the selection background
+instead, and its body rows SHALL keep the block background.
+
+#### Scenario: a nested subagent is its own colour block
+- **WHEN** a subagent is nested under its parent
+- **THEN** every row it draws — status, branch and body rows alike — carries the subagent block background across its whole width
+
+#### Scenario: the nested subagent is the active agent
+- **WHEN** the nested subagent's row is the active agent
+- **THEN** its status and branch rows show the selection background, and its body rows keep the block background
+
 #### Scenario: A subagent of a subagent
 - **WHEN** `%2` is a subagent of `%1`, and `%1` is a subagent of `%0`, all in one repo group
 - **THEN** `%1` and `%2` are drawn after `%0` with the same indent of 2 columns

@@ -63,6 +63,12 @@ pub struct ColorTheme {
     /// Tasks tab color for `completed` items (`✔`).
     pub task_completed: Color,
     pub subagent: Color,
+    /// Background of a nested subagent's row block. Default Tokyo Night
+    /// storm-adjacent grey-blue (`#272e33`): one step above the base
+    /// focus background (`#1a1b26`) and below the selection background
+    /// (`#414868`), so a child reads as a card without outrunning the
+    /// active row.
+    pub subagent_bg: Color,
     pub commit_hash: Color,
     pub diff_added: Color,
     pub diff_deleted: Color,
@@ -140,6 +146,7 @@ impl Default for ColorTheme {
             task_pending: Color::Rgb(0x7a, 0xa2, 0xf7),
             task_completed: Color::Rgb(0x9e, 0xce, 0x6a),
             subagent: Color::Rgb(0x73, 0xda, 0xcb),
+            subagent_bg: Color::Rgb(0x27, 0x2e, 0x33),
             commit_hash: Color::Rgb(0xe0, 0xaf, 0x68),
             diff_added: Color::Rgb(0x9e, 0xce, 0x6a),
             diff_deleted: Color::Rgb(0xf7, 0x76, 0x8e),
@@ -218,6 +225,7 @@ impl ColorTheme {
         theme.task_pending = read(tmux::SIDEBAR_COLOR_TASK_PENDING, theme.task_pending);
         theme.task_completed = read(tmux::SIDEBAR_COLOR_TASK_COMPLETED, theme.task_completed);
         theme.subagent = read(tmux::SIDEBAR_COLOR_SUBAGENT, theme.subagent);
+        theme.subagent_bg = read(tmux::SIDEBAR_COLOR_SUBAGENT_BG, theme.subagent_bg);
         theme.commit_hash = read(tmux::SIDEBAR_COLOR_COMMIT_HASH, theme.commit_hash);
         theme.diff_added = read(tmux::SIDEBAR_COLOR_DIFF_ADDED, theme.diff_added);
         theme.diff_deleted = read(tmux::SIDEBAR_COLOR_DIFF_DELETED, theme.diff_deleted);

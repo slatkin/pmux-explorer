@@ -226,6 +226,9 @@ pub const SIDEBAR_COLOR_TASK_PENDING: &str = "@sidebar_color_task_pending";
 /// Tasks tab `✔` icon + subject color for completed items.
 pub const SIDEBAR_COLOR_TASK_COMPLETED: &str = "@sidebar_color_task_completed";
 pub const SIDEBAR_COLOR_SUBAGENT: &str = "@sidebar_color_subagent";
+/// Background of a nested subagent's row block, so a child reads as one
+/// card under its parent rather than as another sibling.
+pub const SIDEBAR_COLOR_SUBAGENT_BG: &str = "@sidebar_color_subagent_bg";
 /// Bottom-panel tab rule's ` │ ` delimiter between tab glyphs.
 pub const SIDEBAR_COLOR_TAB_SEPARATOR: &str = "@sidebar_color_tab_separator";
 pub const SIDEBAR_COLOR_COMMIT_HASH: &str = "@sidebar_color_commit_hash";

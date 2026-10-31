@@ -120,10 +120,16 @@ fn render_pane_lines(
     // the width left for its content shrinks with the indent.
     let indent = if nested { NEST_INDENT } else { 0 };
     let inner_width = width.saturating_sub(2 + indent);
+    // A nested subagent is a block, not a row: its whole height wears the
+    // subagent background, so a child reads as one card under its parent
+    // instead of as another sibling. The active row still overrides the
+    // status and branch rows with the selection background, which is the
+    // stronger signal; a child's deeper rows keep the block colour.
+    let nested_bg = nested.then_some(theme.subagent_bg);
     let bg = if active {
         Some(theme.selection_bg)
     } else {
-        None
+        nested_bg
     };
     let apply_bg = |style: Style| match bg {
         Some(c) => style.bg(c),
@@ -150,12 +156,18 @@ fn render_pane_lines(
         inline_branch: lifted_branch,
         prompt_max_lines,
     };
+    // The deeper rows have no grabber, but their marker *column* still
+    // belongs to the block, so a nested child's left edge stays painted.
+    let plain_marker_style = match nested_bg {
+        Some(colour) => Style::default().bg(colour),
+        None => Style::default(),
+    };
     let plain_ctx = RowCtx {
         marker_char: " ",
-        marker_style: Style::default(),
+        marker_style: plain_marker_style,
         inner_width,
         theme,
-        bg: None,
+        bg: nested_bg,
         active,
         indent,
         inline_branch: None,
@@ -1184,6 +1196,64 @@ mod tests {
         assert!(
             inner_with_bg > 0,
             "the row's content carries the selection background too"
+        );
+    }
+
+    #[test]
+    fn a_nested_subagent_wears_its_block_background_on_every_row() {
+        let theme = ColorTheme::default();
+        let mut p = pane(PermissionMode::Default, PaneStatus::Running, "do work");
+        p.prompt = "aaaa bbbb cccc dddd eeee ffff gggg hhhh iiii jjjj".into();
+        let lines = render_nested(&p, 24, true);
+        assert!(lines.len() > 2, "the fixture must draw body rows too");
+
+        for (index, line) in lines.iter().enumerate() {
+            for span in &line.spans {
+                assert_eq!(
+                    span.style.bg,
+                    Some(theme.subagent_bg),
+                    "row {index} span {:?} must sit on the subagent block background",
+                    span.content
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_nested_subagent_keeps_its_block_below_an_active_status_row() {
+        let theme = ColorTheme::default();
+        let mut p = pane(PermissionMode::Default, PaneStatus::Running, "do work");
+        p.prompt = "aaaa bbbb cccc dddd eeee ffff gggg".into();
+        let lines = render_pane_lines(
+            &p,
+            &PaneGitInfo::default(),
+            None,
+            None,
+            true,
+            40,
+            &StatusIcons::default(),
+            &theme,
+            0,
+            0,
+            false,
+            true,
+        );
+
+        assert!(
+            lines[0]
+                .spans
+                .iter()
+                .any(|span| span.style.bg == Some(theme.selection_bg)),
+            "the active status row keeps the stronger selection background"
+        );
+        let below = lines
+            .iter()
+            .skip(1)
+            .flat_map(|line| &line.spans)
+            .all(|span| span.style.bg == Some(theme.subagent_bg));
+        assert!(
+            below,
+            "the child's deeper rows keep the block colour, not the selection background"
         );
     }
 

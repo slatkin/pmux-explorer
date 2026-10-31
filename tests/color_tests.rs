@@ -20,6 +20,10 @@ fn test_all_color_theme_defaults() {
     assert_eq!(theme.selection_bg, Color::Rgb(0x41, 0x48, 0x68));
     assert_eq!(theme.focus_bg, Color::Rgb(0x1a, 0x1b, 0x26));
     assert_eq!(theme.focus_active_bg, Color::Rgb(0x24, 0x28, 0x3b));
+    // A nested subagent's block sits between the base fill and the
+    // selection background, so a child reads as a card without
+    // outrunning the active row.
+    assert_eq!(theme.subagent_bg, Color::Rgb(0x27, 0x2e, 0x33));
 
     // Status colors
     assert_eq!(theme.status_all, Color::Rgb(0x7a, 0xa2, 0xf7));
