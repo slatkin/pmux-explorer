@@ -41,6 +41,55 @@ fn repo_header_line(
     ])
 }
 
+/// Columns a boxed subagent row loses to its frame: `│ ` on the left and
+/// ` │` on the right.
+const BOX_FRAME: usize = 4;
+
+/// Top edge of a subagent box: `╭─ N subagents ───╮`, starting at the
+/// parent's content column and ending in the last column.
+fn box_top_line(count: usize, width: usize, color: ratatui::style::Color) -> Line<'static> {
+    let noun = if count == 1 { "subagent" } else { "subagents" };
+    let head = format!("╭─ {count} {noun} ");
+    let fill = width.saturating_sub(2 + display_width(&head) + 1).max(1);
+    Line::from(vec![
+        Span::raw("  "),
+        Span::styled(
+            format!("{head}{}╮", "─".repeat(fill)),
+            Style::default().fg(color),
+        ),
+    ])
+}
+
+fn box_bottom_line(width: usize, color: ratatui::style::Color) -> Line<'static> {
+    let fill = width.saturating_sub(4);
+    Line::from(vec![
+        Span::raw("  "),
+        Span::styled(
+            format!("╰{}╯", "─".repeat(fill)),
+            Style::default().fg(color),
+        ),
+    ])
+}
+
+/// Frame one rendered row (drawn `BOX_FRAME` columns narrower): the marker
+/// and its space stay at the left edge, then `│ ` opens the box and ` │`
+/// closes it. Each border takes the background beside it, so the active
+/// row's highlight runs unbroken across the frame.
+fn frame_row(line: &mut Line<'static>, color: ratatui::style::Color) {
+    let border = Style::default().fg(color);
+    let left_bg = line.spans.get(1).and_then(|span| span.style.bg);
+    let right_bg = line.spans.last().and_then(|span| span.style.bg);
+    let with_bg = |style: Style, bg: Option<ratatui::style::Color>| match bg {
+        Some(c) => style.bg(c),
+        None => style,
+    };
+    let at = line.spans.len().min(2);
+    line.spans
+        .insert(at, Span::styled("│ ", with_bg(border, left_bg)));
+    line.spans
+        .push(Span::styled(" │", with_bg(border, right_bg)));
+}
+
 #[derive(Debug, Default)]
 pub(super) struct CollectedRows {
     pub lines: Vec<Line<'static>>,
@@ -112,8 +161,23 @@ pub(super) fn collect(state: &AppState, width: u16) -> CollectedRows {
         collected.lines.push(header);
         collected.line_to_row.push(None);
 
-        for (pane, git_info) in filtered_panes.iter() {
-            let nested = crate::group::nested_under(&roots, &visible_ids, &pane.pane_id);
+        let nested_flags: Vec<bool> = filtered_panes
+            .iter()
+            .map(|(pane, _)| crate::group::nested_under(&roots, &visible_ids, &pane.pane_id))
+            .collect();
+        for (i, (pane, git_info)) in filtered_panes.iter().enumerate() {
+            let nested = nested_flags[i];
+            if nested && !(i > 0 && nested_flags[i - 1]) {
+                // A run of nested subagents opens one box, titled with the
+                // run's length and set off from the parent by a blank row.
+                let count = nested_flags[i..].iter().take_while(|n| **n).count();
+                collected.lines.push(Line::from(""));
+                collected.line_to_row.push(None);
+                collected
+                    .lines
+                    .push(box_top_line(count, width, theme.border_inactive));
+                collected.line_to_row.push(None);
+            }
             collect_pane(
                 &mut collected,
                 state,
@@ -125,6 +189,12 @@ pub(super) fn collect(state: &AppState, width: u16) -> CollectedRows {
                 nested,
             );
             row_index += 1;
+            if nested && !nested_flags.get(i + 1).copied().unwrap_or(false) {
+                collected
+                    .lines
+                    .push(box_bottom_line(width, theme.border_inactive));
+                collected.line_to_row.push(None);
+            }
         }
     }
 
@@ -147,7 +217,12 @@ fn collect_pane(
     nested: bool,
 ) {
     let theme = &state.theme;
-    let indent = if nested { row::NEST_INDENT } else { 0 };
+    // A nested subagent draws inside the box, `BOX_FRAME` columns narrower.
+    let (frame, row_width) = if nested {
+        (2, width.saturating_sub(BOX_FRAME))
+    } else {
+        (0, width)
+    };
     // One active agent per sidebar: the pane the cursor names gets both the
     // left `┃` and the selection background, always — whichever panel
     // owns the keyboard. The cursor follows the tmux focus, so a click on an
@@ -164,14 +239,20 @@ fn collect_pane(
         ports,
         task_progress,
         is_active,
-        width,
+        row_width,
         &state.icons,
         theme,
         state.spinner_frame,
         state.now,
         inline_branch,
-        nested,
+        false,
     );
+    let mut pane_lines = pane_lines;
+    if nested {
+        for line in &mut pane_lines {
+            frame_row(line, theme.border_inactive);
+        }
+    }
     let pane_line_count = pane_lines.len();
     collected.lines.extend(pane_lines);
     for _ in 0..pane_line_count {
@@ -187,17 +268,12 @@ fn collect_pane(
     if pane.sidebar_spawned
         && git_info.is_worktree
         && pane_line_count >= 2
-        && let Some(x) = row::sidebar_remove_marker_col(
-            git_info,
-            ports,
-            true,
-            width.saturating_sub(2 + indent),
-            indent,
-        )
+        && let Some(x) =
+            row::sidebar_remove_marker_col(git_info, ports, true, row_width.saturating_sub(2), 0)
     {
         collected
             .pending_remove
-            .push((status_line_idx + 1, x, pane.pane_id.clone()));
+            .push((status_line_idx + 1, x + frame, pane.pane_id.clone()));
     }
 }
 
@@ -438,8 +514,8 @@ mod tests {
     #[test]
     fn collect_puts_a_nested_remove_marker_on_the_drawn_x() {
         // A spawned worktree nested under its parent keeps the `×` pinned
-        // to the rightmost column: the indent must not shift the click
-        // target off the drawn glyph.
+        // to the rightmost column inside the subagent box: the frame must
+        // not shift the click target off the drawn glyph.
         let mut state = AppState::new("%0".into());
         let mut parent = make_pane("%0", PaneStatus::Running);
         parent.pane_name = Some("orchestrator".into());
@@ -475,8 +551,8 @@ mod tests {
         );
         assert_eq!(
             *click_col as usize,
-            width as usize - 1,
-            "the × stays in the last column through the indent"
+            width as usize - 3,
+            "the × stays in the last column inside the box frame"
         );
     }
 
@@ -511,13 +587,16 @@ mod tests {
         insta::assert_snapshot!(joined, @"
         repo
             orchestrator
-              ♟ unit1
-              ♟ unit2
+
+          ╭─ 2 subagents ──────────────────────╮
+          │   ♟ unit1                        │
+          │   ♟ unit2                        │
+          ╰────────────────────────────────────╯
         ");
         assert_eq!(
             collected.line_to_row,
-            vec![None, Some(0), Some(1), Some(2)],
-            "each child row belongs to its own row index"
+            vec![None, Some(0), None, None, Some(1), Some(2), None],
+            "each child row belongs to its own row index; the box edges map to none"
         );
     }
 }
