@@ -23,7 +23,7 @@ pub struct ColorTheme {
     pub filter_inactive: Color,
     /// Filter bar row background. Painted at all times, so it sits over
     /// the focus fill while the sidebar pane is the active one.
-    /// Default Tokyo Night line highlight (`#414868`).
+    /// Default `#23283d`, a slate just above both section fills.
     pub filter_bar_bg: Color,
     pub agent_claude: Color,
     pub agent_codex: Color,
@@ -47,7 +47,9 @@ pub struct ColorTheme {
     pub selection_bg: Color,
     /// Base focus background over the whole sidebar while its tmux pane
     /// is the active one. Default Tokyo Night background (`#1a1b26`)
-    /// sits below selection_bg (`#414868`) so the cursor still pops.
+    /// sits below selection_bg (`#23283d`); the two fills are close
+    /// (1.17:1), so the selected row's `┃` marker and bold title, not
+    /// its fill, carry the cursor.
     pub focus_bg: Color,
     /// Active focus background over the keyboard-owning section.
     /// Default `#1e2336`, a slate that stays distinct from focus_bg
@@ -66,11 +68,11 @@ pub struct ColorTheme {
     /// Background of a nested subagent's row block, which starts at the
     /// child's indent. Default Tokyo Night `fg_gutter` (`#3b4261`):
     /// 1.7:1 against the base focus background (`#1a1b26`) and 1.6:1
-    /// against the active fill (`#1e2336`), while staying below the
-    /// selection background (`#414868`) so a child reads as a card
-    /// without outrunning the active row. `bg_highlight` (`#292e42`)
-    /// is too faint on the base fill (1.3:1), and `dark3` (`#545c7e`)
-    /// outruns the selection background.
+    /// against the active fill (`#1e2336`), so a child reads as a card.
+    /// It sits 1.5:1 above the selection background (`#23283d`), which
+    /// makes the child block the stronger band; `bg_highlight`
+    /// (`#292e42`) is too faint on the base fill (1.3:1), and `dark3`
+    /// (`#545c7e`) is louder still.
     pub subagent_bg: Color,
     pub commit_hash: Color,
     pub diff_added: Color,
@@ -123,7 +125,7 @@ impl Default for ColorTheme {
             status_error: Color::Rgb(0xf7, 0x76, 0x8e),
             status_unknown: Color::Rgb(0x56, 0x5f, 0x89),
             filter_inactive: Color::Rgb(0x9a, 0xa5, 0xce),
-            filter_bar_bg: Color::Rgb(0x41, 0x48, 0x68),
+            filter_bar_bg: Color::Rgb(0x23, 0x28, 0x3d),
             agent_claude: Color::Rgb(0xff, 0x9e, 0x64),
             agent_codex: Color::Rgb(0xbb, 0x9a, 0xf7),
             agent_opencode: Color::Rgb(0x7d, 0xcf, 0xff),
@@ -138,7 +140,7 @@ impl Default for ColorTheme {
             wait_reason: Color::Rgb(0xe0, 0xaf, 0x68),
             wait_reason_action: Color::Rgb(0xf7, 0x76, 0x8e),
             wait_reason_action_dim: Color::Rgb(0x8a, 0x3f, 0x4e),
-            selection_bg: Color::Rgb(0x41, 0x48, 0x68),
+            selection_bg: Color::Rgb(0x23, 0x28, 0x3d),
             focus_bg: Color::Rgb(0x1a, 0x1b, 0x26),
             focus_active_bg: Color::Rgb(0x1e, 0x23, 0x36),
             branch: Color::Rgb(0x73, 0xda, 0xcb),
