@@ -131,23 +131,24 @@ fn render_pane_lines(
     } else {
         nested_bg
     };
-    let apply_bg = |style: Style| match bg {
-        Some(c) => style.bg(c),
-        None => style,
-    };
     // One active agent, one mark: the left `┃` grabs the eye and the
     // selection background washes the row, both on the same pane — the
     // pane the cursor names, which is the tmux-focused pane as soon as the
     // cursor has followed it. To keep the accent compact the marker and
     // the fill appear only on the status row and the branch/ports row,
     // never on deeper details like task progress or prompt wrapping.
+    // The gutter column — the grabber and the space beside it — belongs to
+    // the parent's surface: only the active agent's highlight covers it. A
+    // nested child's block starts at its indent, so the child reads as an
+    // inset card rather than a full-width band.
+    let gutter_bg = active.then_some(theme.selection_bg);
     let marker_ctx = RowCtx {
         marker_char: if active { SELECTION_MARKER } else { " " },
-        marker_style: if active {
-            apply_bg(Style::default().fg(theme.accent))
-        } else {
-            apply_bg(Style::default())
+        marker_style: match gutter_bg {
+            Some(colour) => Style::default().fg(theme.accent).bg(colour),
+            None => Style::default(),
         },
+        gutter_bg,
         inner_width,
         theme,
         bg,
@@ -156,15 +157,10 @@ fn render_pane_lines(
         inline_branch: lifted_branch,
         prompt_max_lines,
     };
-    // The deeper rows have no grabber, but their marker *column* still
-    // belongs to the block, so a nested child's left edge stays painted.
-    let plain_marker_style = match nested_bg {
-        Some(colour) => Style::default().bg(colour),
-        None => Style::default(),
-    };
     let plain_ctx = RowCtx {
         marker_char: " ",
-        marker_style: plain_marker_style,
+        marker_style: Style::default(),
+        gutter_bg: None,
         inner_width,
         theme,
         bg: nested_bg,
@@ -259,6 +255,7 @@ mod tests {
         RowCtx {
             marker_char: " ",
             marker_style: Style::default(),
+            gutter_bg: None,
             indent: 0,
             inner_width,
             theme,
@@ -1200,7 +1197,7 @@ mod tests {
     }
 
     #[test]
-    fn a_nested_subagent_wears_its_block_background_on_every_row() {
+    fn a_nested_subagents_block_starts_at_its_indent() {
         let theme = ColorTheme::default();
         let mut p = pane(PermissionMode::Default, PaneStatus::Running, "do work");
         p.prompt = "aaaa bbbb cccc dddd eeee ffff gggg hhhh iiii jjjj".into();
@@ -1208,7 +1205,23 @@ mod tests {
         assert!(lines.len() > 2, "the fixture must draw body rows too");
 
         for (index, line) in lines.iter().enumerate() {
-            for span in &line.spans {
+            // Columns 0 and 1 are the gutter (marker and the space beside
+            // it): they belong to the parent's surface, not to the block.
+            for span in line.spans.iter().take(2) {
+                assert_ne!(
+                    span.style.bg,
+                    Some(theme.subagent_bg),
+                    "row {index}: the gutter column must not join the block"
+                );
+            }
+            let block_width = line
+                .spans
+                .iter()
+                .skip(2)
+                .map(|span| display_width(&span.content))
+                .sum::<usize>();
+            assert!(block_width > 0, "row {index} must draw content");
+            for span in line.spans.iter().skip(2) {
                 assert_eq!(
                     span.style.bg,
                     Some(theme.subagent_bg),
@@ -1239,22 +1252,24 @@ mod tests {
             true,
         );
 
-        assert!(
-            lines[0]
-                .spans
-                .iter()
-                .any(|span| span.style.bg == Some(theme.selection_bg)),
+        assert_eq!(
+            lines[0].spans[0].style.bg,
+            Some(theme.selection_bg),
             "the active status row keeps the stronger selection background"
         );
         let below = lines
             .iter()
             .skip(1)
-            .flat_map(|line| &line.spans)
-            .all(|span| span.style.bg == Some(theme.subagent_bg));
-        assert!(
-            below,
-            "the child's deeper rows keep the block colour, not the selection background"
-        );
+            .flat_map(|line| line.spans.iter().skip(2));
+        let mut below = below.peekable();
+        assert!(below.peek().is_some(), "the fixture must draw body rows");
+        for span in below {
+            assert_eq!(
+                span.style.bg,
+                Some(theme.subagent_bg),
+                "the child's deeper rows keep the block colour, not the selection background"
+            );
+        }
     }
 
     #[test]

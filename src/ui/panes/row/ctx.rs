@@ -14,6 +14,11 @@ pub(super) struct RowCtx<'a> {
     pub(super) marker_char: &'static str,
     /// Style for the left marker (fg + optional bg already applied).
     pub(super) marker_style: Style,
+    /// Background of the gutter column — the marker and the space beside
+    /// it. Only the active agent's highlight covers it; a nested
+    /// subagent's block starts at its indent instead, so the gutter
+    /// column belongs to the parent's surface.
+    pub(super) gutter_bg: Option<Color>,
     /// Extra blank columns after the marker and its trailing space, which
     /// push a nested subagent's content right by that many columns. The
     /// inner width already has this indent subtracted.
@@ -37,6 +42,16 @@ pub(super) struct RowCtx<'a> {
 }
 
 impl RowCtx<'_> {
+    /// The space beside the marker: the gutter's own background, which is
+    /// the highlight on the active row and nothing anywhere else.
+    #[inline]
+    pub(super) fn gutter_style(&self) -> Style {
+        match self.gutter_bg {
+            Some(colour) => Style::default().bg(colour),
+            None => Style::default(),
+        }
+    }
+
     #[inline]
     pub(super) fn apply_bg(&self, style: Style) -> Style {
         match self.bg {
@@ -54,7 +69,7 @@ impl RowCtx<'_> {
         let bg_default = self.apply_bg(Style::default());
         let mut spans = Vec::with_capacity(content_spans.len() + 4);
         spans.push(Span::styled(self.marker_char, self.marker_style));
-        spans.push(Span::styled(" ", bg_default));
+        spans.push(Span::styled(" ", self.gutter_style()));
         if self.indent > 0 {
             spans.push(Span::styled(" ".repeat(self.indent), bg_default));
         }
@@ -74,7 +89,7 @@ impl RowCtx<'_> {
         let bg_default = self.apply_bg(Style::default());
         let mut spans = Vec::with_capacity(left_spans.len() + right_spans.len() + 4);
         spans.push(Span::styled(self.marker_char, self.marker_style));
-        spans.push(Span::styled(" ", bg_default));
+        spans.push(Span::styled(" ", self.gutter_style()));
         if self.indent > 0 {
             spans.push(Span::styled(" ".repeat(self.indent), bg_default));
         }
