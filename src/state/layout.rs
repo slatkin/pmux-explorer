@@ -57,8 +57,8 @@ pub struct SpawnRemoveTarget {
 }
 
 /// Click target for one tab label on the bottom panel's rule — or on
-/// a strip's footer tab bar, the same horizontal band on the tab
-/// section's bottom row: the columns the label text occupies as the
+/// a strip's tab bar, the same horizontal band on the tab section's
+/// top row: the columns the label text occupies as the
 /// last frame drew them. The renderer truncates labels that do not
 /// fit, so a label pushed off the band has a shrunken range — or none
 /// — and a click can only ever land on a label that is drawn.
@@ -125,9 +125,9 @@ pub struct FrameLayout {
     /// OSC 8 hyperlink overlays the main loop writes after each frame so
     /// terminals can recognise PR numbers as clickable links.
     pub hyperlink_overlays: Vec<HyperlinkOverlay>,
-    /// The tab labels' drawn column ranges on the bottom panel's rule,
-    /// as the last frame computed them while truncating the run to the
-    /// rule's width. Rewritten every frame; empty before the first
+    /// The tab labels' drawn column ranges on the bottom panel's rule
+    /// or the strip's tab-bar row, as the last frame computed them
+    /// while truncating the run to the bar's width. Rewritten every frame; empty before the first
     /// frame and while the panel is hidden, when no label is
     /// clickable.
     pub bottom_tab_targets: Vec<BottomTabTarget>,
@@ -217,7 +217,7 @@ pub(crate) fn filter_bar_layout(
 const STRIP_FILTER_COLS: u16 = 4;
 /// Columns the strip's vertical tab divider occupies between the agent
 /// panel and the tab panel: a single thin line. The tab glyphs live on
-/// the footer row instead, so the divider is one column wide.
+/// the tab-bar row instead, so the divider is one column wide.
 const STRIP_DIVIDER_COLS: u16 = 1;
 /// Columns either strip panel keeps at least: the agent panel and the
 /// tab panel (divider included) each never shrink below this.
@@ -226,8 +226,8 @@ const STRIP_MIN_PANEL_COLS: u16 = 20;
 /// The panel geometry of a strip as the last frame laid it out: the
 /// vertical filter bar at the left edge, the agent panel next to it,
 /// and — while the tab panel shows — the thin divider line and the
-/// tab panel to the right edge, with the tab bar as a footer row
-/// across the tab section's bottom. Every `Rect` except `footer`
+/// tab panel to the right edge, with the tab bar as a header row
+/// across the tab section's top. Every `Rect` except `tab_bar`
 /// spans the full strip height and all are positioned in the strip
 /// pane's own coordinates (the TUI's frame is the whole sidebar pane,
 /// so `y` is 0 and the `x` columns are the frame's absolute columns
@@ -240,12 +240,12 @@ pub struct StripLayout {
     pub agents: Rect,
     /// The 1-column divider line, while the tab panel shows.
     pub divider: Option<Rect>,
-    /// The tab panel, right of the divider, while it shows. Its last
-    /// row is the footer tab bar, not content.
+    /// The tab panel, right of the divider, while it shows. Its first
+    /// row is the tab bar, not content.
     pub tabs: Option<Rect>,
-    /// The footer tab bar: the bottom row of the tab section, the
-    /// divider column included, while the tab panel shows.
-    pub footer: Option<Rect>,
+    /// The tab bar: the top row of the tab section, the divider
+    /// column included, while the tab panel shows.
+    pub tab_bar: Option<Rect>,
 }
 
 /// The geometry of a strip `width` columns wide and `height` rows tall
@@ -283,7 +283,7 @@ pub fn strip_layout_for_tab_cols(width: u16, height: u16, tab_cols: u16) -> Stri
     let mut agents = Rect::new(agents_x, 0, width.saturating_sub(filter_width), height);
     let mut divider = None;
     let mut tabs = None;
-    let mut footer = None;
+    let mut tab_bar = None;
     if tab_cols > 0 && width >= STRIP_FILTER_COLS + 2 * STRIP_MIN_PANEL_COLS {
         let available = width - STRIP_FILTER_COLS;
         let tab_cols = tab_cols.clamp(STRIP_MIN_PANEL_COLS, available - STRIP_MIN_PANEL_COLS);
@@ -297,18 +297,16 @@ pub fn strip_layout_for_tab_cols(width: u16, height: u16, tab_cols: u16) -> Stri
             tab_cols - STRIP_DIVIDER_COLS,
             height,
         ));
-        // The footer is the tab section's bottom row, divider column
+        // The tab bar is the tab section's first row, divider column
         // included — a zero-height strip has no row to hold it.
-        footer = height
-            .checked_sub(1)
-            .map(|last| Rect::new(divider_x, last, tab_cols, 1));
+        tab_bar = (height > 0).then(|| Rect::new(divider_x, 0, tab_cols, 1));
     }
     StripLayout {
         filter,
         agents,
         divider,
         tabs,
-        footer,
+        tab_bar,
     }
 }
 
@@ -404,12 +402,12 @@ pub struct SplitDrag {
     pub axis: LayoutKind,
     /// Column of the press, kept for the unmoved release's tab click:
     /// both tab bars are horizontal (a column's rule, a strip's
-    /// footer), so the release reads the press column against the
+    /// tab-bar row), so the release reads the press column against the
     /// drawn glyph columns.
     pub press_col: u16,
     /// Row of the press, kept for the unmoved release of a strip
-    /// press: only a press on the footer row resolves to a tab click —
-    /// a press on the thin divider line above it resolves to nothing.
+    /// press: only a press on the tab-bar row resolves to a tab click —
+    /// a press on the thin divider line below it resolves to nothing.
     pub press_row: u16,
     /// Whether a drag event reached a row other than the rule row (a
     /// column) or a column other than the divider's (a strip).
@@ -505,7 +503,8 @@ impl AppState {
     ///   tab (decision 4) — and a press above the rule goes to the
     ///   agents panel.
     /// - A strip routes by the drawn [`StripLayout`]: a press on the
-    ///   divider starts a strip drag, a press in the filter column goes
+    ///   divider or the tab-bar row starts a strip drag, a press in the
+    ///   filter column goes
     ///   to [`Self::handle_filter_column_click`], and a press in the
     ///   agent panel to [`Self::handle_strip_agent_click`].
     ///
@@ -562,7 +561,7 @@ impl AppState {
 
     /// The strip branch of [`Self::handle_terminal_click`]: route by
     /// the drawn [`StripLayout`]. A press on the thin divider line or
-    /// on the footer tab bar starts a strip drag (its `size` is the
+    /// on the tab bar starts a strip drag (its `size` is the
     /// drawn tab columns, divider included) — the same rule the
     /// column's rule row keeps, where the bar is both the drag handle
     /// and the tab strip; the filter column and the agent panel go to
@@ -572,7 +571,7 @@ impl AppState {
             return false;
         };
         if strip.divider.is_some_and(|d| point_in_rect(row, col, d))
-            || strip.footer.is_some_and(|f| point_in_rect(row, col, f))
+            || strip.tab_bar.is_some_and(|b| point_in_rect(row, col, b))
         {
             self.split_drag = Some(SplitDrag {
                 axis: LayoutKind::Strip,
@@ -733,7 +732,7 @@ impl AppState {
     /// its size as the shared percent of its axis (~a tmux write per
     /// drag, not per move); an unmoved press resolves as a click and
     /// selects the tab the press names — by column on a column's rule,
-    /// and likewise by column on a strip's footer, where a press on
+    /// and likewise by column on a strip's tab bar, where a press on
     /// the thin divider line instead resolves to nothing. No drag:
     /// the release belongs to nothing.
     pub fn end_split_drag(&mut self, term_height: u16) {
@@ -746,15 +745,15 @@ impl AppState {
             match drag.axis {
                 LayoutKind::Column => self.handle_bottom_tab_click(drag.press_col),
                 LayoutKind::Strip => {
-                    // Only a footer press resolves to a tab click: the
-                    // glyphs live on the footer row now, so a held
-                    // press released on the thin divider line above
-                    // the footer changes nothing.
+                    // Only a tab-bar press resolves to a tab click: the
+                    // glyphs live on the tab-bar row now, so a held
+                    // press released on the thin divider line below
+                    // the bar changes nothing.
                     if self
                         .layout
                         .strip
-                        .and_then(|strip| strip.footer)
-                        .is_some_and(|footer| point_in_rect(drag.press_row, drag.press_col, footer))
+                        .and_then(|strip| strip.tab_bar)
+                        .is_some_and(|bar| point_in_rect(drag.press_row, drag.press_col, bar))
                     {
                         self.handle_bottom_tab_click(drag.press_col);
                     }
@@ -1156,13 +1155,13 @@ mod tests {
         // The spec's parts scenario: 120 columns, 40 percent — the
         // filter bar, then the agent panel, then the divider line on
         // column 72, then the tab panel to the right edge — with the
-        // footer tab bar on the tab section's bottom row.
+        // tab bar on the tab section's top row.
         let layout = strip_layout(120, 12, 40);
         assert_eq!(layout.filter, Rect::new(0, 0, 4, 12));
         assert_eq!(layout.agents, Rect::new(4, 0, 68, 12));
         assert_eq!(layout.divider, Some(Rect::new(72, 0, 1, 12)));
         assert_eq!(layout.tabs, Some(Rect::new(73, 0, 47, 12)));
-        assert_eq!(layout.footer, Some(Rect::new(72, 11, 48, 1)));
+        assert_eq!(layout.tab_bar, Some(Rect::new(72, 0, 48, 1)));
     }
 
     #[test]

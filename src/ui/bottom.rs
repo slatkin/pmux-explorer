@@ -35,29 +35,35 @@ pub(crate) struct TitleSpan {
     tab: Option<BottomTab>,
 }
 
-/// The rule row that tops the bottom panel: the tab run centered on
-/// the row and space fill on both sides — a solid band [`draw_bottom`]
-/// paints in `filter_bar_bg`. No left, right or bottom border
-/// character exists around it. The run centers by padding
+/// The row a tab bar draws on: the tab run placed by `align` and
+/// space fill beside it — a solid band the caller paints in
+/// `filter_bar_bg`. No left, right or bottom border character exists
+/// around it. `Alignment::Center` — the column's rule — pads
 /// `floor((width - run) / 2)` columns on the left and the remainder on
-/// the right, so the row stays exactly `width` long; a run wider than
-/// `width` gets no pad and each title span truncates against the
-/// remaining budget, so the row never overflows.
+/// the right; `Alignment::Right` — the strip's tab bar — leaves the
+/// whole pad on the left so the run hugs the band's right edge. Either
+/// way the row stays exactly `width` long; a run wider than `width`
+/// gets no pad and each title span truncates against the remaining
+/// budget, so the row never overflows.
 ///
 /// The walk also produces each label's drawn column range — the click
-/// hitboxes are this layout read back, so a label the rule truncates
+/// hitboxes are this layout read back, so a label the bar truncates
 /// away has a shrunken range or none and can never be clicked where it
 /// is not drawn.
 pub(crate) fn top_line_border(
     title_spans: &[TitleSpan],
     rule_style: Style,
     width: u16,
+    align: Alignment,
 ) -> (Line<'static>, Vec<BottomTabTarget>) {
     let run_width: usize = title_spans
         .iter()
         .map(|title| display_width(&title.span.content))
         .sum();
-    let leading = (width as usize).saturating_sub(run_width) / 2;
+    let leading = match align {
+        Alignment::Right => (width as usize).saturating_sub(run_width),
+        _ => (width as usize).saturating_sub(run_width) / 2,
+    };
     let mut remaining = (width as usize).saturating_sub(leading);
     let mut spans = vec![Span::styled(" ".repeat(leading), rule_style)];
     let mut col = leading as u16; // the first span starts after the pad
@@ -82,7 +88,7 @@ pub(crate) fn top_line_border(
 
 /// The column bottom panel: the rule row on top, the tab content under
 /// it. The rule is the column's tab bar; a strip keeps its tabs on a
-/// footer row instead and calls [`draw_bottom_content`] with the tab
+/// header row instead and calls [`draw_bottom_content`] with the tab
 /// panel's content `Rect` directly.
 pub fn draw_bottom(frame: &mut Frame, state: &mut AppState, area: Rect) {
     let theme = &state.theme;
@@ -106,8 +112,12 @@ pub fn draw_bottom(frame: &mut Frame, state: &mut AppState, area: Rect) {
         rule_rect,
     );
 
-    let (top_line, targets) =
-        top_line_border(&build_tab_title(state), Style::default(), area.width);
+    let (top_line, targets) = top_line_border(
+        &build_tab_title(state),
+        Style::default(),
+        area.width,
+        Alignment::Center,
+    );
     // Publish the label columns this frame actually drew so the click
     // handler hit-tests the drawn rule, never a recomputed one.
     state.layout.bottom_tab_targets = targets;
@@ -122,19 +132,19 @@ pub fn draw_bottom(frame: &mut Frame, state: &mut AppState, area: Rect) {
 const THIN_DIVIDER: &str = "\u{258e}";
 
 /// The strip's tab bar geometry: the 1-column divider line and the
-/// footer row at the bottom of the tab section. The divider is the
+/// header row at the top of the tab section. The divider is the
 /// [`THIN_DIVIDER`] glyph over whatever fill the sidebar paints — it
-/// carries no band of its own — while the footer is a band in the
+/// carries no band of its own — while the header is a band in the
 /// filter bar's background colour, the same band colour the column's
 /// rule wears — rendered after the focus fill so they win over it. The
-/// shown tab glyphs run horizontally on the footer, centred and
-/// truncated exactly as the column's rule draws them
+/// shown tab glyphs run horizontally on the header, right-aligned and
+/// truncated exactly as the column's rule lays a run out
 /// ([`top_line_border`], the same layout the rule and the tab click
 /// test read); the displayed tab keeps the bolded accent the rule
-/// gives it. The glyph columns are shifted by the footer's left edge
+/// gives it. The glyph columns are shifted by the header's left edge
 /// and published as `FrameLayout::bottom_tab_targets` so a click
 /// hit-tests the columns that were drawn.
-pub fn draw_strip_divider(frame: &mut Frame, state: &mut AppState, divider: Rect, footer: Rect) {
+pub fn draw_strip_divider(frame: &mut Frame, state: &mut AppState, divider: Rect, tab_bar: Rect) {
     // The divider column gets no band — just the glyph, foreground
     // only, in the band's own colour, so it reads as a thin line over
     // the sidebar's own fill.
@@ -144,24 +154,29 @@ pub fn draw_strip_divider(frame: &mut Frame, state: &mut AppState, divider: Rect
         .join("\n");
     frame.render_widget(Paragraph::new(thin_line).style(line_style), divider);
     let band = Block::default().style(Style::default().bg(state.theme.filter_bar_bg));
-    frame.render_widget(band, footer);
-    let (line, targets) = strip_footer_line(state, footer);
+    frame.render_widget(band, tab_bar);
+    let (line, targets) = strip_tab_bar_line(state, tab_bar);
     state.layout.bottom_tab_targets = targets;
-    frame.render_widget(Paragraph::new(line), footer);
+    frame.render_widget(Paragraph::new(line), tab_bar);
 }
 
-/// The footer's drawn line and its tab hitboxes: the rule's own
-/// centred run laid out over `footer`'s columns, with each hitbox
-/// shifted from run-relative to frame-absolute columns by `footer.x`.
-/// Both the renderer and the `#[cfg(test)]` publisher run through
-/// this, so a click can only ever land on a glyph actually drawn.
-fn strip_footer_line(state: &AppState, footer: Rect) -> (Line<'static>, Vec<BottomTabTarget>) {
-    let (line, targets) = top_line_border(&build_tab_title(state), Style::default(), footer.width);
+/// The tab bar's drawn line and its tab hitboxes: the rule's own run
+/// right-aligned over `tab_bar`'s columns, with each hitbox shifted
+/// from run-relative to frame-absolute columns by `tab_bar.x`. Both
+/// the renderer and the `#[cfg(test)]` publisher run through this, so
+/// a click can only ever land on a glyph actually drawn.
+fn strip_tab_bar_line(state: &AppState, tab_bar: Rect) -> (Line<'static>, Vec<BottomTabTarget>) {
+    let (line, targets) = top_line_border(
+        &build_tab_title(state),
+        Style::default(),
+        tab_bar.width,
+        Alignment::Right,
+    );
     let targets = targets
         .into_iter()
         .map(|mut target| {
-            target.start += footer.x;
-            target.end += footer.x;
+            target.start += tab_bar.x;
+            target.end += tab_bar.x;
             target
         })
         .collect();
@@ -220,7 +235,7 @@ pub(crate) fn build_tab_title(state: &AppState) -> Vec<TitleSpan> {
         }
         spans.push(TitleSpan {
             // One glyph per tab (see `BottomTab::label`); the run is
-            // centered on the rule by `top_line_border`.
+            // placed on the bar by `top_line_border`.
             span: Span::styled(tab.label(), is(&tab)),
             tab: Some(tab),
         });
@@ -234,18 +249,23 @@ pub(crate) fn build_tab_title(state: &AppState) -> Vec<TitleSpan> {
 /// clicks hit-test the drawn columns, not a re-implemented walk.
 #[cfg(test)]
 pub(crate) fn draw_tab_targets(state: &mut AppState, width: u16) {
-    let (_, targets) = top_line_border(&build_tab_title(state), Style::default(), width);
+    let (_, targets) = top_line_border(
+        &build_tab_title(state),
+        Style::default(),
+        width,
+        Alignment::Center,
+    );
     state.layout.bottom_tab_targets = targets;
 }
 
-/// Publish the strip footer's tab hitboxes the way `draw_strip_divider`
-/// does: run [`strip_footer_line`] over a synthetic footer `x`/`width`
+/// Publish the strip tab bar's hitboxes the way `draw_strip_divider`
+/// does: run [`strip_tab_bar_line`] over a synthetic bar `x`/`width`
 /// and store the drawn column ranges. Tests use it instead of a
-/// rendered frame so the footer's unmoved-release click hit-tests the
+/// rendered frame so the bar's unmoved-release click hit-tests the
 /// drawn columns, not a re-implemented walk.
 #[cfg(test)]
 pub(crate) fn draw_strip_tab_targets(state: &mut AppState, x: u16, width: u16) {
-    let (_, targets) = strip_footer_line(state, Rect::new(x, 0, width, 1));
+    let (_, targets) = strip_tab_bar_line(state, Rect::new(x, 0, width, 1));
     state.layout.bottom_tab_targets = targets;
 }
 
@@ -304,7 +324,7 @@ mod tests {
         // the bright text colour.
         let mut pi = state_with_focused_agent(AgentType::Pi);
         pi.global.bottom_tab = BottomTab::Thought;
-        let (rule_line, _) = top_line_border(&build_tab_title(&pi), rule, 40);
+        let (rule_line, _) = top_line_border(&build_tab_title(&pi), rule, 40, Alignment::Center);
         insta::assert_snapshot!(rule_text(rule_line), @"              │ 󰟶 │  │ 󰊢");
         let title = build_tab_title(&pi);
         let thought = title
@@ -325,21 +345,49 @@ mod tests {
         // A non-pi pane hides the Thought glyph; the displayed tab is
         // the Activity fallback. The run centers at every width.
         let claude = state_with_focused_agent(AgentType::Claude);
-        let (rule_line, _) = top_line_border(&build_tab_title(&claude), rule, 30);
+        let (rule_line, _) =
+            top_line_border(&build_tab_title(&claude), rule, 30, Alignment::Center);
         insta::assert_snapshot!(rule_text(rule_line), @"           │  │ 󰊢");
 
         // Every width keeps the rule exactly the width: the four-glyph
         // pi run needs 13 columns, and at 6 the overflowing run loses
         // its pad, truncates the tail (Tasks and Git draw nothing)
         // and stays 6 wide.
-        let (rule_line, _) = top_line_border(&build_tab_title(&claude), rule, 22);
+        let (rule_line, _) =
+            top_line_border(&build_tab_title(&claude), rule, 22, Alignment::Center);
         insta::assert_snapshot!(rule_text(rule_line), @"       │  │ 󰊢");
-        let (rule_line, _) = top_line_border(&build_tab_title(&pi), rule, 20);
+        let (rule_line, _) = top_line_border(&build_tab_title(&pi), rule, 20, Alignment::Center);
         insta::assert_snapshot!(rule_text(rule_line), @"    │ 󰟶 │  │ 󰊢");
-        let (rule_line, _) = top_line_border(&build_tab_title(&claude), rule, 18);
+        let (rule_line, _) =
+            top_line_border(&build_tab_title(&claude), rule, 18, Alignment::Center);
         insta::assert_snapshot!(rule_text(rule_line), @"     │  │ 󰊢");
-        let (rule_line, _) = top_line_border(&build_tab_title(&pi), rule, 6);
+        let (rule_line, _) = top_line_border(&build_tab_title(&pi), rule, 6, Alignment::Center);
         insta::assert_snapshot!(rule_text(rule_line), @" │ 󰟶…");
+    }
+
+    #[test]
+    fn top_line_border_right_aligns_the_tab_run() {
+        // The strip's tab bar: the whole pad goes left so the run hugs
+        // the band's right edge — the 13-column pi run leaves 7 pad
+        // columns on a 20-column bar and none on a 6-column one.
+        let rule = Style::default().fg(Color::Indexed(240));
+        let pi = state_with_focused_agent(AgentType::Pi);
+        let (bar_line, targets) =
+            top_line_border(&build_tab_title(&pi), rule, 20, Alignment::Right);
+        insta::assert_snapshot!(rule_text(bar_line), @"        │ 󰟶 │  │ 󰊢");
+        let ranges: Vec<(u16, u16, BottomTab)> =
+            targets.iter().map(|t| (t.start, t.end, t.tab)).collect();
+        assert_eq!(
+            ranges,
+            vec![
+                (7, 8, BottomTab::Activity),
+                (11, 12, BottomTab::Thought),
+                (15, 16, BottomTab::Tasks),
+                (19, 20, BottomTab::GitStatus),
+            ]
+        );
+        let (bar_line, _) = top_line_border(&build_tab_title(&pi), rule, 6, Alignment::Right);
+        insta::assert_snapshot!(rule_text(bar_line), @" │ 󰟶…");
     }
 
     #[test]
@@ -352,7 +400,7 @@ mod tests {
         // column 13 of 40 and column 3 of 20, and each " │ "
         // separator costs three. Each glyph is one column, so a click
         // can only ever land on drawn text.
-        let (_, wide) = top_line_border(&build_tab_title(&pi), rule, 40);
+        let (_, wide) = top_line_border(&build_tab_title(&pi), rule, 40, Alignment::Center);
         let ranges: Vec<(u16, u16, BottomTab)> =
             wide.iter().map(|t| (t.start, t.end, t.tab)).collect();
         assert_eq!(
@@ -365,7 +413,7 @@ mod tests {
             ]
         );
 
-        let (_, narrow) = top_line_border(&build_tab_title(&pi), rule, 20);
+        let (_, narrow) = top_line_border(&build_tab_title(&pi), rule, 20, Alignment::Center);
         let ranges: Vec<(u16, u16, BottomTab)> =
             narrow.iter().map(|t| (t.start, t.end, t.tab)).collect();
         assert_eq!(

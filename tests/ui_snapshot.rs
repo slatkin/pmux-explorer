@@ -2470,7 +2470,7 @@ fn snapshot_subagent_whose_root_the_status_filter_hides() {
 //
 // The strip's own shape: the vertical filter bar, the agent panel, the
 // thin divider line and the tab panel side by side, with the tab bar
-// as a footer row across the tab section's bottom. The snapshots below pin the `strip-layout` spec's
+// as a right-aligned header row across the tab section's top. The snapshots below pin the `strip-layout` spec's
 // scenarios — the parts of a 120-column strip, the Thought glyph a pi
 // pane adds to the divider run, a tab width of 0 (no divider, no tab
 // panel) and a strip too narrow for both panel minimums.
@@ -2500,18 +2500,18 @@ fn snapshot_strip_120x12_with_the_tools_tab() {
     let mut state = make_strip_state(AgentType::Claude, PaneStatus::Idle, 40);
     let output = render_to_string(&mut state, 120, 12);
     insta::assert_snapshot!(output, @"
-    󱓯 1 ⓘ                                                                — ▾▎
+    󱓯 1 ⓘ                                                                — ▾                                        │  │ 󰊢
      0 project                                                             ▎
     󰥔 0 ┃ 󰒲                                                                ▎
     󰒲 1     Waiting for prompt…                                             ▎
      0                                                                     ▎
+                                                                            ▎
                                                                             ▎                 No tools yet
                                                                             ▎
                                                                             ▎
                                                                             ▎
                                                                             ▎
-                                                                            ▎
-    ⇅ ⤢                                                                                         │  │ 󰊢
+    ⇅ ⤢                                                                     ▎
     ");
 }
 
@@ -2520,18 +2520,18 @@ fn snapshot_strip_pi_pane_shows_the_thought_glyph() {
     let mut state = make_strip_state(AgentType::Pi, PaneStatus::Running, 40);
     let output = render_to_string(&mut state, 120, 12);
     insta::assert_snapshot!(output, @"
-    󱓯 1 ⓘ                                                                — ▾▎
+    󱓯 1 ⓘ                                                                — ▾                                    │ 󰟶 │  │ 󰊢
      1 project                                                             ▎
     󰥔 0 ┃                                                                 ▎
     󰒲 0                                                                     ▎
      0                                                                     ▎
+                                                                            ▎
                                                                             ▎                 No tools yet
                                                                             ▎
                                                                             ▎
                                                                             ▎
                                                                             ▎
-                                                                            ▎
-    ⇅ ⤢                                                                                       │ 󰟶 │  │ 󰊢
+    ⇅ ⤢                                                                     ▎
     ");
 }
 
@@ -2593,18 +2593,18 @@ fn snapshot_strip_nests_a_subagent_under_its_parent() {
 
     let output = render_to_string(&mut state, 120, 12);
     insta::assert_snapshot!(output, @"
-    󱓯 2 ⓘ                                                                — ▾▎
+    󱓯 2 ⓘ                                                                — ▾                                    │ 󰟶 │  │ 󰊢
      2 project                                                            +▎
     󰥔 0 ┃   orchestrator main                                             ▎
     󰒲 0       ♟ unit1 + pmux/unit1                                        ▎
      0                                                                     ▎
+                                                                            ▎
                                                                             ▎                 No tools yet
                                                                             ▎
                                                                             ▎
                                                                             ▎
                                                                             ▎
-                                                                            ▎
-    ⇅ ⤢                                                                                       │ 󰟶 │  │ 󰊢
+    ⇅ ⤢                                                                     ▎
     ");
 }
 

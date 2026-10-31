@@ -1606,7 +1606,7 @@ mod tests {
 
     /// A strip state whose frame drew the 120×12, 40-percent layout:
     /// filter 0..4, agents 4..72, the divider line on column 72, tabs
-    /// 73..120, and the footer tab bar on row 11 spanning 72..120. The
+    /// 73..120, and the tab bar on row 0 spanning 72..120. The
     /// press routing tests read only the drawn `StripLayout`, the way
     /// the handlers do.
     fn strip_state() -> AppState {
@@ -1757,9 +1757,9 @@ mod tests {
 
     #[test]
     fn a_strip_press_outside_the_divider_starts_no_drag() {
-        // The divider is the only strip region that starts a drag: the
-        // agent panel and the tab panel route to clicks, the filter
-        // column to the chip walk.
+        // The divider line and the tab-bar row are the regions that
+        // start a drag — a press on a mid-strip row of the agent
+        // panel, the tab panel or the filter column starts none.
         let mut state = strip_state();
         for (row, col) in [(5, 10), (5, 80), (5, 0)] {
             state.handle_terminal_click(row, col, 12);
@@ -1864,9 +1864,9 @@ mod tests {
         );
     }
 
-    /// The footer column the Git glyph's drawn hitbox starts on: read
-    /// back off the published targets, the same values the frame's own
-    /// centering produced.
+    /// The tab-bar column the Git glyph's drawn hitbox starts on:
+    /// read back off the published targets, the same values the
+    /// frame's own right-aligning produced.
     fn drawn_glyph_col(state: &AppState, tab: BottomTab) -> u16 {
         state
             .layout
@@ -1874,22 +1874,23 @@ mod tests {
             .iter()
             .find(|target| target.tab == tab)
             .map(|target| target.start)
-            .expect("the tab glyph is drawn on the footer")
+            .expect("the tab glyph is drawn on the tab bar")
     }
 
     #[test]
     fn a_strip_drag_from_a_glyph_resizes_without_selecting_the_tab() {
-        // Spec "a drag that starts on a glyph": pressing the footer on
-        // the Git glyph's column and dragging to another column resizes
-        // the two panels; the tab selection must not follow the press.
+        // Spec "a drag that starts on a glyph": pressing the tab bar
+        // on the Git glyph's column and dragging to another column
+        // resizes the two panels; the tab selection must not follow
+        // the press.
         let mut state = strip_state();
         state.global.bottom_tab = BottomTab::GitStatus;
         crate::ui::bottom::draw_strip_tab_targets(&mut state, 72, 48);
         let git_col = drawn_glyph_col(&state, BottomTab::GitStatus);
 
-        // Row 11 is the footer row of the drawn 12-row strip.
-        state.handle_terminal_click(11, git_col, 12);
-        state.handle_split_drag_move(11, 60, 12);
+        // Row 0 is the tab-bar row of the drawn 12-row strip.
+        state.handle_terminal_click(0, git_col, 12);
+        state.handle_split_drag_move(0, 60, 12);
         state.end_split_drag(12);
 
         assert_eq!(
@@ -1904,16 +1905,16 @@ mod tests {
     }
 
     #[test]
-    fn an_unmoved_release_on_a_footer_glyph_selects_its_tab() {
+    fn an_unmoved_release_on_a_tab_bar_glyph_selects_its_tab() {
         // Spec "a click on a glyph": press and release on the Git
-        // glyph's column of the footer with no move — the release
+        // glyph's column of the tab bar with no move — the release
         // selects the tab and the panel widths do not change.
         let mut state = strip_state();
         state.global.bottom_tab = BottomTab::Activity;
         crate::ui::bottom::draw_strip_tab_targets(&mut state, 72, 48);
         let git_col = drawn_glyph_col(&state, BottomTab::GitStatus);
 
-        state.handle_terminal_click(11, git_col, 12);
+        state.handle_terminal_click(0, git_col, 12);
         state.end_split_drag(12);
 
         assert_eq!(
@@ -1929,17 +1930,18 @@ mod tests {
     }
 
     #[test]
-    fn a_click_on_the_footer_band_changes_nothing() {
-        // Spec "a click on the band": a footer column with no glyph —
-        // the footer's left edge, before the centered run — is outside
-        // every hitbox, so neither the tab nor the panel widths may
-        // change. The thin divider line keeps the same rule: a press
-        // released on the line above the footer selects nothing.
+    fn a_click_on_the_tab_bar_band_changes_nothing() {
+        // Spec "a click on the band": a tab-bar column with no glyph —
+        // the bar's left edge, before the right-aligned run — is
+        // outside every hitbox, so neither the tab nor the panel
+        // widths may change. The thin divider line keeps the same
+        // rule: a press released on the line below the bar selects
+        // nothing.
         let mut state = strip_state();
         state.global.bottom_tab = BottomTab::Tasks;
         crate::ui::bottom::draw_strip_tab_targets(&mut state, 72, 48);
 
-        state.handle_terminal_click(11, 72, 12);
+        state.handle_terminal_click(0, 72, 12);
         state.end_split_drag(12);
         state.handle_terminal_click(5, 72, 12);
         state.end_split_drag(12);
