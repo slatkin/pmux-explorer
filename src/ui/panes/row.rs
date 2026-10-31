@@ -137,10 +137,10 @@ fn render_pane_lines(
     // cursor has followed it. To keep the accent compact the marker and
     // the fill appear only on the status row and the branch/ports row,
     // never on deeper details like task progress or prompt wrapping.
-    // The gutter column — the grabber and the space beside it — belongs to
-    // the parent's surface: only the active agent's highlight covers it. A
-    // nested child's block starts at its indent, so the child reads as an
-    // inset card rather than a full-width band.
+    // The gutter — the grabber, the space beside it and a nested child's
+    // indent — belongs to the parent's surface: only the active agent's
+    // highlight covers it. A nested child's block starts at its first icon,
+    // so the child reads as an inset card rather than a full-width band.
     let gutter_bg = active.then_some(theme.selection_bg);
     let marker_ctx = RowCtx {
         marker_char: if active { SELECTION_MARKER } else { " " },
@@ -1197,7 +1197,7 @@ mod tests {
     }
 
     #[test]
-    fn a_nested_subagents_block_starts_at_its_indent() {
+    fn a_nested_subagents_block_starts_at_its_first_icon() {
         let theme = ColorTheme::default();
         let mut p = pane(PermissionMode::Default, PaneStatus::Running, "do work");
         p.prompt = "aaaa bbbb cccc dddd eeee ffff gggg hhhh iiii jjjj".into();
@@ -1205,23 +1205,17 @@ mod tests {
         assert!(lines.len() > 2, "the fixture must draw body rows too");
 
         for (index, line) in lines.iter().enumerate() {
-            // Columns 0 and 1 are the gutter (marker and the space beside
-            // it): they belong to the parent's surface, not to the block.
-            for span in line.spans.iter().take(2) {
+            // The first three spans are the gutter: the marker, the space
+            // beside it and the indent. They belong to the parent's
+            // surface; the block starts with the first icon.
+            for span in line.spans.iter().take(3) {
                 assert_ne!(
                     span.style.bg,
                     Some(theme.subagent_bg),
-                    "row {index}: the gutter column must not join the block"
+                    "row {index}: the gutter and indent must not join the block"
                 );
             }
-            let block_width = line
-                .spans
-                .iter()
-                .skip(2)
-                .map(|span| display_width(&span.content))
-                .sum::<usize>();
-            assert!(block_width > 0, "row {index} must draw content");
-            for span in line.spans.iter().skip(2) {
+            for span in line.spans.iter().skip(3) {
                 assert_eq!(
                     span.style.bg,
                     Some(theme.subagent_bg),
@@ -1260,7 +1254,7 @@ mod tests {
         let below = lines
             .iter()
             .skip(1)
-            .flat_map(|line| line.spans.iter().skip(2));
+            .flat_map(|line| line.spans.iter().skip(3));
         let mut below = below.peekable();
         assert!(below.peek().is_some(), "the fixture must draw body rows");
         for span in below {
