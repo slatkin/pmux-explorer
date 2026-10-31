@@ -50,8 +50,8 @@ pub struct ColorTheme {
     /// sits below selection_bg (`#414868`) so the cursor still pops.
     pub focus_bg: Color,
     /// Active focus background over the keyboard-owning section.
-    /// Default Tokyo Night storm background (`#24283b`) stays distinct
-    /// from focus_bg on a dark terminal.
+    /// Default `#1e2336`, a slate that stays distinct from focus_bg
+    /// (`#1a1b26`) on a dark terminal.
     pub focus_active_bg: Color,
     pub branch: Color,
     pub badge_danger: Color,
@@ -65,8 +65,8 @@ pub struct ColorTheme {
     pub subagent: Color,
     /// Background of a nested subagent's row block, which starts at the
     /// child's indent. Default Tokyo Night `fg_gutter` (`#3b4261`):
-    /// 1.7:1 against the base focus background (`#1a1b26`) and 1.5:1
-    /// against the active fill (`#24283b`), while staying below the
+    /// 1.7:1 against the base focus background (`#1a1b26`) and 1.6:1
+    /// against the active fill (`#1e2336`), while staying below the
     /// selection background (`#414868`) so a child reads as a card
     /// without outrunning the active row. `bg_highlight` (`#292e42`)
     /// is too faint on the base fill (1.3:1), and `dark3` (`#545c7e`)
@@ -140,7 +140,7 @@ impl Default for ColorTheme {
             wait_reason_action_dim: Color::Rgb(0x8a, 0x3f, 0x4e),
             selection_bg: Color::Rgb(0x41, 0x48, 0x68),
             focus_bg: Color::Rgb(0x1a, 0x1b, 0x26),
-            focus_active_bg: Color::Rgb(0x24, 0x28, 0x3b),
+            focus_active_bg: Color::Rgb(0x1e, 0x23, 0x36),
             branch: Color::Rgb(0x73, 0xda, 0xcb),
             badge_danger: Color::Rgb(0xf7, 0x76, 0x8e),
             badge_auto: Color::Rgb(0xe0, 0xaf, 0x68),
