@@ -603,7 +603,8 @@ pub fn kill_window(window_id: &str) -> Result<(), String> {
     run_tmux_capture(&["kill-window", "-t", window_id]).map(|_| ())
 }
 
-pub fn select_pane(pane_id: &str) {
+/// Returns whether the final `select-pane` succeeded.
+pub fn select_pane(pane_id: &str) -> bool {
     // Find the session containing this pane and switch to it first
     let session_id = display_message(pane_id, "#{session_id}");
     if !session_id.is_empty() {
@@ -614,7 +615,7 @@ pub fn select_pane(pane_id: &str) {
     if !window_id.is_empty() {
         let _ = run_tmux(&["select-window", "-t", &window_id]);
     }
-    let _ = run_tmux(&["select-pane", "-t", pane_id]);
+    run_tmux(&["select-pane", "-t", pane_id]).is_some()
 }
 
 /// Build the `set-option -p` argument list that colours `pane`'s border

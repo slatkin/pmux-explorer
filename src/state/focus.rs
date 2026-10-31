@@ -127,9 +127,10 @@ impl AppState {
         {
             // Update the sidebar immediately so the active marker and
             // repo header highlight move without waiting for the next
-            // periodic tmux refresh.
-            self.focus_state.focused_pane_id = Some(target_pane_id.clone());
-            tmux::select_pane(&target_pane_id);
+            // periodic tmux refresh — but only once tmux took the jump.
+            if tmux::select_pane(&target_pane_id) {
+                self.focus_state.focused_pane_id = Some(target_pane_id.clone());
+            }
 
             // The jump may land on a window that has no sidebar of its own
             // (e.g. with @sidebar_auto_create off). Summon one there so the
