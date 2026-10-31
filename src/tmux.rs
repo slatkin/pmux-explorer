@@ -45,6 +45,7 @@ pub use panes::{
     SidebarPaneInfo, SidebarPaneReading, find_active_pane, focused_pane_path, get_pane_path,
     get_sidebar_pane_reading, query_active_window_panes,
 };
+pub(crate) use panes::{is_stale_focus, pick_active_pane};
 pub use query::query_sessions;
 pub(crate) use query::query_sessions_with_process_snapshot;
 pub use types::{

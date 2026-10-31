@@ -57,9 +57,19 @@ impl AppState {
         // which only contains agent panes. This allows activity/git info to
         // be displayed even when the focused pane has no agent running.
         // When the sidebar has focus, find_active_pane returns None — preserve
-        // the previously focused pane so bottom panel data stays stable.
-        if let Some((id, _)) = tmux::find_active_pane(&self.tmux_pane) {
+        // the previously focused pane so bottom panel data stays stable —
+        // unless that pane lives in another window, where it would mark
+        // an agent the user is not looking at.
+        let panes = tmux::query_active_window_panes();
+        if let Some((id, _)) = tmux::pick_active_pane(&self.tmux_pane, &panes) {
             self.adopt_focused_pane(id);
+        } else if self
+            .focus_state
+            .focused_pane_id
+            .as_deref()
+            .is_some_and(|prev| tmux::is_stale_focus(prev, &panes))
+        {
+            self.focus_state.focused_pane_id = None;
         }
     }
 

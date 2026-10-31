@@ -249,6 +249,13 @@ pub(crate) fn pick_active_pane(
         .map(|p| (p.0.clone(), p.2.clone()))
 }
 
+/// True when `previous` names a pane that is not in this window's pane
+/// list. An empty list means the query failed, so nothing is known and the
+/// previous pane is not called stale.
+pub(crate) fn is_stale_focus(previous: &str, panes: &[(String, bool, String)]) -> bool {
+    !panes.is_empty() && !panes.iter().any(|p| p.0 == previous)
+}
+
 /// Find the focused pane's working directory by querying tmux directly.
 /// Used by the background git thread which doesn't have access to AppState.
 /// Queries all panes (not just agent panes) so git info is available
@@ -260,6 +267,14 @@ pub fn focused_pane_path(sidebar_pane: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn is_stale_focus_only_for_a_pane_outside_this_window() {
+        let panes = vec![("%1".into(), false, "/home".into())];
+        assert!(is_stale_focus("%7", &panes));
+        assert!(!is_stale_focus("%1", &panes));
+        assert!(!is_stale_focus("%7", &[]));
+    }
 
     #[test]
     fn pick_active_pane_returns_active_non_sidebar() {
