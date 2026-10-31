@@ -464,25 +464,23 @@ fn compute_scroll_offset(state: &mut AppState, total_lines: usize, list_area: Re
     // Auto-scroll to keep the active agent visible: the active row is
     // drawn at all times, whichever panel owns the keyboard, so the
     // scroll follows it at all times.
-    {
-        let mut first_line: Option<usize> = None;
-        let mut last_line: Option<usize> = None;
-        for (i, mapping) in state.layout.line_to_row.iter().enumerate() {
-            if *mapping == Some(state.global.selected_pane_row) {
-                if first_line.is_none() {
-                    first_line = Some(i);
-                }
-                last_line = Some(i);
+    let mut first_line: Option<usize> = None;
+    let mut last_line: Option<usize> = None;
+    for (i, mapping) in state.layout.line_to_row.iter().enumerate() {
+        if *mapping == Some(state.global.selected_pane_row) {
+            if first_line.is_none() {
+                first_line = Some(i);
             }
+            last_line = Some(i);
         }
-        if let (Some(first), Some(last)) = (first_line, last_line) {
-            let visible_h = list_area.height as usize;
-            let offset = state.scrolls.panes.offset;
-            if first < offset {
-                state.scrolls.panes.offset = first.saturating_sub(1);
-            } else if last >= offset + visible_h {
-                state.scrolls.panes.offset = (last + 1).saturating_sub(visible_h);
-            }
+    }
+    if let (Some(first), Some(last)) = (first_line, last_line) {
+        let visible_h = list_area.height as usize;
+        let offset = state.scrolls.panes.offset;
+        if first < offset {
+            state.scrolls.panes.offset = first.saturating_sub(1);
+        } else if last >= offset + visible_h {
+            state.scrolls.panes.offset = (last + 1).saturating_sub(visible_h);
         }
     }
 

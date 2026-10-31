@@ -507,17 +507,12 @@ impl AppState {
     /// the user did not pick.
     pub(crate) fn resolve_cursor_row(&mut self) {
         let targets = &self.layout.pane_row_targets;
-        let named = self
-            .global
-            .cursor_pane_id
-            .as_deref()
-            .and_then(|pane_id| targets.iter().position(|target| target.pane_id == pane_id));
-        let focused = self
-            .focus_state
-            .focused_pane_id
-            .as_deref()
-            .and_then(|pane_id| targets.iter().position(|target| target.pane_id == pane_id));
-        let row = named.or(focused).unwrap_or(self.global.selected_pane_row);
+        let row_of = |pane_id: Option<&str>| {
+            pane_id.and_then(|id| targets.iter().position(|target| target.pane_id == id))
+        };
+        let row = row_of(self.global.cursor_pane_id.as_deref())
+            .or_else(|| row_of(self.focus_state.focused_pane_id.as_deref()))
+            .unwrap_or(self.global.selected_pane_row);
         self.global.selected_pane_row = row;
         self.global.cursor_pane_id = targets.get(row).map(|target| target.pane_id.clone());
     }
