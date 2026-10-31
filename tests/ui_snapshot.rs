@@ -1638,7 +1638,7 @@ fn snapshot_filter_bar_icons_use_selected_and_inactive_colors() {
 
     let styled = render_to_styled_string(&mut state, 30, 25);
     let line = styled.lines().next().unwrap();
-    insta::assert_snapshot!(line, @" [bg:#23283d]󱓯[fg:#7aa2f7,bg:#23283d] [bg:#23283d]2[fg:#7aa2f7,bg:#23283d,bold] [bg:#23283d][fg:#9ece6a,bg:#23283d] [bg:#23283d]1[fg:#c0caf5,bg:#23283d] [bg:#23283d]󰥔[fg:#9aa5ce,bg:#23283d] [bg:#23283d]0[fg:#9aa5ce,bg:#23283d] [bg:#23283d]󰒲[fg:#7dcfff,bg:#23283d] [bg:#23283d]1[fg:#c0caf5,bg:#23283d] [bg:#23283d][fg:#9aa5ce,bg:#23283d] [bg:#23283d]0[fg:#9aa5ce,bg:#23283d] [bg:#23283d] [bg:#23283d] [bg:#23283d] [bg:#23283d] [bg:#23283d] [bg:#23283d]⇄[fg:#9ece6a,bg:#23283d] [bg:#23283d]⤢[fg:#9ece6a,bg:#23283d] [bg:#23283d]");
+    insta::assert_snapshot!(line, @" [bg:#1f202f]󱓯[fg:#7aa2f7,bg:#1f202f] [bg:#1f202f]2[fg:#7aa2f7,bg:#1f202f,bold] [bg:#1f202f][fg:#9ece6a,bg:#1f202f] [bg:#1f202f]1[fg:#c0caf5,bg:#1f202f] [bg:#1f202f]󰥔[fg:#9aa5ce,bg:#1f202f] [bg:#1f202f]0[fg:#9aa5ce,bg:#1f202f] [bg:#1f202f]󰒲[fg:#7dcfff,bg:#1f202f] [bg:#1f202f]1[fg:#c0caf5,bg:#1f202f] [bg:#1f202f][fg:#9aa5ce,bg:#1f202f] [bg:#1f202f]0[fg:#9aa5ce,bg:#1f202f] [bg:#1f202f] [bg:#1f202f] [bg:#1f202f] [bg:#1f202f] [bg:#1f202f] [bg:#1f202f]⇄[fg:#9ece6a,bg:#1f202f] [bg:#1f202f]⤢[fg:#9ece6a,bg:#1f202f] [bg:#1f202f]");
 }
 
 #[test]
@@ -1687,7 +1687,7 @@ fn snapshot_filter_selected_icon_has_color_without_underline() {
     // modifier on the selected filter would surface in the snapshot diff.
     let styled = render_to_styled_string(&mut state, 30, 25);
     let line = styled.lines().next().unwrap();
-    insta::assert_snapshot!(line, @" [bg:#23283d]󱓯[fg:#7aa2f7,bg:#23283d] [bg:#23283d]2[fg:#c0caf5,bg:#23283d] [bg:#23283d][fg:#9ece6a,bg:#23283d] [bg:#23283d]1[fg:#7aa2f7,bg:#23283d,bold] [bg:#23283d]󰥔[fg:#9aa5ce,bg:#23283d] [bg:#23283d]0[fg:#9aa5ce,bg:#23283d] [bg:#23283d]󰒲[fg:#7dcfff,bg:#23283d] [bg:#23283d]1[fg:#c0caf5,bg:#23283d] [bg:#23283d][fg:#9aa5ce,bg:#23283d] [bg:#23283d]0[fg:#9aa5ce,bg:#23283d] [bg:#23283d] [bg:#23283d] [bg:#23283d] [bg:#23283d] [bg:#23283d] [bg:#23283d]⇄[fg:#9ece6a,bg:#23283d] [bg:#23283d]⤢[fg:#9ece6a,bg:#23283d] [bg:#23283d]");
+    insta::assert_snapshot!(line, @" [bg:#1f202f]󱓯[fg:#7aa2f7,bg:#1f202f] [bg:#1f202f]2[fg:#c0caf5,bg:#1f202f] [bg:#1f202f][fg:#9ece6a,bg:#1f202f] [bg:#1f202f]1[fg:#7aa2f7,bg:#1f202f,bold] [bg:#1f202f]󰥔[fg:#9aa5ce,bg:#1f202f] [bg:#1f202f]0[fg:#9aa5ce,bg:#1f202f] [bg:#1f202f]󰒲[fg:#7dcfff,bg:#1f202f] [bg:#1f202f]1[fg:#c0caf5,bg:#1f202f] [bg:#1f202f][fg:#9aa5ce,bg:#1f202f] [bg:#1f202f]0[fg:#9aa5ce,bg:#1f202f] [bg:#1f202f] [bg:#1f202f] [bg:#1f202f] [bg:#1f202f] [bg:#1f202f] [bg:#1f202f]⇄[fg:#9ece6a,bg:#1f202f] [bg:#1f202f]⤢[fg:#9ece6a,bg:#1f202f] [bg:#1f202f]");
 }
 
 #[test]
