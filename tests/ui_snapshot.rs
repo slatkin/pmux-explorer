@@ -2430,7 +2430,7 @@ fn snapshot_subagent_with_parent_in_another_group_is_a_top_level_row() {
      󱓯 1  1 󰥔 0 󰒲 0  0                                    ⇄ ⤢
     ⓘ                                              project-sub ▾
     project-sub
-    ┃   ♟
+    ┃  
                             │ 󰟶 │  │ 󰊢
                             No tools yet
     ");
@@ -2459,7 +2459,7 @@ fn snapshot_subagent_whose_root_the_status_filter_hides() {
      󱓯 2  1 󰥔 0 󰒲 1  0                                    ⇄ ⤢
     ⓘ                                                        — ▾
     project
-        ♟
+       
                             │ 󰟶 │  │ 󰊢
                             No tools yet
     ");
@@ -2596,7 +2596,7 @@ fn snapshot_strip_nests_a_subagent_under_its_parent() {
      2 project                                                            +▎
     󰥔 0 ┃   orchestrator main                                             ▎
     󰒲 0   ╭─ 1 subagent ───────────────────────────────────────────────────╮▎
-     0   │   ♟ unit1 + pmux/unit1                                       │▎
+     0   │   unit1 + pmux/unit1                                         │▎
           ╰────────────────────────────────────────────────────────────────╯▎
                                                                             ▎                 No tools yet
                                                                             ▎

@@ -1434,7 +1434,7 @@ mod tests {
             None,
         );
         let line = status_row(&p, &ctx, &StatusIcons::default(), 0, 0);
-        insta::assert_snapshot!(line_text(&line), @"    ♟");
+        insta::assert_snapshot!(line_text(&line), @"   ");
     }
 
     #[test]
@@ -1456,7 +1456,7 @@ mod tests {
         let ctx = test_ctx(&theme, 40, false);
         let p = pi_subagent(PmuxTaskKind::Spawned, SubagentParent::Orphaned, None);
         let line = status_row(&p, &ctx, &StatusIcons::default(), 0, 0);
-        insta::assert_snapshot!(line_text(&line), @"    ♟ ORPHANED");
+        insta::assert_snapshot!(line_text(&line), @"    ORPHANED");
         let tag = line
             .spans
             .iter()
@@ -1496,7 +1496,7 @@ mod tests {
         p.pane_name = Some("a-very-long-pane-name-that-will-not-fit".into());
         let line = status_row(&p, &ctx, &StatusIcons::default(), 0, 0);
         let text = line_text(&line);
-        insta::assert_snapshot!(text, @"    ♟ ORPHANED a-very-long-pa…");
+        insta::assert_snapshot!(text, @"    ORPHANED a-very-long-pane…");
         assert!(
             text.contains("ORPHANED"),
             "the tag survives a tight row: {text:?}"
@@ -1559,7 +1559,7 @@ mod tests {
         let mut p = pi_subagent(PmuxTaskKind::Spawned, SubagentParent::Orphaned, None);
         p.pane_name = Some("my-task".into());
         let line = status_row(&p, &ctx, &StatusIcons::default(), 0, 0);
-        insta::assert_snapshot!(line_text(&line), @"    ♟ ORPHANED my-task");
+        insta::assert_snapshot!(line_text(&line), @"    ORPHANED my-task");
     }
 
     #[test]
@@ -1591,7 +1591,7 @@ mod tests {
         let text = line_text(&line);
         insta::assert_snapshot!(
             text,
-            @"    ♟ ORPHANED a-very-lo… 1m5s"
+            @"    ORPHANED a-very-long… 1m5s"
         );
         assert!(
             display_width(text.trim_end()) <= ctx.inner_width + 2,
@@ -1616,7 +1616,7 @@ mod tests {
             .collect::<Vec<_>>()
             .join("\n");
         insta::assert_snapshot!(joined, @"
-          ♟
+         
         󰭹 Task completed
         ");
         assert_eq!(
@@ -1712,7 +1712,7 @@ mod tests {
             .collect::<Vec<_>>()
             .join("\n");
         insta::assert_snapshot!(joined, @"
-          ♟
+         
            main
         󰭹 Task completed
         ");

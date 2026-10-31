@@ -60,7 +60,7 @@ pub(super) fn status_row(
         pulse_color.unwrap_or_else(|| theme.status_color(&pane.status, pane.attention));
     // The agent label is always shown; a real pane name (set via pmux's
     // `select-pane -T`) is appended after the badge slot, so the subagent
-    // badge (♟ / ↻) and a permission badge sit between the agent label and
+    // badge (↻ for a resumed one, none for a spawned one) and a permission badge sit between the agent label and
     // the pane name. Only the pane's own name is shown in the title slot —
     // never the tmux session name. OpenCode renders its label as a padded
     // Nerd glyph chip on a black background instead of the word, since the
@@ -72,7 +72,7 @@ pub(super) fn status_row(
     // permission mode, whose badge is empty, so the pmux identity can use it.
     let (badge, badge_override) = match &pane.subagent {
         Some(info) => match info.kind {
-            PmuxTaskKind::Spawned => ("♟", Some(theme.badge_plan)),
+            PmuxTaskKind::Spawned => ("", None),
             PmuxTaskKind::Resumed => ("↻", Some(theme.badge_auto)),
         },
         None => (pane.permission_mode.badge(), None),

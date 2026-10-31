@@ -586,8 +586,8 @@ mod tests {
         repo
             orchestrator
           ╭─ 2 subagents ──────────────────────╮
-          │   ♟ unit1                        │
-          │   ♟ unit2                        │
+          │   unit1                          │
+          │   unit2                          │
           ╰────────────────────────────────────╯
         ");
         assert_eq!(
