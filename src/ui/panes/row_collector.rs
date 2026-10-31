@@ -169,10 +169,8 @@ pub(super) fn collect(state: &AppState, width: u16) -> CollectedRows {
             let nested = nested_flags[i];
             if nested && !(i > 0 && nested_flags[i - 1]) {
                 // A run of nested subagents opens one box, titled with the
-                // run's length and set off from the parent by a blank row.
+                // run's length, directly under the parent's last row.
                 let count = nested_flags[i..].iter().take_while(|n| **n).count();
-                collected.lines.push(Line::from(""));
-                collected.line_to_row.push(None);
                 collected
                     .lines
                     .push(box_top_line(count, width, theme.border_inactive));
@@ -587,7 +585,6 @@ mod tests {
         insta::assert_snapshot!(joined, @"
         repo
             orchestrator
-
           ╭─ 2 subagents ──────────────────────╮
           │   ♟ unit1                        │
           │   ♟ unit2                        │
@@ -595,7 +592,7 @@ mod tests {
         ");
         assert_eq!(
             collected.line_to_row,
-            vec![None, Some(0), None, None, Some(1), Some(2), None],
+            vec![None, Some(0), None, Some(1), Some(2), None],
             "each child row belongs to its own row index; the box edges map to none"
         );
     }
