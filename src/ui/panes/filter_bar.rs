@@ -81,8 +81,8 @@ pub(super) fn render_filter_bar<'a>(state: &AppState, width: u16) -> (Line<'a>, 
     // A chip's icon is grey when its count is zero and lit in its
     // status colour otherwise. Selection plays no part in the icon —
     // the active chip is marked only by its count, which is drawn in
-    // the bolded accent: the accent alone is quiet next to the icons'
-    // status colours, so the weight carries the selection.
+    // the bolded accent: the accent alone is the dimmest colour on
+    // the filter bar's band, so the weight carries the selection.
     for (i, chip) in chips.iter().enumerate() {
         if i > 0 {
             spans.push(Span::raw(" "));
