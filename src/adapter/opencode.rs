@@ -145,6 +145,17 @@ mod tests {
     use serde_json::json;
 
     #[test]
+    fn reported_matches_the_parse_arms() {
+        // OpenCode's session-context arms hardcode `worktree: None`, so the
+        // worktree leg of the pin does not apply.
+        super::super::assert_reported_matches_parse(
+            "opencode",
+            false,
+            Some(super::super::SESSION_CONTEXT_FIELDS),
+        );
+    }
+
+    #[test]
     fn session_start() {
         let adapter = OpenCodeAdapter;
         let event = adapter

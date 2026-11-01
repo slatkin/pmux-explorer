@@ -7,6 +7,17 @@ fn hook_registrations_match_parse_arms() {
 }
 
 #[test]
+fn reported_matches_the_parse_arms() {
+    // Claude's session-context arms read the worktree object, so a dropped
+    // `parse_worktree` must trip the pin.
+    super::super::assert_reported_matches_parse(
+        "claude",
+        true,
+        Some(super::super::SESSION_CONTEXT_FIELDS),
+    );
+}
+
+#[test]
 fn session_start() {
     let adapter = ClaudeAdapter;
     let input = json!({"cwd": "/home/user", "permission_mode": "default"});

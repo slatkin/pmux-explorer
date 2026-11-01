@@ -138,3 +138,125 @@ pub(crate) fn assert_table_drift_free(agent: &str, table: &[HookRegistration]) {
         );
     }
 }
+
+/// The representative payload of one event kind: the minimal payload the
+/// kind needs to parse, enriched with a full session context so a drift
+/// check can see which context fields a parse arm really reads.
+#[cfg(test)]
+pub(crate) fn representative_payload(kind: AgentEventKind) -> serde_json::Value {
+    let mut payload = minimal_payload(kind);
+    let object = payload
+        .as_object_mut()
+        .expect("minimal payload is an object");
+    object.insert("session_id".to_string(), serde_json::json!("sess-drift"));
+    object.insert("cwd".to_string(), serde_json::json!("/repo"));
+    object.insert(
+        "worktree".to_string(),
+        serde_json::json!({
+            "name": "wt",
+            "path": "/repo/wt",
+            "branch": "feat",
+            "originalRepoDir": "/repo"
+        }),
+    );
+    payload
+}
+
+/// The session id a parsed event carries, for the drift checks. The
+/// variants without a session id answer `None`.
+#[cfg(test)]
+pub(crate) fn event_session_id(event: &crate::event::AgentEvent) -> Option<&str> {
+    use crate::event::AgentEvent;
+    match event {
+        AgentEvent::SessionStart { session_id, .. }
+        | AgentEvent::UserPromptSubmit { session_id, .. }
+        | AgentEvent::Notification { session_id, .. }
+        | AgentEvent::Stop { session_id, .. }
+        | AgentEvent::StopFailure { session_id, .. }
+        | AgentEvent::PermissionDenied { session_id, .. }
+        | AgentEvent::CwdChanged { session_id, .. } => session_id.as_deref(),
+        _ => None,
+    }
+}
+
+/// The worktree a parsed event carries, for the drift checks. A parse arm
+/// that never reads the worktree object and a payload without one both
+/// answer `None`.
+#[cfg(test)]
+pub(crate) fn event_worktree(
+    event: &crate::event::AgentEvent,
+) -> Option<&crate::event::WorktreeInfo> {
+    use crate::event::AgentEvent;
+    match event {
+        AgentEvent::SessionStart { worktree, .. }
+        | AgentEvent::UserPromptSubmit { worktree, .. }
+        | AgentEvent::Notification { worktree, .. }
+        | AgentEvent::Stop { worktree, .. }
+        | AgentEvent::StopFailure { worktree, .. }
+        | AgentEvent::PermissionDenied { worktree, .. }
+        | AgentEvent::CwdChanged { worktree, .. } => worktree.as_ref(),
+        _ => None,
+    }
+}
+
+/// The reported-set drift pin. For every event an adapter accepts,
+/// `reported()` answers `session_id` exactly when the parse arm carries
+/// session context, and an event the adapter does not accept reports
+/// nothing — so adding a session-context event without wiring `reported()`
+/// fails here instead of silently dropping the identity writes.
+///
+/// `reads_worktree` marks the adapters whose session-context parse arms
+/// read the worktree object (`claude`, `pi`); for them a reported
+/// `worktree` must really be parsed from the payload, so dropping
+/// `parse_worktree` from an arm fails here instead of clearing the
+/// worktree options on every event. `session_fields` is the uniform
+/// reported set every session-context event must carry; `None` for a
+/// table-driven adapter whose per-event sets differ.
+#[cfg(test)]
+pub(crate) fn assert_reported_matches_parse(
+    agent: &str,
+    reads_worktree: bool,
+    session_fields: Option<&'static [&'static str]>,
+) {
+    use crate::event::resolve_adapter;
+    let adapter = resolve_adapter(agent).expect("adapter should exist");
+
+    for kind in AgentEventKind::ALL {
+        let event_name = kind.external_name();
+        let payload = representative_payload(*kind);
+        let reported = adapter.reported(event_name, &payload);
+        let Some(event) = adapter.parse(event_name, &payload) else {
+            assert!(
+                reported.is_empty(),
+                "{agent}: {event_name} is not accepted by parse() but reported() answers {reported:?}"
+            );
+            continue;
+        };
+        let carries_session = event_session_id(&event).is_some();
+        assert_eq!(
+            reported.contains("session_id"),
+            carries_session,
+            "{agent}: {event_name} reported() disagrees with its parse arm about session context"
+        );
+        if carries_session && let Some(fields) = session_fields {
+            assert_eq!(
+                reported.fields(),
+                fields,
+                "{agent}: {event_name} reports a set other than the session-context fields"
+            );
+        }
+        if reads_worktree && reported.contains("worktree") {
+            let worktree = event_worktree(&event).unwrap_or_else(|| {
+                panic!(
+                    "{agent}: {event_name} reports `worktree` but its parse arm does not read the worktree object"
+                )
+            });
+            assert!(
+                !worktree.name.is_empty()
+                    || !worktree.path.is_empty()
+                    || !worktree.branch.is_empty(),
+                "{agent}: {event_name} reports `worktree` but its parse arm dropped the payload's worktree"
+            );
+        }
+    }
+}

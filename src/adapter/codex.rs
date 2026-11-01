@@ -115,6 +115,17 @@ mod tests {
     }
 
     #[test]
+    fn reported_matches_the_parse_arms() {
+        // Codex's session-context arms hardcode `worktree: None`, so the
+        // worktree leg of the pin does not apply.
+        super::super::assert_reported_matches_parse(
+            "codex",
+            false,
+            Some(super::super::SESSION_CONTEXT_FIELDS),
+        );
+    }
+
+    #[test]
     fn session_start() {
         let adapter = CodexAdapter;
         let input = json!({"cwd": "/home/user", "session_id": "sess-codex-1"});

@@ -541,6 +541,15 @@ mod tests {
     }
 
     #[test]
+    fn reported_matches_the_parse_arms() {
+        // The reported set is table-driven, but the table itself is not the
+        // parse arms: this pins that a `worktree` the table declares is one
+        // the parse arm really reads. The per-event sets differ, so the
+        // uniform-field leg is off.
+        super::super::assert_reported_matches_parse("pi", true, None);
+    }
+
+    #[test]
     fn stop_does_not_report_worktree() {
         let adapter = PiAdapter;
         let reported = adapter.reported("stop", &json!({"cwd": "/tmp"}));
