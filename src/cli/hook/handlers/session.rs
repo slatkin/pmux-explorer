@@ -1,11 +1,13 @@
-use crate::cli::{set_attention, set_status};
 use crate::desktop_notification;
 use crate::desktop_notification::DesktopNotificationKind;
+use crate::event::{AgentEvent, Reported};
+use crate::pane_state::transition;
+use crate::pane_store::PaneStore;
 use crate::tmux;
 
 use super::super::context::{
-    AgentContext, PENDING_SESSION_END, PENDING_WORKTREE_REMOVE, clear_run_state,
-    pane_writes_allowed, run_session_end_teardown, set_agent_meta,
+    PENDING_SESSION_END, PENDING_WORKTREE_REMOVE, pane_writes_allowed, run_session_end_teardown,
+    should_update_cwd,
 };
 use super::super::notifications::{
     NotifyLabels, NotifyPayload, notify_lifecycle, session_end_body, session_end_fingerprint,
@@ -14,44 +16,40 @@ use super::super::notifications::{
 
 pub(in crate::cli::hook) fn on_session_start(
     pane: &str,
-    ctx: &AgentContext<'_>,
-    source: &str,
+    event: &AgentEvent,
+    reported: &Reported,
+    store: &dyn PaneStore,
 ) -> i32 {
-    set_agent_meta(pane, ctx);
-    set_attention(pane, "clear");
-    clear_run_state(pane);
-    set_notification_run_id(pane);
-    tmux::unset_pane_option(pane, tmux::PANE_PROMPT);
-    tmux::unset_pane_option(pane, tmux::PANE_PROMPT_SOURCE);
-    // `@pane_subagents` is deliberately preserved across SessionStart.
-    // Subagents share the parent's `$TMUX_PANE`, so when a subagent
-    // fires its own SessionStart after SubagentStart has populated the
-    // list, clearing it here would drop the marker that
-    // `should_update_cwd` and `drain_pending_teardowns` rely on. The
-    // normal teardown paths (`run_session_end_teardown` via
-    // `clear_all_meta`) already clear the list when a real session
-    // ends, so the only state this would skip clearing is a subagent
-    // list stranded by a hard crash — acceptable vs. racing against
-    // legitimate subagent activity.
-    // A fresh session overrides any deferred teardown that was waiting
-    // for the previous run's subagents to drain.
-    tmux::unset_pane_option(pane, PENDING_SESSION_END);
-    tmux::unset_pane_option(pane, PENDING_WORKTREE_REMOVE);
+    let snapshot = store.snapshot(pane);
+    // The notification run id is a call-site write and the pending teardown
+    // markers are handler-owned state; both ride the transition's batch so
+    // the event still costs one apply.
+    let mut writes = transition(&snapshot, event, reported);
+    set_notification_run_id(&mut writes);
+    // `@pane_subagents` is deliberately preserved across SessionStart — the
+    // transition leaves it alone. Subagents share the parent's `$TMUX_PANE`,
+    // so when a subagent fires its own SessionStart after SubagentStart has
+    // populated the list, clearing it here would drop the marker that
+    // `should_update_cwd` and `drain_pending_teardowns` rely on. The normal
+    // teardown paths (`run_session_end_teardown` via `clear_all_meta`)
+    // already clear the list when a real session ends, so the only state
+    // this would skip clearing is a subagent list stranded by a hard crash
+    // — acceptable vs. racing against legitimate subagent activity.
+    // A fresh session overrides any deferred teardown that was waiting for
+    // the previous run's subagents to drain.
+    writes.unset(PENDING_SESSION_END);
+    writes.unset(PENDING_WORKTREE_REMOVE);
+    let _ = store.apply(pane, &writes);
     // A fresh session starts with an empty task store, matching the
     // activity log's session semantics so a pane reused for new work
     // does not show the previous run's list. Skipped while subagents
     // are active: they share the parent's `$TMUX_PANE`, and a child's
     // SessionStart must not wipe the parent's list — same rule as
-    // `mark_task_reset`.
-    if pane_writes_allowed(pane) {
+    // `mark_task_reset`. The read is post-batch, so it sees exactly what
+    // the apply left behind.
+    if should_update_cwd(&store.get(pane, tmux::PANE_SUBAGENTS)) {
         crate::task_store::clear_tasks(pane);
     }
-    match source {
-        "resume" => tmux::set_pane_option(pane, tmux::PANE_WAIT_REASON, "session_resumed"),
-        "compact" => tmux::set_pane_option(pane, tmux::PANE_WAIT_REASON, "session_resumed_compact"),
-        _ => tmux::unset_pane_option(pane, tmux::PANE_WAIT_REASON),
-    }
-    set_status(pane, "idle");
     0
 }
 
@@ -60,6 +58,7 @@ pub(in crate::cli::hook) fn on_session_end(
     agent_name: &str,
     end_reason: &str,
     notifications: &desktop_notification::DesktopNotificationSettings,
+    store: &dyn PaneStore,
 ) -> i32 {
     // Subagents share the parent's `$TMUX_PANE`, so a SessionEnd fired
     // while `@pane_subagents` is populated is almost certainly a child's
@@ -98,6 +97,7 @@ pub(in crate::cli::hook) fn on_session_end(
                 fingerprint_suffix: &session_end_fingerprint(end_reason),
                 body: &session_end_body(end_reason),
             },
+            store,
         );
     }
     // The thinking feed environment is resolved here, at the hook's
@@ -111,6 +111,8 @@ pub(in crate::cli::hook) fn on_session_end(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::pane_state::SESSION_CONTEXT;
+    use crate::pane_store::MemPaneStore;
     use std::fs;
 
     fn default_notifications() -> desktop_notification::DesktopNotificationSettings {
@@ -120,19 +122,22 @@ mod tests {
         }
     }
 
-    fn basic_ctx() -> AgentContext<'static> {
-        AgentContext {
-            agent: "claude",
-            cwd: "/repo",
-            permission_mode: "default",
-            worktree: &None,
-            session_id: &None,
+    fn session_start_event(source: &str, session_id: Option<&str>) -> AgentEvent {
+        AgentEvent::SessionStart {
+            agent: "claude".into(),
+            cwd: "/repo".into(),
+            permission_mode: "default".into(),
+            source: source.into(),
+            worktree: None,
+            agent_id: None,
+            session_id: session_id.map(str::to_string),
         }
     }
 
     #[test]
     fn on_session_end_preserves_parent_state_when_subagents_active() {
         let _guard = tmux::test_mock::install();
+        let store = MemPaneStore::new();
         let pane = "%PARENT_END";
         tmux::test_mock::set(pane, tmux::PANE_SUBAGENTS, "Explore:sub-1");
         tmux::test_mock::set(pane, tmux::PANE_AGENT, "claude");
@@ -144,7 +149,7 @@ mod tests {
         let _ = fs::create_dir_all(log_path.parent().unwrap());
         fs::write(&log_path, "1234567890|Read|main.rs\n").unwrap();
 
-        let exit = on_session_end(pane, "claude", "", &default_notifications());
+        let exit = on_session_end(pane, "claude", "", &default_notifications(), &store);
 
         assert_eq!(exit, 0);
         assert!(
@@ -170,12 +175,13 @@ mod tests {
     #[test]
     fn on_session_end_clears_state_when_no_subagents() {
         let _guard = tmux::test_mock::install();
+        let store = MemPaneStore::new();
         let pane = "%LONE_END";
         tmux::test_mock::set(pane, tmux::PANE_AGENT, "claude");
         tmux::test_mock::set(pane, tmux::PANE_CWD, "/repo");
         tmux::test_mock::set(pane, tmux::PANE_STATUS, "running");
 
-        let exit = on_session_end(pane, "claude", "", &default_notifications());
+        let exit = on_session_end(pane, "claude", "", &default_notifications(), &store);
 
         assert_eq!(exit, 0);
         assert!(
@@ -188,32 +194,21 @@ mod tests {
 
     #[test]
     fn on_session_start_sets_agent_and_idle_status() {
-        let _guard = tmux::test_mock::install();
+        let store = MemPaneStore::new();
         let pane = "%NEW_SESSION";
-        let ctx = AgentContext {
-            agent: "claude",
-            cwd: "/repo",
-            permission_mode: "default",
-            worktree: &None,
-            session_id: &Some("sess-123".into()),
-        };
 
-        let exit = on_session_start(pane, &ctx, "");
+        let exit = on_session_start(
+            pane,
+            &session_start_event("", Some("sess-123")),
+            &SESSION_CONTEXT,
+            &store,
+        );
         assert_eq!(exit, 0);
-        assert_eq!(
-            tmux::test_mock::get(pane, tmux::PANE_AGENT).as_deref(),
-            Some("claude")
-        );
-        assert_eq!(
-            tmux::test_mock::get(pane, tmux::PANE_STATUS).as_deref(),
-            Some("idle")
-        );
-        assert_eq!(
-            tmux::test_mock::get(pane, tmux::PANE_SESSION_ID).as_deref(),
-            Some("sess-123")
-        );
+        assert_eq!(store.get(pane, tmux::PANE_AGENT), "claude");
+        assert_eq!(store.get(pane, tmux::PANE_STATUS), "idle");
+        assert_eq!(store.get(pane, tmux::PANE_SESSION_ID), "sess-123");
         assert!(
-            !tmux::test_mock::contains(pane, tmux::PANE_PROMPT),
+            !store.contains(pane, tmux::PANE_PROMPT),
             "SessionStart should clear any stale prompt"
         );
     }
@@ -225,50 +220,58 @@ mod tests {
         // parent's list. If it did, should_update_cwd would start
         // returning true and the next hook from either side could
         // clobber the parent's cwd/worktree metadata.
-        let _guard = tmux::test_mock::install();
+        let store = MemPaneStore::new();
         let pane = "%SUBAGENT_LIVE";
-        tmux::test_mock::set(pane, tmux::PANE_SUBAGENTS, "Explore:sub-1");
+        store.insert(pane, tmux::PANE_SUBAGENTS, "Explore:sub-1");
 
-        on_session_start(pane, &basic_ctx(), "");
+        on_session_start(
+            pane,
+            &session_start_event("", None),
+            &SESSION_CONTEXT,
+            &store,
+        );
 
         assert_eq!(
-            tmux::test_mock::get(pane, tmux::PANE_SUBAGENTS).as_deref(),
-            Some("Explore:sub-1"),
+            store.get(pane, tmux::PANE_SUBAGENTS),
+            "Explore:sub-1",
             "SessionStart must not wipe an active subagent list"
         );
     }
 
     #[test]
     fn fresh_session_start_clears_pending_markers() {
-        let _guard = tmux::test_mock::install();
+        let store = MemPaneStore::new();
         let pane = "%PARENT_RESTART";
-        tmux::test_mock::set(pane, PENDING_SESSION_END, "1");
-        tmux::test_mock::set(pane, PENDING_WORKTREE_REMOVE, "1");
+        store.insert(pane, PENDING_SESSION_END, "1");
+        store.insert(pane, PENDING_WORKTREE_REMOVE, "1");
 
-        let ctx = AgentContext {
-            agent: "claude",
-            cwd: "/repo",
-            permission_mode: "default",
-            worktree: &None,
-            session_id: &None,
-        };
-        on_session_start(pane, &ctx, "");
+        on_session_start(
+            pane,
+            &session_start_event("", None),
+            &SESSION_CONTEXT,
+            &store,
+        );
 
         assert!(
-            !tmux::test_mock::contains(pane, PENDING_SESSION_END),
+            !store.contains(pane, PENDING_SESSION_END),
             "fresh SessionStart must drop a stale pending marker"
         );
-        assert!(!tmux::test_mock::contains(pane, PENDING_WORKTREE_REMOVE));
+        assert!(!store.contains(pane, PENDING_WORKTREE_REMOVE));
     }
 
     #[test]
     fn on_session_start_clears_the_task_store() {
-        let _guard = tmux::test_mock::install();
+        let store = MemPaneStore::new();
         let pane = "%TASK_FRESH_SESSION";
         crate::task_store::record_task(pane, "stale task").unwrap();
         assert!(crate::task_store::store_file_path(pane).exists());
 
-        on_session_start(pane, &basic_ctx(), "");
+        on_session_start(
+            pane,
+            &session_start_event("", None),
+            &SESSION_CONTEXT,
+            &store,
+        );
 
         assert!(
             !crate::task_store::store_file_path(pane).exists(),
@@ -278,12 +281,17 @@ mod tests {
 
     #[test]
     fn on_session_start_preserves_task_store_while_subagents_active() {
-        let _guard = tmux::test_mock::install();
+        let store = MemPaneStore::new();
         let pane = "%TASK_SUBAGENT_SESSION";
-        tmux::test_mock::set(pane, tmux::PANE_SUBAGENTS, "Explore:sub-1");
+        store.insert(pane, tmux::PANE_SUBAGENTS, "Explore:sub-1");
         crate::task_store::record_task(pane, "parent task").unwrap();
 
-        on_session_start(pane, &basic_ctx(), "");
+        on_session_start(
+            pane,
+            &session_start_event("", None),
+            &SESSION_CONTEXT,
+            &store,
+        );
 
         assert!(
             crate::task_store::store_file_path(pane).exists(),
@@ -295,34 +303,46 @@ mod tests {
 
     #[test]
     fn on_session_start_resume_writes_wait_reason() {
-        let _guard = tmux::test_mock::install();
+        let store = MemPaneStore::new();
         let pane = "%RESUME";
-        on_session_start(pane, &basic_ctx(), "resume");
-        assert_eq!(
-            tmux::test_mock::get(pane, tmux::PANE_WAIT_REASON).as_deref(),
-            Some("session_resumed"),
+        on_session_start(
+            pane,
+            &session_start_event("resume", None),
+            &SESSION_CONTEXT,
+            &store,
         );
+        assert_eq!(store.get(pane, tmux::PANE_WAIT_REASON), "session_resumed");
     }
 
     #[test]
     fn on_session_start_compact_writes_compact_wait_reason() {
-        let _guard = tmux::test_mock::install();
+        let store = MemPaneStore::new();
         let pane = "%COMPACT";
-        on_session_start(pane, &basic_ctx(), "compact");
+        on_session_start(
+            pane,
+            &session_start_event("compact", None),
+            &SESSION_CONTEXT,
+            &store,
+        );
         assert_eq!(
-            tmux::test_mock::get(pane, tmux::PANE_WAIT_REASON).as_deref(),
-            Some("session_resumed_compact"),
+            store.get(pane, tmux::PANE_WAIT_REASON),
+            "session_resumed_compact",
         );
     }
 
     #[test]
     fn on_session_start_startup_clears_stale_wait_reason() {
-        let _guard = tmux::test_mock::install();
+        let store = MemPaneStore::new();
         let pane = "%FRESH";
-        tmux::test_mock::set(pane, tmux::PANE_WAIT_REASON, "session_resumed");
-        on_session_start(pane, &basic_ctx(), "startup");
+        store.insert(pane, tmux::PANE_WAIT_REASON, "session_resumed");
+        on_session_start(
+            pane,
+            &session_start_event("startup", None),
+            &SESSION_CONTEXT,
+            &store,
+        );
         assert!(
-            !tmux::test_mock::contains(pane, tmux::PANE_WAIT_REASON),
+            !store.contains(pane, tmux::PANE_WAIT_REASON),
             "startup source should drop a stale resume marker"
         );
     }
@@ -345,8 +365,15 @@ mod tests {
     #[test]
     fn on_session_end_routine_reason_does_not_notify() {
         let _guard = tmux::test_mock::install();
+        let store = MemPaneStore::new();
         let pane = "%END_ROUTINE";
-        on_session_end(pane, "claude", "clear", &notifications_enabled_all());
+        on_session_end(
+            pane,
+            "claude",
+            "clear",
+            &notifications_enabled_all(),
+            &store,
+        );
         // The notification helper writes a dedup stamp only when a notification
         // actually goes out; a missing stamp is proof the gate rejected it.
         assert!(
@@ -358,9 +385,11 @@ mod tests {
     #[test]
     fn on_session_end_logout_attempts_notification() {
         let _guard = tmux::test_mock::install();
+        // The run id is read through the store, so the seed goes here; the
+        // dedup stamp is still written through the raw helpers (row 4.5).
+        let store = MemPaneStore::new();
         let pane = "%END_LOGOUT";
-        // Seed a run id so the fingerprint is run-scoped.
-        tmux::test_mock::set(pane, tmux::PANE_NOTIFICATION_RUN_ID, "1700000000000");
+        store.insert(pane, tmux::PANE_NOTIFICATION_RUN_ID, "1700000000000");
         // Agent name is surfaced in the desktop notification title; using an
         // obvious test marker makes it trivial to spot when a local `cargo
         // test` run happens to actually fire osascript.
@@ -369,6 +398,7 @@ mod tests {
             "cargo-test: on_session_end_logout",
             "logout",
             &notifications_enabled_all(),
+            &store,
         );
         // `send_desktop_notification` succeeds (it is a no-op under the
         // `SIDEBAR_DISABLE_DESKTOP_NOTIFICATIONS` guard), so the stamp is
@@ -386,13 +416,15 @@ mod tests {
     #[test]
     fn on_session_end_bypass_disabled_attempts_notification() {
         let _guard = tmux::test_mock::install();
+        let store = MemPaneStore::new();
         let pane = "%END_BYPASS";
-        tmux::test_mock::set(pane, tmux::PANE_NOTIFICATION_RUN_ID, "1700000000000");
+        store.insert(pane, tmux::PANE_NOTIFICATION_RUN_ID, "1700000000000");
         on_session_end(
             pane,
             "cargo-test: on_session_end_bypass_disabled",
             "bypass_permissions_disabled",
             &notifications_enabled_all(),
+            &store,
         );
         let stamp_key = tmux::PANE_OS_NOTIFY_TASK_COMPLETED;
         if tmux::test_mock::contains(pane, stamp_key) {

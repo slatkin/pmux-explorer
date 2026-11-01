@@ -89,13 +89,10 @@ mod tests {
             branch: "feat".into(),
             original_repo_dir: "/home/user/repo".into(),
         });
-        let session_id = None;
         let ctx = AgentContext {
             agent: "claude",
             cwd: "/tmp/wt/src",
-            permission_mode: "default",
             worktree: &wt,
-            session_id: &session_id,
         };
         assert_eq!(repo_label_from_ctx(&ctx), Some("repo".into()));
     }
@@ -128,13 +125,10 @@ mod tests {
             branch: "feature/xyz".into(),
             original_repo_dir: "/home/user/repo".into(),
         });
-        let session_id = None;
         let ctx = AgentContext {
             agent: "claude",
             cwd: "/tmp/wt/src",
-            permission_mode: "default",
             worktree: &wt,
-            session_id: &session_id,
         };
         assert_eq!(branch_label_from_ctx(&ctx), Some("feature/xyz".into()));
     }

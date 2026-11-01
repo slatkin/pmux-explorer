@@ -1,6 +1,6 @@
-use super::location::sync_worktree_meta;
 use super::meta::clear_all_meta;
 use crate::cli::{set_attention, set_status};
+use crate::pane_store::{PaneStore, PaneWrites};
 use crate::tmux::{self, AgentType};
 
 /// Legacy pane-option name. Nothing sets this any more — a child
@@ -14,8 +14,10 @@ pub(in crate::cli::hook) const PENDING_SESSION_END: &str = tmux::PANE_PENDING_SE
 /// `@pane_subagents` becomes empty.
 pub(in crate::cli::hook) const PENDING_WORKTREE_REMOVE: &str = tmux::PANE_PENDING_WORKTREE_REMOVE;
 
-pub(in crate::cli::hook) fn mark_pending(pane: &str, key: &str) {
-    tmux::set_pane_option(pane, key, "1");
+pub(in crate::cli::hook) fn mark_pending(pane: &str, key: &'static str, store: &dyn PaneStore) {
+    let mut writes = PaneWrites::new();
+    writes.set(key, "1");
+    let _ = store.apply(pane, &writes);
 }
 
 /// Run any deferred teardown recorded by a previous call to
@@ -26,10 +28,12 @@ pub(in crate::cli::hook) fn mark_pending(pane: &str, key: &str) {
 /// `on_session_end` no longer participates — a child SessionEnd racing
 /// ahead of SubagentStop would otherwise replay the teardown against
 /// the live parent. The SessionEnd path now bails out early instead.
-pub(in crate::cli::hook) fn drain_pending_teardowns(pane: &str) {
-    if !tmux::get_pane_option_value(pane, PENDING_WORKTREE_REMOVE).is_empty() {
-        run_worktree_remove_teardown(pane);
-        tmux::unset_pane_option(pane, PENDING_WORKTREE_REMOVE);
+pub(in crate::cli::hook) fn drain_pending_teardowns(pane: &str, store: &dyn PaneStore) {
+    if !store.get(pane, PENDING_WORKTREE_REMOVE).is_empty() {
+        run_worktree_remove_teardown(pane, store);
+        let mut writes = PaneWrites::new();
+        writes.unset(PENDING_WORKTREE_REMOVE);
+        let _ = store.apply(pane, &writes);
     }
 }
 
@@ -64,10 +68,16 @@ pub(in crate::cli::hook) fn run_session_end_teardown(
 
 /// Side-effect body of the WorktreeRemove teardown. Same pattern as
 /// `run_session_end_teardown` — single source of truth for both the inline
-/// and deferred paths.
-pub(in crate::cli::hook) fn run_worktree_remove_teardown(pane: &str) {
-    sync_worktree_meta(pane, &None);
-    // Clear hook-set cwd so query_sessions() falls back to
-    // pane_current_path, avoiding stale worktree path association.
-    tmux::unset_pane_option(pane, tmux::PANE_CWD);
+/// and deferred paths. The teardown's option writes are one batch through
+/// the store: drop the worktree pair and the hook-set cwd so the query
+/// layer falls back to `pane_current_path` instead of associating the pane
+/// with a stale worktree path.
+pub(in crate::cli::hook) fn run_worktree_remove_teardown(pane: &str, store: &dyn PaneStore) {
+    // The `None` arm of `sync_worktree_meta`, expressed as a batch: both
+    // worktree fields go.
+    let mut writes = PaneWrites::new();
+    writes.unset(tmux::PANE_WORKTREE_NAME);
+    writes.unset(tmux::PANE_WORKTREE_BRANCH);
+    writes.unset(tmux::PANE_CWD);
+    let _ = store.apply(pane, &writes);
 }
