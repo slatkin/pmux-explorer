@@ -727,6 +727,8 @@ pub(crate) fn split_tmux_fields(line: &str, delimiter: char) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::event::AgentEvent;
+    use crate::pane_state::{SESSION_CONTEXT, transition};
     use crate::pane_store::{MemPaneStore, PaneSnapshot, PaneWrites};
     use crate::tmux::AGENT_SESSION_PANE_OPTIONS;
 
@@ -1330,6 +1332,102 @@ mod tests {
     fn split_tmux_fields_unescapes_delimiter() {
         let fields = split_tmux_fields("one|two\\|still-two|three", '|');
         assert_eq!(fields, vec!["one", "two|still-two", "three"]);
+    }
+
+    // ─── write-then-read round trip ─────────────────────────────────
+
+    /// Quote one field value the way tmux's `#{q:...}` prints it for the
+    /// `list-panes` read: a backslash and the `|` delimiter are escaped,
+    /// and [`split_tmux_fields`] un-escapes them on the way back.
+    fn quote_field(value: &str) -> String {
+        let mut quoted = String::with_capacity(value.len());
+        for ch in value.chars() {
+            if ch == '\\' || ch == '|' {
+                quoted.push('\\');
+            }
+            quoted.push(ch);
+        }
+        quoted
+    }
+
+    /// Render one pane's options as a `list-panes -F` line with the
+    /// query format's 27-field pane suffix: tmux-native fields get fixed
+    /// values, every `@pane_*` option is read from the store.
+    fn render_pane_line(store: &MemPaneStore, pane: &str) -> String {
+        let mut fields = field_strings(&full_fields());
+        for (index, key) in [
+            (pane_line_field::PANE_STATUS, PANE_STATUS),
+            (pane_line_field::PANE_ATTENTION, PANE_ATTENTION),
+            (pane_line_field::AGENT, PANE_AGENT),
+            (4, PANE_NAME), // @pane_name: parsed as no field, still printed
+            (pane_line_field::PANE_ROLE, PANE_ROLE),
+            (pane_line_field::PROMPT, PANE_PROMPT),
+            (pane_line_field::PROMPT_SOURCE, PANE_PROMPT_SOURCE),
+            (pane_line_field::STARTED_AT, PANE_STARTED_AT),
+            (pane_line_field::WAIT_REASON, PANE_WAIT_REASON),
+            (pane_line_field::SUBAGENTS, PANE_SUBAGENTS),
+            (pane_line_field::PANE_CWD, PANE_CWD),
+            (pane_line_field::PERMISSION_MODE, PANE_PERMISSION_MODE),
+            (pane_line_field::WORKTREE_NAME, PANE_WORKTREE_NAME),
+            (pane_line_field::WORKTREE_BRANCH, PANE_WORKTREE_BRANCH),
+            (pane_line_field::SESSION_ID, PANE_SESSION_ID),
+            (pane_line_field::SIDEBAR_SPAWNED, SPAWNED_OPTION),
+            (pane_line_field::BG_CMD, PANE_BG_CMD),
+            (pane_line_field::SUBAGENT_KIND, PANE_SUBAGENT_KIND),
+            (pane_line_field::SUBAGENT_PARENT, PANE_SUBAGENT_PARENT),
+            (pane_line_field::SUBAGENT_TASK, PANE_SUBAGENT_TASK),
+        ] {
+            fields[index] = store.get(pane, key);
+        }
+        fields[pane_line_field::PANE_ID] = pane.to_string();
+        fields
+            .iter()
+            .map(|value| quote_field(value))
+            .collect::<Vec<_>>()
+            .join("|")
+    }
+
+    #[test]
+    fn a_multiline_wait_reason_survives_the_write_then_read_round_trip() {
+        // The seam's end-to-end guarantee: a value a hook writes must read
+        // back as one field of the pane list the sidebar polls. A `|` or a
+        // newline left in the stored reason would split the pane line here
+        // and shift every downstream field.
+        let store = MemPaneStore::new();
+        let pane = "%ROUNDTRIP";
+        store.insert(pane, PANE_STARTED_AT, "1700");
+
+        let event = AgentEvent::Notification {
+            agent: "claude".into(),
+            cwd: "/repo".into(),
+            permission_mode: "default".into(),
+            wait_reason: "waiting for\nyour input|permission needed".into(),
+            meta_only: false,
+            worktree: None,
+            agent_id: None,
+            session_id: Some("ses-1".into()),
+        };
+
+        // The handler path: one snapshot, one transition, one batched apply.
+        let snapshot = store.snapshot(pane);
+        let writes = transition(&snapshot, &event, &SESSION_CONTEXT);
+        store.apply(pane, &writes).unwrap();
+
+        // Render the pane the way tmux prints it for the sidebar's
+        // `list-panes -F` format, then parse it with the query decoder.
+        let line = render_pane_line(&store, pane);
+        let parsed = parse_pane_line(&line).expect("the pane must survive the round trip");
+
+        assert_eq!(
+            parsed.wait_reason, "waiting for your input permission needed",
+            "the reason must read back on one line, no separator left"
+        );
+        assert!(!parsed.wait_reason.contains('\n'));
+        assert!(!parsed.wait_reason.contains('|'));
+        assert_eq!(parsed.status, PaneStatus::Waiting);
+        assert!(parsed.attention);
+        assert_eq!(parsed.agent, AgentType::Claude);
+        assert_eq!(parsed.session_id.as_deref(), Some("ses-1"));
     }
 
     #[test]
