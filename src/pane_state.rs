@@ -407,7 +407,11 @@ pub fn is_system_message(s: &str) -> bool {
 
 /// Whether the snapshot shows a live background shell: `@pane_bg_cmd`
 /// present and non-empty.
-fn live_bg_shell(snapshot: &PaneSnapshot) -> bool {
+///
+/// The one definition of "background shell live": the `Stop` and
+/// `Notification` transitions and `on_stop`'s notification gate all read
+/// this, so tightening the rule once tightens every reader.
+pub fn live_bg_shell(snapshot: &PaneSnapshot) -> bool {
     snapshot
         .bg_cmd
         .as_deref()

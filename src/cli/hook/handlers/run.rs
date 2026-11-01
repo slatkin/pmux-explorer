@@ -1,7 +1,7 @@
 use crate::desktop_notification;
 use crate::desktop_notification::DesktopNotificationKind;
 use crate::event::{AgentEvent, Reported};
-use crate::pane_state::transition;
+use crate::pane_state::{live_bg_shell, transition};
 use crate::pane_store::PaneStore;
 
 use super::super::context::{AgentContext, mark_task_reset};
@@ -44,10 +44,7 @@ pub(in crate::cli::hook) fn on_stop(
         return 0;
     };
     let snapshot = store.snapshot(pane);
-    let bg_shell_live = snapshot
-        .bg_cmd
-        .as_deref()
-        .is_some_and(|cmd| !cmd.is_empty());
+    let bg_shell_live = live_bg_shell(&snapshot);
     let writes = transition(&snapshot, event, reported);
     let _ = store.apply(pane, &writes);
     // The batch above cleared the stale `@pane_subagents` list, so the
