@@ -42,10 +42,10 @@
 
 ## 7. Integration
 
-- [ ] 7.1 Add a write-then-read test: apply a `Notification` with a multi-line `wait_reason` through the in-memory adapter, render that pane as a `list-panes` line, and parse it with the `query.rs` decoder. Verify: the pane is present and the reason is one line.
-- [ ] 7.2 Update `docs/state-management.md` for the store, the snapshot and the batch. Verify: the doc names the store, the transition and the rules, and no longer describes handlers writing options one by one.
-- [ ] 7.3 Run `cargo fmt`, `cargo clippy`, `cargo test`, `cargo build --release` and `openspec validate pane-write-seam --strict`. Verify: all five exit with status 0.
-- [ ] 7.4 Commit the work in concern-sized commits on `main` (seam and encoder, reported fields, transition and handlers, sweeps, docs) and confirm `git status` is clean. Verify: `git status` shows no changes.
+- [x] 7.1 Add a write-then-read test: apply a `Notification` with a multi-line `wait_reason` through the in-memory adapter, render that pane as a `list-panes` line, and parse it with the `query.rs` decoder. Verify: the pane is present and the reason is one line.
+- [x] 7.2 Update `docs/state-management.md` for the store, the snapshot and the batch. Verify: the doc names the store, the transition and the rules, and no longer describes handlers writing options one by one.
+- [x] 7.3 Run `cargo fmt`, `cargo clippy`, `cargo test`, `cargo build --release` and `openspec validate pane-write-seam --strict`. Verify: all five exit with status 0.
+- [x] 7.4 Commit the work in concern-sized commits on `main` (seam and encoder, reported fields, transition and handlers, sweeps, docs) and confirm `git status` is clean. Verify: `git status` shows no changes.
 
 ## Workflow follow-up
 
