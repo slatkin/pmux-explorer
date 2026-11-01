@@ -2,11 +2,11 @@
 
 ## 1. The store seam and the encoder
 
-- [ ] 1.1 Add a `PaneWrites` type (ordered `Set(key, value)` / `Unset(key)`) and a `PaneStore` trait with `snapshot(pane)`, `get(pane, key)` and `apply(pane, &PaneWrites)`. Verify: `cargo build` passes and a unit test builds a `PaneWrites` and reads it back.
-- [ ] 1.2 Add the tmux adapter. `apply` builds one `tmux` invocation with `;`-joined `set` commands and is a no-op on an empty list; `snapshot` reads `status`, `bg_cmd`, `subagents` and `started_at` with one `display-message`, using the `list-panes` escaping; `get` reads one option. Verify: unit tests pin the exact argument list of a mixed set/unset batch and the snapshot format string.
-- [ ] 1.3 Add the in-memory adapter that implements the same trait and holds options per pane. Verify: a unit test applies a batch and reads the options back, including an `Unset` and a `get`.
-- [ ] 1.4 Encode every value in `apply` with `sanitize_tmux_value`, extended to replace `\r`. Verify: unit tests show `\n`, `\r` and `|` in a value come out as one field, for both adapters.
-- [ ] 1.5 Create the store once in the `hook` entry (`src/cli/hook.rs`) and pass it down to the handlers. Verify: `cargo build` passes and `cargo test` is green with the handlers unchanged.
+- [x] 1.1 Add a `PaneWrites` type (ordered `Set(key, value)` / `Unset(key)`) and a `PaneStore` trait with `snapshot(pane)`, `get(pane, key)` and `apply(pane, &PaneWrites)`. Verify: `cargo build` passes and a unit test builds a `PaneWrites` and reads it back.
+- [x] 1.2 Add the tmux adapter. `apply` builds one `tmux` invocation with `;`-joined `set` commands and is a no-op on an empty list; `snapshot` reads `status`, `bg_cmd`, `subagents` and `started_at` with one `display-message`, using the `list-panes` escaping; `get` reads one option. Verify: unit tests pin the exact argument list of a mixed set/unset batch and the snapshot format string.
+- [x] 1.3 Add the in-memory adapter that implements the same trait and holds options per pane. Verify: a unit test applies a batch and reads the options back, including an `Unset` and a `get`.
+- [x] 1.4 Encode every value in `apply` with `sanitize_tmux_value`, extended to replace `\r`. Verify: unit tests show `\n`, `\r` and `|` in a value come out as one field, for both adapters.
+- [x] 1.5 Create the store once in the `hook` entry (`src/cli/hook.rs`) and pass it down to the handlers. Verify: `cargo build` passes and `cargo test` is green with the handlers unchanged.
 
 ## 2. Reported fields per event
 
