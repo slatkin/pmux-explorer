@@ -4,8 +4,7 @@
 //! sidebar's poll reads the pane state from before the batch or from after
 //! it, never from between. Two adapters implement the trait: the tmux
 //! adapter in [`crate::tmux::pane_store`] for production, and
-//! [`MemPaneStore`] here for tests — the replacement of the old
-//! `cfg(test)` `tmux::test_mock`.
+//! [`MemPaneStore`] here for tests.
 //!
 //! The write rules themselves (the status priority, the subagent guard, the
 //! not-reported rule) live in the transition function built on this seam, not
@@ -111,13 +110,13 @@ pub trait PaneStore {
 }
 
 /// The in-memory adapter: options held in a map keyed by `(pane, key)`,
-/// with the same observable semantics tests relied on from the old
-/// `tmux::test_mock` — `get` returns the empty string for an unset key, and
-/// a pre-populated value stays exactly as inserted. `apply` encodes `Set`
-/// values with [`sanitize_tmux_value`] like every other adapter, so a value
-/// written through the store is always one field. The map sits behind a
-/// `RefCell` because the trait's `apply` takes `&self` — the tmux adapter
-/// needs no mutability, and the seam is threaded as a shared reference.
+/// with test-friendly semantics — `get` returns the empty string for an
+/// unset key, and a pre-populated value stays exactly as inserted. `apply`
+/// encodes `Set` values with [`sanitize_tmux_value`] like every other
+/// adapter, so a value written through the store is always one field. The
+/// map sits behind a `RefCell` because the trait's `apply` takes `&self` —
+/// the tmux adapter needs no mutability, and the seam is threaded as a
+/// shared reference.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct MemPaneStore {
     options: RefCell<HashMap<(String, String), String>>,

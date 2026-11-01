@@ -53,6 +53,3 @@ pub use types::{
     AgentType, CLAUDE_AGENT, CODEX_AGENT, OPENCODE_AGENT, PI_AGENT, PaneInfo, PaneStatus,
     PermissionMode, SessionInfo, SubagentInfo, SubagentParent, WindowInfo, WorktreeMetadata,
 };
-
-#[cfg(test)]
-pub use options::test_mock;
