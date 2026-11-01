@@ -42,8 +42,12 @@ producer does nothing. It does not warn and it does not retry.
 ## The payload
 
 Every payload is a JSON object. The fields below are the ones the sidebar
-reads. A field that a producer cannot fill is omitted or sent empty; the
-sidebar treats an empty string as "not reported".
+reads. The fields listed for an event are the fields that event reports:
+the sidebar stores each one as it arrives, and an empty value clears the
+option the field backs. A field the event does not report is left alone,
+so a value stored earlier survives. Which fields an event reports is
+declared per agent; for pi, the declaration is the field list the
+`pmux-explorer setup pi` contract prints.
 
 ### `session-start`
 
@@ -139,7 +143,7 @@ assistant message.
 | `cwd` | The working directory. |
 | `session_id` | The session identifier. |
 | `permission_mode` | The agent's permission mode. |
-| `worktree` | The worktree object, if any. |
+| `worktree` | The worktree object, if any. pi does not report `worktree` on `stop`, so a pi producer that leaves a worktree says so on `session-start` or `user-prompt-submit`, the events that report it. |
 
 ### `stop-failure`
 
