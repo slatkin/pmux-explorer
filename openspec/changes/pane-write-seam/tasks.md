@@ -37,8 +37,8 @@
 
 ## 6. Sidebar sweeps and teardown
 
-- [ ] 6.1 Express the bg-shell sweep in `state/refresh.rs` as `PaneWrites`: unset `bg_cmd`, and set `status = idle` only when the status is `background`. The sweep takes the store as an argument, constructed at `apply_session_snapshot` (tmux adapter in the sidebar, in-memory adapter in tests). Verify: tests for both scenarios in "the sidebar's own sweeps follow the same rules".
-- [ ] 6.2 Express the three wipe paths (`clear_all_meta`, `clear_dead_agent_metadata`, `clear_agent_pane_state`) as one `Unset` batch each, keeping each path's own skip list; each takes the store like the sweep, threaded through `query_sessions_with_process_snapshot` the way `FeedEnv` is. Verify: existing wipe tests pass, and each wipe makes one `tmux` call.
+- [x] 6.1 Express the bg-shell sweep in `state/refresh.rs` as `PaneWrites`: unset `bg_cmd`, and set `status = idle` only when the status is `background`. The sweep takes the store as an argument, constructed at `apply_session_snapshot` (tmux adapter in the sidebar, in-memory adapter in tests). Verify: tests for both scenarios in "the sidebar's own sweeps follow the same rules".
+- [x] 6.2 Express the three wipe paths (`clear_all_meta`, `clear_dead_agent_metadata`, `clear_agent_pane_state`) as one `Unset` batch each, keeping each path's own skip list; each takes the store like the sweep, threaded through `query_sessions_with_process_snapshot` the way `FeedEnv` is. Verify: existing wipe tests pass, and each wipe makes one `tmux` call.
 
 ## 7. Integration
 
