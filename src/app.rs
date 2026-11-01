@@ -19,17 +19,19 @@ mod setup;
 mod size_guard;
 mod workers;
 
-/// Run the TUI event loop. Returns when the loop exits (currently only on
-/// fatal I/O error, since the loop is `loop { ... }`).
+/// Run the TUI event loop. Returns when `shutdown` is set or on fatal I/O
+/// error.
 ///
 /// `needs_refresh` is the process-wide SIGUSR1 flag owned by `main.rs` — the
 /// signal handler must reference a static visible at signal-handler time,
 /// so the static stays with the `extern "C"` handler in the binary crate and
-/// we just borrow it here.
+/// we just borrow it here. `shutdown` is the same kind of flag for SIGTERM
+/// and SIGHUP: once set, the loop returns so the caller's guards run.
 pub fn run(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     tmux_pane: String,
     needs_refresh: &'static AtomicBool,
+    shutdown: &'static AtomicBool,
 ) -> io::Result<()> {
     let mut state = setup::init_state(tmux_pane);
 
@@ -48,7 +50,7 @@ pub fn run(
     let spinner_interval = Duration::from_millis(200);
     let mut needs_redraw = true;
 
-    loop {
+    while !shutdown.load(Ordering::Relaxed) {
         if needs_redraw {
             render::render_frame(terminal, &mut state)?;
             needs_redraw = false;
@@ -140,4 +142,5 @@ pub fn run(
             .global
             .flush_pending_cursor_save(std::time::Duration::from_millis(120));
     }
+    Ok(())
 }

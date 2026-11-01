@@ -10,6 +10,8 @@ use pmux_explorer::{app, tmux};
 use ratatui::{Terminal, backend::CrosstermBackend};
 
 static NEEDS_REFRESH: AtomicBool = AtomicBool::new(false);
+/// Set by SIGTERM/SIGHUP so the event loop returns and the drop guards run.
+static SHUTDOWN: AtomicBool = AtomicBool::new(false);
 
 struct TuiSession {
     entered_alt_screen: bool,
@@ -78,6 +80,17 @@ fn main() -> io::Result<()> {
         sa.sa_sigaction = sigusr1_handler as *const () as libc::sighandler_t;
         sa.sa_flags = libc::SA_RESTART;
         libc::sigaction(libc::SIGUSR1, &sa, std::ptr::null_mut());
+
+        // SIGTERM (`kill`, `pkill`) and SIGHUP (pane closing) end the loop
+        // instead of the process, so the guards below clear the pane option
+        // and restore the terminal. SA_RESETHAND puts the default action
+        // back after the first signal: a loop that never returns can still
+        // be killed by a second one.
+        let mut sa: libc::sigaction = std::mem::zeroed();
+        sa.sa_sigaction = shutdown_handler as *const () as libc::sighandler_t;
+        sa.sa_flags = libc::SA_RESTART | libc::SA_RESETHAND;
+        libc::sigaction(libc::SIGTERM, &sa, std::ptr::null_mut());
+        libc::sigaction(libc::SIGHUP, &sa, std::ptr::null_mut());
     }
 
     let pid = std::process::id();
@@ -100,9 +113,13 @@ fn main() -> io::Result<()> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    app::run(&mut terminal, tmux_pane, &NEEDS_REFRESH)
+    app::run(&mut terminal, tmux_pane, &NEEDS_REFRESH, &SHUTDOWN)
 }
 
 extern "C" fn sigusr1_handler(_: libc::c_int) {
     NEEDS_REFRESH.store(true, Ordering::Relaxed);
+}
+
+extern "C" fn shutdown_handler(_: libc::c_int) {
+    SHUTDOWN.store(true, Ordering::Relaxed);
 }
