@@ -32,8 +32,8 @@
 
 ## 5. The activity-log rule
 
-- [ ] 5.1 Move the option writes of `handle_activity_log` into `transition`'s `ActivityLog` arm: the status move (`waiting` and `error` become `running`; `idle`, `background` and an absent status stay; `started_at` is set on the first move to `running`), the background-Bash `@pane_bg_cmd` write, and the plan-mode permission write, which keeps the subagent guard. Verify: one test per scenario in "a finished pane stays finished", plus tests for the bg-cmd and plan-mode writes.
-- [ ] 5.2 Make the handler apply the result as one batch and write the activity entry as before. Verify: `handle_activity_log` makes one `snapshot` and at most one `apply`, and the activity log still gets its entry in every scenario.
+- [x] 5.1 Move the option writes of `handle_activity_log` into `transition`'s `ActivityLog` arm: the status move (`waiting` and `error` become `running`; `idle`, `background` and an absent status stay; `started_at` is set on the first move to `running`), the background-Bash `@pane_bg_cmd` write, and the plan-mode permission write, which keeps the subagent guard. Verify: one test per scenario in "a finished pane stays finished", plus tests for the bg-cmd and plan-mode writes.
+- [x] 5.2 Make the handler apply the result as one batch and write the activity entry as before. Verify: `handle_activity_log` makes one `snapshot` and at most one `apply`, and the activity log still gets its entry in every scenario.
 
 ## 6. Sidebar sweeps and teardown
 
