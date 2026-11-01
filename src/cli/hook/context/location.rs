@@ -1,3 +1,4 @@
+use crate::pane_state::subagents_active;
 use crate::pane_store::PaneStore;
 use crate::tmux;
 
@@ -5,7 +6,7 @@ use crate::tmux;
 /// When subagents are active, events may come from a subagent running in a
 /// worktree, so we should NOT overwrite the parent agent's cwd.
 pub(in crate::cli::hook) fn should_update_cwd(current_subagents: &str) -> bool {
-    current_subagents.is_empty()
+    !subagents_active(current_subagents)
 }
 
 /// Returns true if pane-scoped writes from this hook event are safe to

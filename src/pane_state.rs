@@ -351,6 +351,19 @@ pub fn status_writes(status: &str) -> PaneWrites {
     writes
 }
 
+/// Whether a pane has active subagents: the `@pane_subagents` list is
+/// present and non-empty. An unset option and an empty list both read as
+/// none; any other value, including a whitespace-only one, counts as
+/// active.
+///
+/// The one definition of "subagents active": [`identity_guarded`] and
+/// the hook-context guards (`should_update_cwd`, `pane_writes_allowed`)
+/// delegate here, so a second condition added to the rule reaches every
+/// reader at once.
+pub fn subagents_active(subagents: &str) -> bool {
+    !subagents.is_empty()
+}
+
 /// Whether the identity-scoped writes of an event may touch the pane:
 /// false while the snapshot shows active subagents, true otherwise.
 ///
@@ -362,7 +375,7 @@ pub fn status_writes(status: &str) -> PaneWrites {
 /// cover status, attention, prompt or the response preview — a child's
 /// progress is still visible while it runs.
 pub fn identity_guarded(snapshot: &PaneSnapshot) -> bool {
-    snapshot.subagents.as_deref().is_none_or(str::is_empty)
+    !subagents_active(snapshot.subagents.as_deref().unwrap_or(""))
 }
 
 /// Wait reasons that demand direct user action and must stay visible as
@@ -1167,6 +1180,19 @@ mod tests {
             "",
             "Explore:sub-1,Plan:sub-2"
         )));
+    }
+
+    #[test]
+    fn subagents_active_treats_unset_empty_and_whitespace_alike() {
+        // The guard the snapshot feeds and the hook-context guards the raw
+        // option string feed must agree on the edges: unset and an empty
+        // list both read as none (the snapshot maps an empty value to
+        // `None`, and the store's `get` returns "" for an unset key).
+        assert!(!subagents_active(""));
+        assert!(subagents_active(SUBAGENTS));
+        // A whitespace-only value is not an empty list — it counts as
+        // active, matching both former copies of the rule.
+        assert!(subagents_active(" "));
     }
 
     #[test]
