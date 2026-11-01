@@ -4,70 +4,10 @@ use ratatui::{
 };
 
 use super::ctx::RowCtx;
-use crate::tmux::{PaneStatus, SubagentInfo, SubagentParent};
-use crate::ui::text::{display_width, truncate_to_width, wait_reason_label, wrap_text};
-
-/// Renders the pmux identity row of a subagent pane: the response-row arrow,
-/// then the parent label (or `ORPHANED`). The pane's own name is shown in the
-/// status row's title slot — pmux writes its launch name into the pane title
-/// as `<name> — <task>` — so carrying the fuzzy task here would repeat that
-/// name. The whole line is cut to the inner width in one pass, so it is
-/// always a single row no matter how long the parent label is.
-pub(super) fn subagent_identity_row(
-    subagent: Option<&SubagentInfo>,
-    ctx: &RowCtx,
-) -> Option<Line<'static>> {
-    let info = subagent?;
-    let theme = ctx.theme;
-    let (parent_label, parent_color) = match &info.parent {
-        SubagentParent::Pane(label) => (label.as_str(), theme.text_inactive),
-        SubagentParent::Orphaned => ("ORPHANED", theme.status_error),
-    };
-
-    let full = format!("▷ {parent_label}");
-    let shown = truncate_to_width(&full, ctx.inner_width);
-
-    // The surviving text is a char prefix of `full`, possibly closed by the
-    // truncation ellipsis.
-    let (body, ellipsis) = if shown.ends_with('\u{2026}') && shown != full {
-        (&shown[..shown.len() - '\u{2026}'.len_utf8()], true)
-    } else {
-        (shown.as_str(), false)
-    };
-    let kept = body.chars().count();
-
-    // Exclusive char-index boundaries where each coloured piece ends; each
-    // piece keeps its own colour when the cut lands inside it.
-    let boundaries = [2, 2 + parent_label.chars().count()];
-    let colors = [theme.response_arrow, parent_color];
-
-    let mut spans: Vec<Span<'static>> = Vec::with_capacity(3);
-    let mut start = 0usize;
-    for (index, end) in boundaries.into_iter().enumerate() {
-        let end = end.min(kept);
-        if end > start {
-            spans.push(Span::styled(
-                full.chars()
-                    .skip(start)
-                    .take(end - start)
-                    .collect::<String>(),
-                ctx.apply_bg(Style::default().fg(colors[index])),
-            ));
-        }
-        start = end;
-    }
-    if ellipsis {
-        // The ellipsis continues the piece whose first dropped character
-        // sits at the cut point.
-        let cut_color = colors[boundaries.iter().position(|end| kept < *end).unwrap_or(1)];
-        spans.push(Span::styled(
-            "\u{2026}".to_string(),
-            ctx.apply_bg(Style::default().fg(cut_color)),
-        ));
-    }
-
-    Some(ctx.row_line(spans, display_width(&shown)))
-}
+use crate::tmux::PaneStatus;
+use crate::ui::text::{
+    display_width, truncate_to_width, wait_reason_entry, wait_reason_label, wrap_text,
+};
 
 pub(super) fn task_progress_row(
     task_progress: Option<&crate::activity::TaskProgress>,
@@ -144,6 +84,7 @@ pub(super) fn wait_reason_row(
     wait_reason: &str,
     status: &PaneStatus,
     ctx: &RowCtx,
+    spinner_frame: usize,
 ) -> Option<Line<'static>> {
     if wait_reason.is_empty() {
         return None;
@@ -151,8 +92,23 @@ pub(super) fn wait_reason_row(
     let reason = wait_reason_label(wait_reason);
     let text = format!("  {}", reason);
     let text_dw = display_width(&text);
+    // A reason that demands the user is painted red, so it does not blend
+    // into the agent title on the status row above it.
+    let action_required = wait_reason_entry(wait_reason).is_some_and(|entry| entry.action_required);
     let reason_color = if matches!(status, PaneStatus::Error) {
         ctx.theme.status_error
+    } else if action_required {
+        // An action-required label blinks: it flips to the dimmed red for
+        // the second half of each spinner cycle (~800 ms at the 200 ms
+        // frame clock) — the same cadence the running icon pulses on — so
+        // the demand for input reads as alive, not as static decoration.
+        // The dim phase stays in the red family rather than greying out.
+        // The chat prompt text itself never blinks.
+        if spinner_frame >= crate::SPINNER_PULSE.len() / 2 {
+            ctx.theme.wait_reason_action_dim
+        } else {
+            ctx.theme.wait_reason_action
+        }
     } else {
         ctx.theme.wait_reason
     };
@@ -180,6 +136,11 @@ pub(super) fn background_hint_row(ctx: &RowCtx, cmd: &str) -> Line<'static> {
     )
 }
 
+/// Glyph that heads the response preview line, so the line reads as the
+/// agent's reply rather than the user's prompt. Includes the trailing
+/// space the reply text starts after.
+pub(super) const RESPONSE_ARROW_PREFIX: &str = "\u{f0b79} ";
+
 pub(super) fn prompt_rows(pane: &crate::tmux::PaneInfo, ctx: &RowCtx) -> Vec<Line<'static>> {
     let theme = ctx.theme;
     let is_response = pane.prompt_is_response;
@@ -189,17 +150,17 @@ pub(super) fn prompt_rows(pane: &crate::tmux::PaneInfo, ctx: &RowCtx) -> Vec<Lin
         theme.text_inactive
     };
     let wrap_width = ctx.inner_width.saturating_sub(2);
-    let wrapped = wrap_text(&pane.prompt, wrap_width, 3);
+    let wrapped = wrap_text(&pane.prompt, wrap_width, ctx.prompt_max_lines);
 
     let mut out = Vec::with_capacity(wrapped.len());
     for (li, wl) in wrapped.iter().enumerate() {
         if is_response && li == 0 {
             let arrow_color = theme.response_arrow;
-            let text_dw = 2 + display_width(wl); // "▷ " width
+            let text_dw = display_width(RESPONSE_ARROW_PREFIX) + display_width(wl);
             out.push(ctx.row_line(
                 vec![
                     Span::styled(
-                        "▷ ",
+                        RESPONSE_ARROW_PREFIX,
                         ctx.apply_bg(
                             Style::default()
                                 .fg(arrow_color)

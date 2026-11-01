@@ -1,9 +1,9 @@
+use pmux_explorer::state::AppState;
+use pmux_explorer::tmux::{AgentType, PaneInfo, PaneStatus, SessionInfo, WorktreeMetadata};
+use pmux_explorer::ui;
 #[allow(unused_imports)]
 use ratatui::style::{Color, Modifier};
 use ratatui::{Terminal, backend::TestBackend, buffer::Buffer};
-use tmux_agent_sidebar::state::AppState;
-use tmux_agent_sidebar::tmux::{AgentType, PaneInfo, PaneStatus, SessionInfo, WorktreeMetadata};
-use tmux_agent_sidebar::ui;
 
 pub const FIXED_NOW: u64 = 1_700_000_000;
 
@@ -55,11 +55,15 @@ pub fn buffer_to_styled_string(buf: &Buffer) -> String {
             line.push_str(cell.symbol());
 
             let mut attrs = Vec::new();
-            if let Color::Indexed(n) = cell.fg {
-                attrs.push(format!("fg:{n}"));
+            match cell.fg {
+                Color::Indexed(n) => attrs.push(format!("fg:{n}")),
+                Color::Rgb(r, g, b) => attrs.push(format!("fg:#{r:02x}{g:02x}{b:02x}")),
+                _ => {}
             }
-            if let Color::Indexed(n) = cell.bg {
-                attrs.push(format!("bg:{n}"));
+            match cell.bg {
+                Color::Indexed(n) => attrs.push(format!("bg:{n}")),
+                Color::Rgb(r, g, b) => attrs.push(format!("bg:#{r:02x}{g:02x}{b:02x}")),
+                _ => {}
             }
             if let Color::Indexed(n) = cell.underline_color {
                 attrs.push(format!("ul:{n}"));
@@ -83,6 +87,13 @@ pub fn buffer_to_styled_string(buf: &Buffer) -> String {
         lines.pop();
     }
     lines.join("\n")
+}
+
+pub fn render_to_buffer(state: &mut AppState, width: u16, height: u16) -> Buffer {
+    let backend = TestBackend::new(width, height);
+    let mut terminal = Terminal::new(backend).unwrap();
+    terminal.draw(|frame| ui::draw(frame, state)).unwrap();
+    terminal.backend().buffer().clone()
 }
 
 pub fn render_to_string(state: &mut AppState, width: u16, height: u16) -> String {
@@ -114,7 +125,7 @@ pub fn make_pane(agent: AgentType, status: PaneStatus) -> PaneInfo {
         prompt_is_response: false,
         started_at: None,
         wait_reason: String::new(),
-        permission_mode: tmux_agent_sidebar::tmux::PermissionMode::Default,
+        permission_mode: pmux_explorer::tmux::PermissionMode::Default,
         subagents: vec![],
         pane_pid: None,
         worktree: WorktreeMetadata::default(),
@@ -126,13 +137,13 @@ pub fn make_pane(agent: AgentType, status: PaneStatus) -> PaneInfo {
     }
 }
 
-pub fn make_repo_group(name: &str, panes: Vec<PaneInfo>) -> tmux_agent_sidebar::group::RepoGroup {
-    tmux_agent_sidebar::group::RepoGroup {
+pub fn make_repo_group(name: &str, panes: Vec<PaneInfo>) -> pmux_explorer::group::RepoGroup {
+    pmux_explorer::group::RepoGroup {
         name: name.into(),
         has_focus: true,
         panes: panes
             .into_iter()
-            .map(|p| (p, tmux_agent_sidebar::group::PaneGitInfo::default()))
+            .map(|p| (p, pmux_explorer::group::PaneGitInfo::default()))
             .collect(),
     }
 }
@@ -146,12 +157,12 @@ pub fn make_repo_group(name: &str, panes: Vec<PaneInfo>) -> tmux_agent_sidebar::
 pub fn make_state(_sessions: Vec<SessionInfo>) -> AppState {
     // Clicking a status chip saves the filter through `tmux set -g`; keep
     // that away from the developer's live server.
-    tmux_agent_sidebar::tmux::isolate_from_live_server();
+    pmux_explorer::tmux::isolate_from_live_server();
     let mut state = AppState::new("%99".into());
     state.now = FIXED_NOW;
     state.focus_state.sidebar_focused = true;
     state.focus_state.focused_pane_id = Some("%1".into());
-    state.notices.missing_hook_groups = vec![tmux_agent_sidebar::state::NoticesMissingHookGroup {
+    state.notices.missing_hook_groups = vec![pmux_explorer::state::NoticesMissingHookGroup {
         agent: "claude".into(),
         hooks: vec!["Stop".into()],
     }];

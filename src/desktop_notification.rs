@@ -4,6 +4,7 @@ use std::process::Stdio;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
+use crate::pane_store::{PaneStore, PaneWrites};
 use crate::time::now_epoch_secs;
 use crate::tmux;
 
@@ -163,18 +164,20 @@ pub fn has_run_scoped_stamp(
     pane_id: &str,
     kind: DesktopNotificationKind,
     run_id: Option<u64>,
+    store: &dyn PaneStore,
 ) -> bool {
     let Some(run_id) = run_id else { return false };
     if pane_id.is_empty() {
         return false;
     }
-    let raw = tmux::get_pane_option_value(pane_id, stamp_option_key(kind));
+    let raw = store.get(pane_id, stamp_option_key(kind));
     let Some(stamp) = parse_stamp(&raw) else {
         return false;
     };
     stamp.fingerprint.starts_with(&format!("{run_id}:"))
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn notify_if_allowed(
     settings: &DesktopNotificationSettings,
     pane_id: &str,
@@ -183,6 +186,7 @@ pub fn notify_if_allowed(
     fingerprint: &str,
     title: &str,
     body: &str,
+    store: &dyn PaneStore,
 ) -> bool {
     if !settings.enabled || pane_id.is_empty() || !settings.event_enabled(event) {
         return false;
@@ -191,7 +195,7 @@ pub fn notify_if_allowed(
     let key = stamp_option_key(kind);
     let normalized_fingerprint = normalize_fingerprint(fingerprint);
     let now = now_epoch_secs();
-    let current = tmux::get_pane_option_value(pane_id, key);
+    let current = store.get(pane_id, key);
     if let Some(stamp) = parse_stamp(&current)
         && stamp.fingerprint == normalized_fingerprint
         && now.saturating_sub(stamp.timestamp) < DESKTOP_NOTIFICATION_COOLDOWN_SECS
@@ -201,7 +205,13 @@ pub fn notify_if_allowed(
 
     match send_desktop_notification(title, body) {
         Ok(()) => {
-            tmux::set_pane_option(pane_id, key, &encode_stamp(now, &normalized_fingerprint));
+            // The stamp rides the store like every other pane-option write;
+            // the apply-side encoder leaves it intact because the stamp is
+            // `:`-separated and the encoder only replaces `|`, `\n` and
+            // `\r`.
+            let mut writes = PaneWrites::new();
+            writes.set(key, encode_stamp(now, &normalized_fingerprint));
+            let _ = store.apply(pane_id, &writes);
             true
         }
         Err(err) => {
@@ -233,12 +243,19 @@ fn stamp_option_key(kind: DesktopNotificationKind) -> &'static str {
     }
 }
 
+/// Encode a dedup stamp as `timestamp:fingerprint`. The separator is `:`
+/// and not `|` because the apply-side encoder replaces `|` (tmux's pane
+/// option field separator) while the timestamp is digits-only, so splitting
+/// on the first `:` is unambiguous even though a run-scoped fingerprint
+/// itself carries `:` separators. A `|`-stamp left by an older binary fails
+/// to parse, which costs at most one duplicate desktop notification after
+/// an upgrade.
 fn encode_stamp(timestamp: u64, fingerprint: &str) -> String {
-    format!("{}|{}", timestamp, fingerprint)
+    format!("{timestamp}:{fingerprint}")
 }
 
 fn parse_stamp(raw: &str) -> Option<NotificationStamp> {
-    let (ts, fingerprint) = raw.split_once('|')?;
+    let (ts, fingerprint) = raw.split_once(':')?;
     Some(NotificationStamp {
         timestamp: ts.parse().ok()?,
         fingerprint: fingerprint.to_string(),
@@ -249,6 +266,10 @@ fn normalize_fingerprint(value: &str) -> String {
     value.replace(['|', '\n', '\r'], " ")
 }
 
+/// Send one desktop notification through the platform backend.
+///
+/// The `String` in the error is the complete user-facing message: the
+/// caller prints it verbatim and no caller distinguishes failure kinds.
 fn send_desktop_notification(title: &str, body: &str) -> Result<(), String> {
     // Test-suite guard: never spawn a real notification command while the
     // guard from `.cargo/config.toml` is active.
@@ -275,12 +296,7 @@ fn send_desktop_notification(title: &str, body: &str) -> Result<(), String> {
     {
         let mut command = Command::new("notify-send");
         command
-            .args([
-                "--app-name=tmux-agent-sidebar",
-                "--urgency=normal",
-                title,
-                body,
-            ])
+            .args(["--app-name=pmux-explorer", "--urgency=normal", title, body])
             .stdout(Stdio::null())
             .stderr(Stdio::null());
         run_notification_command(&mut command, "notify-send", DESKTOP_NOTIFICATION_TIMEOUT)
@@ -355,6 +371,12 @@ fn escape_applescript(value: &str) -> String {
         .replace('"', "\\\"")
 }
 
+/// Run one notification command, waiting at most `timeout` for it.
+///
+/// The `String` in the error is the complete user-facing message, passed
+/// up through [`send_desktop_notification`] and printed verbatim; no
+/// caller distinguishes failure kinds. Every failure path embeds the
+/// source error in that message.
 fn run_notification_command(
     command: &mut Command,
     command_name: &str,
@@ -390,6 +412,7 @@ fn run_notification_command(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::pane_store::MemPaneStore;
 
     #[test]
     fn settings_parse_bool_and_numbers() {
@@ -446,6 +469,36 @@ mod tests {
         let parsed = parse_stamp(&stamp).unwrap();
         assert_eq!(parsed.timestamp, 123);
         assert_eq!(parsed.fingerprint, "foo bar");
+    }
+
+    #[test]
+    fn stamp_round_trip_survives_a_colon_bearing_fingerprint() {
+        // A run-scoped fingerprint is `run_id:suffix` and a suffix may
+        // itself carry `:` (`session-ended:logout`). The timestamp is
+        // digits-only, so splitting on the FIRST `:` still separates the
+        // two fields and the fingerprint keeps every later `:`.
+        let stamp = encode_stamp(42, "1700000000000:session-ended:logout");
+        let parsed = parse_stamp(&stamp).unwrap();
+        assert_eq!(parsed.timestamp, 42);
+        assert_eq!(parsed.fingerprint, "1700000000000:session-ended:logout");
+    }
+
+    #[test]
+    fn stamp_survives_the_apply_side_encoder() {
+        // The encoder replaces `|`; the stamp must not use it, or a stamp
+        // written through the store would come back unparsable.
+        let stamp = encode_stamp(42, "1700000000000:stop");
+        let stored = crate::cli::sanitize_tmux_value(&stamp);
+        assert_eq!(parse_stamp(&stored).unwrap().timestamp, 42);
+        assert_eq!(
+            parse_stamp(&stored).unwrap().fingerprint,
+            "1700000000000:stop"
+        );
+    }
+
+    #[test]
+    fn a_pipe_stamp_left_by_an_older_binary_fails_to_parse() {
+        assert!(parse_stamp("42|old-fingerprint").is_none());
     }
 
     #[test]
@@ -519,22 +572,23 @@ mod tests {
 
     #[test]
     fn has_run_scoped_stamp_returns_false_without_stamp() {
-        let _guard = tmux::test_mock::install();
+        let store = MemPaneStore::new();
         let pane = "%PANE_NO_STAMP";
         assert!(!has_run_scoped_stamp(
             pane,
             DesktopNotificationKind::TaskCompleted,
             Some(1_700_000_000_000),
+            &store,
         ));
     }
 
     #[test]
     fn has_run_scoped_stamp_matches_current_run() {
-        let _guard = tmux::test_mock::install();
+        let store = MemPaneStore::new();
         let pane = "%PANE_CURRENT_RUN";
         let run_id = 1_700_000_000_000_u64;
         let stamp = encode_stamp(42, &format!("{run_id}:task-xyz"));
-        tmux::test_mock::set(
+        store.insert(
             pane,
             stamp_option_key(DesktopNotificationKind::TaskCompleted),
             &stamp,
@@ -543,17 +597,18 @@ mod tests {
             pane,
             DesktopNotificationKind::TaskCompleted,
             Some(run_id),
+            &store,
         ));
     }
 
     #[test]
     fn has_run_scoped_stamp_rejects_stale_run() {
-        let _guard = tmux::test_mock::install();
+        let store = MemPaneStore::new();
         let pane = "%PANE_STALE_RUN";
         let old_run = 1_600_000_000_000_u64;
         let new_run = 1_700_000_000_000_u64;
         let stamp = encode_stamp(42, &format!("{old_run}:task-xyz"));
-        tmux::test_mock::set(
+        store.insert(
             pane,
             stamp_option_key(DesktopNotificationKind::TaskCompleted),
             &stamp,
@@ -562,15 +617,16 @@ mod tests {
             pane,
             DesktopNotificationKind::TaskCompleted,
             Some(new_run),
+            &store,
         ));
     }
 
     #[test]
     fn has_run_scoped_stamp_requires_run_id() {
-        let _guard = tmux::test_mock::install();
+        let store = MemPaneStore::new();
         let pane = "%PANE_NO_RUN_ID";
         let stamp = encode_stamp(42, "1700000000000:task-xyz");
-        tmux::test_mock::set(
+        store.insert(
             pane,
             stamp_option_key(DesktopNotificationKind::TaskCompleted),
             &stamp,
@@ -579,6 +635,7 @@ mod tests {
             pane,
             DesktopNotificationKind::TaskCompleted,
             None,
+            &store,
         ));
     }
 }

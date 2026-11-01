@@ -91,7 +91,7 @@ configuration file.
 - **THEN** a document states the event names, the fields of each event, and the meaning of each field
 
 #### Scenario: The setup command for pi
-- **WHEN** `tmux-agent-sidebar setup pi` runs
+- **WHEN** `pmux-explorer setup pi` runs
 - **THEN** it prints the producer contract and exits successfully, and it changes no configuration file
 
 ### Requirement: a dead pi pane is cleared
@@ -238,30 +238,30 @@ a pi pane whose pi process is gone, SHALL remove it.
 ### Requirement: the parent is resolved at each refresh
 
 At each refresh, the sidebar SHALL take as parent the agent pane whose
-reported session id equals the recorded parent session id. It SHALL show the
-parent by that pane's tmux title, or by its pane id when the title is empty.
-When no pane has that session id, it SHALL show `ORPHANED` in the theme's
-error colour.
+reported session id equals the recorded parent session id, and SHALL keep
+that pane's id. When no pane has that session id, the subagent SHALL be
+orphaned. The resolution SHALL run over every live pane, before any filter,
+so a parent row that a filter hides still resolves.
 
 #### Scenario: The parent is live and named
 - **WHEN** a subagent records parent session id `P1` and pane `%0` reports session id `P1` with the title `orchestrator`
-- **THEN** the subagent shows the parent as `orchestrator`
+- **THEN** the subagent's parent is pane `%0`
 
 #### Scenario: The parent has no title
 - **WHEN** the parent pane `%0` has an empty title
-- **THEN** the subagent shows the parent as `%0`
+- **THEN** the subagent's parent is still pane `%0`, because the title plays no part in the link
 
 #### Scenario: The parent is gone
 - **WHEN** no pane reports session id `P1`
-- **THEN** the subagent shows `ORPHANED` in the error colour
+- **THEN** the subagent is orphaned
 
 #### Scenario: The parent comes back
-- **WHEN** a pane that reports session id `P1` appears after the subagent was shown as orphaned
-- **THEN** the next refresh shows that pane as the parent
+- **WHEN** a pane that reports session id `P1` appears after the subagent was orphaned
+- **THEN** the next refresh resolves that pane as the parent
 
 #### Scenario: The parent is hidden by a filter
 - **WHEN** the parent pane is live but the sidebar's repository filter hides its row
-- **THEN** the subagent still shows that pane as its parent
+- **THEN** the subagent's parent is still that pane
 
 ### Requirement: a subagent pane carries a badge
 
@@ -284,25 +284,73 @@ permission mode badge is shown for other agents.
 - **WHEN** a pi pane without a subagent identity is listed
 - **THEN** its status row shows no badge
 
-### Requirement: a subagent pane shows its parent
+### Requirement: a subagent pane is nested under its ultimate parent
 
-The pane row of a subagent SHALL show a line directly under the status row
-that names the parent (or `ORPHANED`). The line SHALL NOT carry the fuzzy
-task: the task names the pmux launch, and the status row's title slot already
-shows the pane name pmux derives from the same launch. The line SHALL be cut
-to the row width.
+A subagent pane SHALL be drawn directly after its ultimate parent, indented by
+2 columns, with no row that names the parent. The ultimate parent is the top
+of the parent chain that is reachable among the panes of the same repo group.
+All depths SHALL use the same indent. Children of one ultimate parent SHALL
+keep the order tmux lists them in.
 
-#### Scenario: A parent resolves
+#### Scenario: A subagent nests under its parent
+- **WHEN** a repo group holds pane `%0` and a subagent `%1` whose parent is `%0`
+- **THEN** `%1` is drawn directly after `%0`, indented by 2 columns, with no parent line
 
-- **WHEN** a subagent pane whose parent session id resolves to a live parent pane is listed
-- **THEN** the line under the status row shows the parent's pane name and no task text
+### Requirement: a nested subagent is drawn as a block
 
-#### Scenario: No parent resolves
+Every row of a nested subagent SHALL carry the subagent block background
+across the row's whole width — the indent and the marker column included — so
+a child reads as one block under its parent rather than as another sibling.
+The active agent's status and branch rows SHALL keep the selection background
+instead, and its body rows SHALL keep the block background.
 
-- **WHEN** a subagent pane whose parent session id resolves to no live pane is listed
-- **THEN** the line under the status row shows `ORPHANED` and no task text
+#### Scenario: a nested subagent is its own colour block
+- **WHEN** a subagent is nested under its parent
+- **THEN** every row it draws — status, branch and body rows alike — carries the subagent block background across its whole width
+
+#### Scenario: the nested subagent is the active agent
+- **WHEN** the nested subagent's row is the active agent
+- **THEN** its status and branch rows show the selection background, and its body rows keep the block background
+
+#### Scenario: A subagent of a subagent
+- **WHEN** `%2` is a subagent of `%1`, and `%1` is a subagent of `%0`, all in one repo group
+- **THEN** `%1` and `%2` are drawn after `%0` with the same indent of 2 columns
+
+#### Scenario: Children keep tmux order
+- **WHEN** subagents `%3` and `%1` share the ultimate parent `%0` and tmux lists `%3` before `%1`
+- **THEN** `%3` is drawn before `%1`
+
+#### Scenario: Selection follows the drawn order
+- **WHEN** the sidebar selection moves down from a parent that has two children
+- **THEN** it visits the first child, then the second child, then the next top-level pane
+
+#### Scenario: The parent is in another repo group
+- **WHEN** the parent pane is live but belongs to a different repo group than the subagent
+- **THEN** the subagent is a top-level row of its own group, with no indent and no tag
+
+#### Scenario: The status filter hides the ultimate parent
+- **WHEN** the status filter hides the ultimate parent but shows the subagent
+- **THEN** the subagent is a top-level row, with no indent and no tag
 
 #### Scenario: A narrow sidebar
+- **WHEN** the sidebar is narrow
+- **THEN** every row of the nested subagent is cut to the width left after the indent, and the row count does not change
 
-- **WHEN** the line is wider than the row
-- **THEN** the line is cut to the row width and the row count does not change
+### Requirement: an orphaned subagent carries a tag
+
+The status row of an orphaned subagent SHALL show the word `ORPHANED` in the
+theme's error color, after the subagent badge. An orphaned subagent SHALL be a
+top-level row. A subagent that is not nested for any other reason SHALL carry
+no tag.
+
+#### Scenario: An orphaned subagent
+- **WHEN** a subagent pane whose parent session id resolves to no live pane is listed
+- **THEN** its status row shows `ORPHANED` in the error color after the badge, and the pane is a top-level row
+
+#### Scenario: Children of an orphaned subagent
+- **WHEN** an orphaned subagent has its own subagents in the same repo group
+- **THEN** those subagents are nested under it, and only the orphaned subagent carries the tag
+
+#### Scenario: A resolved subagent
+- **WHEN** a subagent pane whose parent resolves to a live pane is listed
+- **THEN** its status row shows no `ORPHANED` tag

@@ -1,7 +1,6 @@
 mod attention;
 mod run;
 mod session;
-mod status_priority;
 mod subagent;
 mod worktree;
 

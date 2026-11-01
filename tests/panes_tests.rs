@@ -1,11 +1,11 @@
 #[allow(dead_code, unused_imports)]
 mod test_helpers;
 
+use pmux_explorer::state::Focus;
+use pmux_explorer::tmux::{AgentType, PaneStatus, SessionInfo, WindowInfo};
+use pmux_explorer::ui::colors::ColorTheme;
+use pmux_explorer::ui::icons::StatusIcons;
 use test_helpers::*;
-use tmux_agent_sidebar::state::Focus;
-use tmux_agent_sidebar::tmux::{AgentType, PaneStatus, SessionInfo, WindowInfo};
-use tmux_agent_sidebar::ui::colors::ColorTheme;
-use tmux_agent_sidebar::ui::icons::StatusIcons;
 
 // ─── Agents: auto-scroll behavior Tests ─────────────────────────────
 
@@ -83,18 +83,7 @@ fn snapshot_codex_agent_styled() {
     let theme = ColorTheme::default();
     assert_eq!(
         theme.agent_color(&AgentType::Codex),
-        ratatui::style::Color::Indexed(141)
-    );
-}
-
-// ─── Agents: Unknown agent type ─────────────────────────────────────
-
-#[test]
-fn snapshot_unknown_agent_styled() {
-    let theme = ColorTheme::default();
-    assert_eq!(
-        theme.agent_color(&AgentType::Unknown),
-        ratatui::style::Color::Indexed(244)
+        ratatui::style::Color::Rgb(0xbb, 0x9a, 0xf7)
     );
 }
 
@@ -119,13 +108,12 @@ fn test_running_icon_blink_off() {
     state.spinner_frame = 0;
 
     insta::assert_snapshot!(render_to_string(&mut state, 28, 25), @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-    ┃ ● claude
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+    ┃  
+              │  │ 󰊢
+            No tools yet
     ");
 }
 
@@ -148,13 +136,12 @@ fn test_running_spinner_frame_advances() {
     state.spinner_frame = 3;
 
     insta::assert_snapshot!(render_to_string(&mut state, 28, 25), @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-    ┃ ● claude
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+    ┃  
+              │  │ 󰊢
+            No tools yet
     ");
 }
 
@@ -176,13 +163,12 @@ fn test_waiting_icon() {
     state.focus_state.sidebar_focused = false;
 
     insta::assert_snapshot!(render_to_string(&mut state, 28, 25), @"
-     ≡1 ●0 ◐1 ○0 ✕0          ☐⤢
+     󱓯 1  0 󰥔 1 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-    ┃ ◐ claude
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+    ┃ 󰥔 
+              │  │ 󰊢
+            No tools yet
     ");
 }
 
@@ -204,13 +190,12 @@ fn test_error_icon() {
     state.focus_state.sidebar_focused = false;
 
     insta::assert_snapshot!(render_to_string(&mut state, 28, 25), @"
-     ≡1 ●0 ◐0 ○0 ✕1          ☐⤢
+     󱓯 1  0 󰥔 0 󰒲 0  1   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-    ┃ ✕ claude
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+    ┃  
+              │  │ 󰊢
+            No tools yet
     ");
 }
 
@@ -226,8 +211,11 @@ fn test_unknown_status_icon() {
 fn test_agents_auto_scroll_shows_last_selected_pane() {
     // When the last agent in a group is selected, the auto-scroll
     // should bring it into view (the selection marker must be visible).
+    // Nine panes make a 19-line list inside the 16-row list viewport
+    // (30% of the 26-row frame leaves 18 agent rows), so the selection
+    // really needs a scroll.
     let mut panes = Vec::new();
-    for i in 0..6 {
+    for i in 0..9 {
         let mut pane = make_pane(AgentType::Claude, PaneStatus::Idle);
         pane.pane_id = format!("%{}", i);
         panes.push(pane);
@@ -249,8 +237,7 @@ fn test_agents_auto_scroll_shows_last_selected_pane() {
     state.rebuild_row_targets();
 
     // Select the last agent
-    state.global.selected_pane_row = 5;
-    // Use a tight height so agents area is small (height - 1 margin - 20 bottom)
+    state.global.selected_pane_row = 8;
     let _ = render_to_string(&mut state, 28, 26);
 
     // Auto-scroll should have moved forward to keep the last-selected pane visible.
@@ -263,7 +250,10 @@ fn test_agents_auto_scroll_shows_last_selected_pane() {
 #[test]
 fn test_agents_auto_scroll_up_shows_group_header() {
     // After scrolling down, selecting the first agent should scroll
-    // back up enough to show the group header.
+    // back up enough to show the group header. At 25 frame rows the
+    // 30% split leaves the list viewport 2 lines short of the 17-line
+    // total (15 vs 17), so the up-scroll branch `first < offset` can
+    // fire; at 26 it is 1 short and the branch misses by equality.
     let mut panes = Vec::new();
     for i in 0..8 {
         let mut pane = make_pane(AgentType::Claude, PaneStatus::Idle);
@@ -288,22 +278,33 @@ fn test_agents_auto_scroll_up_shows_group_header() {
 
     // Scroll to bottom
     state.global.selected_pane_row = 7;
-    let _ = render_to_string(&mut state, 28, 26);
+    let _ = render_to_string(&mut state, 28, 25);
     assert!(state.scrolls.panes.offset > 0, "should have scrolled down");
 
     // Now select first agent and re-render
     state.global.selected_pane_row = 0;
     // The snapshot locks in that the `project` repo header is visible after
     // scrolling back up to the first agent.
-    insta::assert_snapshot!(render_to_string(&mut state, 28, 26), @"
-     ≡8 ●0 ◐0 ○8 ✕0          ☐⤢
+    insta::assert_snapshot!(render_to_string(&mut state, 28, 25), @"
+     󱓯 8  0 󰥔 0 󰒲 8  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-      ○ claude
+      󰒲 
         Waiting for prompt…
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+    ┃ 󰒲 
+        Waiting for prompt…
+      󰒲 
+        Waiting for prompt…
+      󰒲 
+        Waiting for prompt…
+      󰒲 
+        Waiting for prompt…
+      󰒲 
+        Waiting for prompt…
+      󰒲 
+        Waiting for prompt…
+              │  │ 󰊢
+            No tools yet
     ");
 }
 
@@ -327,7 +328,7 @@ fn repo_popup_renders_repo_names_when_open() {
         make_repo_group("backend", vec![pane.clone()]),
     ];
     state.rebuild_row_targets();
-    state.popup = tmux_agent_sidebar::state::PopupState::Repo {
+    state.popup = pmux_explorer::state::PopupState::Repo {
         selected: 0,
         area: None,
     };
@@ -335,18 +336,17 @@ fn repo_popup_renders_repo_names_when_open() {
     // The snapshot locks in that the popup lists the `All` entry plus both
     // repo names when opened.
     insta::assert_snapshot!(render_to_string(&mut state, 40, 30), @"
-     ≡2 ●0 ◐0 ○2 ✕0                      ☐⤢
+     󱓯 2  0 󰥔 0 󰒲 2  0               ⇄ ☐⤢
     ⓘ                                    — ▾
     frontend                    ┌──────────┐
-    ┃ ○ claude                  │ All      │
+    ┃ 󰒲                        │ All      │
         Waiting for prompt…     │ frontend │
                                 │ backend  │
     backend                     └──────────┘
-    ┃ ○ claude
+    ┃ 󰒲 
         Waiting for prompt…
-    ╭ Activity│Tasks│Git ──────────────────╮
-    │            No activity yet           │
-    ╰──────────────────────────────────────╯
+                    │  │ 󰊢
+                  No tools yet
     ");
     // The popup area is required for click hit-testing and is non-visual
     // state, so it stays as a direct assertion.
@@ -375,7 +375,7 @@ fn repo_popup_highlights_selected_entry_with_background() {
     ];
     state.rebuild_row_targets();
     state.focus_state.sidebar_focused = false; // surface raw colors instead of REVERSED
-    state.popup = tmux_agent_sidebar::state::PopupState::Repo {
+    state.popup = pmux_explorer::state::PopupState::Repo {
         selected: 2, // "backend" (0=All, 1=frontend, 2=backend)
         area: None,
     };
@@ -383,35 +383,35 @@ fn repo_popup_highlights_selected_entry_with_background() {
     // Styled snapshot locks in that the `backend` row carries the selection
     // background (bg:239) on each cell of the entry.
     insta::assert_snapshot!(render_to_styled_string(&mut state, 40, 30), @"
-     ≡[fg:111]2[fg:153] ●[fg:114]0[fg:245] ◐[fg:245]0[fg:245] ○[fg:245]2[fg:255] ✕[fg:245]0[fg:245]                      ☐[fg:245]⤢[fg:114]
-    ⓘ[fg:221]                                    —[fg:255] ▾[fg:255]
-    f[fg:153]r[fg:153]o[fg:153]n[fg:153]t[fg:153]e[fg:153]n[fg:153]d[fg:153]                    ┌[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]┐[fg:153]
-    ┃[fg:153] ○[fg:110] [fg:174]c[fg:174]l[fg:174]a[fg:174]u[fg:174]d[fg:174]e[fg:174]                  │[fg:153] [fg:255]A[fg:255]l[fg:255]l[fg:255] [fg:255] [fg:255] [fg:255] [fg:255] [fg:255] [fg:255]│[fg:153]
-       [fg:255] [fg:255]W[fg:255]a[fg:255]i[fg:255]t[fg:255]i[fg:255]n[fg:255]g[fg:255] [fg:255]f[fg:255]o[fg:255]r[fg:255] [fg:255]p[fg:255]r[fg:255]o[fg:255]m[fg:255]p[fg:255]t[fg:255]…[fg:255]     │[fg:153] [fg:252]f[fg:252]r[fg:252]o[fg:252]n[fg:252]t[fg:252]e[fg:252]n[fg:252]d[fg:252] [fg:252]│[fg:153]
-                                │[fg:153] [fg:255,bg:239]b[fg:255,bg:239]a[fg:255,bg:239]c[fg:255,bg:239]k[fg:255,bg:239]e[fg:255,bg:239]n[fg:255,bg:239]d[fg:255,bg:239] [fg:255,bg:239] [fg:255,bg:239]│[fg:153]
-    b[fg:153]a[fg:153]c[fg:153]k[fg:153]e[fg:153]n[fg:153]d[fg:153]                     └[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]┘[fg:153]
-    ┃[fg:153] ○[fg:110] [fg:174]c[fg:174]l[fg:174]a[fg:174]u[fg:174]d[fg:174]e[fg:174]
-       [fg:255] [fg:255]W[fg:255]a[fg:255]i[fg:255]t[fg:255]i[fg:255]n[fg:255]g[fg:255] [fg:255]f[fg:255]o[fg:255]r[fg:255] [fg:255]p[fg:255]r[fg:255]o[fg:255]m[fg:255]p[fg:255]t[fg:255]…[fg:255]
-
-    ╭[fg:240] [fg:240]A[fg:153]c[fg:153]t[fg:153]i[fg:153]v[fg:153]i[fg:153]t[fg:153]y[fg:153]│[fg:240]T[fg:252]a[fg:252]s[fg:252]k[fg:252]s[fg:252]│[fg:240]G[fg:252]i[fg:252]t[fg:252] [fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]╮[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]N[fg:252]o[fg:252] [fg:252]a[fg:252]c[fg:252]t[fg:252]i[fg:252]v[fg:252]i[fg:252]t[fg:252]y[fg:252] [fg:252]y[fg:252]e[fg:252]t[fg:252] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    ╰[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]╯[fg:240]
+     [bg:#414868]󱓯[fg:#7aa2f7,bg:#414868] [bg:#414868]2[fg:#7aa2f7,bg:#414868,bold] [bg:#414868][fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868]󰥔[fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868]󰒲[fg:#7dcfff,bg:#414868] [bg:#414868]2[fg:#c0caf5,bg:#414868] [bg:#414868][fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]⇄[fg:#9ece6a,bg:#414868] [bg:#414868]☐[fg:#9aa5ce,bg:#414868]⤢[fg:#9ece6a,bg:#414868] [bg:#414868]
+    ⓘ[fg:#e0af68,bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]—[fg:#c0caf5,bg:#1e2336] [bg:#1e2336]▾[fg:#c0caf5,bg:#1e2336]
+    f[fg:#7aa2f7,bg:#1e2336]r[fg:#7aa2f7,bg:#1e2336]o[fg:#7aa2f7,bg:#1e2336]n[fg:#7aa2f7,bg:#1e2336]t[fg:#7aa2f7,bg:#1e2336]e[fg:#7aa2f7,bg:#1e2336]n[fg:#7aa2f7,bg:#1e2336]d[fg:#7aa2f7,bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]┌[fg:#7aa2f7]─[fg:#7aa2f7]─[fg:#7aa2f7]─[fg:#7aa2f7]─[fg:#7aa2f7]─[fg:#7aa2f7]─[fg:#7aa2f7]─[fg:#7aa2f7]─[fg:#7aa2f7]─[fg:#7aa2f7]─[fg:#7aa2f7]┐[fg:#7aa2f7]
+    ┃[fg:#7aa2f7,bg:#414868] [bg:#414868]󰒲[fg:#7dcfff,bg:#414868] [fg:#ff9e64,bg:#414868][fg:#ff9e64,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]│[fg:#7aa2f7] [fg:#c0caf5]A[fg:#c0caf5]l[fg:#c0caf5]l[fg:#c0caf5] [fg:#c0caf5] [fg:#c0caf5] [fg:#c0caf5] [fg:#c0caf5] [fg:#c0caf5] [fg:#c0caf5]│[fg:#7aa2f7]
+     [bg:#1e2336] [bg:#1e2336] [fg:#c0caf5,bg:#1e2336] [fg:#c0caf5,bg:#1e2336]W[fg:#c0caf5,bg:#1e2336]a[fg:#c0caf5,bg:#1e2336]i[fg:#c0caf5,bg:#1e2336]t[fg:#c0caf5,bg:#1e2336]i[fg:#c0caf5,bg:#1e2336]n[fg:#c0caf5,bg:#1e2336]g[fg:#c0caf5,bg:#1e2336] [fg:#c0caf5,bg:#1e2336]f[fg:#c0caf5,bg:#1e2336]o[fg:#c0caf5,bg:#1e2336]r[fg:#c0caf5,bg:#1e2336] [fg:#c0caf5,bg:#1e2336]p[fg:#c0caf5,bg:#1e2336]r[fg:#c0caf5,bg:#1e2336]o[fg:#c0caf5,bg:#1e2336]m[fg:#c0caf5,bg:#1e2336]p[fg:#c0caf5,bg:#1e2336]t[fg:#c0caf5,bg:#1e2336]…[fg:#c0caf5,bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]│[fg:#7aa2f7] [fg:#a9b1d6]f[fg:#a9b1d6]r[fg:#a9b1d6]o[fg:#a9b1d6]n[fg:#a9b1d6]t[fg:#a9b1d6]e[fg:#a9b1d6]n[fg:#a9b1d6]d[fg:#a9b1d6] [fg:#a9b1d6]│[fg:#7aa2f7]
+     [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]│[fg:#7aa2f7] [fg:#c0caf5,bg:#414868]b[fg:#c0caf5,bg:#414868]a[fg:#c0caf5,bg:#414868]c[fg:#c0caf5,bg:#414868]k[fg:#c0caf5,bg:#414868]e[fg:#c0caf5,bg:#414868]n[fg:#c0caf5,bg:#414868]d[fg:#c0caf5,bg:#414868] [fg:#c0caf5,bg:#414868] [fg:#c0caf5,bg:#414868]│[fg:#7aa2f7]
+    b[fg:#7aa2f7,bg:#1e2336]a[fg:#7aa2f7,bg:#1e2336]c[fg:#7aa2f7,bg:#1e2336]k[fg:#7aa2f7,bg:#1e2336]e[fg:#7aa2f7,bg:#1e2336]n[fg:#7aa2f7,bg:#1e2336]d[fg:#7aa2f7,bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]└[fg:#7aa2f7]─[fg:#7aa2f7]─[fg:#7aa2f7]─[fg:#7aa2f7]─[fg:#7aa2f7]─[fg:#7aa2f7]─[fg:#7aa2f7]─[fg:#7aa2f7]─[fg:#7aa2f7]─[fg:#7aa2f7]─[fg:#7aa2f7]┘[fg:#7aa2f7]
+    ┃[fg:#7aa2f7,bg:#414868] [bg:#414868]󰒲[fg:#7dcfff,bg:#414868] [fg:#ff9e64,bg:#414868][fg:#ff9e64,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]
+     [bg:#1e2336] [bg:#1e2336] [fg:#c0caf5,bg:#1e2336] [fg:#c0caf5,bg:#1e2336]W[fg:#c0caf5,bg:#1e2336]a[fg:#c0caf5,bg:#1e2336]i[fg:#c0caf5,bg:#1e2336]t[fg:#c0caf5,bg:#1e2336]i[fg:#c0caf5,bg:#1e2336]n[fg:#c0caf5,bg:#1e2336]g[fg:#c0caf5,bg:#1e2336] [fg:#c0caf5,bg:#1e2336]f[fg:#c0caf5,bg:#1e2336]o[fg:#c0caf5,bg:#1e2336]r[fg:#c0caf5,bg:#1e2336] [fg:#c0caf5,bg:#1e2336]p[fg:#c0caf5,bg:#1e2336]r[fg:#c0caf5,bg:#1e2336]o[fg:#c0caf5,bg:#1e2336]m[fg:#c0caf5,bg:#1e2336]p[fg:#c0caf5,bg:#1e2336]t[fg:#c0caf5,bg:#1e2336]…[fg:#c0caf5,bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+     [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+     [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+     [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+     [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+     [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+     [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+     [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+     [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+     [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+     [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+     [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+     [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+     [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868][fg:#7aa2f7,bg:#414868,bold] [fg:#9aa5ce,bg:#414868]│[fg:#9aa5ce,bg:#414868] [fg:#9aa5ce,bg:#414868][fg:#c0caf5,bg:#414868] [fg:#9aa5ce,bg:#414868]│[fg:#9aa5ce,bg:#414868] [fg:#9aa5ce,bg:#414868]󰊢[fg:#c0caf5,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]N[fg:#a9b1d6,bg:#1a1b26]o[fg:#a9b1d6,bg:#1a1b26] [fg:#a9b1d6,bg:#1a1b26]t[fg:#a9b1d6,bg:#1a1b26]o[fg:#a9b1d6,bg:#1a1b26]o[fg:#a9b1d6,bg:#1a1b26]l[fg:#a9b1d6,bg:#1a1b26]s[fg:#a9b1d6,bg:#1a1b26] [fg:#a9b1d6,bg:#1a1b26]y[fg:#a9b1d6,bg:#1a1b26]e[fg:#a9b1d6,bg:#1a1b26]t[fg:#a9b1d6,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
     ");
 }

@@ -1,19 +1,19 @@
 ---
-title: tmux-agent-sidebar
-description: tmux-agent-sidebar — one tmux sidebar that tracks every Claude Code, Codex, and OpenCode pane across every session and window. See status, background shells, prompts, Git state, activity, and worktrees without switching windows.
+title: pmux-explorer
+description: pmux-explorer — one tmux sidebar that tracks every Claude Code, Codex, and OpenCode pane across every session and window. See status, background shells, prompts, Git state, activity, and worktrees without switching windows.
 template: splash
 hero:
-  tagline: 'Every <span class="hero-agent"><img src="/tmux-agent-sidebar/brands/claude.ico" alt="" aria-hidden="true" width="16" height="16" />Claude Code</span>, <span class="hero-agent"><img src="/tmux-agent-sidebar/brands/codex.png" alt="" aria-hidden="true" width="16" height="16" />Codex</span>, and <span class="hero-agent"><img src="/tmux-agent-sidebar/brands/opencode.svg" alt="" aria-hidden="true" width="16" height="20" />OpenCode</span> pane across every tmux session and window — status, background shells, prompts, Git, and activity in one sidebar.'
+  tagline: 'Every <span class="hero-agent"><img src="/pmux-explorer/brands/claude.ico" alt="" aria-hidden="true" width="16" height="16" />Claude Code</span>, <span class="hero-agent"><img src="/pmux-explorer/brands/codex.png" alt="" aria-hidden="true" width="16" height="16" />Codex</span>, and <span class="hero-agent"><img src="/pmux-explorer/brands/opencode.svg" alt="" aria-hidden="true" width="16" height="20" />OpenCode</span> pane across every tmux session and window — status, background shells, prompts, Git, and activity in one sidebar.'
   image:
-    alt: tmux-agent-sidebar screenshot
+    alt: pmux-explorer screenshot
     file: ../../assets/captures/hero.png
   actions:
     - text: Get Started
-      link: /tmux-agent-sidebar/getting-started/installation/
+      link: /pmux-explorer/getting-started/installation/
       icon: right-arrow
       variant: primary
     - text: View on GitHub
-      link: https://github.com/hiroppy/tmux-agent-sidebar
+      link: https://github.com/slatkin/pmux-explorer
       icon: external
       variant: minimal
 ---
@@ -46,13 +46,13 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
 Using [TPM](https://github.com/tmux-plugins/tpm):
 
 ```bash
-set -g @plugin 'hiroppy/tmux-agent-sidebar'
+set -g @plugin 'slatkin/pmux-explorer'
 ```
 
 Reload with `tmux source ~/.tmux.conf`, press `prefix + I` to install, and the
 install wizard downloads a pre-built binary or builds from source.
 
-Next, wire up your agent hooks — [Claude Code](/tmux-agent-sidebar/getting-started/claude-code/)
-installs as a plugin, [Codex](/tmux-agent-sidebar/getting-started/codex/) is a
-one-paste setup inside its own pane, and [OpenCode](/tmux-agent-sidebar/getting-started/opencode/)
+Next, wire up your agent hooks — [Claude Code](/pmux-explorer/getting-started/claude-code/)
+installs as a plugin, [Codex](/pmux-explorer/getting-started/codex/) is a
+one-paste setup inside its own pane, and [OpenCode](/pmux-explorer/getting-started/opencode/)
 uses the bundled plugin bridge.

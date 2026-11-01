@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEventKind};
 use ratatui::{Terminal, backend::CrosstermBackend};
 
-use crate::state::{AppState, BottomTab, Focus};
+use crate::state::{AppState, BottomTab, Focus, LayoutKind, StatusFilter};
 use crate::worktree::RemoveMode;
 
 /// Dispatch a single crossterm [`Event`] into the [`AppState`], returning
@@ -30,20 +30,39 @@ pub(super) fn handle_event(
             let bottom_h = state.layout.bottom_panel_height;
             match mouse.kind {
                 MouseEventKind::Down(MouseButton::Left) => {
-                    if state.handle_terminal_click(mouse.row, mouse.column, term_height) {
-                        // Keep the background git poller in sync immediately — the
-                        // keyboard `BackTab` path does the same update. Without this,
-                        // clicking into Git Status leaves polling disabled until the
-                        // next refresh tick and the tab renders stale data.
-                        git_tab_active
-                            .store(state.global.bottom_tab.is_git_status(), Ordering::Relaxed);
-                    }
+                    // A press on the rule starts a split drag and
+                    // selects no tab; presses above the rule go to the
+                    // agents panel. The background git poller syncs at
+                    // the release, which is the event that may change
+                    // the tab now.
+                    state.handle_terminal_click(mouse.row, mouse.column, term_height);
+                }
+                MouseEventKind::Drag(MouseButton::Left) => {
+                    // Held-button motion: while a split drag is live,
+                    // resize the drawn split on the drag's axis — to
+                    // the mouse row for a column, to the mouse column
+                    // for a strip; without a drag this is a no-op.
+                    state.handle_split_drag_move(mouse.row, mouse.column, term_height);
+                }
+                MouseEventKind::Up(MouseButton::Left) => {
+                    // The release resolves a split drag — a moved drag
+                    // saves its rows as the shared percent, an unmoved
+                    // press selects the tab the press column names.
+                    state.end_split_drag(term_height);
+                    // Keep the background git poller in sync immediately — the
+                    // keyboard `BackTab` path does the same update. Without this,
+                    // clicking into Git Status leaves polling disabled until the
+                    // next refresh tick and the tab renders stale data.
+                    git_tab_active.store(
+                        state.displayed_bottom_tab().is_git_status(),
+                        Ordering::Relaxed,
+                    );
                 }
                 MouseEventKind::ScrollDown => {
-                    state.handle_mouse_scroll(mouse.row, term_height, bottom_h, 3);
+                    state.handle_mouse_scroll(mouse.row, mouse.column, term_height, bottom_h, 3);
                 }
                 MouseEventKind::ScrollUp => {
-                    state.handle_mouse_scroll(mouse.row, term_height, bottom_h, -3);
+                    state.handle_mouse_scroll(mouse.row, mouse.column, term_height, bottom_h, -3);
                 }
                 _ => {}
             }
@@ -62,87 +81,123 @@ pub(super) fn handle_key_event(
     state: &mut AppState,
     git_tab_active: &AtomicBool,
 ) -> bool {
+    if handle_modal_key(key, state) {
+        return true;
+    }
+    handle_main_key(key, state, git_tab_active);
+    true
+}
+
+/// Swallow the whole keyboard while a modal layer (notices popup, spawn
+/// modal, remove confirmation or repo popup) is open; a key the layer
+/// does not bind does nothing, but still never reaches the main keys.
+/// `false` when no modal layer is open.
+fn handle_modal_key(key: KeyEvent, state: &mut AppState) -> bool {
     if state.is_notices_popup_open() {
-        if key.code == KeyCode::Esc {
-            state.close_notices_popup();
-        }
-        return true;
-    }
-    if state.is_spawn_input_open() {
-        match key.code {
-            KeyCode::Esc => state.close_spawn_input(),
-            KeyCode::Enter => state.confirm_spawn_input(),
-            KeyCode::Tab | KeyCode::Down => state.spawn_input_next_field(),
-            KeyCode::BackTab | KeyCode::Up => state.spawn_input_prev_field(),
-            KeyCode::Left => state.spawn_input_cycle(-1),
-            KeyCode::Right => state.spawn_input_cycle(1),
-            KeyCode::Backspace => state.spawn_input_pop_char(),
-            KeyCode::Char(c) => state.spawn_input_push_char(c),
-            _ => {}
-        }
-        return true;
-    }
-    if state.is_remove_confirm_open() {
-        match key.code {
-            KeyCode::Esc | KeyCode::Char('n') => state.close_remove_confirm(),
-            KeyCode::Char('c') => state.confirm_remove(RemoveMode::WindowOnly),
-            KeyCode::Enter | KeyCode::Char('y') => {
-                state.confirm_remove(RemoveMode::WindowAndWorktree)
-            }
-            _ => {}
-        }
-        return true;
-    }
-    if state.is_repo_popup_open() {
+        handle_notices_popup_key(key, state);
+    } else if state.is_spawn_input_open() {
+        handle_spawn_input_key(key, state);
+    } else if state.is_remove_confirm_open() {
+        handle_remove_confirm_key(key, state);
+    } else if state.is_repo_popup_open() {
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
-        match key.code {
-            KeyCode::Esc => state.close_repo_popup(),
-            KeyCode::Char('j') | KeyCode::Down => repo_popup_nav_down(state),
-            KeyCode::Char('n') if ctrl => repo_popup_nav_down(state),
-            KeyCode::Char('k') | KeyCode::Up => repo_popup_nav_up(state),
-            KeyCode::Char('p') if ctrl => repo_popup_nav_up(state),
-            KeyCode::Enter => state.confirm_repo_popup(),
-            _ => {}
-        }
-        return true;
+        handle_repo_popup_key(key, state, ctrl);
+    } else {
+        return false;
     }
-    let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+    true
+}
+
+/// Keys while the notices popup is open: Esc closes it, every other key
+/// is swallowed.
+fn handle_notices_popup_key(key: KeyEvent, state: &mut AppState) {
+    if key.code == KeyCode::Esc {
+        state.close_notices_popup();
+    }
+}
+
+/// Keys while the spawn modal is open: it owns the keyboard — Esc
+/// cancels, Enter confirms, Tab/BackTab and the arrows walk the fields,
+/// characters edit the focused field.
+fn handle_spawn_input_key(key: KeyEvent, state: &mut AppState) {
     match key.code {
-        KeyCode::Esc => {
-            if state.focus_state.focus == Focus::ActivityLog
-                || state.focus_state.focus == Focus::Filter
-            {
-                state.focus_state.focus = Focus::Panes;
-            }
-        }
+        KeyCode::Esc => state.close_spawn_input(),
+        KeyCode::Enter => state.confirm_spawn_input(),
+        KeyCode::Tab | KeyCode::Down => state.spawn_input_next_field(),
+        KeyCode::BackTab | KeyCode::Up => state.spawn_input_prev_field(),
+        KeyCode::Left => state.spawn_input_cycle(-1),
+        KeyCode::Right => state.spawn_input_cycle(1),
+        KeyCode::Backspace => state.spawn_input_pop_char(),
+        KeyCode::Char(c) => state.spawn_input_push_char(c),
+        _ => {}
+    }
+}
+
+/// Keys while the remove confirmation is open: Esc and `n` cancel, `c`
+/// removes only the window, Enter and `y` remove the worktree too.
+fn handle_remove_confirm_key(key: KeyEvent, state: &mut AppState) {
+    match key.code {
+        KeyCode::Esc | KeyCode::Char('n') => state.close_remove_confirm(),
+        KeyCode::Char('c') => state.confirm_remove(RemoveMode::WindowOnly),
+        KeyCode::Enter | KeyCode::Char('y') => state.confirm_remove(RemoveMode::WindowAndWorktree),
+        _ => {}
+    }
+}
+
+/// Keys while the repo popup is open: j/Ctrl-n and k/Ctrl-p move the
+/// selection, Enter confirms, Esc cancels.
+fn handle_repo_popup_key(key: KeyEvent, state: &mut AppState, ctrl: bool) {
+    match key.code {
+        KeyCode::Esc => state.close_repo_popup(),
+        KeyCode::Char('j') | KeyCode::Down => repo_popup_nav_down(state),
+        KeyCode::Char('n') if ctrl => repo_popup_nav_down(state),
+        KeyCode::Char('k') | KeyCode::Up => repo_popup_nav_up(state),
+        KeyCode::Char('p') if ctrl => repo_popup_nav_up(state),
+        KeyCode::Enter => state.confirm_repo_popup(),
+        _ => {}
+    }
+}
+
+/// Keys with no modal layer open: dispatch on the layout kind, because
+/// a strip and a column keep different key maps (decision 7 of the
+/// `add-strip-layout` design).
+fn handle_main_key(key: KeyEvent, state: &mut AppState, git_tab_active: &AtomicBool) {
+    match state.layout_kind {
+        LayoutKind::Column => handle_column_main_key(key, state, git_tab_active),
+        LayoutKind::Strip => handle_strip_main_key(key, state, git_tab_active),
+    }
+}
+
+/// Keys with no modal layer open in a column: bottom-panel navigation and
+/// focus, the filter bar's keys while it has focus, the agent list's item
+/// actions and the bottom tab cycle.
+fn handle_column_main_key(key: KeyEvent, state: &mut AppState, git_tab_active: &AtomicBool) {
+    let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+    // The filter bar's keys only act while it has focus; elsewhere they
+    // fall through to the wildcard like in the caller's match below.
+    if handle_filter_keys(state, key.code) {
+        return;
+    }
+    match key.code {
+        KeyCode::Esc => esc_returns_focus_to_panes(state),
         KeyCode::Char('j') | KeyCode::Down => pane_nav_down(state),
         KeyCode::Char('n') if ctrl => pane_nav_down(state),
         KeyCode::Char('k') | KeyCode::Up => pane_nav_up(state),
+        // pmux-explorer.conf forwards tmux prefix + Ctrl-P as M-C-p.
+        KeyCode::Char('p') if key.modifiers == (KeyModifiers::CONTROL | KeyModifiers::ALT) => {
+            state.toggle_popout();
+        }
+        // pmux-explorer.conf forwards tmux prefix + Ctrl-O as M-C-o.
+        KeyCode::Char('o') if key.modifiers == (KeyModifiers::CONTROL | KeyModifiers::ALT) => {
+            state.switch_sidebar_side();
+        }
         KeyCode::Char('p') if ctrl => pane_nav_up(state),
-        KeyCode::Char('p') => state.toggle_popout(),
-        // The width lock joins the pop-out as a bare single-key global
-        // action: like `p`, it stays reachable in every focus state —
-        // popups still swallow it, since they return above the match.
+        // The width lock is a bare single-key action on a column —
+        // the feature it toggles converges docked column widths, and
+        // a strip has neither a docked width nor the lock glyph. It
+        // stays reachable in every focus state; popups still swallow
+        // it, since they return above the match.
         KeyCode::Char('w') => state.toggle_width_lock(),
-        KeyCode::Char('h') | KeyCode::Left => {
-            if state.focus_state.focus == Focus::Filter {
-                state.global.status_filter = state.global.status_filter.prev();
-                state.global.save_filter();
-                state.rebuild_row_targets();
-            }
-        }
-        KeyCode::Char('l') | KeyCode::Right => {
-            if state.focus_state.focus == Focus::Filter {
-                state.global.status_filter = state.global.status_filter.next();
-                state.global.save_filter();
-                state.rebuild_row_targets();
-            }
-        }
-        KeyCode::Char('r') => {
-            if state.focus_state.focus == Focus::Filter {
-                state.toggle_repo_popup();
-            }
-        }
         KeyCode::Char('n') => {
             if state.focus_state.focus == Focus::Panes {
                 state.open_spawn_input_from_selection();
@@ -158,23 +213,176 @@ pub(super) fn handle_key_event(
                 state.activate_selected_pane();
             }
         }
-        KeyCode::Tab => {
-            // Tab only cycles the status filter while the filter bar has
-            // focus, exactly like the Left/Right keys. Cycling it from the
-            // agent list made Tab change a server-wide setting by accident.
-            if state.focus_state.focus == Focus::Filter {
-                state.global.status_filter = state.global.status_filter.next();
-                state.global.save_filter();
-                state.rebuild_row_targets();
-            }
+        KeyCode::BackTab => handle_back_tab(state, git_tab_active),
+        _ => {}
+    }
+}
+
+/// The filter bar's own keys while it has focus: Left/h and Right/l
+/// step the status filter, Tab cycles it like Right does, `r` opens the
+/// repo popup. Tab only cycles the status filter while the filter bar
+/// has focus — cycling it from the agent list made Tab change a
+/// server-wide setting by accident.
+fn handle_filter_keys(state: &mut AppState, code: KeyCode) -> bool {
+    if state.focus_state.focus != Focus::Filter {
+        return false;
+    }
+    match code {
+        KeyCode::Char('h') | KeyCode::Left => {
+            apply_status_filter(state, state.global.status_filter.prev());
+        }
+        KeyCode::Char('l') | KeyCode::Right | KeyCode::Tab => {
+            apply_status_filter(state, state.global.status_filter.next());
+        }
+        KeyCode::Char('r') => state.toggle_repo_popup(),
+        _ => return false,
+    }
+    true
+}
+
+/// Keys with no modal layer open in a strip (decision 7 of the
+/// `add-strip-layout` design): Left/`h` and Right/`l` walk the focus
+/// through `Filter`, `Panes` and `ActivityLog` in the strip's left-to-
+/// right order and stop at the ends, while Up/Down — and the `j`/`k` and
+/// Ctrl-N/Ctrl-P spellings of them — act inside the focused part: step
+/// the filter category, move the agent selection without leaving the
+/// agent panel, or scroll the tab panel. Tab, BackTab, Esc, `r`, `n`,
+/// `x`, Enter and the pop-out and side-switch prefixes keep their
+/// column meaning.
+fn handle_strip_main_key(key: KeyEvent, state: &mut AppState, git_tab_active: &AtomicBool) {
+    let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+    // The keys the two layouts share come first: the pop-out and
+    // side-switch prefixes (tmux forwards them with both modifiers),
+    // Esc's return to the agent list and BackTab's tab cycle.
+    match key.code {
+        // pmux-explorer.conf forwards tmux prefix + Ctrl-P as M-C-p.
+        KeyCode::Char('p') if key.modifiers == (KeyModifiers::CONTROL | KeyModifiers::ALT) => {
+            state.toggle_popout();
+            return;
+        }
+        // pmux-explorer.conf forwards tmux prefix + Ctrl-O as M-C-o.
+        KeyCode::Char('o') if key.modifiers == (KeyModifiers::CONTROL | KeyModifiers::ALT) => {
+            state.switch_sidebar_side();
+            return;
+        }
+        KeyCode::Esc => {
+            esc_returns_focus_to_panes(state);
+            return;
         }
         KeyCode::BackTab => {
-            state.next_bottom_tab();
-            git_tab_active.store(state.global.bottom_tab.is_git_status(), Ordering::Relaxed);
+            handle_back_tab(state, git_tab_active);
+            return;
         }
         _ => {}
     }
-    true
+    match state.focus_state.focus {
+        Focus::Filter => match key.code {
+            // The filter bar is the left end: Left/`h` keep the focus and
+            // leave the category alone.
+            KeyCode::Char('h') | KeyCode::Left => {}
+            KeyCode::Char('l') | KeyCode::Right => {
+                state.focus_state.focus = Focus::Panes;
+            }
+            // Tab keeps cycling the status filter while the filter bar
+            // has focus, like in a column.
+            KeyCode::Tab => apply_status_filter(state, state.global.status_filter.next()),
+            KeyCode::Char('r') => state.toggle_repo_popup(),
+            KeyCode::Up | KeyCode::Char('k') => {
+                apply_status_filter(state, state.global.status_filter.prev());
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                apply_status_filter(state, state.global.status_filter.next());
+            }
+            KeyCode::Char('n') if ctrl => {
+                apply_status_filter(state, state.global.status_filter.next());
+            }
+            KeyCode::Char('p') if ctrl => {
+                apply_status_filter(state, state.global.status_filter.prev());
+            }
+            _ => {}
+        },
+        Focus::Panes => match key.code {
+            KeyCode::Char('h') | KeyCode::Left => {
+                state.focus_state.focus = Focus::Filter;
+            }
+            KeyCode::Char('l') | KeyCode::Right => {
+                state.focus_state.focus = Focus::ActivityLog;
+            }
+            // The selection moves inside the agent panel and stops at the
+            // first and last agent; no arm hands the focus to another
+            // part, unlike the column's navigation walk.
+            KeyCode::Up | KeyCode::Char('k') => {
+                if state.move_pane_selection(-1) {
+                    state.global.queue_cursor_save();
+                }
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                if state.move_pane_selection(1) {
+                    state.global.queue_cursor_save();
+                }
+            }
+            KeyCode::Char('n') if ctrl => {
+                if state.move_pane_selection(1) {
+                    state.global.queue_cursor_save();
+                }
+            }
+            KeyCode::Char('p') if ctrl => {
+                if state.move_pane_selection(-1) {
+                    state.global.queue_cursor_save();
+                }
+            }
+            KeyCode::Char('n') => state.open_spawn_input_from_selection(),
+            KeyCode::Char('x') => state.open_remove_confirm(),
+            KeyCode::Enter => state.activate_selected_pane(),
+            _ => {}
+        },
+        Focus::ActivityLog => match key.code {
+            KeyCode::Char('h') | KeyCode::Left => {
+                state.focus_state.focus = Focus::Panes;
+            }
+            // The tab panel is the right end: Right/`l` keep the focus.
+            KeyCode::Char('l') | KeyCode::Right => {}
+            KeyCode::Up | KeyCode::Char('k') => {
+                state.scroll_bottom(-1);
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                state.scroll_bottom(1);
+            }
+            KeyCode::Char('n') if ctrl => {
+                state.scroll_bottom(1);
+            }
+            KeyCode::Char('p') if ctrl => {
+                state.scroll_bottom(-1);
+            }
+            _ => {}
+        },
+    }
+}
+
+/// Adopt a new status filter: persist it and rebuild the agent rows to
+/// match. Shared by the Left/Right keys and Tab.
+fn apply_status_filter(state: &mut AppState, filter: StatusFilter) {
+    state.global.status_filter = filter;
+    state.global.save_filter();
+    state.rebuild_row_targets();
+}
+
+/// Esc from the bottom panel (activity log or filter bar) returns focus
+/// to the agent list.
+fn esc_returns_focus_to_panes(state: &mut AppState) {
+    if state.focus_state.focus == Focus::ActivityLog || state.focus_state.focus == Focus::Filter {
+        state.focus_state.focus = Focus::Panes;
+    }
+}
+
+/// BackTab advances the bottom panel's tab cycle and keeps the git
+/// poller flag in step with the Git tab.
+fn handle_back_tab(state: &mut AppState, git_tab_active: &AtomicBool) {
+    state.next_bottom_tab();
+    git_tab_active.store(
+        state.displayed_bottom_tab().is_git_status(),
+        Ordering::Relaxed,
+    );
 }
 
 fn pane_nav_down(state: &mut AppState) {
@@ -204,10 +412,11 @@ fn pane_nav_up(state: &mut AppState) {
             }
         }
         Focus::ActivityLog => {
-            let at_top = match state.global.bottom_tab {
+            let at_top = match state.displayed_bottom_tab() {
                 BottomTab::Activity => state.activity.scroll.offset == 0,
                 BottomTab::Tasks => state.tasks.scroll.offset == 0,
                 BottomTab::GitStatus => state.scrolls.git.offset == 0,
+                BottomTab::Thought => state.scrolls.thought.offset == 0,
             };
             if at_top {
                 state.focus_state.focus = Focus::Panes;
@@ -245,6 +454,20 @@ mod tests {
 
     fn ctrl_key(c: char) -> KeyEvent {
         KeyEvent::new(KeyCode::Char(c), KeyModifiers::CONTROL)
+    }
+
+    fn popout_key() -> KeyEvent {
+        KeyEvent::new(
+            KeyCode::Char('p'),
+            KeyModifiers::CONTROL | KeyModifiers::ALT,
+        )
+    }
+
+    fn side_switch_key() -> KeyEvent {
+        KeyEvent::new(
+            KeyCode::Char('o'),
+            KeyModifiers::CONTROL | KeyModifiers::ALT,
+        )
     }
 
     /// Build an AppState with three navigable pane rows and Panes focus,
@@ -360,48 +583,82 @@ mod tests {
     }
 
     #[test]
-    fn bare_p_toggles_the_popout_and_does_not_navigate() {
-        // The bare `p` runs the pop-out action, not navigation. The pane
-        // id cannot exist in any tmux server, so the pane probe fails and
-        // the action reports the unreadable window size instead of acting
-        // — the flash is the proof that `p` reached the pop-out (the
-        // refusal flash itself is covered by the injected popout tests).
-        // The selection starts off row 0, so a `p` that navigated would
-        // move it and fail here.
+    fn bare_p_does_not_pop_out_or_navigate() {
         let mut state = state_with_three_panes();
         state.tmux_pane = "%4294967295".into();
         state.global.selected_pane_row = 1;
         let flag = AtomicBool::new(false);
         handle_key_event(key(KeyCode::Char('p')), &mut state, &flag);
         assert_eq!(state.global.selected_pane_row, 1);
-        assert!(
-            state
-                .flash
-                .as_ref()
-                .is_some_and(|(msg, _)| msg.starts_with("Pop-out unavailable:")),
-            "pressing `p` must reach the pop-out action"
-        );
+        assert!(state.flash.is_none());
     }
 
     #[test]
-    fn bare_p_does_not_toggle_while_a_popup_is_open() {
-        // Popups swallow every key: the bare `p` must not float the pane
-        // behind the repo popup's back.
+    fn popout_shortcut_does_not_toggle_while_a_popup_is_open() {
         let mut state = state_with_repo_popup_open();
         state.tmux_pane = "%4294967295".into();
         let flag = AtomicBool::new(false);
-        handle_key_event(key(KeyCode::Char('p')), &mut state, &flag);
+        handle_key_event(popout_key(), &mut state, &flag);
         assert!(state.flash.is_none(), "no pop-out while a popup is open");
         assert!(state.is_repo_popup_open());
     }
 
     #[test]
-    fn ctrl_p_still_navigates_panes_after_p_is_bound() {
+    fn popout_shortcut_toggles_without_navigating() {
+        // A nonexistent pane makes the action report a failed probe,
+        // so reaching it is observable without floating a real pane.
         let mut state = state_with_three_panes();
-        state.global.selected_pane_row = 2;
+        state.tmux_pane = "%4294967295".into();
+        state.global.selected_pane_row = 1;
         let flag = AtomicBool::new(false);
-        handle_key_event(ctrl_key('p'), &mut state, &flag);
+        handle_key_event(popout_key(), &mut state, &flag);
         assert_eq!(state.global.selected_pane_row, 1);
+        assert_eq!(
+            state.flash.as_ref().map(|(msg, _)| msg.as_str()),
+            Some(
+                "Pop-out unavailable: could not read the window size, so the sidebar stays docked."
+            ),
+        );
+    }
+
+    #[test]
+    fn side_switch_shortcut_switches_without_navigating() {
+        // The key reaches the switch action: on the isolated test tmux
+        // the sweep finds no sidebars and stays silent — the assertion
+        // is that the press neither navigated nor flashed a pop-out.
+        let mut state = state_with_three_panes();
+        state.tmux_pane = "%4294967295".into();
+        state.global.selected_pane_row = 1;
+        let flag = AtomicBool::new(false);
+        handle_key_event(side_switch_key(), &mut state, &flag);
+        assert_eq!(state.global.selected_pane_row, 1);
+        assert!(state.flash.is_none());
+    }
+
+    #[test]
+    fn side_switch_shortcut_does_nothing_while_a_popup_is_open() {
+        // The modal layer swallows the whole keyboard, so prefix + Ctrl-O
+        // must not sweep while a popup is open.
+        let mut state = state_with_repo_popup_open();
+        state.tmux_pane = "%4294967295".into();
+        let flag = AtomicBool::new(false);
+        handle_key_event(side_switch_key(), &mut state, &flag);
+        assert!(
+            state.flash.is_none(),
+            "no side switch while a popup is open"
+        );
+        assert!(state.is_repo_popup_open());
+    }
+
+    #[test]
+    fn bare_o_and_plain_ctrl_o_do_not_switch_the_side() {
+        // Only the M-C-o spelling (tmux prefix + Ctrl-O) switches; plain
+        // Ctrl-O and bare o stay safe inside the TUI.
+        let mut state = state_with_three_panes();
+        state.tmux_pane = "%4294967295".into();
+        let flag = AtomicBool::new(false);
+        handle_key_event(key(KeyCode::Char('o')), &mut state, &flag);
+        handle_key_event(ctrl_key('o'), &mut state, &flag);
         assert!(state.flash.is_none());
     }
 
@@ -511,5 +768,221 @@ mod tests {
         handle_key_event(key(KeyCode::Tab), &mut state, &flag);
 
         assert_eq!(state.global.status_filter, before.next());
+    }
+
+    // ─── Strip key map ───────────────────────────────────────────────
+
+    /// A strip-layout state with three navigable pane rows and Panes
+    /// focus — the strip twin of [`state_with_three_panes`].
+    fn strip_state_with_three_panes() -> AppState {
+        let mut state = state_with_three_panes();
+        state.layout_kind = LayoutKind::Strip;
+        state
+    }
+
+    #[test]
+    fn strip_right_from_the_agent_panel_moves_focus_to_the_tab_panel() {
+        let mut state = strip_state_with_three_panes();
+        let flag = AtomicBool::new(false);
+
+        handle_key_event(key(KeyCode::Right), &mut state, &flag);
+        assert_eq!(state.focus_state.focus, Focus::ActivityLog);
+
+        // `l` is the same walk one step later: back to Panes is Left's
+        // job, but `l` from Panes reaches the tab panel again.
+        state.focus_state.focus = Focus::Panes;
+        handle_key_event(key(KeyCode::Char('l')), &mut state, &flag);
+        assert_eq!(state.focus_state.focus, Focus::ActivityLog);
+    }
+
+    #[test]
+    fn strip_down_on_the_last_agent_stays_selected_and_keeps_focus() {
+        let mut state = strip_state_with_three_panes();
+        state.global.selected_pane_row = 2;
+        let flag = AtomicBool::new(false);
+
+        handle_key_event(key(KeyCode::Down), &mut state, &flag);
+
+        assert_eq!(state.global.selected_pane_row, 2);
+        assert_eq!(state.focus_state.focus, Focus::Panes);
+    }
+
+    #[test]
+    fn strip_down_in_the_filter_bar_steps_the_category() {
+        let mut state = strip_state_with_three_panes();
+        state.focus_state.focus = Focus::Filter;
+        state.global.status_filter = StatusFilter::Busy;
+        let flag = AtomicBool::new(false);
+
+        handle_key_event(key(KeyCode::Down), &mut state, &flag);
+
+        assert_eq!(state.global.status_filter, StatusFilter::Waiting);
+        assert_eq!(state.focus_state.focus, Focus::Filter);
+    }
+
+    #[test]
+    fn strip_left_at_the_left_end_keeps_the_filter_and_category() {
+        let mut state = strip_state_with_three_panes();
+        state.focus_state.focus = Focus::Filter;
+        state.global.status_filter = StatusFilter::Waiting;
+        let flag = AtomicBool::new(false);
+
+        handle_key_event(key(KeyCode::Left), &mut state, &flag);
+
+        assert_eq!(state.focus_state.focus, Focus::Filter);
+        assert_eq!(state.global.status_filter, StatusFilter::Waiting);
+    }
+
+    #[test]
+    fn strip_left_from_the_agent_panel_moves_focus_to_the_filter_bar() {
+        let mut state = strip_state_with_three_panes();
+        let flag = AtomicBool::new(false);
+
+        handle_key_event(key(KeyCode::Left), &mut state, &flag);
+        assert_eq!(state.focus_state.focus, Focus::Filter);
+
+        // `h` spells the same walk.
+        state.focus_state.focus = Focus::Panes;
+        handle_key_event(key(KeyCode::Char('h')), &mut state, &flag);
+        assert_eq!(state.focus_state.focus, Focus::Filter);
+    }
+
+    #[test]
+    fn strip_right_stops_at_the_tab_panel_and_left_returns_to_panes() {
+        let mut state = strip_state_with_three_panes();
+        state.focus_state.focus = Focus::ActivityLog;
+        let flag = AtomicBool::new(false);
+
+        handle_key_event(key(KeyCode::Right), &mut state, &flag);
+        assert_eq!(state.focus_state.focus, Focus::ActivityLog);
+
+        handle_key_event(key(KeyCode::Left), &mut state, &flag);
+        assert_eq!(state.focus_state.focus, Focus::Panes);
+    }
+
+    #[test]
+    fn strip_up_in_the_filter_bar_steps_back_a_category() {
+        let mut state = strip_state_with_three_panes();
+        state.focus_state.focus = Focus::Filter;
+        state.global.status_filter = StatusFilter::Busy;
+        let flag = AtomicBool::new(false);
+
+        handle_key_event(key(KeyCode::Up), &mut state, &flag);
+
+        assert_eq!(state.global.status_filter, StatusFilter::All);
+    }
+
+    #[test]
+    fn strip_up_and_down_move_the_agent_selection_without_leaving() {
+        let mut state = strip_state_with_three_panes();
+        let flag = AtomicBool::new(false);
+
+        // Up at the first agent stops there.
+        handle_key_event(key(KeyCode::Up), &mut state, &flag);
+        assert_eq!(state.global.selected_pane_row, 0);
+        assert_eq!(state.focus_state.focus, Focus::Panes);
+
+        handle_key_event(key(KeyCode::Down), &mut state, &flag);
+        assert_eq!(state.global.selected_pane_row, 1);
+        assert_eq!(state.focus_state.focus, Focus::Panes);
+
+        handle_key_event(key(KeyCode::Up), &mut state, &flag);
+        assert_eq!(state.global.selected_pane_row, 0);
+        assert_eq!(state.focus_state.focus, Focus::Panes);
+    }
+
+    #[test]
+    fn strip_up_and_down_scroll_the_tab_panel_without_leaving() {
+        let mut state = strip_state_with_three_panes();
+        state.focus_state.focus = Focus::ActivityLog;
+        state.activity.scroll = crate::state::ScrollState {
+            offset: 0,
+            total_lines: 10,
+            visible_height: 3,
+        };
+        let flag = AtomicBool::new(false);
+
+        handle_key_event(key(KeyCode::Down), &mut state, &flag);
+        assert_eq!(state.activity.scroll.offset, 1);
+        assert_eq!(state.focus_state.focus, Focus::ActivityLog);
+
+        handle_key_event(key(KeyCode::Up), &mut state, &flag);
+        assert_eq!(state.activity.scroll.offset, 0);
+        // Unlike a column, the tab panel does not hand the focus back at
+        // its top — the focus only moves with Left/Right and `h`/`l`.
+        assert_eq!(state.focus_state.focus, Focus::ActivityLog);
+    }
+
+    #[test]
+    fn strip_keeps_esc_backtab_and_the_popup_keys() {
+        let mut state = strip_state_with_three_panes();
+        state.focus_state.focus = Focus::ActivityLog;
+        state.activity.scroll = crate::state::ScrollState {
+            offset: 3,
+            total_lines: 10,
+            visible_height: 3,
+        };
+        let flag = AtomicBool::new(false);
+
+        // Esc returns focus to the agent list, like in a column.
+        handle_key_event(key(KeyCode::Esc), &mut state, &flag);
+        assert_eq!(state.focus_state.focus, Focus::Panes);
+
+        // BackTab still cycles the bottom tabs.
+        handle_key_event(key(KeyCode::BackTab), &mut state, &flag);
+        assert_eq!(state.global.bottom_tab, BottomTab::Tasks);
+
+        // `r` still opens the repo popup while the filter bar has focus.
+        state.focus_state.focus = Focus::Filter;
+        handle_key_event(key(KeyCode::Char('r')), &mut state, &flag);
+        assert!(state.is_repo_popup_open());
+    }
+
+    #[test]
+    fn the_column_key_map_is_unchanged() {
+        let mut state = state_with_three_panes();
+        let flag = AtomicBool::new(false);
+
+        // Left/Right still step the category while the filter bar has
+        // focus — they do not walk the focus between parts.
+        state.focus_state.focus = Focus::Filter;
+        handle_key_event(key(KeyCode::Right), &mut state, &flag);
+        assert_eq!(state.global.status_filter, StatusFilter::Busy);
+        assert_eq!(state.focus_state.focus, Focus::Filter);
+        handle_key_event(key(KeyCode::Left), &mut state, &flag);
+        assert_eq!(state.global.status_filter, StatusFilter::All);
+        assert_eq!(state.focus_state.focus, Focus::Filter);
+
+        // The filter steps above rebuilt the row targets from the (here
+        // empty) agent list — restore the three synthetic rows so the
+        // navigation walk below has something to select.
+        state.layout.pane_row_targets = vec![
+            RowTarget {
+                pane_id: "%1".into(),
+            },
+            RowTarget {
+                pane_id: "%2".into(),
+            },
+            RowTarget {
+                pane_id: "%3".into(),
+            },
+        ];
+        state.global.selected_pane_row = 0;
+
+        // Down/Up still walk the focus chain: Down past the last agent
+        // hands the focus to the bottom panel, Up at the filter bar top
+        // keeps it there, and k walks back from the tab panel to the
+        // agent list only at its top.
+        handle_key_event(key(KeyCode::Down), &mut state, &flag);
+        assert_eq!(state.focus_state.focus, Focus::Panes);
+        handle_key_event(key(KeyCode::Down), &mut state, &flag);
+        handle_key_event(key(KeyCode::Down), &mut state, &flag);
+        assert_eq!(state.global.selected_pane_row, 2);
+        handle_key_event(key(KeyCode::Down), &mut state, &flag);
+        assert_eq!(state.focus_state.focus, Focus::ActivityLog);
+
+        state.focus_state.focus = Focus::Filter;
+        handle_key_event(key(KeyCode::Up), &mut state, &flag);
+        assert_eq!(state.focus_state.focus, Focus::Filter);
     }
 }

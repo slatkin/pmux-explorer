@@ -9,8 +9,8 @@
 use std::collections::BTreeSet;
 use std::fs;
 
-use tmux_agent_sidebar::VERSION;
-use tmux_agent_sidebar::adapter::claude::ClaudeAdapter;
+use pmux_explorer::VERSION;
+use pmux_explorer::adapter::claude::ClaudeAdapter;
 
 const HOOKS_JSON_PATH: &str = "hooks/hooks.json";
 
@@ -110,7 +110,7 @@ fn plugin_manifest_omits_redundant_hooks_field() {
 
     assert_eq!(
         json.get("name").and_then(|v| v.as_str()),
-        Some("tmux-agent-sidebar")
+        Some("pmux-explorer")
     );
     assert!(
         json.get("hooks").is_none(),

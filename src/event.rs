@@ -8,6 +8,42 @@ use serde_json::Value;
 
 use crate::pmux_task::PmuxTask;
 
+/// The payload fields one event reports, declared by the event's adapter.
+/// A reported field is stored even when its value is empty — an empty value
+/// clears the option the field backs — and a field the event does not
+/// report leaves the stored value alone. The set is a property of the
+/// event, not of the payload: a field that is absent from a payload but
+/// reported by the event counts as empty, because key presence alone
+/// cannot tell "no worktree any more" from "never had one". A payload
+/// that is not valid JSON reports nothing, so it clears nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Reported(&'static [&'static str]);
+
+impl Reported {
+    /// The set of an event that reports no fields.
+    pub const NONE: Self = Reported(&[]);
+
+    /// The set of the given field names, in declaration order.
+    pub const fn new(fields: &'static [&'static str]) -> Self {
+        Reported(fields)
+    }
+
+    /// The declared field names, in declaration order.
+    pub const fn fields(self) -> &'static [&'static str] {
+        self.0
+    }
+
+    /// Whether the event reports `field`.
+    pub fn contains(self, field: &str) -> bool {
+        self.0.contains(&field)
+    }
+
+    /// Whether the event reports no fields.
+    pub const fn is_empty(self) -> bool {
+        self.0.is_empty()
+    }
+}
+
 /// Worktree metadata from Claude Code hook payloads.
 /// Present only when the agent is running in a worktree; `None` otherwise.
 #[derive(Debug, Clone, PartialEq)]
@@ -151,6 +187,17 @@ impl AgentEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reported_set_answers_the_field_questions() {
+        let reported = Reported::new(&["cwd", "worktree"]);
+        assert!(reported.contains("cwd"));
+        assert!(!reported.contains("session_id"));
+        assert!(!reported.is_empty());
+        assert_eq!(reported.fields(), &["cwd", "worktree"]);
+        assert_eq!(Reported::NONE, Reported::new(&[]));
+        assert!(Reported::NONE.is_empty());
+    }
 
     #[test]
     fn worktree_info_default_is_none() {

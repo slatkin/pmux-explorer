@@ -56,11 +56,54 @@ impl AppState {
         // Query tmux directly for the active pane, not through `repo_groups`
         // which only contains agent panes. This allows activity/git info to
         // be displayed even when the focused pane has no agent running.
-        // When the sidebar has focus, find_active_pane returns None — preserve
-        // the previously focused pane so bottom panel data stays stable.
-        if let Some((id, _)) = tmux::find_active_pane(&self.tmux_pane) {
-            self.focus_state.focused_pane_id = Some(id);
+        // When the sidebar has focus, pick_active_pane names the window's
+        // last active pane, so a window switched to with the sidebar active
+        // still marks its agent. With no such pane it returns None — preserve
+        // the previously focused pane so bottom panel data stays stable —
+        // unless that pane lives in another window, where it would mark
+        // an agent the user is not looking at.
+        let panes = tmux::query_active_window_panes();
+        if let Some((id, _)) = tmux::pick_active_pane(&self.tmux_pane, &panes) {
+            self.adopt_focused_pane(id);
+        } else if self
+            .focus_state
+            .focused_pane_id
+            .as_deref()
+            .is_some_and(|prev| tmux::is_stale_focus(prev, &panes))
+        {
+            self.focus_state.focused_pane_id = None;
         }
+    }
+
+    /// The cursor and the tmux focus are one agent, so a focus change from
+    /// outside the sidebar — a click on an agent pane, a tmux navigation
+    /// key — takes the cursor with it: the marked row is the pane the user
+    /// just entered, and one click is enough. The row itself follows from
+    /// `cursor_pane_id` the next time the targets are rebuilt.
+    ///
+    /// This only ever runs for a pane tmux reports as focused; while the
+    /// sidebar holds the keyboard [`tmux::find_active_pane`] reports
+    /// the pane that held it before, which is no focus change, so browsing
+    /// with `j`/`k` keeps the cursor it moved.
+    fn adopt_focused_pane(&mut self, pane_id: String) {
+        if self.focus_state.focused_pane_id.as_deref() != Some(pane_id.as_str()) {
+            self.global.cursor_pane_id = Some(pane_id.clone());
+        }
+        self.focus_state.focused_pane_id = Some(pane_id);
+    }
+
+    /// Put the cursor on `row` and name the pane it lands on, so the row
+    /// and the shared cursor identity move together. Every cursor move
+    /// goes through here — a direct row write would leave the two
+    /// behind each other, and the next rebuild would resolve the row
+    /// back onto the stale pane.
+    pub fn select_row(&mut self, row: usize) {
+        self.global.selected_pane_row = row;
+        self.global.cursor_pane_id = self
+            .layout
+            .pane_row_targets
+            .get(row)
+            .map(|target| target.pane_id.clone());
     }
 
     /// Move agent selection. Returns true if moved, false if at boundary.
@@ -71,7 +114,7 @@ impl AppState {
         let len = self.layout.pane_row_targets.len() as isize;
         let next = self.global.selected_pane_row as isize + delta;
         if next >= 0 && next < len {
-            self.global.selected_pane_row = next as usize;
+            self.select_row(next as usize);
             true
         } else {
             false
@@ -87,9 +130,10 @@ impl AppState {
         {
             // Update the sidebar immediately so the active marker and
             // repo header highlight move without waiting for the next
-            // periodic tmux refresh.
-            self.focus_state.focused_pane_id = Some(target_pane_id.clone());
-            tmux::select_pane(&target_pane_id);
+            // periodic tmux refresh — but only once tmux took the jump.
+            if tmux::select_pane(&target_pane_id) {
+                self.focus_state.focused_pane_id = Some(target_pane_id.clone());
+            }
 
             // The jump may land on a window that has no sidebar of its own
             // (e.g. with @sidebar_auto_create off). Summon one there so the
@@ -223,6 +267,32 @@ mod tests {
         // Out-of-range cursor → None (not a panic).
         state.global.selected_pane_row = 99;
         assert!(state.selected_pane().is_none());
+    }
+
+    #[test]
+    fn adopt_focused_pane_moves_the_cursor_onto_the_focused_pane() {
+        let mut state = AppState::new("%99".into());
+        state.global.cursor_pane_id = Some("%1".into());
+
+        state.adopt_focused_pane("%3".into());
+
+        assert_eq!(state.focus_state.focused_pane_id.as_deref(), Some("%3"));
+        assert_eq!(
+            state.global.cursor_pane_id.as_deref(),
+            Some("%3"),
+            "the cursor and the tmux focus are one agent"
+        );
+    }
+
+    #[test]
+    fn adopt_focused_pane_keeps_its_cursor_for_the_same_pane() {
+        let mut state = AppState::new("%99".into());
+        state.focus_state.focused_pane_id = Some("%2".into());
+        state.global.cursor_pane_id = Some("%2".into());
+
+        state.adopt_focused_pane("%2".into());
+
+        assert_eq!(state.global.cursor_pane_id.as_deref(), Some("%2"));
     }
 
     #[test]

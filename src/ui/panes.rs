@@ -12,7 +12,9 @@ use ratatui::{
     widgets::{Block, BorderType, Borders, Clear, Paragraph},
 };
 
-use crate::state::{AppState, Focus, PopupState, RepoFilter, SpawnField};
+use crate::state::{AppState, PopupState, RepoFilter, SpawnField};
+
+pub(crate) use filter_bar::draw_strip_filter_bar;
 
 pub(super) const SPAWN_BUTTON: &str = "+";
 
@@ -56,24 +58,44 @@ struct PaneLayout {
 }
 
 impl PaneLayout {
-    fn compute(area: Rect) -> Self {
+    /// Split the agents area into the filter row, the repo header and
+    /// the list. Without the filter row (`with_filter_row: false`, a
+    /// strip's agent panel) the header takes the first row and the
+    /// list starts one row down.
+    fn compute(area: Rect, with_filter_row: bool) -> Self {
         let filter_area = Rect {
             x: area.x,
             y: area.y,
             width: area.width,
-            height: 1.min(area.height),
+            height: if with_filter_row {
+                1.min(area.height)
+            } else {
+                0
+            },
         };
         let secondary_area = Rect {
             x: area.x,
-            y: area.y + 1,
+            y: if with_filter_row { area.y + 1 } else { area.y },
             width: area.width,
-            height: 1.min(area.height.saturating_sub(1)),
+            height: 1.min(if with_filter_row {
+                area.height.saturating_sub(1)
+            } else {
+                area.height
+            }),
         };
         let list_area = Rect {
             x: area.x,
-            y: area.y + 2,
+            y: if with_filter_row {
+                area.y + 2
+            } else {
+                area.y + 1
+            },
             width: area.width,
-            height: area.height.saturating_sub(2),
+            height: if with_filter_row {
+                area.height.saturating_sub(2)
+            } else {
+                area.height.saturating_sub(1)
+            },
         };
         Self {
             filter_area,
@@ -417,6 +439,13 @@ fn render_filter_bar_into(frame: &mut Frame, state: &mut AppState, area: Rect) {
         control.is_some_and(|control| control.popout.is_none_or(|popout| popout < area.width)),
         "the pop-out column must sit inside the rendered row"
     );
+    // The filter bar wears its own background at all times — focused or
+    // not. It renders after the focus fill, so it wins over it; spans
+    // without an explicit `bg` keep this colour underneath them.
+    frame.render_widget(
+        Block::default().style(Style::default().bg(state.theme.filter_bar_bg)),
+        area,
+    );
     frame.render_widget(Paragraph::new(vec![line]), area);
 }
 
@@ -432,26 +461,26 @@ fn compute_scroll_offset(state: &mut AppState, total_lines: usize, list_area: Re
     state.scrolls.panes.total_lines = total_lines;
     state.scrolls.panes.visible_height = list_area.height as usize;
 
-    // Auto-scroll to keep selected agent visible
-    if state.focus_state.sidebar_focused && state.focus_state.focus == Focus::Panes {
-        let mut first_line: Option<usize> = None;
-        let mut last_line: Option<usize> = None;
-        for (i, mapping) in state.layout.line_to_row.iter().enumerate() {
-            if *mapping == Some(state.global.selected_pane_row) {
-                if first_line.is_none() {
-                    first_line = Some(i);
-                }
-                last_line = Some(i);
+    // Auto-scroll to keep the active agent visible: the active row is
+    // drawn at all times, whichever panel owns the keyboard, so the
+    // scroll follows it at all times.
+    let mut first_line: Option<usize> = None;
+    let mut last_line: Option<usize> = None;
+    for (i, mapping) in state.layout.line_to_row.iter().enumerate() {
+        if *mapping == Some(state.global.selected_pane_row) {
+            if first_line.is_none() {
+                first_line = Some(i);
             }
+            last_line = Some(i);
         }
-        if let (Some(first), Some(last)) = (first_line, last_line) {
-            let visible_h = list_area.height as usize;
-            let offset = state.scrolls.panes.offset;
-            if first < offset {
-                state.scrolls.panes.offset = first.saturating_sub(1);
-            } else if last >= offset + visible_h {
-                state.scrolls.panes.offset = (last + 1).saturating_sub(visible_h);
-            }
+    }
+    if let (Some(first), Some(last)) = (first_line, last_line) {
+        let visible_h = list_area.height as usize;
+        let offset = state.scrolls.panes.offset;
+        if first < offset {
+            state.scrolls.panes.offset = first.saturating_sub(1);
+        } else if last >= offset + visible_h {
+            state.scrolls.panes.offset = (last + 1).saturating_sub(visible_h);
         }
     }
 
@@ -488,9 +517,15 @@ fn render_flash_banner_into(frame: &mut Frame, state: &mut AppState, area: Rect)
     }
 }
 
-pub fn draw_agents(frame: &mut Frame, state: &mut AppState, area: Rect) {
-    let layout = PaneLayout::compute(area);
-    render_filter_bar_into(frame, state, layout.filter_area);
+/// Draw the agent panel. With `with_filter_row` (the column layout)
+/// the status filter bar takes the first row and the repo header and
+/// the list follow it; without it (a strip's agent panel) the header
+/// takes the first row and the list starts right under it.
+pub fn draw_agents(frame: &mut Frame, state: &mut AppState, area: Rect, with_filter_row: bool) {
+    let layout = PaneLayout::compute(area, with_filter_row);
+    if with_filter_row {
+        render_filter_bar_into(frame, state, layout.filter_area);
+    }
     render_secondary_header_into(frame, state, layout.secondary_area);
 
     let row_collector::CollectedRows {
@@ -526,7 +561,7 @@ mod tests {
             width: 40,
             height: 20,
         };
-        let layout = PaneLayout::compute(area);
+        let layout = PaneLayout::compute(area, true);
         assert_eq!(layout.filter_area.x, 0);
         assert_eq!(layout.filter_area.y, 0);
         assert_eq!(layout.filter_area.width, 40);
@@ -547,7 +582,7 @@ mod tests {
             width: 40,
             height: 1,
         };
-        let layout = PaneLayout::compute(area);
+        let layout = PaneLayout::compute(area, true);
         assert_eq!(layout.filter_area.height, 1);
         assert_eq!(layout.secondary_area.height, 0);
         assert_eq!(layout.list_area.height, 0);
@@ -561,8 +596,54 @@ mod tests {
             width: 40,
             height: 0,
         };
-        let layout = PaneLayout::compute(area);
+        let layout = PaneLayout::compute(area, true);
         assert_eq!(layout.filter_area.height, 0);
+        assert_eq!(layout.secondary_area.height, 0);
+        assert_eq!(layout.list_area.height, 0);
+    }
+
+    #[test]
+    fn pane_layout_without_filter_row_starts_the_header_on_the_first_row() {
+        // A strip's agent panel: no filter row, so the repo header
+        // takes row 0 and the list starts one row down.
+        let area = Rect {
+            x: 4,
+            y: 0,
+            width: 40,
+            height: 20,
+        };
+        let layout = PaneLayout::compute(area, false);
+        assert_eq!(layout.filter_area.height, 0);
+        assert_eq!(layout.secondary_area.y, 0);
+        assert_eq!(layout.secondary_area.height, 1);
+        assert_eq!(layout.list_area.y, 1);
+        assert_eq!(layout.list_area.height, 19);
+        assert_eq!(layout.list_area.x, 4);
+    }
+
+    #[test]
+    fn pane_layout_without_filter_row_handles_a_one_row_area() {
+        let area = Rect {
+            x: 4,
+            y: 0,
+            width: 40,
+            height: 1,
+        };
+        let layout = PaneLayout::compute(area, false);
+        assert_eq!(layout.filter_area.height, 0);
+        assert_eq!(layout.secondary_area.height, 1);
+        assert_eq!(layout.list_area.height, 0);
+    }
+
+    #[test]
+    fn pane_layout_without_filter_row_handles_zero_height() {
+        let area = Rect {
+            x: 4,
+            y: 0,
+            width: 40,
+            height: 0,
+        };
+        let layout = PaneLayout::compute(area, false);
         assert_eq!(layout.secondary_area.height, 0);
         assert_eq!(layout.list_area.height, 0);
     }
@@ -575,7 +656,7 @@ mod tests {
             width: 30,
             height: 15,
         };
-        let layout = PaneLayout::compute(area);
+        let layout = PaneLayout::compute(area, true);
         assert_eq!(layout.filter_area.x, 5);
         assert_eq!(layout.filter_area.y, 10);
         assert_eq!(layout.secondary_area.x, 5);

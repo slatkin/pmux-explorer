@@ -7,6 +7,17 @@ fn hook_registrations_match_parse_arms() {
 }
 
 #[test]
+fn reported_matches_the_parse_arms() {
+    // Claude's session-context arms read the worktree object, so a dropped
+    // `parse_worktree` must trip the pin.
+    super::super::assert_reported_matches_parse(
+        "claude",
+        true,
+        Some(super::super::SESSION_CONTEXT_FIELDS),
+    );
+}
+
+#[test]
 fn session_start() {
     let adapter = ClaudeAdapter;
     let input = json!({"cwd": "/home/user", "permission_mode": "default"});
@@ -810,4 +821,71 @@ fn activity_log_with_tool_response() {
             tool_response: json!({"task": {"id": "42"}}),
         }
     );
+}
+
+// ─── the reported set per event ─────────────────────────────────────
+
+#[test]
+fn the_session_context_events_report_the_session_fields() {
+    let adapter = ClaudeAdapter;
+    for event_name in [
+        "session-start",
+        "user-prompt-submit",
+        "notification",
+        "stop",
+        "stop-failure",
+        "permission-denied",
+        "cwd-changed",
+    ] {
+        let reported = adapter.reported(event_name, &json!({}));
+        assert_eq!(
+            reported.fields(),
+            &["session_id", "cwd", "worktree"],
+            "{event_name} should report the session-context fields"
+        );
+    }
+}
+
+#[test]
+fn cwd_changed_reports_the_session_fields() {
+    // `cwd-changed` carries session context even though it names no agent.
+    let adapter = ClaudeAdapter;
+    let reported = adapter.reported("cwd-changed", &json!({"cwd": "/new/dir"}));
+    assert!(reported.contains("session_id"));
+    assert!(reported.contains("cwd"));
+    assert!(reported.contains("worktree"));
+}
+
+#[test]
+fn the_events_without_session_context_report_nothing() {
+    let adapter = ClaudeAdapter;
+    for event_name in [
+        "session-end",
+        "subagent-start",
+        "subagent-stop",
+        "activity-log",
+        "task-created",
+        "task-completed",
+        "teammate-idle",
+    ] {
+        let reported = adapter.reported(event_name, &json!({}));
+        assert!(reported.is_empty(), "{event_name} should report nothing");
+    }
+}
+
+#[test]
+fn an_invalid_payload_reports_nothing() {
+    let adapter = ClaudeAdapter;
+    // A payload that is not valid JSON reaches the adapter as `Null`; it
+    // reports nothing, so it clears nothing.
+    let invalid =
+        serde_json::from_str::<serde_json::Value>("{\"cwd\": ").unwrap_or(serde_json::Value::Null);
+    assert!(invalid.is_null());
+    for event_name in ["session-start", "stop", "cwd-changed"] {
+        assert_eq!(
+            adapter.reported(event_name, &invalid),
+            Reported::NONE,
+            "{event_name} reported something for an invalid payload"
+        );
+    }
 }

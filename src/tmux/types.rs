@@ -30,7 +30,7 @@ pub struct PaneInfo {
     /// status row.
     pub pane_name: Option<String>,
     /// `true` when the window this pane lives in was created by the
-    /// sidebar's spawn flow (via the `@agent-sidebar-spawned` window
+    /// sidebar's spawn flow (via the `@pmux-explorer-spawned` window
     /// option). Used by the row renderer to show a clickable red `×`
     /// in place of the usual `+` worktree marker.
     pub sidebar_spawned: bool,
@@ -54,9 +54,8 @@ pub struct SubagentInfo {
     pub parent: SubagentParent,
 }
 
-/// The parent of a subagent: the label (tmux title, or pane id when the
-/// title is empty) of the live agent pane with the recorded session id, or
-/// `Orphaned` when no pane reports that session id.
+/// The parent of a subagent: the pane id of the live agent pane with the
+/// recorded session id, or `Orphaned` when no pane reports that session id.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SubagentParent {
     Pane(String),
@@ -124,8 +123,6 @@ pub enum AgentType {
     Codex,
     OpenCode,
     Pi,
-    #[allow(dead_code)]
-    Unknown,
 }
 
 #[derive(Debug, Clone)]
@@ -162,12 +159,17 @@ impl AgentType {
             Self::Codex => CODEX_AGENT,
             Self::OpenCode => OPENCODE_AGENT,
             Self::Pi => PI_AGENT,
-            Self::Unknown => "unknown",
         }
     }
 
-    pub fn label(&self) -> &str {
-        self.as_str()
+    /// The name the sidebar draws for a pane's agent. Claude and pi draw a
+    /// Nerd Font glyph instead of a word; the rest keep their protocol name.
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Claude => "\u{ec82}",
+            Self::Pi => "\u{e22c}",
+            _ => self.as_str(),
+        }
     }
 }
 
@@ -241,11 +243,10 @@ mod tests {
 
     #[test]
     fn agent_type_label() {
-        assert_eq!(AgentType::Claude.label(), "claude");
+        assert_eq!(AgentType::Claude.label(), "\u{ec82}");
         assert_eq!(AgentType::Codex.label(), "codex");
         assert_eq!(AgentType::OpenCode.label(), "opencode");
-        assert_eq!(AgentType::Pi.label(), "pi");
-        assert_eq!(AgentType::Unknown.label(), "unknown");
+        assert_eq!(AgentType::Pi.label(), "\u{e22c}");
     }
 
     #[test]

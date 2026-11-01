@@ -45,7 +45,7 @@ pub(crate) fn encode_pane_id_for_file_name(pane_id: &str) -> String {
 
 pub fn log_file_path(pane_id: &str) -> PathBuf {
     PathBuf::from(format!(
-        "/tmp/tmux-agent-activity{}.log",
+        "/tmp/pmux-explorer-activity{}.log",
         encode_pane_id_for_file_name(pane_id)
     ))
 }
@@ -248,6 +248,25 @@ mod tests {
     }
 
     #[test]
+    fn test_read_activity_log_label_keeps_pipes() {
+        // The log label keeps `|` (only line breaks are sanitized away),
+        // and `parse_entry` reads it back unchanged via splitn(3, '|').
+        let pane_id = "%99_pipe_test";
+        let path = log_file_path(pane_id);
+        let mut f = fs::File::create(&path).unwrap();
+        writeln!(f, "10:30|Bash|cat a.log | grep foo").unwrap();
+        drop(f);
+
+        let entries = read_activity_log(pane_id, 50);
+
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].tool, "Bash");
+        assert_eq!(entries[0].label, "cat a.log | grep foo");
+
+        fs::remove_file(&path).unwrap();
+    }
+
+    #[test]
     fn test_tool_color() {
         let entry = ActivityEntry {
             timestamp: "10:00".into(),
@@ -332,7 +351,7 @@ mod tests {
     #[test]
     fn test_log_file_path() {
         let path = log_file_path("%5");
-        assert_eq!(path.to_str().unwrap(), "/tmp/tmux-agent-activity_5.log");
+        assert_eq!(path.to_str().unwrap(), "/tmp/pmux-explorer-activity_5.log");
     }
 
     #[test]

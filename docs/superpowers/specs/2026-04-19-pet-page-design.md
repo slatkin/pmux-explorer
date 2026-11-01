@@ -187,7 +187,7 @@ mdx page via `astro:assets`. The hero image at the top of the page reuses
   and the recommended ~1 s extra sleep targets `pet_x ≈ 30` (well clear
   of both home and the desk). If the captured frame is consistently at home
   or already at the desk, the fallbacks are:
-  1. Add a debug-only env var (e.g. `TMUX_AGENT_SIDEBAR_FORCE_PET_STATE=walking`)
+  1. Add a debug-only env var (e.g. `PMUX_EXPLORER_FORCE_PET_STATE=walking`)
      that pins `PetState` and `pet_x` for capture purposes. Most
      deterministic; small change in `src/app/setup.rs`.
   2. Switch the Walking image to a short animated capture

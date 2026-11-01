@@ -23,17 +23,19 @@ pub(crate) mod size_guard;
 pub(crate) mod width_guard;
 mod workers;
 
-/// Run the TUI event loop. Returns when the loop exits (currently only on
-/// fatal I/O error, since the loop is `loop { ... }`).
+/// Run the TUI event loop. Returns when `shutdown` is set or on fatal I/O
+/// error.
 ///
 /// `needs_refresh` is the process-wide SIGUSR1 flag owned by `main.rs` — the
 /// signal handler must reference a static visible at signal-handler time,
 /// so the static stays with the `extern "C"` handler in the binary crate and
-/// we just borrow it here.
+/// we just borrow it here. `shutdown` is the same kind of flag for SIGTERM
+/// and SIGHUP: once set, the loop returns so the caller's guards run.
 pub fn run(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     tmux_pane: String,
     needs_refresh: &'static AtomicBool,
+    shutdown: &'static AtomicBool,
 ) -> io::Result<()> {
     let mut state = setup::init_state(tmux_pane);
 
@@ -52,7 +54,7 @@ pub fn run(
     let spinner_interval = Duration::from_millis(200);
     let mut needs_redraw = true;
 
-    loop {
+    while !shutdown.load(Ordering::Relaxed) {
         if needs_redraw {
             render::render_frame(terminal, &mut state)?;
             needs_redraw = false;
@@ -98,12 +100,23 @@ pub fn run(
             }
             needs_redraw = true;
             if is_window_active {
-                // Grow the sidebar back when an orchestrator's new panes
-                // squeezed it below `@sidebar_min_width`.
+                // Keep the sidebar's width inside its band: grow it back
+                // when orchestrator panes squeezed it below
+                // `@sidebar_min_width`, shrink it when tmux's resize
+                // behaviour pushed it past `@sidebar_max_width`. A strip
+                // is as wide as the window and is never touched here.
                 let pane_width = terminal.size().map(|s| s.width).unwrap_or(0);
-                size_guard::enforce(&state.tmux_pane, pane_width, state.global.min_width);
-                // Keep a floating panel as tall and as wide as its window,
-                // anchored to the right edge, after the window resized.
+                size_guard::enforce(
+                    &state.tmux_pane,
+                    pane_width,
+                    state.layout_kind,
+                    state.global.min_width,
+                    state.global.max_width,
+                );
+                // Keep a floating panel at its size rule and its edge
+                // anchor after the window resized: a column 40 wide at
+                // the right edge, a strip as wide as the window at the
+                // edge it was docked at.
                 panel_guard::enforce(
                     &state.tmux_pane,
                     state.sidebar_pane.window_width,
@@ -111,6 +124,11 @@ pub fn run(
                     &mut last_window_width,
                     &mut last_window_height,
                     state.sidebar_pane.floating,
+                    panel_guard::PanelRule {
+                        layout: state.layout_kind,
+                        edge: state.docked_edge,
+                        docked_size: state.docked_size.unwrap_or(0),
+                    },
                 );
             }
             // Converge the docked width on the shared value for every docked
@@ -122,7 +140,10 @@ pub fn run(
             // no-ops inside the guard, so floating panes still reach
             // `panel_guard` here exactly as before.
             width_guard::enforce(&mut state);
-            git_tab_active.store(state.global.bottom_tab.is_git_status(), Ordering::Relaxed);
+            git_tab_active.store(
+                state.displayed_bottom_tab().is_git_status(),
+                Ordering::Relaxed,
+            );
             last_refresh = std::time::Instant::now();
         }
 
@@ -140,4 +161,5 @@ pub fn run(
             .global
             .flush_pending_cursor_save(std::time::Duration::from_millis(120));
     }
+    Ok(())
 }

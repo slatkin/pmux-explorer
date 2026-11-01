@@ -3,8 +3,9 @@ use std::sync::LazyLock;
 
 use super::commands::{display_message, run_tmux};
 use super::options::{
-    SIDEBAR_BOTTOM_TAB, SIDEBAR_CURSOR, SIDEBAR_DOCKED_WIDTH, SIDEBAR_FILTER, SIDEBAR_MIN_WIDTH,
-    SIDEBAR_REPO_FILTER, SIDEBAR_WIDTH_LOCK,
+    SIDEBAR_BOTTOM_HEIGHT, SIDEBAR_BOTTOM_TAB, SIDEBAR_CURSOR, SIDEBAR_DOCKED_WIDTH,
+    SIDEBAR_FILTER, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH, SIDEBAR_REPO_FILTER, SIDEBAR_TAB_WIDTH,
+    SIDEBAR_WIDTH_LOCK,
 };
 
 /// The sidebar's own pane state, read from tmux on every refresh.
@@ -24,29 +25,41 @@ pub struct SidebarPaneInfo {
     /// tmux 3.8+). Always `false` when tmux is too old to report the
     /// flag, so the sidebar behaves as docked there.
     pub floating: bool,
+    /// Height of the pane (`#{pane_height}`) — the size a strip's
+    /// pop-out captures so the pop-in can restore it. `0` when the
+    /// query failed or tmux did not report the field.
+    pub height: u16,
+    /// Whether the pane touches its window's top edge
+    /// (`#{pane_at_top}`). While a strip is docked this names its
+    /// edge (top strip vs bottom strip); missing reads as not at the
+    /// top, so an older tmux reports a bottom edge.
+    pub at_top: bool,
 }
 
 /// The pane-state fields that precede the shared options in the reading
 /// format: `pane_active`, `window_active`, `pane_width`, `window_width`,
-/// `window_height`, `pane_floating_flag`.
-const SIDEBAR_CORE_FIELD_COUNT: usize = 6;
+/// `window_height`, `pane_floating_flag`, `pane_height`, `pane_at_top`.
+const SIDEBAR_CORE_FIELD_COUNT: usize = 8;
 
 /// The shared sidebar options, in the order they are appended after the
 /// pane fields of the reading format. The query string
 /// ([`SIDEBAR_PANE_QUERY`]) and the parse split count both derive from
 /// this one list, so adding or reordering a shared option cannot
 /// silently shift the field every later position reads. Every field but
-/// the last expands to at most one space-free token (docked-width and
-/// floor digits, `on`/`off`) so the positional space-split parse stays
-/// safe; the repo filter stays last and is cut at the terminator instead
-/// because a repo name may contain spaces.
-const SHARED_OPTION_FIELDS: [&str; 7] = [
+/// the last expands to at most one space-free token (digits, `on`/`off`,
+/// a tab name) so the positional space-split parse stays safe; the repo
+/// filter stays last and is cut at the terminator instead because a repo
+/// name may contain spaces.
+const SHARED_OPTION_FIELDS: [&str; 10] = [
     SIDEBAR_FILTER,
     SIDEBAR_CURSOR,
     SIDEBAR_BOTTOM_TAB,
+    SIDEBAR_BOTTOM_HEIGHT,
+    SIDEBAR_TAB_WIDTH,
     SIDEBAR_DOCKED_WIDTH,
     SIDEBAR_WIDTH_LOCK,
     SIDEBAR_MIN_WIDTH,
+    SIDEBAR_MAX_WIDTH,
     SIDEBAR_REPO_FILTER,
 ];
 
@@ -60,7 +73,8 @@ const SHARED_OPTION_FIELDS: [&str; 7] = [
 static SIDEBAR_PANE_QUERY: LazyLock<String> = LazyLock::new(|| {
     let mut format = String::from(
         "#{pane_active} #{window_active} #{pane_width} \
-#{window_width} #{window_height} #{pane_floating_flag} ",
+#{window_width} #{window_height} #{pane_floating_flag} #{pane_height} \
+#{pane_at_top} ",
     );
     for option in SHARED_OPTION_FIELDS {
         format.push_str(&format!("#{{{}}} ", option));
@@ -90,7 +104,8 @@ pub struct SidebarPaneReading {
 impl SidebarPaneInfo {
     /// Values used when the pane is gone or the query failed: not focused,
     /// not the active window, and the historical default pane width. The
-    /// window size is unknown (`0`), so nothing sizes from it.
+    /// window size and the pane height are unknown (`0`), so nothing sizes
+    /// from them.
     pub(crate) const FALLBACK: Self = Self {
         pane_active: false,
         window_active: false,
@@ -98,18 +113,21 @@ impl SidebarPaneInfo {
         window_width: 0,
         window_height: 0,
         floating: false,
+        height: 0,
+        at_top: false,
     };
 }
 
 /// Parse the `#{pane_active} #{window_active} #{pane_width} #{window_width}
-/// #{window_height} #{pane_floating_flag} #{@sidebar_filter} #{@sidebar_cursor}
-/// #{@sidebar_bottom_tab} #{@sidebar_docked_width} #{@sidebar_width_lock}
-/// #{@sidebar_min_width} #{@sidebar_repo_filter} /eot/` output. Fewer than the three core fields
+/// #{window_height} #{pane_floating_flag} #{pane_height} #{pane_at_top}
+/// #{@sidebar_filter} ... #{@sidebar_repo_filter} /eot/` output. Fewer than
+/// the three core fields
 /// (the pane is gone, or the query failed) yields
 /// [`SidebarPaneInfo::FALLBACK`] with no options; missing window fields or
 /// a missing floating flag (tmux older than 3.8 has no
 /// `pane_floating_flag`) keep the parsed fields and report a zero window
-/// size / not-floating.
+/// size / not-floating; a missing `#{pane_height}` reports a zero pane
+/// height and a missing `#{pane_at_top}` reports not at the top.
 ///
 /// The fields are split on single spaces so an option that expands to an
 /// empty string keeps its position, and the repo filter (last field) keeps
@@ -133,12 +151,17 @@ pub(crate) fn parse_sidebar_pane_reading(out: &str) -> SidebarPaneReading {
     let window_width = fields.next().and_then(|s| s.parse().ok()).unwrap_or(0);
     let window_height = fields.next().and_then(|s| s.parse().ok()).unwrap_or(0);
     let floating = fields.next() == Some("1");
+    let height = fields.next().and_then(|s| s.parse().ok()).unwrap_or(0);
+    let at_top = fields.next() == Some("1");
     let filter = fields.next().unwrap_or("");
     let cursor = fields.next().unwrap_or("");
     let bottom_tab = fields.next().unwrap_or("");
+    let bottom_height = fields.next().unwrap_or("");
+    let tab_width = fields.next().unwrap_or("");
     let docked_width = fields.next().unwrap_or("");
     let width_lock = fields.next().unwrap_or("");
     let min_width = fields.next().unwrap_or("");
+    let max_width = fields.next().unwrap_or("");
     let repo_field = fields.next().unwrap_or("");
     // Cut at the terminator so the `trim()` inside `display_message`
     // cannot eat trailing whitespace from the repo name. The field is
@@ -156,9 +179,12 @@ pub(crate) fn parse_sidebar_pane_reading(out: &str) -> SidebarPaneReading {
         filter,
         cursor,
         bottom_tab,
+        bottom_height,
+        tab_width,
         docked_width,
         width_lock,
         min_width,
+        max_width,
         repo_filter,
     ]) {
         if !value.is_empty() {
@@ -173,6 +199,8 @@ pub(crate) fn parse_sidebar_pane_reading(out: &str) -> SidebarPaneReading {
             window_width,
             window_height,
             floating,
+            height,
+            at_top,
         },
         options,
     }
@@ -191,29 +219,43 @@ pub fn get_pane_path(pane_id: &str) -> Option<String> {
     Some(display_message(pane_id, "#{pane_current_path}")).filter(|s| !s.is_empty())
 }
 
-/// Query tmux for all panes in the active window, returning (pane_id, pane_active, path).
+/// One pane of the sidebar's window, as `list-panes` reports it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WindowPane {
+    pub id: String,
+    /// tmux's active pane of the window (`#{pane_active}`).
+    pub active: bool,
+    /// The pane that was active before the current one (`#{pane_last}`).
+    pub last: bool,
+    pub path: String,
+}
+
+/// Query tmux for all panes in the sidebar's window.
 /// This queries tmux directly and is NOT filtered by agent type, so it includes
 /// all panes (shell, editor, etc.) — not just agent panes.
-pub fn query_active_window_panes() -> Vec<(String, bool, String)> {
-    // List panes in the current (active) window across all sessions
+pub fn query_active_window_panes() -> Vec<WindowPane> {
     let output = match run_tmux(&[
         "list-panes",
         "-F",
-        "#{pane_id}|#{pane_active}|#{pane_current_path}",
+        "#{pane_id}|#{pane_active}|#{pane_last}|#{pane_current_path}",
     ]) {
         Some(s) => s,
         None => return vec![],
     };
-    output
-        .lines()
-        .filter_map(|line| {
-            let parts: Vec<&str> = line.splitn(3, '|').collect();
-            if parts.len() < 3 {
-                return None;
-            }
-            Some((parts[0].to_string(), parts[1] == "1", parts[2].to_string()))
-        })
-        .collect()
+    output.lines().filter_map(parse_window_pane).collect()
+}
+
+fn parse_window_pane(line: &str) -> Option<WindowPane> {
+    let parts: Vec<&str> = line.splitn(4, '|').collect();
+    if parts.len() < 4 {
+        return None;
+    }
+    Some(WindowPane {
+        id: parts[0].to_string(),
+        active: parts[1] == "1",
+        last: parts[2] == "1",
+        path: parts[3].to_string(),
+    })
 }
 
 /// Find the focused (non-sidebar) pane ID and path by querying tmux directly.
@@ -223,19 +265,30 @@ pub fn find_active_pane(sidebar_pane: &str) -> Option<(String, String)> {
     pick_active_pane(sidebar_pane, &query_active_window_panes())
 }
 
-/// Pure logic: pick the active non-sidebar pane from a list.
-/// Returns the pane with pane_active=true (excluding sidebar) if one exists.
-/// Returns None when the sidebar itself is active or no valid pane is found,
-/// so callers can preserve the previously focused pane.
+/// Pure logic: pick the focused non-sidebar pane from a list.
+/// Returns the active pane (excluding the sidebar) if one exists. While the
+/// sidebar itself is active, the pane the user came from (`pane_last`) is
+/// the focused one: it is where focus returns, and without it a window
+/// switched to with the sidebar active would name no agent at all.
+/// Returns None when neither exists, so callers can preserve the
+/// previously focused pane.
 pub(crate) fn pick_active_pane(
     sidebar_pane: &str,
-    panes: &[(String, bool, String)],
+    panes: &[WindowPane],
 ) -> Option<(String, String)> {
-    let valid = |p: &&(String, bool, String)| p.0 != sidebar_pane && !p.2.is_empty();
+    let valid = |p: &&WindowPane| p.id != sidebar_pane && !p.path.is_empty();
+    let sidebar_active = panes.iter().any(|p| p.active && p.id == sidebar_pane);
     panes
         .iter()
-        .find(|p| p.1 && valid(p))
-        .map(|p| (p.0.clone(), p.2.clone()))
+        .find(|p| valid(p) && (p.active || (sidebar_active && p.last)))
+        .map(|p| (p.id.clone(), p.path.clone()))
+}
+
+/// True when `previous` names a pane that is not in this window's pane
+/// list. An empty list means the query failed, so nothing is known and the
+/// previous pane is not called stale.
+pub(crate) fn is_stale_focus(previous: &str, panes: &[WindowPane]) -> bool {
+    !panes.is_empty() && !panes.iter().any(|p| p.id == previous)
 }
 
 /// Find the focused pane's working directory by querying tmux directly.
@@ -250,12 +303,29 @@ pub fn focused_pane_path(sidebar_pane: &str) -> Option<String> {
 mod tests {
     use super::*;
 
+    fn pane(id: &str, active: bool, last: bool, path: &str) -> WindowPane {
+        WindowPane {
+            id: id.into(),
+            active,
+            last,
+            path: path.into(),
+        }
+    }
+
+    #[test]
+    fn is_stale_focus_only_for_a_pane_outside_this_window() {
+        let panes = vec![pane("%1", false, false, "/home")];
+        assert!(is_stale_focus("%7", &panes));
+        assert!(!is_stale_focus("%1", &panes));
+        assert!(!is_stale_focus("%7", &[]));
+    }
+
     #[test]
     fn pick_active_pane_returns_active_non_sidebar() {
         let panes = vec![
-            ("%1".into(), false, "/home".into()),
-            ("%2".into(), true, "/work".into()),
-            ("%3".into(), false, "/tmp".into()),
+            pane("%1", false, false, "/home"),
+            pane("%2", true, false, "/work"),
+            pane("%3", false, false, "/tmp"),
         ];
         assert_eq!(
             pick_active_pane("%99", &panes),
@@ -264,17 +334,8 @@ mod tests {
     }
 
     #[test]
-    fn pick_active_pane_skips_sidebar_even_when_marked_active() {
-        let panes = vec![("%99".into(), true, "/a".into())];
-        assert!(pick_active_pane("%99", &panes).is_none());
-    }
-
-    #[test]
     fn pick_active_pane_skips_panes_with_empty_path() {
-        let panes = vec![
-            ("%1".into(), true, "".into()),
-            ("%2".into(), true, "/ok".into()),
-        ];
+        let panes = vec![pane("%1", true, false, ""), pane("%2", true, false, "/ok")];
         assert_eq!(
             pick_active_pane("%99", &panes),
             Some(("%2".into(), "/ok".into()))
@@ -289,31 +350,92 @@ mod tests {
     #[test]
     fn pick_active_pane_returns_none_when_no_active() {
         let panes = vec![
-            ("%1".into(), false, "/x".into()),
-            ("%2".into(), false, "/y".into()),
+            pane("%1", false, false, "/x"),
+            pane("%2", false, true, "/y"),
         ];
         assert!(pick_active_pane("%99", &panes).is_none());
+    }
+
+    #[test]
+    fn pick_active_pane_falls_back_to_last_pane_while_sidebar_is_active() {
+        let panes = vec![
+            pane("%10", false, true, "/agent"),
+            pane("%38", false, false, "/worker"),
+            pane("%99", true, false, "/sidebar"),
+        ];
+        assert_eq!(
+            pick_active_pane("%99", &panes),
+            Some(("%10".into(), "/agent".into()))
+        );
+    }
+
+    #[test]
+    fn pick_active_pane_ignores_last_pane_while_an_agent_pane_is_active() {
+        let panes = vec![
+            pane("%1", true, false, "/active"),
+            pane("%2", false, true, "/last"),
+            pane("%99", false, false, "/sidebar"),
+        ];
+        assert_eq!(
+            pick_active_pane("%99", &panes),
+            Some(("%1".into(), "/active".into()))
+        );
+    }
+
+    #[test]
+    fn pick_active_pane_returns_none_when_sidebar_is_active_without_a_last_pane() {
+        let panes = vec![
+            pane("%1", false, false, "/x"),
+            pane("%99", true, false, "/sidebar"),
+        ];
+        assert!(pick_active_pane("%99", &panes).is_none());
+    }
+
+    #[test]
+    fn parse_window_pane_reads_the_four_fields_and_keeps_pipes_in_the_path() {
+        assert_eq!(
+            parse_window_pane("%3|0|1|/a|b"),
+            Some(pane("%3", false, true, "/a|b"))
+        );
+        assert!(parse_window_pane("%3|1|/a").is_none());
     }
 
     // ─── parse_sidebar_pane_reading ───────────────────────────────
 
     #[test]
     fn parse_sidebar_pane_reading_parses_floating_flag() {
-        let reading = parse_sidebar_pane_reading("1 1 40 100 30 1");
+        let reading = parse_sidebar_pane_reading("1 1 40 100 30 1 12 1");
         assert!(reading.info.floating);
         assert!(reading.info.pane_active);
         assert!(reading.info.window_active);
         assert_eq!(reading.info.width, 40);
         assert_eq!(reading.info.window_width, 100);
         assert_eq!(reading.info.window_height, 30);
+        assert_eq!(reading.info.height, 12);
+        assert!(reading.info.at_top);
         assert!(reading.options.is_empty());
 
-        let docked = parse_sidebar_pane_reading("0 1 80 120 40 0");
+        let docked = parse_sidebar_pane_reading("0 1 80 120 40 0 12 0");
         assert!(!docked.info.floating);
         assert!(!docked.info.pane_active);
         assert_eq!(docked.info.width, 80);
         assert_eq!(docked.info.window_width, 120);
         assert_eq!(docked.info.window_height, 40);
+        assert_eq!(docked.info.height, 12);
+        assert!(!docked.info.at_top);
+    }
+
+    #[test]
+    fn parse_sidebar_pane_reading_without_height_and_at_top_fields_reports_zero_and_bottom() {
+        // tmux older than the strip layout has no `#{pane_at_top}` in
+        // every listing and a failed probe no pane height at all: the
+        // core fields before them must survive and the pane must read
+        // as height-unknown at the bottom edge.
+        let reading = parse_sidebar_pane_reading("0 1 80 120 40 0");
+        assert_eq!(reading.info.height, 0);
+        assert!(!reading.info.at_top);
+        assert_eq!(reading.info.window_width, 120);
+        assert_eq!(reading.info.window_height, 40);
     }
 
     #[test]
@@ -328,6 +450,8 @@ mod tests {
         assert_eq!(reading.info.width, 80);
         assert_eq!(reading.info.window_width, 120);
         assert_eq!(reading.info.window_height, 40);
+        assert_eq!(reading.info.height, 0);
+        assert!(!reading.info.at_top);
     }
 
     #[test]
@@ -340,8 +464,9 @@ mod tests {
 
     #[test]
     fn parse_sidebar_pane_reading_parses_all_set_options() {
-        let reading =
-            parse_sidebar_pane_reading("1 1 40 100 30 1 waiting 7 tasks    my-repo /eot/");
+        let reading = parse_sidebar_pane_reading(
+            "1 1 40 100 30 1 12 0 waiting 7 tasks 45 55 60 on 20 80 my-repo /eot/",
+        );
         assert_eq!(reading.options.get(SIDEBAR_FILTER), Some(&"waiting".into()));
         assert_eq!(reading.options.get(SIDEBAR_CURSOR), Some(&"7".into()));
         assert_eq!(
@@ -349,10 +474,22 @@ mod tests {
             Some(&"tasks".into())
         );
         assert_eq!(
+            reading.options.get(SIDEBAR_BOTTOM_HEIGHT),
+            Some(&"45".into())
+        );
+        assert_eq!(reading.options.get(SIDEBAR_TAB_WIDTH), Some(&"55".into()));
+        assert_eq!(
+            reading.options.get(SIDEBAR_DOCKED_WIDTH),
+            Some(&"60".into())
+        );
+        assert_eq!(reading.options.get(SIDEBAR_WIDTH_LOCK), Some(&"on".into()));
+        assert_eq!(reading.options.get(SIDEBAR_MIN_WIDTH), Some(&"20".into()));
+        assert_eq!(reading.options.get(SIDEBAR_MAX_WIDTH), Some(&"80".into()));
+        assert_eq!(
             reading.options.get(SIDEBAR_REPO_FILTER),
             Some(&"my-repo".into())
         );
-        assert_eq!(reading.options.len(), 4);
+        assert_eq!(reading.options.len(), 10);
     }
 
     #[test]
@@ -361,23 +498,26 @@ mod tests {
         // and the repo filter: digits for the shared docked width and the
         // floor, `on`/`off` for the lock — every value one space-free
         // token, so a repo filter with spaces still lands whole.
-        let locked =
-            parse_sidebar_pane_reading("0 1 80 120 40 0 all 3 tasks 45 on 20 My Repo /eot/");
+        let locked = parse_sidebar_pane_reading(
+            "0 1 80 120 40 0 10 0 all 3 tasks 25 40 45 on 20 80 My Repo /eot/",
+        );
         assert_eq!(locked.options.get(SIDEBAR_DOCKED_WIDTH), Some(&"45".into()));
         assert_eq!(locked.options.get(SIDEBAR_WIDTH_LOCK), Some(&"on".into()));
         assert_eq!(locked.options.get(SIDEBAR_MIN_WIDTH), Some(&"20".into()));
+        assert_eq!(locked.options.get(SIDEBAR_MAX_WIDTH), Some(&"80".into()));
         assert_eq!(
             locked.options.get(SIDEBAR_REPO_FILTER),
             Some(&"My Repo".into())
         );
-        assert_eq!(locked.options.len(), 7);
+        assert_eq!(locked.options.len(), 10);
 
-        // Unset, the three slots collapse to separators and stay out of
+        // Unset, the four slots collapse to separators and stay out of
         // the map while the cursor keeps its position.
-        let unset = parse_sidebar_pane_reading("0 1 80 120 40 0  12      /eot/");
+        let unset = parse_sidebar_pane_reading("0 1 80 120 40 0 10 0  12        /eot/");
         assert_eq!(unset.options.get(SIDEBAR_DOCKED_WIDTH), None);
         assert_eq!(unset.options.get(SIDEBAR_WIDTH_LOCK), None);
         assert_eq!(unset.options.get(SIDEBAR_MIN_WIDTH), None);
+        assert_eq!(unset.options.get(SIDEBAR_MAX_WIDTH), None);
         assert_eq!(unset.options.get(SIDEBAR_CURSOR), Some(&"12".into()));
     }
 
@@ -388,18 +528,24 @@ mod tests {
         // `tasks` and `git` must each land on the bottom-tab key without
         // shifting the repo filter.
         for tab in ["activity", "tasks", "git"] {
-            // `{tab}` set with the width fields and the repo filter
-            // unset: each empty field contributes only its separator
-            // space, so the fixture's gap before `/eot/` is one space
-            // short of the real wire shape — the positional parse
-            // reads both the same.
-            let reading =
-                parse_sidebar_pane_reading(&format!("0 1 80 120 40 0 all 3 {tab}    /eot/"));
+            // Faithful wire shape for `{tab}` set with the tab width
+            // set and the width fields plus repo unset: the tab keeps
+            // its slot, the empty slots collapse to separator spaces,
+            // and the empty repo slot drops to nothing before the
+            // terminator.
+            let reading = parse_sidebar_pane_reading(&format!(
+                "0 1 80 120 40 0 12 0 all 3 {tab} 25 40     /eot/"
+            ));
             assert_eq!(
                 reading.options.get(SIDEBAR_BOTTOM_TAB),
                 Some(&tab.to_string()),
                 "tab value {tab} must round-trip"
             );
+            assert_eq!(
+                reading.options.get(SIDEBAR_BOTTOM_HEIGHT),
+                Some(&"25".into())
+            );
+            assert_eq!(reading.options.get(SIDEBAR_TAB_WIDTH), Some(&"40".into()));
             assert_eq!(reading.options.get(SIDEBAR_REPO_FILTER), None);
             assert_eq!(reading.options.get(SIDEBAR_CURSOR), Some(&"3".into()));
         }
@@ -411,27 +557,37 @@ mod tests {
         // option is not set, which collapses to nothing between the
         // spaces — the cursor must keep its position and the filter
         // key must stay out of the map.
-        let reading = parse_sidebar_pane_reading("0 1 80 120 40 0  12      /eot/");
+        let reading = parse_sidebar_pane_reading("0 1 80 120 40 0 12 0  12        /eot/");
         assert!(!reading.options.contains_key(SIDEBAR_FILTER));
         assert_eq!(reading.options.get(SIDEBAR_CURSOR), Some(&"12".into()));
         assert!(!reading.options.contains_key(SIDEBAR_BOTTOM_TAB));
+        assert!(!reading.options.contains_key(SIDEBAR_BOTTOM_HEIGHT));
+        assert!(!reading.options.contains_key(SIDEBAR_TAB_WIDTH));
+        assert!(!reading.options.contains_key(SIDEBAR_DOCKED_WIDTH));
+        assert!(!reading.options.contains_key(SIDEBAR_WIDTH_LOCK));
+        assert!(!reading.options.contains_key(SIDEBAR_MIN_WIDTH));
+        assert!(!reading.options.contains_key(SIDEBAR_MAX_WIDTH));
         assert!(!reading.options.contains_key(SIDEBAR_REPO_FILTER));
 
         // Trailing empty fields are trimmed away by `display-message`,
         // so a set filter with unset cursor and repo filter must still
         // land on the right key.
-        let only_filter = parse_sidebar_pane_reading("0 1 80 120 40 0 busy       /eot/");
+        let only_filter = parse_sidebar_pane_reading("0 1 80 120 40 0 12 0 busy         /eot/");
         assert_eq!(
             only_filter.options.get(SIDEBAR_FILTER),
             Some(&"busy".into())
         );
         assert!(!only_filter.options.contains_key(SIDEBAR_BOTTOM_TAB));
+        assert!(!only_filter.options.contains_key(SIDEBAR_BOTTOM_HEIGHT));
+        assert!(!only_filter.options.contains_key(SIDEBAR_TAB_WIDTH));
         assert_eq!(only_filter.options.len(), 1);
     }
 
     #[test]
     fn parse_sidebar_pane_reading_keeps_spaces_in_the_repo_filter() {
-        let reading = parse_sidebar_pane_reading("0 1 80 120 40 0 all 2 git    My Repo Dir /eot/");
+        let reading = parse_sidebar_pane_reading(
+            "0 1 80 120 40 0 12 0 all 2 git 33 40     My Repo Dir /eot/",
+        );
         assert_eq!(
             reading.options.get(SIDEBAR_REPO_FILTER),
             Some(&"My Repo Dir".into())
@@ -439,6 +595,11 @@ mod tests {
         assert_eq!(reading.options.get(SIDEBAR_CURSOR), Some(&"2".into()));
         assert_eq!(reading.options.get(SIDEBAR_FILTER), Some(&"all".into()));
         assert_eq!(reading.options.get(SIDEBAR_BOTTOM_TAB), Some(&"git".into()));
+        assert_eq!(
+            reading.options.get(SIDEBAR_BOTTOM_HEIGHT),
+            Some(&"33".into())
+        );
+        assert_eq!(reading.options.get(SIDEBAR_TAB_WIDTH), Some(&"40".into()));
     }
 
     #[test]
@@ -447,35 +608,45 @@ mod tests {
         // anchors the end of the repo field so a repo name with a
         // trailing space survives the read instead of being corrupted
         // tick after tick.
-        let reading = parse_sidebar_pane_reading("1 1 40 100 30 1 busy 3 git    My Repo  /eot/");
+        let reading =
+            parse_sidebar_pane_reading("1 1 40 100 30 1 12 0 busy 3 git 18 40     My Repo  /eot/");
         assert_eq!(
             reading.options.get(SIDEBAR_REPO_FILTER),
             Some(&"My Repo ".into())
         );
         assert_eq!(reading.options.get(SIDEBAR_FILTER), Some(&"busy".into()));
         assert_eq!(reading.options.get(SIDEBAR_CURSOR), Some(&"3".into()));
+        assert_eq!(
+            reading.options.get(SIDEBAR_BOTTOM_HEIGHT),
+            Some(&"18".into())
+        );
+        assert_eq!(reading.options.get(SIDEBAR_TAB_WIDTH), Some(&"40".into()));
     }
 
     #[test]
     fn parse_sidebar_pane_reading_omits_unset_repo_filter_before_terminator() {
         // Repo filter unset: the leftover separator spaces between the
         // tab field and the terminator must not become repo values.
-        let reading = parse_sidebar_pane_reading("1 1 40 100 30 1 waiting 7      /eot/");
+        let reading = parse_sidebar_pane_reading("1 1 40 100 30 1 12 0 waiting 7        /eot/");
         assert!(!reading.options.contains_key(SIDEBAR_REPO_FILTER));
         assert!(!reading.options.contains_key(SIDEBAR_BOTTOM_TAB));
+        assert!(!reading.options.contains_key(SIDEBAR_BOTTOM_HEIGHT));
+        assert!(!reading.options.contains_key(SIDEBAR_TAB_WIDTH));
         assert_eq!(reading.options.get(SIDEBAR_CURSOR), Some(&"7".into()));
         assert_eq!(reading.options.get(SIDEBAR_FILTER), Some(&"waiting".into()));
     }
 
     #[test]
     fn parse_sidebar_pane_reading_keeps_unset_filter_position_before_repo() {
-        // Filter unset, cursor unset, tab unset, repo set: all six empty
-        // fields must keep their slots so the repo lands on its own key,
-        // not on an earlier one's.
-        let reading = parse_sidebar_pane_reading("1 1 40 100 30 1       repo-x /eot/");
+        // Every shared option unset except the repo filter: all nine
+        // empty fields must keep their slots so the repo lands on its
+        // own key, not on an earlier one's.
+        let reading = parse_sidebar_pane_reading("1 1 40 100 30 1 12 0          repo-x /eot/");
         assert!(!reading.options.contains_key(SIDEBAR_FILTER));
         assert!(!reading.options.contains_key(SIDEBAR_CURSOR));
         assert!(!reading.options.contains_key(SIDEBAR_BOTTOM_TAB));
+        assert!(!reading.options.contains_key(SIDEBAR_BOTTOM_HEIGHT));
+        assert!(!reading.options.contains_key(SIDEBAR_TAB_WIDTH));
         assert_eq!(
             reading.options.get(SIDEBAR_REPO_FILTER),
             Some(&"repo-x".into())

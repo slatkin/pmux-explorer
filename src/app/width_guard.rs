@@ -144,6 +144,12 @@ pub(crate) fn step(
 /// switches to them. A floating panel and an unknown window size are
 /// no-ops ([`step`] gates them).
 pub(crate) fn enforce(state: &mut AppState) {
+    // Column-only feature: the shared value is a docked column width.
+    // A strip pane spans its window's width, so publishing it would
+    // poison the shared width and `resize-pane -x` would be nonsense.
+    if state.layout_kind != crate::state::LayoutKind::Column {
+        return;
+    }
     let pane = state.sidebar_pane;
     match step(&mut state.width_guard, pane, &mut state.global) {
         WidthAction::Idle => {}
@@ -173,6 +179,8 @@ mod tests {
             window_width,
             window_height: 30,
             floating: false,
+            height: 30,
+            at_top: false,
         }
     }
 
@@ -353,7 +361,7 @@ mod tests {
         // seed written while the enabling pane was squeezed) is adopted at
         // the floor, not at `S`.
         let mut tracker = primed(45);
-        let mut global = locked_global(Some(8), None, false);
+        let mut global = locked_global(Some(8), Some(20), false);
 
         let action = step(&mut tracker, pane(45, 200), &mut global);
 
@@ -391,7 +399,7 @@ mod tests {
     fn a_narrower_shared_width_shrinks_the_pane() {
         // A peer published a smaller width; this pane adopts it.
         let mut tracker = primed(80);
-        let mut global = locked_global(Some(30), None, false);
+        let mut global = locked_global(Some(30), Some(20), false);
 
         let action = step(&mut tracker, pane(80, 100), &mut global);
 

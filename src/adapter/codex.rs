@@ -2,7 +2,10 @@ use crate::event::{AgentEvent, AgentEventKind, EventAdapter};
 use crate::tmux::CODEX_AGENT;
 use serde_json::Value;
 
-use super::{HookRegistration, json_str, json_value_or_null, optional_str};
+use super::{
+    HookRegistration, json_str, json_value_or_null, optional_str, session_context_reported,
+};
+use crate::event::Reported;
 
 pub struct CodexAdapter;
 
@@ -43,6 +46,14 @@ impl CodexAdapter {
 }
 
 impl EventAdapter for CodexAdapter {
+    fn reported(&self, event_name: &str, input: &Value) -> Reported {
+        // Codex's three hook events all carry session context.
+        match event_name {
+            "session-start" | "user-prompt-submit" | "stop" => session_context_reported(input),
+            _ => Reported::NONE,
+        }
+    }
+
     fn parse(&self, event_name: &str, input: &Value) -> Option<AgentEvent> {
         match event_name {
             "session-start" => Some(AgentEvent::SessionStart {
@@ -101,6 +112,17 @@ mod tests {
     #[test]
     fn hook_registrations_match_parse_arms() {
         super::super::assert_table_drift_free("codex", CodexAdapter::HOOK_REGISTRATIONS);
+    }
+
+    #[test]
+    fn reported_matches_the_parse_arms() {
+        // Codex's session-context arms hardcode `worktree: None`, so the
+        // worktree leg of the pin does not apply.
+        super::super::assert_reported_matches_parse(
+            "codex",
+            false,
+            Some(super::super::SESSION_CONTEXT_FIELDS),
+        );
     }
 
     #[test]
@@ -365,5 +387,60 @@ mod tests {
                 session_id: None,
             }
         );
+    }
+
+    // ─── the reported set per event ────────────────────────────
+
+    #[test]
+    fn the_session_context_events_report_the_session_fields() {
+        let adapter = CodexAdapter;
+        for event_name in ["session-start", "user-prompt-submit", "stop"] {
+            let reported = adapter.reported(event_name, &json!({}));
+            assert_eq!(
+                reported.fields(),
+                &["session_id", "cwd", "worktree"],
+                "{event_name} should report the session-context fields"
+            );
+        }
+    }
+
+    #[test]
+    fn the_events_without_session_context_report_nothing() {
+        let adapter = CodexAdapter;
+        for event_name in [
+            "session-end",
+            "notification",
+            "stop-failure",
+            "permission-denied",
+            "cwd-changed",
+            "subagent-start",
+            "subagent-stop",
+            "activity-log",
+            "task-created",
+            "task-completed",
+            "teammate-idle",
+            "worktree-create",
+            "worktree-remove",
+        ] {
+            let reported = adapter.reported(event_name, &json!({}));
+            assert!(reported.is_empty(), "{event_name} should report nothing");
+        }
+    }
+
+    #[test]
+    fn an_invalid_payload_reports_nothing() {
+        let adapter = CodexAdapter;
+        // A payload that is not valid JSON reaches the adapter as `Null`;
+        // it reports nothing, so it clears nothing.
+        let invalid = serde_json::from_str::<serde_json::Value>("{\"cwd\": ")
+            .unwrap_or(serde_json::Value::Null);
+        assert!(invalid.is_null());
+        for event_name in ["session-start", "user-prompt-submit", "stop"] {
+            assert_eq!(
+                adapter.reported(event_name, &invalid),
+                Reported::NONE,
+                "{event_name} reported something for an invalid payload"
+            );
+        }
     }
 }

@@ -1,15 +1,15 @@
 #[allow(dead_code, unused_imports)]
 mod test_helpers;
 
-use test_helpers::*;
-use tmux_agent_sidebar::activity::{ActivityEntry, TaskProgress, TaskStatus};
-use tmux_agent_sidebar::group::{PaneGitInfo, RepoGroup};
-use tmux_agent_sidebar::pmux_task::PmuxTaskKind;
-use tmux_agent_sidebar::state::{Focus, PopupState, RepoFilter, StatusFilter};
-use tmux_agent_sidebar::tmux::{
+use pmux_explorer::activity::{ActivityEntry, TaskProgress, TaskStatus};
+use pmux_explorer::group::{PaneGitInfo, RepoGroup};
+use pmux_explorer::pmux_task::PmuxTaskKind;
+use pmux_explorer::state::{AppState, Focus, LayoutKind, PopupState, RepoFilter, StatusFilter};
+use pmux_explorer::tmux::{
     AgentType, PaneInfo, PaneStatus, PermissionMode, SessionInfo, SubagentInfo, SubagentParent,
     WindowInfo, WorktreeMetadata,
 };
+use test_helpers::*;
 
 // ─── UI Snapshot Tests ─────────────────────────────────────────────
 
@@ -31,13 +31,13 @@ fn snapshot_single_agent_idle_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     ≡1 ●0 ◐0 ○1 ✕0          ☐⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0   ⇄ ☐⤢
     ⓘ                        — ▾
-    ┃ ○ claude
+    project
+    ┃ 󰒲 
         Waiting for prompt…
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+              │  │ 󰊢
+            No tools yet
     ");
 }
 
@@ -65,13 +65,13 @@ fn snapshot_secondary_header_without_notices() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     ≡1 ●0 ◐0 ○1 ✕0          ☐⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0   ⇄ ☐⤢
                              — ▾
-    ┃ ○ claude
+    project
+    ┃ 󰒲 
         Waiting for prompt…
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+              │  │ 󰊢
+            No tools yet
     ");
 }
 
@@ -95,13 +95,13 @@ fn snapshot_secondary_header_long_repo_filter_truncated() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     ≡1 ●0 ◐0 ○1 ✕0          ☐⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0   ⇄ ☐⤢
     ⓘ  very-long-repository-n… ▾
-    ┃ ○ claude
+    very-long-repository-name-th
+    ┃ 󰒲 
         Waiting for prompt…
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+              │  │ 󰊢
+            No tools yet
     ");
 }
 
@@ -119,19 +119,19 @@ fn snapshot_version_banner_does_not_duplicate_in_scroll_area() {
         }],
     }]);
     state.repo_groups = vec![make_repo_group("project", vec![pane])];
-    state.version_notice = Some(tmux_agent_sidebar::version::UpdateNotice {
+    state.version_notice = Some(pmux_explorer::version::UpdateNotice {
         local_version: "0.2.6".into(),
         latest_version: "0.2.7".into(),
     });
-    state.bottom_panel_height = 0;
+    state.global.bottom_percent = 0;
     state.rebuild_row_targets();
 
     let output = render_to_string(&mut state, 28, 10);
     insta::assert_snapshot!(output, @"
-     ≡1 ●0 ◐0 ○1 ✕0          ☐⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-    ┃ ○ claude
+    ┃ 󰒲 
         Waiting for prompt…
     ");
 }
@@ -156,13 +156,12 @@ fn snapshot_single_agent_running_with_elapsed() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     dotfiles
-    ┃ ● claude              2m5s
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+    ┃                     2m5s
+              │  │ 󰊢
+            No tools yet
     ");
 }
 
@@ -187,13 +186,12 @@ fn snapshot_long_pane_name_truncated_keeps_elapsed_visible() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     dotfiles
-    ┃ ● claude this-is-a-r… 2m5s
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+    ┃   this-is-a-ridicu… 2m5s
+              │  │ 󰊢
+            No tools yet
     ");
 }
 
@@ -216,13 +214,12 @@ fn running_spinner_different_frame() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-    ┃ ● claude
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+    ┃  
+              │  │ 󰊢
+            No tools yet
     ");
 }
 
@@ -246,13 +243,13 @@ fn snapshot_agent_with_prompt_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     ≡1 ●0 ◐0 ○1 ✕0          ☐⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0   ⇄ ☐⤢
     ⓘ                        — ▾
-    ┃ ○ claude
+    project
+    ┃ 󰒲 
         fix the bug
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+              │  │ 󰊢
+            No tools yet
     ");
 }
 
@@ -276,15 +273,15 @@ fn snapshot_agent_with_japanese_prompt_ui() {
 
     let output = render_to_string(&mut state, 28, 27);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
-    ┃ ● claude
+    project
+    ┃  
         こ れ っ て 今 1時 間 経 っ て い
         る け ど 、 起 動 し て 確 認 し て
         も 問 題 な い ？
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+              │  │ 󰊢
+            No tools yet
     ");
 }
 
@@ -302,7 +299,7 @@ fn snapshot_two_agents_same_window_ui() {
         prompt_is_response: false,
         started_at: None,
         wait_reason: String::new(),
-        permission_mode: tmux_agent_sidebar::tmux::PermissionMode::Default,
+        permission_mode: pmux_explorer::tmux::PermissionMode::Default,
         subagents: vec![],
         pane_pid: None,
         worktree: WorktreeMetadata::default(),
@@ -324,7 +321,7 @@ fn snapshot_two_agents_same_window_ui() {
         prompt_is_response: false,
         started_at: None,
         wait_reason: String::new(),
-        permission_mode: tmux_agent_sidebar::tmux::PermissionMode::Default,
+        permission_mode: pmux_explorer::tmux::PermissionMode::Default,
         subagents: vec![],
         pane_pid: None,
         worktree: WorktreeMetadata::default(),
@@ -350,13 +347,15 @@ fn snapshot_two_agents_same_window_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     ≡2 ●1 ◐0 ○1 ✕0          ☐⤢
+     󱓯 2  1 󰥔 0 󰒲 1  0   ⇄ ☐⤢
     ⓘ                        — ▾
-    ┃ ● claude
+    project
+    ┃  
         fix the bug
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+      󰒲 codex
+        Waiting for prompt…
+              │  │ 󰊢
+            No tools yet
     ");
 }
 
@@ -396,13 +395,15 @@ fn snapshot_two_windows_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     ≡2 ●1 ◐0 ○1 ✕0          ☐⤢
+     󱓯 2  1 󰥔 0 󰒲 1  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project-a
-    ┃ ● claude
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+    ┃  
+    project-b
+      󰒲 codex
+        Waiting for prompt…
+              │  │ 󰊢
+            No tools yet
     ");
 }
 
@@ -445,13 +446,15 @@ fn snapshot_multi_session_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     ≡2 ●1 ◐0 ○1 ✕0          ☐⤢
+     󱓯 2  1 󰥔 0 󰒲 1  0   ⇄ ☐⤢
     ⓘ                        — ▾
     dotfiles
-    ┃ ● claude
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+    ┃  
+    api
+      󰒲 codex
+        Waiting for prompt…
+              │  │ 󰊢
+            No tools yet
     ");
 }
 
@@ -475,13 +478,13 @@ fn snapshot_wait_reason_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     ≡1 ●0 ◐1 ○0 ✕0          ☐⤢
+     󱓯 1  0 󰥔 1 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
-    ┃ ◐ claude
+    project
+    ┃ 󰥔 
         permission required
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+              │  │ 󰊢
+            No tools yet
     ");
 }
 
@@ -505,13 +508,13 @@ fn snapshot_auto_rename_window_title_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     ≡1 ●0 ◐0 ○1 ✕0          ☐⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0   ⇄ ☐⤢
     ⓘ                        — ▾
-    ┃ ○ claude
+    project
+    ┃ 󰒲 
         Waiting for prompt…
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+              │  │ 󰊢
+            No tools yet
     ");
 }
 
@@ -551,18 +554,17 @@ fn snapshot_activity_log_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-    ┃ ● claude
-    ╭ Activity│Tasks│Git ──────╮
-    │10:32                 Edit│
-    │  src/main.rs             │
-    │10:31                 Bash│
-    │  cargo build             │
-    │10:30                 Read│
-    │  Cargo.toml              │
-    ╰──────────────────────────╯
+    ┃  
+              │  │ 󰊢
+    10:32                   Edit
+      src/main.rs
+    10:31                   Bash
+      cargo build
+    10:30                   Read
+      Cargo.toml
     ");
 }
 
@@ -585,21 +587,19 @@ fn snapshot_activity_log_long_label_ui() {
     state.activity.entries = vec![ActivityEntry {
         timestamp: "10:32".into(),
         tool: "Read".into(),
-        label: "config/tmux-agent-sidebar-rs/src/very-long-filename.rs".into(),
+        label: "config/pmux-explorer-rs/src/very-long-filename.rs".into(),
     }];
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-    ┃ ● claude
-    ╭ Activity│Tasks│Git ──────╮
-    │10:32                 Read│
-    │  config/tmux-agent-sideba│
-    │  r-rs/src/very-long-filen│
-    │  ame.rs                  │
-    ╰──────────────────────────╯
+    ┃  
+              │  │ 󰊢
+    10:32                   Read
+      config/pmux-explorer-rs/sr
+      c/very-long-filename.rs
     ");
 }
 
@@ -625,15 +625,15 @@ fn snapshot_prompt_wrapping_ui() {
 
     let output = render_to_string(&mut state, 28, 27);
     insta::assert_snapshot!(output, @"
-     ≡1 ●0 ◐0 ○1 ✕0          ☐⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0   ⇄ ☐⤢
     ⓘ                        — ▾
-    ┃ ○ claude
+    project
+    ┃ 󰒲 
         Please fix the
         authentication bug in
         the login flow that…
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+              │  │ 󰊢
+            No tools yet
     ");
 }
 
@@ -656,14 +656,13 @@ fn snapshot_selected_unfocused_ui() {
 
     let output = render_to_string(&mut state, 28, 26);
     insta::assert_snapshot!(output, @"
-     ≡1 ●0 ◐0 ○1 ✕0          ☐⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-    ┃ ○ claude
+    ┃ 󰒲 
         Waiting for prompt…
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+              │  │ 󰊢
+            No tools yet
     ");
 }
 
@@ -687,13 +686,13 @@ fn snapshot_error_state_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     ≡1 ●0 ◐0 ○0 ✕1          ☐⤢
+     󱓯 1  0 󰥔 0 󰒲 0  1   ⇄ ☐⤢
     ⓘ                        — ▾
-    ┃ ✕ claude
+    project
+    ┃  
         something broke
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+              │  │ 󰊢
+            No tools yet
     ");
 }
 
@@ -717,20 +716,20 @@ fn snapshot_narrow_width_ui() {
 
     let output = render_to_string(&mut state, 18, 25);
     insta::assert_snapshot!(output, @"
-     ≡1 ●0 ◐0 ○1 ✕0☐⤢
+     󱓯 1  0 󰥔 0 ⇄ ☐⤢
     ⓘ              — ▾
-    ┃ ○ claude
+    project
+    ┃ 󰒲 
         hello world
-    ╭ Activity│Tasks ╮
-    │ No activity yet│
-    ╰────────────────╯
+         │  │ 󰊢
+       No tools yet
     ");
 }
 
 /// Create a state with a dummy session so draw() doesn't show "No agent panes found"
 fn make_state_with_groups(
-    groups: Vec<tmux_agent_sidebar::group::RepoGroup>,
-) -> tmux_agent_sidebar::state::AppState {
+    groups: Vec<pmux_explorer::group::RepoGroup>,
+) -> pmux_explorer::state::AppState {
     let pane = make_pane(AgentType::Claude, PaneStatus::Idle);
     let mut state = make_state(vec![SessionInfo {
         session_name: "main".into(),
@@ -759,7 +758,7 @@ fn snapshot_worktree_branch_ui() {
         is_worktree: true,
         worktree_name: None,
     };
-    let mut state = make_state_with_groups(vec![tmux_agent_sidebar::group::RepoGroup {
+    let mut state = make_state_with_groups(vec![pmux_explorer::group::RepoGroup {
         name: "project".into(),
         has_focus: true,
         panes: vec![(pane, git_info)],
@@ -767,14 +766,14 @@ fn snapshot_worktree_branch_ui() {
 
     let output = render_to_string(&mut state, 28, 26);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
-    ┃ ● claude
-    ┃   + feature/sidebar
+    project                    +
+    ┃  
+    ┃    + feature/sidebar
         fix bug
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+              │  │ 󰊢
+            No tools yet
     ");
 }
 
@@ -787,7 +786,7 @@ fn snapshot_worktree_long_branch_truncated_ui() {
         is_worktree: true,
         worktree_name: None,
     };
-    let mut state = make_state_with_groups(vec![tmux_agent_sidebar::group::RepoGroup {
+    let mut state = make_state_with_groups(vec![pmux_explorer::group::RepoGroup {
         name: "project".into(),
         has_focus: true,
         panes: vec![(pane, git_info)],
@@ -795,13 +794,14 @@ fn snapshot_worktree_long_branch_truncated_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     ≡1 ●0 ◐0 ○1 ✕0          ☐⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0   ⇄ ☐⤢
     ⓘ                        — ▾
-    ┃   + feature/very-long-bra…
+    project                    +
+    ┃ 󰒲 
+    ┃    + feature/very-long-b…
         Waiting for prompt…
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+              │  │ 󰊢
+            No tools yet
     ");
 }
 
@@ -814,7 +814,7 @@ fn snapshot_long_branch_with_ports_ui() {
         is_worktree: false,
         worktree_name: None,
     };
-    let mut state = make_state_with_groups(vec![tmux_agent_sidebar::group::RepoGroup {
+    let mut state = make_state_with_groups(vec![pmux_explorer::group::RepoGroup {
         name: "project".into(),
         has_focus: true,
         panes: vec![(pane, git_info)],
@@ -823,12 +823,13 @@ fn snapshot_long_branch_with_ports_ui() {
 
     let output = render_to_string(&mut state, 40, 24);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0                      ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0               ⇄ ☐⤢
     ⓘ                                    — ▾
-    ┃   feature/sidebar/really…  :3000, 5173
-    ╭ Activity│Tasks│Git ──────────────────╮
-    │            No activity yet           │
-    ╰──────────────────────────────────────╯
+    project                                +
+    ┃  
+    ┃    feature/sidebar/real…  :3000, 5173
+                    │  │ 󰊢
+                  No tools yet
     ");
 }
 
@@ -852,13 +853,14 @@ fn snapshot_task_progress_partial_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
+    project
+    ┃  
         ✔◼◻ 1/3
         working
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+              │  │ 󰊢
+            No tools yet
     ");
 }
 
@@ -878,13 +880,13 @@ fn snapshot_task_progress_all_completed_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
-    ┃ ● claude
+    project
+    ┃  
         ✔✔ 2/2
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+              │  │ 󰊢
+            No tools yet
     ");
 }
 
@@ -905,13 +907,13 @@ fn snapshot_task_progress_all_pending_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
-    ┃ ● claude
+    project
+    ┃  
         ◻◻◻ 0/3
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+              │  │ 󰊢
+            No tools yet
     ");
 }
 
@@ -932,7 +934,7 @@ fn snapshot_all_elements_combined_ui() {
         worktree_name: None,
     };
 
-    let mut state = make_state_with_groups(vec![tmux_agent_sidebar::group::RepoGroup {
+    let mut state = make_state_with_groups(vec![pmux_explorer::group::RepoGroup {
         name: "project".into(),
         has_focus: true,
         panes: vec![(pane, git_info)],
@@ -949,19 +951,18 @@ fn snapshot_all_elements_combined_ui() {
 
     let output = render_to_string(&mut state, 30, 32);
     insta::assert_snapshot!(output, @"
-     ≡1 ●0 ◐1 ○0 ✕0            ☐⤢
+     󱓯 1  0 󰥔 1 󰒲 0  0     ⇄ ☐⤢
     ⓘ                          — ▾
     project                      +
-    ┃ ◐ claude auto
-    ┃   main
+    ┃ 󰥔  auto
+    ┃    main
         ✔◼ 1/2
         ├ Explore #1
         └ Plan #2
         permission required
         fixing the bug
-    ╭ Activity│Tasks│Git ────────╮
-    │       No activity yet      │
-    ╰────────────────────────────╯
+               │  │ 󰊢
+             No tools yet
     ");
 }
 
@@ -976,15 +977,14 @@ fn snapshot_response_japanese_ui() {
 
     let output = render_to_string(&mut state, 30, 27);
     insta::assert_snapshot!(output, @"
-     ≡1 ●0 ◐0 ○1 ✕0            ☐⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0     ⇄ ☐⤢
     ⓘ                          — ▾
     project
-    ┃ ○ claude
-      ▷ 修 正 が 完 了 し ま し た 。 テ ス ト
+    ┃ 󰒲 
+      󰭹 修 正 が 完 了 し ま し た 。 テ ス ト
         も 全 て 通 っ て い ま す 。
-    ╭ Activity│Tasks│Git ────────╮
-    │       No activity yet      │
-    ╰────────────────────────────╯
+               │  │ 󰊢
+             No tools yet
     ");
 }
 
@@ -1011,19 +1011,18 @@ fn snapshot_three_groups_middle_focused_ui() {
 
     let output = render_to_string(&mut state, 28, 33);
     insta::assert_snapshot!(output, @"
-     ≡3 ●1 ◐0 ○2 ✕0          ☐⤢
+     󱓯 3  1 󰥔 0 󰒲 2  0   ⇄ ☐⤢
     ⓘ                        — ▾
     repo-a
-      ● claude
+    ┃  
     repo-b
-    ┃ ○ codex
+      󰒲 codex
         Waiting for prompt…
     repo-c
-      ○ claude
+      󰒲 
         Waiting for prompt…
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+              │  │ 󰊢
+            No tools yet
     ");
 }
 
@@ -1038,13 +1037,12 @@ fn snapshot_bypass_all_badge_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-    ┃ ● claude !
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+    ┃   !
+              │  │ 󰊢
+            No tools yet
     ");
 }
 
@@ -1057,13 +1055,12 @@ fn snapshot_full_auto_badge_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-    ┃ ● claude auto
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+    ┃   auto
+              │  │ 󰊢
+            No tools yet
     ");
 }
 
@@ -1076,13 +1073,12 @@ fn snapshot_plan_badge_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-    ┃ ● claude plan
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+    ┃   plan
+              │  │ 󰊢
+            No tools yet
     ");
 }
 
@@ -1095,13 +1091,12 @@ fn snapshot_accept_edits_badge_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-    ┃ ● claude edit
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+    ┃   edit
+              │  │ 󰊢
+            No tools yet
     ");
 }
 
@@ -1116,7 +1111,7 @@ fn snapshot_response_with_branch_ui() {
         is_worktree: false,
         worktree_name: None,
     };
-    let mut state = make_state_with_groups(vec![tmux_agent_sidebar::group::RepoGroup {
+    let mut state = make_state_with_groups(vec![pmux_explorer::group::RepoGroup {
         name: "project".into(),
         has_focus: true,
         panes: vec![(pane, git_info)],
@@ -1124,15 +1119,14 @@ fn snapshot_response_with_branch_ui() {
 
     let output = render_to_string(&mut state, 34, 27);
     insta::assert_snapshot!(output, @"
-     ≡1 ●0 ◐0 ○1 ✕0                ☐⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0         ⇄ ☐⤢
     ⓘ                              — ▾
     project                          +
-    ┃ ○ claude
-    ┃   feature/ui-v2
-      ▷ Done. All tests are green.
-    ╭ Activity│Tasks│Git ────────────╮
-    │         No activity yet        │
-    ╰────────────────────────────────╯
+    ┃ 󰒲 
+    ┃    feature/ui-v2
+      󰭹 Done. All tests are green.
+                 │  │ 󰊢
+               No tools yet
     ");
 }
 
@@ -1147,13 +1141,13 @@ fn snapshot_wait_reason_elicitation_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     ≡1 ●0 ◐1 ○0 ✕0          ☐⤢
+     󱓯 1  0 󰥔 1 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
-    ┃ ◐ claude
+    project
+    ┃ 󰥔 
         waiting for selection
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+              │  │ 󰊢
+            No tools yet
     ");
 }
 
@@ -1166,13 +1160,13 @@ fn snapshot_wait_reason_unknown_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     ≡1 ●0 ◐1 ○0 ✕0          ☐⤢
+     󱓯 1  0 󰥔 1 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
-    ┃ ◐ claude
+    project
+    ┃ 󰥔 
         some_future_reason
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+              │  │ 󰊢
+            No tools yet
     ");
 }
 
@@ -1187,13 +1181,13 @@ fn snapshot_wait_reason_permission_denied_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     ≡1 ●0 ◐1 ○0 ✕0          ☐⤢
+     󱓯 1  0 󰥔 1 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
-    ┃ ◐ claude
+    project
+    ┃ 󰥔 
         permission denied
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+              │  │ 󰊢
+            No tools yet
     ");
 }
 
@@ -1208,7 +1202,7 @@ fn snapshot_worktree_with_name_ui() {
         is_worktree: true,
         worktree_name: Some("auth-wt".into()),
     };
-    let mut state = make_state_with_groups(vec![tmux_agent_sidebar::group::RepoGroup {
+    let mut state = make_state_with_groups(vec![pmux_explorer::group::RepoGroup {
         name: "project".into(),
         has_focus: true,
         panes: vec![(pane, git_info)],
@@ -1216,13 +1210,13 @@ fn snapshot_worktree_with_name_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
-    ┃ ● claude
-    ┃   + auth-wt: feat/auth
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+    project                    +
+    ┃  
+    ┃    + auth-wt: feat/auth
+              │  │ 󰊢
+            No tools yet
     ");
 }
 
@@ -1235,7 +1229,7 @@ fn snapshot_worktree_name_same_as_branch_ui() {
         is_worktree: true,
         worktree_name: Some("feat/auth".into()),
     };
-    let mut state = make_state_with_groups(vec![tmux_agent_sidebar::group::RepoGroup {
+    let mut state = make_state_with_groups(vec![pmux_explorer::group::RepoGroup {
         name: "project".into(),
         has_focus: true,
         panes: vec![(pane, git_info)],
@@ -1243,13 +1237,13 @@ fn snapshot_worktree_name_same_as_branch_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
-    ┃ ● claude
-    ┃   + feat/auth
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+    project                    +
+    ┃  
+    ┃    + feat/auth
+              │  │ 󰊢
+            No tools yet
     ");
 }
 
@@ -1300,26 +1294,17 @@ fn snapshot_activity_all_tool_types_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-    ┃ ● claude
-    ╭ Activity│Tasks│Git ──────╮
-    │10:07                Agent│
-    │  Explore codebase        │
-    │10:06                Skill│
-    │  commit                  │
-    │10:05           ToolSearch│
-    │  select:Read             │
-    │10:04           TaskCreate│
-    │  #1 Fix bug              │
-    │10:03             WebFetch│
-    │  docs.rs/ratatui         │
-    │10:02                 Grep│
-    │  run_git                 │
-    │10:01                Write│
-    │  new_file.rs             │
-    ╰──────────────────────────╯
+    ┃  
+              │  │ 󰊢
+    10:07                  Agent
+      Explore codebase
+    10:06                  Skill
+      commit
+    10:05             ToolSearch
+      select:Read
     ");
 }
 
@@ -1339,14 +1324,13 @@ fn snapshot_focus_activity_log_ui() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-    ┃ ● claude
-    ╭ Activity│Tasks│Git ──────╮
-    │10:00                 Read│
-    │  file.rs                 │
-    ╰──────────────────────────╯
+    ┃  
+              │  │ 󰊢
+    10:00                   Read
+      file.rs
     ");
 }
 
@@ -1365,13 +1349,13 @@ fn right_border_narrow_width_with_badge() {
     // fully-drawn right border.
     let output = render_to_string(&mut state, 22, 25);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0    ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0 ⇄ ☐⤢
     ⓘ                  — ▾
-    ┃ ● claude !    2h0m0s
+    project
+    ┃   !         2h0m0s
         fix the issue
-    ╭ Activity│Tasks│Git ╮
-    │   No activity yet  │
-    ╰────────────────────╯
+           │  │ 󰊢
+         No tools yet
     ");
     // Structural invariant (width-agnostic): every line that starts with a
     // border glyph must also end with one. Kept alongside the snapshot so
@@ -1414,112 +1398,100 @@ fn right_border_all_permission_modes_and_agents() {
     }
     insta::assert_snapshot!(composite, @"
     === Claude / Default ===
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-    ┃ ● claude          1h30m32s
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+    ┃                 1h30m32s
+              │  │ 󰊢
+            No tools yet
 
     === Claude / Auto ===
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-    ┃ ● claude auto     1h30m32s
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+    ┃   auto          1h30m32s
+              │  │ 󰊢
+            No tools yet
 
     === Claude / DontAsk ===
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-    ┃ ● claude dontAsk  1h30m32s
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+    ┃   dontAsk       1h30m32s
+              │  │ 󰊢
+            No tools yet
 
     === Claude / Plan ===
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-    ┃ ● claude plan     1h30m32s
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+    ┃   plan          1h30m32s
+              │  │ 󰊢
+            No tools yet
 
     === Claude / AcceptEdits ===
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-    ┃ ● claude edit     1h30m32s
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+    ┃   edit          1h30m32s
+              │  │ 󰊢
+            No tools yet
 
     === Claude / BypassPermissions ===
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-    ┃ ● claude !        1h30m32s
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+    ┃   !             1h30m32s
+              │  │ 󰊢
+            No tools yet
 
     === Codex / Default ===
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-    ┃ ● codex           1h30m32s
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+    ┃  codex           1h30m32s
+              │  │ 󰊢
+            No tools yet
 
     === Codex / Auto ===
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-    ┃ ● codex auto      1h30m32s
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+    ┃  codex auto      1h30m32s
+              │  │ 󰊢
+            No tools yet
 
     === Codex / DontAsk ===
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-    ┃ ● codex dontAsk   1h30m32s
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+    ┃  codex dontAsk   1h30m32s
+              │  │ 󰊢
+            No tools yet
 
     === Codex / Plan ===
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-    ┃ ● codex plan      1h30m32s
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+    ┃  codex plan      1h30m32s
+              │  │ 󰊢
+            No tools yet
 
     === Codex / AcceptEdits ===
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-    ┃ ● codex edit      1h30m32s
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+    ┃  codex edit      1h30m32s
+              │  │ 󰊢
+            No tools yet
 
     === Codex / BypassPermissions ===
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-    ┃ ● codex !         1h30m32s
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+    ┃  codex !         1h30m32s
+              │  │ 󰊢
+            No tools yet
     ");
 }
 
@@ -1539,13 +1511,14 @@ fn snapshot_filter_bar_shows_counts() {
     let mut state = make_state_with_groups(vec![make_repo_group("project", vec![pane1, pane2])]);
     let output = render_to_string(&mut state, 30, 25);
     insta::assert_snapshot!(output, @"
-     ≡2 ●1 ◐0 ○1 ✕0            ☐⤢
+     󱓯 2  1 󰥔 0 󰒲 1  0     ⇄ ☐⤢
     ⓘ                          — ▾
     project
-    ┃ ● claude
-    ╭ Activity│Tasks│Git ────────╮
-    │       No activity yet      │
-    ╰────────────────────────────╯
+    ┃  
+      󰒲 codex
+        Waiting for prompt…
+               │  │ 󰊢
+             No tools yet
     ");
 }
 
@@ -1564,13 +1537,12 @@ fn snapshot_filter_running_hides_idle() {
     state.global.status_filter = StatusFilter::Busy;
     let output = render_to_string(&mut state, 30, 25);
     insta::assert_snapshot!(output, @"
-     ≡2 ●1 ◐0 ○1 ✕0            ☐⤢
+     󱓯 2  1 󰥔 0 󰒲 1  0     ⇄ ☐⤢
     ⓘ                          — ▾
     project
-    ┃ ● claude
-    ╭ Activity│Tasks│Git ────────╮
-    │       No activity yet      │
-    ╰────────────────────────────╯
+    ┃  
+               │  │ 󰊢
+             No tools yet
     ");
 }
 
@@ -1589,13 +1561,13 @@ fn snapshot_filter_idle_hides_running() {
     state.global.status_filter = StatusFilter::Idle;
     let output = render_to_string(&mut state, 30, 25);
     insta::assert_snapshot!(output, @"
-     ≡2 ●1 ◐0 ○1 ✕0            ☐⤢
+     󱓯 2  1 󰥔 0 󰒲 1  0     ⇄ ☐⤢
     ⓘ                          — ▾
-      ○ codex
+    project
+      󰒲 codex
         Waiting for prompt…
-    ╭ Activity│Tasks│Git ────────╮
-    │       No activity yet      │
-    ╰────────────────────────────╯
+               │  │ 󰊢
+             No tools yet
     ");
 }
 
@@ -1617,13 +1589,12 @@ fn snapshot_filter_hides_empty_groups() {
     state.global.status_filter = StatusFilter::Busy;
     let output = render_to_string(&mut state, 30, 25);
     insta::assert_snapshot!(output, @"
-     ≡2 ●1 ◐0 ○1 ✕0            ☐⤢
+     󱓯 2  1 󰥔 0 󰒲 1  0     ⇄ ☐⤢
     ⓘ                          — ▾
     repo-a
-    ┃ ● claude
-    ╭ Activity│Tasks│Git ────────╮
-    │       No activity yet      │
-    ╰────────────────────────────╯
+    ┃  
+               │  │ 󰊢
+             No tools yet
     ");
 }
 
@@ -1642,15 +1613,14 @@ fn snapshot_filter_all_shows_everything() {
     state.global.status_filter = StatusFilter::All;
     let output = render_to_string(&mut state, 30, 30);
     insta::assert_snapshot!(output, @"
-     ≡2 ●1 ◐0 ○1 ✕0            ☐⤢
+     󱓯 2  1 󰥔 0 󰒲 1  0     ⇄ ☐⤢
     ⓘ                          — ▾
     project
-    ┃ ● claude
-      ○ codex
+    ┃  
+      󰒲 codex
         Waiting for prompt…
-    ╭ Activity│Tasks│Git ────────╮
-    │       No activity yet      │
-    ╰────────────────────────────╯
+               │  │ 󰊢
+             No tools yet
     ");
 }
 
@@ -1668,7 +1638,7 @@ fn snapshot_filter_bar_icons_use_selected_and_inactive_colors() {
 
     let styled = render_to_styled_string(&mut state, 30, 25);
     let line = styled.lines().next().unwrap();
-    insta::assert_snapshot!(line, @" ≡[fg:111]2[fg:153] ●[fg:114]1[fg:255] ◐[fg:245]0[fg:245] ○[fg:245]1[fg:255] ✕[fg:245]0[fg:245]            ☐[fg:245]⤢[fg:114]");
+    insta::assert_snapshot!(line, @" [bg:#414868]󱓯[fg:#7aa2f7,bg:#414868] [bg:#414868]2[fg:#7aa2f7,bg:#414868,bold] [bg:#414868][fg:#9ece6a,bg:#414868] [bg:#414868]1[fg:#c0caf5,bg:#414868] [bg:#414868]󰥔[fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868]󰒲[fg:#7dcfff,bg:#414868] [bg:#414868]1[fg:#c0caf5,bg:#414868] [bg:#414868][fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]⇄[fg:#9ece6a,bg:#414868] [bg:#414868]☐[fg:#9aa5ce,bg:#414868]⤢[fg:#9ece6a,bg:#414868] [bg:#414868]");
 }
 
 #[test]
@@ -1687,10 +1657,16 @@ fn snapshot_filter_bar_stays_fixed_on_scroll() {
 
     let output = render_to_string(&mut state, 30, 15);
     insta::assert_snapshot!(output, @"
-     ≡6 ●6 ◐0 ○0 ✕0            ☐⤢
-    ╭ Activity│Tasks│Git ────────╮
-    │       No activity yet      │
-    ╰────────────────────────────╯
+     󱓯 6  6 󰥔 0 󰒲 0  0     ⇄ ☐⤢
+    ⓘ                          — ▾
+       
+    ┃  
+       
+       
+       
+       
+               │  │ 󰊢
+             No tools yet
     ");
 }
 
@@ -1711,7 +1687,7 @@ fn snapshot_filter_selected_icon_has_color_without_underline() {
     // modifier on the selected filter would surface in the snapshot diff.
     let styled = render_to_styled_string(&mut state, 30, 25);
     let line = styled.lines().next().unwrap();
-    insta::assert_snapshot!(line, @" ≡[fg:245]2[fg:255] ●[fg:114]1[fg:153] ◐[fg:245]0[fg:245] ○[fg:245]1[fg:255] ✕[fg:245]0[fg:245]            ☐[fg:245]⤢[fg:114]");
+    insta::assert_snapshot!(line, @" [bg:#414868]󱓯[fg:#7aa2f7,bg:#414868] [bg:#414868]2[fg:#c0caf5,bg:#414868] [bg:#414868][fg:#9ece6a,bg:#414868] [bg:#414868]1[fg:#7aa2f7,bg:#414868,bold] [bg:#414868]󰥔[fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868]󰒲[fg:#7dcfff,bg:#414868] [bg:#414868]1[fg:#c0caf5,bg:#414868] [bg:#414868][fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]⇄[fg:#9ece6a,bg:#414868] [bg:#414868]☐[fg:#9aa5ce,bg:#414868]⤢[fg:#9ece6a,bg:#414868] [bg:#414868]");
 }
 
 #[test]
@@ -1730,13 +1706,13 @@ fn snapshot_filter_error_shows_agents() {
     state.global.status_filter = StatusFilter::Error;
     let output = render_to_string(&mut state, 30, 25);
     insta::assert_snapshot!(output, @"
-     ≡2 ●1 ◐0 ○0 ✕1            ☐⤢
+     󱓯 2  1 󰥔 0 󰒲 0  1     ⇄ ☐⤢
     ⓘ                          — ▾
-    ┃ ✕ claude
+    project
+    ┃  
         something broke
-    ╭ Activity│Tasks│Git ────────╮
-    │       No activity yet      │
-    ╰────────────────────────────╯
+               │  │ 󰊢
+             No tools yet
     ");
 }
 
@@ -1756,13 +1732,13 @@ fn snapshot_filter_waiting_shows_only_waiting() {
     state.global.status_filter = StatusFilter::Waiting;
     let output = render_to_string(&mut state, 30, 25);
     insta::assert_snapshot!(output, @"
-     ≡2 ●0 ◐1 ○1 ✕0            ☐⤢
+     󱓯 2  0 󰥔 1 󰒲 1  0     ⇄ ☐⤢
     ⓘ                          — ▾
-    ┃ ◐ claude
+    project
+    ┃ 󰥔 
         permission required
-    ╭ Activity│Tasks│Git ────────╮
-    │       No activity yet      │
-    ╰────────────────────────────╯
+               │  │ 󰊢
+             No tools yet
     ");
 }
 
@@ -1789,11 +1765,11 @@ fn repo_group_with_root(name: &str, panes: Vec<PaneInfo>) -> RepoGroup {
     }
 }
 
-/// Shrink the bottom panel so the default 20-row bottom block leaves
-/// enough room for popup rendering in narrow test backends.
-fn make_state_for_popup_tests(groups: Vec<RepoGroup>) -> tmux_agent_sidebar::state::AppState {
+/// Shrink the bottom panel to its 3-row minimum (1% clamps up to 3
+/// rows) so popup tests keep room in narrow test backends.
+fn make_state_for_popup_tests(groups: Vec<RepoGroup>) -> pmux_explorer::state::AppState {
     let mut state = make_state_with_groups(groups);
-    state.bottom_panel_height = 3;
+    state.global.bottom_percent = 1;
     state
 }
 
@@ -1803,15 +1779,14 @@ fn snapshot_repo_header_shows_spawn_plus_button() {
     let mut state = make_state_for_popup_tests(vec![repo_group_with_root("proj", vec![pane])]);
     let output = render_to_string(&mut state, 30, 15);
     insta::assert_snapshot!(output, @"
-     ≡1 ●0 ◐0 ○1 ✕0            ☐⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0     ⇄ ☐⤢
     ⓘ                          — ▾
     proj                         +
-    ┃ ○ claude
-    ┃   main
+    ┃ 󰒲 
+    ┃    main
         Waiting for prompt…
-    ╭ Activity│Tasks│Git ────────╮
-    │       No activity yet      │
-    ╰────────────────────────────╯
+               │  │ 󰊢
+             No tools yet
     ");
 }
 
@@ -1822,7 +1797,7 @@ fn snapshot_spawn_modal_default_state() {
     state.open_spawn_input_for_repo("proj".into(), "/home/u/proj".into(), None);
     let output = render_to_string(&mut state, 34, 18);
     insta::assert_snapshot!(output, @"
-     ≡1 ●0 ◐0 ○1 ✕0                ☐⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0         ⇄ ☐⤢
     ⓘ╭ Spawn worktree ──────────────╮▾
     p│                              │+
     ┃│ NAME                         │
@@ -1832,9 +1807,8 @@ fn snapshot_spawn_modal_default_state() {
      │ MODE                         │
      │ default                      │
      ╰──────────────────────────────╯
-    ╭ Activity│Tasks│Git ────────────╮
-    │         No activity yet        │
-    ╰────────────────────────────────╯
+                 │  │ 󰊢
+               No tools yet
     ");
 }
 
@@ -1851,9 +1825,10 @@ fn snapshot_spawn_modal_anchors_directly_below_repo_header() {
     state.open_spawn_input_from_selection();
     let output = render_to_string(&mut state, 34, 18);
     insta::assert_snapshot!(output, @"
-     ≡1 ●0 ◐0 ○1 ✕0                ☐⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0         ⇄ ☐⤢
     ⓘ                              — ▾
-    ╭ Spawn worktree ──────────────╮ +
+    proj                             +
+    ╭ Spawn worktree ──────────────╮
     │ NAME                         │
     │ █                            │
     │ AGENT                        │
@@ -1861,9 +1836,8 @@ fn snapshot_spawn_modal_anchors_directly_below_repo_header() {
     │ MODE                         │
     │ default                      │
     ╰──────────────────────────────╯
-    ╭ Activity│Tasks│Git ────────────╮
-    │         No activity yet        │
-    ╰────────────────────────────────╯
+                 │  │ 󰊢
+               No tools yet
     ");
 }
 
@@ -1881,7 +1855,7 @@ fn snapshot_spawn_modal_advance_fields_cycles_agent_and_mode() {
     state.spawn_input_cycle(2); // default → bypassPermissions
     let output = render_to_string(&mut state, 34, 18);
     insta::assert_snapshot!(output, @"
-     ≡1 ●0 ◐0 ○1 ✕0                ☐⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0         ⇄ ☐⤢
     ⓘ╭ Spawn worktree ──────────────╮▾
     p│                              │+
     ┃│ NAME                         │
@@ -1891,9 +1865,8 @@ fn snapshot_spawn_modal_advance_fields_cycles_agent_and_mode() {
      │ MODE                         │
      │ bypassPermissions            │
      ╰──────────────────────────────╯
-    ╭ Activity│Tasks│Git ────────────╮
-    │         No activity yet        │
-    ╰────────────────────────────────╯
+                 │  │ 󰊢
+               No tools yet
     ");
 }
 
@@ -1907,7 +1880,7 @@ fn snapshot_spawn_modal_tail_fits_long_task_name() {
     }
     let output = render_to_string(&mut state, 34, 18);
     insta::assert_snapshot!(output, @"
-     ≡1 ●0 ◐0 ○1 ✕0                ☐⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0         ⇄ ☐⤢
     ⓘ╭ Spawn worktree ──────────────╮▾
     p│                              │+
     ┃│ NAME                         │
@@ -1917,9 +1890,8 @@ fn snapshot_spawn_modal_tail_fits_long_task_name() {
      │ MODE                         │
      │ default                      │
      ╰──────────────────────────────╯
-    ╭ Activity│Tasks│Git ────────────╮
-    │         No activity yet        │
-    ╰────────────────────────────────╯
+                 │  │ 󰊢
+               No tools yet
     ");
 }
 
@@ -1933,7 +1905,7 @@ fn snapshot_spawn_modal_narrow_width_still_fits() {
     }
     let output = render_to_string(&mut state, 18, 18);
     insta::assert_snapshot!(output, @"
-     ≡1 ●0 ◐0 ○1 ✕0☐⤢
+     󱓯 1  0 󰥔 0 ⇄ ☐⤢
     ╭ Spawn worktree ╮
     │ NAME           │
     │ hi█            │
@@ -1942,9 +1914,8 @@ fn snapshot_spawn_modal_narrow_width_still_fits() {
     │ MODE           │
     │ default        │
     ╰────────────────╯
-    ╭ Activity│Tasks ╮
-    │ No activity yet│
-    ╰────────────────╯
+         │  │ 󰊢
+       No tools yet
     ");
 }
 
@@ -1952,7 +1923,7 @@ fn snapshot_spawn_modal_narrow_width_still_fits() {
 fn snapshot_spawn_modal_compact_layout_in_short_agent_area() {
     let pane = make_pane(AgentType::Claude, PaneStatus::Idle);
     let mut state = make_state_for_popup_tests(vec![repo_group_with_root("proj", vec![pane])]);
-    // Default bottom_panel_height is 3 in `make_state_for_popup_tests`.
+    // Default bottom panel is the 3-row minimum in `make_state_for_popup_tests`.
     // A 14-row terminal leaves 11 rows for the agents panel — below
     // SPAWN_MODAL_EXPANDED_MIN_HEIGHT (12), so the popup must fall
     // back to the label-less compact layout.
@@ -1962,16 +1933,15 @@ fn snapshot_spawn_modal_compact_layout_in_short_agent_area() {
     }
     let output = render_to_string(&mut state, 40, 14);
     insta::assert_snapshot!(output, @"
-     ≡1 ●0 ◐0 ○1 ✕0                      ☐⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0               ⇄ ☐⤢
     ⓘ                                    — ▾
     proj╭ Spawn worktree ──────────────╮   +
-    ┃ ○ │ hi█                          │
+    ┃ 󰒲 │ hi█                          │
     ┃   │ claude                       │
         │ default                      │
         ╰──────────────────────────────╯
-    ╭ Activity│Tasks│Git ──────────────────╮
-    │            No activity yet           │
-    ╰──────────────────────────────────────╯
+                    │  │ 󰊢
+                  No tools yet
     ");
 }
 
@@ -1983,16 +1953,16 @@ fn snapshot_spawn_modal_compact_layout_shows_inline_error() {
     state.confirm_spawn_input();
     let output = render_to_string(&mut state, 40, 14);
     insta::assert_snapshot!(output, @"
-     ≡1 ●0 ◐0 ○1 ✕0                      ☐⤢
-    ⓘ   ╭ Spawn worktree ──────────────╮ — ▾
-    proj│ █                            │   +
-    ┃ ○ │ claude                       │
-    ┃   │ default                      │
+     󱓯 1  0 󰥔 0 󰒲 1  0               ⇄ ☐⤢
+    ⓘ                                    — ▾
+    proj╭ Spawn worktree ──────────────╮   +
+    ┃ 󰒲 │ █                            │
+    ┃   │ claude                       │
+        │ default                      │
         │ name is empty                │
         ╰──────────────────────────────╯
-    ╭ Activity│Tasks│Git ──────────────────╮
-    │            No activity yet           │
-    ╰──────────────────────────────────────╯
+                    │  │ 󰊢
+                  No tools yet
     ");
 }
 
@@ -2029,21 +1999,21 @@ fn snapshot_sidebar_spawned_pane_appends_trailing_remove_marker() {
         ],
     };
     let mut state = make_state_with_groups(vec![group]);
-    state.bottom_panel_height = 3;
+    // 1% clamps up to the 3-row minimum.
+    state.global.bottom_percent = 1;
     let output = render_to_string(&mut state, 30, 20);
     insta::assert_snapshot!(output, @"
-     ≡2 ●0 ◐0 ○2 ✕0            ☐⤢
+     󱓯 2  0 󰥔 0 󰒲 2  0     ⇄ ☐⤢
     ⓘ                          — ▾
     proj                         +
-    ┃ ○ claude
-    ┃   + main
+    ┃ 󰒲 
+    ┃    + main
         Waiting for prompt…
-      ○ claude
-        + feat/x                 ×
+      󰒲 
+         + feat/x               ×
         Waiting for prompt…
-    ╭ Activity│Tasks│Git ────────╮
-    │       No activity yet      │
-    ╰────────────────────────────╯
+               │  │ 󰊢
+             No tools yet
     ");
 }
 
@@ -2169,18 +2139,18 @@ fn snapshot_sidebar_spawned_long_branch_truncates_and_keeps_x() {
         )],
     };
     let mut state = make_state_with_groups(vec![group]);
-    state.bottom_panel_height = 3;
+    // 1% clamps up to the 3-row minimum.
+    state.global.bottom_percent = 1;
     let output = render_to_string(&mut state, 24, 20);
     insta::assert_snapshot!(output, @"
-     ≡1 ●0 ◐0 ○1 ✕0      ☐⤢
+     󱓯 1  0 󰥔 0 󰒲 1   ⇄ ☐⤢
     ⓘ                    — ▾
     proj                   +
-      ○ claude
-        + feature/really-l…×
+    ┃ 󰒲 
+    ┃    + feature/really…×
         Waiting for prompt…
-    ╭ Activity│Tasks│Git ──╮
-    │    No activity yet   │
-    ╰──────────────────────╯
+            │  │ 󰊢
+          No tools yet
     ");
     // The click target must still be registered even after
     // truncation — the × is at the right edge of the branch row.
@@ -2211,19 +2181,19 @@ fn snapshot_sidebar_spawned_coexists_with_port_display() {
         )],
     };
     let mut state = make_state_with_groups(vec![group]);
-    state.bottom_panel_height = 3;
+    // 1% clamps up to the 3-row minimum.
+    state.global.bottom_percent = 1;
     state.pane_state_mut("%9").ports = vec![3000];
     let output = render_to_string(&mut state, 30, 20);
     insta::assert_snapshot!(output, @"
-     ≡1 ●0 ◐0 ○1 ✕0            ☐⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0     ⇄ ☐⤢
     ⓘ                          — ▾
     proj                         +
-      ○ claude
-        + feat/srv         :3000 ×
+    ┃ 󰒲 
+    ┃    + feat/srv       :3000 ×
         Waiting for prompt…
-    ╭ Activity│Tasks│Git ────────╮
-    │       No activity yet      │
-    ╰────────────────────────────╯
+               │  │ 󰊢
+             No tools yet
     ");
 }
 
@@ -2239,18 +2209,17 @@ fn snapshot_remove_confirm_modal_shows_three_options() {
     };
     let output = render_to_string(&mut state, 50, 18);
     insta::assert_snapshot!(output, @"
-     ≡1 ●0 ◐0 ○1 ✕0                                ☐⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0                         ⇄ ☐⤢
     ⓘ                                              — ▾
     proj                                             +
-    ┃ ○ claude
-    ┃   main   ╭ add-login ───────────────╮
+    ┃ 󰒲 
+    ┃    main ╭ add-login ───────────────╮
         Waiting│[y] remove worktree       │
                │[c] close window only     │
                │[n] cancel                │
                ╰──────────────────────────╯
-    ╭ Activity│Tasks│Git ────────────────────────────╮
-    │                 No activity yet                │
-    ╰────────────────────────────────────────────────╯
+                         │  │ 󰊢
+                       No tools yet
     ");
 }
 
@@ -2265,20 +2234,19 @@ fn snapshot_spawn_modal_shows_inline_error_when_task_empty() {
     assert!(state.is_spawn_input_open(), "popup must stay open on error");
     let output = render_to_string(&mut state, 34, 18);
     insta::assert_snapshot!(output, @"
-     ╭ Spawn worktree ──────────────╮
-    ⓘ│                              │▾
-    p│ NAME                         │+
+     󱓯 1  0 󰥔 0 󰒲 1  0         ⇄ ☐⤢
+    ⓘ╭ Spawn worktree ──────────────╮▾
+    p│                              │+
+    ┃│ NAME                         │
     ┃│ █                            │
-    ┃│                              │
      │ AGENT                        │
      │ claude                       │
      │ MODE                         │
      │ default                      │
      │ name is empty                │
      ╰──────────────────────────────╯
-    ╭ Activity│Tasks│Git ────────────╮
-    │         No activity yet        │
-    ╰────────────────────────────────╯
+                 │  │ 󰊢
+               No tools yet
     ");
 }
 
@@ -2311,18 +2279,18 @@ fn snapshot_remove_confirm_modal_shows_inline_error() {
     };
     let output = render_to_string(&mut state, 50, 18);
     insta::assert_snapshot!(output, @"
-     ≡1 ●0 ◐0 ○1 ✕0                                ☐⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0                         ⇄ ☐⤢
     ⓘ                                              — ▾
     proj                                             +
-    ┃ ○ claude ╭ add-login ───────────────╮
-    ┃   main   │[y] remove worktree       │
-        Waiting│[c] close window only     │
+    ┃ 󰒲 
+    ┃    main ╭ add-login ───────────────╮
+        Waiting│[y] remove worktree       │
+               │[c] close window only     │
                │[n] cancel                │
                │git: worktree has uncommi…│
                ╰──────────────────────────╯
-    ╭ Activity│Tasks│Git ────────────────────────────╮
-    │                 No activity yet                │
-    ╰────────────────────────────────────────────────╯
+                         │  │ 󰊢
+                       No tools yet
     ");
 }
 
@@ -2346,13 +2314,13 @@ fn snapshot_background_status_shows_bg_command_row() {
 
     let output = render_to_string(&mut state, 32, 25);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0              ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0       ⇄ ☐⤢
     ⓘ                            — ▾
-    ┃ ◎ claude
+    project
+    ┃ ◎ 
         $ npm run dev
-    ╭ Activity│Tasks│Git ──────────╮
-    │        No activity yet       │
-    ╰──────────────────────────────╯
+                │  │ 󰊢
+              No tools yet
     ");
 }
 
@@ -2377,13 +2345,13 @@ fn snapshot_running_pane_still_shows_live_bg_command() {
 
     let output = render_to_string(&mut state, 32, 25);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0              ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0       ⇄ ☐⤢
     ⓘ                            — ▾
-    ┃ ● claude                   10s
+    project
+    ┃                          10s
         $ cargo watch
-    ╭ Activity│Tasks│Git ──────────╮
-    │        No activity yet       │
-    ╰──────────────────────────────╯
+                │  │ 󰊢
+              No tools yet
     ");
 }
 
@@ -2407,21 +2375,20 @@ fn snapshot_background_long_command_truncates_with_ellipsis() {
 
     let output = render_to_string(&mut state, 28, 25);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
-    ┃ ◎ claude
+    project
+    ┃ ◎ 
         $ cargo run --bin very-…
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+              │  │ 󰊢
+            No tools yet
     ");
 }
 
-// Row 4.3: a subagent pane must keep its identity row even when the parent
-// pane's own row is hidden by the repository filter — the parent label lives
-// on the subagent pane, not on the parent's row.
+// A subagent whose parent lives in another repo group cannot nest: it stays
+// a top-level row of its own group, with no indent and no tag.
 #[test]
-fn snapshot_subagent_identity_survives_repo_filter_hiding_parent() {
+fn snapshot_subagent_with_parent_in_another_group_is_a_top_level_row() {
     let parent = {
         let mut p = make_pane(AgentType::Pi, PaneStatus::Running);
         p.pane_id = "%1".into();
@@ -2435,7 +2402,7 @@ fn snapshot_subagent_identity_survives_repo_filter_hiding_parent() {
         p.subagent = Some(SubagentInfo {
             kind: PmuxTaskKind::Spawned,
             task: Some("unit1 idle collapse".into()),
-            parent: SubagentParent::Pane("orchestrator".into()),
+            parent: SubagentParent::Pane("%1".into()),
         });
         p
     };
@@ -2460,13 +2427,260 @@ fn snapshot_subagent_identity_survives_repo_filter_hiding_parent() {
 
     let output = render_to_string(&mut state, 60, 40);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0                                          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0                                   ⇄ ☐⤢
     ⓘ                                              project-sub ▾
     project-sub
-      ● pi ♟
-      ▷ orchestrator
-    ╭ Activity│Tasks│Git ──────────────────────────────────────╮
-    │                      No activity yet                     │
-    ╰──────────────────────────────────────────────────────────╯
+    ┃  
+                            │ 󰟶 │  │ 󰊢
+                            No tools yet
     ");
+}
+
+// The status filter can hide a child's root too: the child keeps its slot in
+// the group order but draws as a top-level row, without indent or tag.
+#[test]
+fn snapshot_subagent_whose_root_the_status_filter_hides() {
+    let mut parent = make_pane(AgentType::Pi, PaneStatus::Idle);
+    parent.pane_id = "%1".into();
+    let mut subagent = make_pane(AgentType::Pi, PaneStatus::Running);
+    subagent.pane_id = "%2".into();
+    subagent.pane_active = false;
+    subagent.subagent = Some(SubagentInfo {
+        kind: PmuxTaskKind::Spawned,
+        task: Some("unit1 idle collapse".into()),
+        parent: SubagentParent::Pane("%1".into()),
+    });
+
+    let mut state =
+        make_state_with_groups(vec![make_repo_group("project", vec![parent, subagent])]);
+    state.global.status_filter = StatusFilter::Busy;
+    let output = render_to_string(&mut state, 60, 25);
+    insta::assert_snapshot!(output, @"
+     󱓯 2  1 󰥔 0 󰒲 1  0                                   ⇄ ☐⤢
+    ⓘ                                                        — ▾
+    project
+       
+                            │ 󰟶 │  │ 󰊢
+                            No tools yet
+    ");
+}
+
+// ─── Strip snapshots ────────────────────────────────────────────────
+//
+// The strip's own shape: the vertical filter bar, the agent panel, the
+// thin divider line and the tab panel side by side, with the tab bar
+// as a right-aligned header row across the tab section's top. The snapshots below pin the `strip-layout` spec's
+// scenarios — the parts of a 120-column strip, the Thought glyph a pi
+// pane adds to the divider run, a tab width of 0 (no divider, no tab
+// panel) and a strip too narrow for both panel minimums.
+
+/// A one-agent state whose sidebar is a strip `tab_percent` wide split.
+fn make_strip_state(agent: AgentType, status: PaneStatus, tab_percent: u8) -> AppState {
+    let pane = make_pane(agent, status);
+    let mut state = make_state(vec![SessionInfo {
+        session_name: "main".into(),
+        windows: vec![WindowInfo {
+            window_id: "@1".into(),
+            window_name: "project".into(),
+            window_active: true,
+            auto_rename: false,
+            panes: vec![pane.clone()],
+        }],
+    }]);
+    state.repo_groups = vec![make_repo_group("project", vec![pane])];
+    state.layout_kind = LayoutKind::Strip;
+    state.global.tab_percent = tab_percent;
+    state.rebuild_row_targets();
+    state
+}
+
+#[test]
+fn snapshot_strip_120x12_with_the_tools_tab() {
+    let mut state = make_strip_state(AgentType::Claude, PaneStatus::Idle, 40);
+    let output = render_to_string(&mut state, 120, 12);
+    insta::assert_snapshot!(output, @"
+    󱓯 1 ⓘ                                                                — ▾ %1                                    │  │ 󰊢
+     0 project                                                             ▎
+    󰥔 0 ┃ 󰒲                                                                ▎
+    󰒲 1     Waiting for prompt…                                             ▎
+     0                                                                     ▎
+                                                                            ▎
+                                                                            ▎                 No tools yet
+                                                                            ▎
+                                                                            ▎
+                                                                            ▎
+                                                                            ▎
+    ⇅ ⤢                                                                     ▎
+    ");
+}
+
+#[test]
+fn snapshot_strip_pi_pane_shows_the_thought_glyph() {
+    let mut state = make_strip_state(AgentType::Pi, PaneStatus::Running, 40);
+    let output = render_to_string(&mut state, 120, 12);
+    insta::assert_snapshot!(output, @"
+    󱓯 1 ⓘ                                                                — ▾ %1                                │ 󰟶 │  │ 󰊢
+     1 project                                                             ▎
+    󰥔 0 ┃                                                                 ▎
+    󰒲 0                                                                     ▎
+     0                                                                     ▎
+                                                                            ▎
+                                                                            ▎                 No tools yet
+                                                                            ▎
+                                                                            ▎
+                                                                            ▎
+                                                                            ▎
+    ⇅ ⤢                                                                     ▎
+    ");
+}
+
+#[test]
+fn snapshot_strip_nests_a_subagent_under_its_parent() {
+    // The strip shares the row functions with the column, so a nested
+    // subagent indents here too — and the branch stays lifted onto the
+    // status row, one line for the whole child.
+    let mut parent = make_pane(AgentType::Pi, PaneStatus::Running);
+    parent.pane_id = "%1".into();
+    parent.pane_name = Some("orchestrator".into());
+    let mut child = make_pane(AgentType::Pi, PaneStatus::Running);
+    child.pane_id = "%2".into();
+    child.pane_active = false;
+    child.pane_name = Some("unit1".into());
+    child.subagent = Some(SubagentInfo {
+        kind: PmuxTaskKind::Spawned,
+        task: Some("unit1 idle collapse".into()),
+        parent: SubagentParent::Pane("%1".into()),
+    });
+
+    let mut state = make_state(vec![SessionInfo {
+        session_name: "main".into(),
+        windows: vec![WindowInfo {
+            window_id: "@1".into(),
+            window_name: "project".into(),
+            window_active: true,
+            auto_rename: false,
+            panes: vec![parent.clone(), child.clone()],
+        }],
+    }]);
+    state.repo_groups = vec![RepoGroup {
+        name: "project".into(),
+        has_focus: true,
+        panes: vec![
+            (
+                parent,
+                PaneGitInfo {
+                    repo_root: Some("/home/user/project".into()),
+                    branch: Some("main".into()),
+                    is_worktree: false,
+                    worktree_name: None,
+                },
+            ),
+            (
+                child,
+                PaneGitInfo {
+                    repo_root: Some("/home/user/project".into()),
+                    branch: Some("pmux/unit1".into()),
+                    is_worktree: true,
+                    worktree_name: None,
+                },
+            ),
+        ],
+    }];
+    state.layout_kind = LayoutKind::Strip;
+    state.global.tab_percent = 40;
+    state.rebuild_row_targets();
+
+    let output = render_to_string(&mut state, 120, 12);
+    insta::assert_snapshot!(output, @"
+    󱓯 2 ⓘ                                                                — ▾ %1 orchestrator                   │ 󰟶 │  │ 󰊢
+     2 project                                                            +▎
+    󰥔 0 ┃   orchestrator main                                             ▎
+    󰒲 0   ╭─ 1 subagent ──────────────────────────────────────────────────╮ ▎
+     0   │   unit1 + pmux/unit1                                        │ ▎
+          ╰───────────────────────────────────────────────────────────────╯ ▎
+                                                                            ▎                 No tools yet
+                                                                            ▎
+                                                                            ▎
+                                                                            ▎
+                                                                            ▎
+    ⇅ ⤢                                                                     ▎
+    ");
+}
+
+#[test]
+fn snapshot_strip_tab_width_zero_hides_the_tab_panel() {
+    let mut state = make_strip_state(AgentType::Claude, PaneStatus::Idle, 0);
+    let output = render_to_string(&mut state, 120, 12);
+    insta::assert_snapshot!(output, @"
+    󱓯 1 ⓘ                                                                                                                — ▾
+     0 project
+    󰥔 0 ┃ 󰒲 
+    󰒲 1     Waiting for prompt…
+     0
+    ⇅ ⤢
+    ");
+}
+
+#[test]
+fn snapshot_strip_40_columns_has_no_tab_panel() {
+    let mut state = make_strip_state(AgentType::Claude, PaneStatus::Idle, 40);
+    let output = render_to_string(&mut state, 40, 12);
+    insta::assert_snapshot!(output, @"
+    󱓯 1 ⓘ                                — ▾
+     0 project
+    󰥔 0 ┃ 󰒲 
+    󰒲 1     Waiting for prompt…
+     0
+    ⇅ ⤢
+    ");
+}
+
+// ─── The strip control row ──────────────────────────────────────────
+//
+// The strip's side switch shows the vertical `⇅` glyph — the column
+// keeps `⇄` (the `sidebar-panel` spec pins one glyph per layout) — and
+// the pop-out glyph keeps following the floating flag. A 40-column
+// strip isolates the bar: no tab panel fits beside the two panel
+// minimums, so the control row is the frame's last row at the left
+// edge. Colours are not visible characters, so the docked and floating
+// switch styles sit as direct cell checks beside the snapshots.
+
+#[test]
+fn snapshot_strip_control_row_docked_shows_the_vertical_switch() {
+    let mut state = make_strip_state(AgentType::Claude, PaneStatus::Idle, 40);
+    let output = render_to_string(&mut state, 40, 6);
+    insta::assert_snapshot!(output, @"
+    󱓯 1 ⓘ                                — ▾
+     0 project
+    󰥔 0 ┃ 󰒲 
+    󰒲 1     Waiting for prompt…
+     0
+    ⇅ ⤢
+    ");
+    let buf = render_to_buffer(&mut state, 40, 6);
+    assert_eq!(buf[(0, 5)].symbol(), "⇅");
+    assert_eq!(buf[(0, 5)].fg, state.theme.status_running);
+    assert_eq!(buf[(2, 5)].symbol(), "⤢");
+    assert_eq!(buf[(2, 5)].fg, state.theme.status_running);
+}
+
+#[test]
+fn snapshot_strip_control_row_floating_dims_the_switch() {
+    let mut state = make_strip_state(AgentType::Claude, PaneStatus::Idle, 40);
+    state.sidebar_pane.floating = true;
+    let output = render_to_string(&mut state, 40, 6);
+    insta::assert_snapshot!(output, @"
+    󱓯 1 ⓘ                                — ▾
+     0 project
+    󰥔 0 ┃ 󰒲 
+    󰒲 1     Waiting for prompt…
+     0
+    ⇅ ⤡
+    ");
+    let buf = render_to_buffer(&mut state, 40, 6);
+    assert_eq!(buf[(0, 5)].symbol(), "⇅");
+    // Dimmed while floating — the control does nothing there.
+    assert_eq!(buf[(0, 5)].fg, state.theme.filter_inactive);
+    assert_eq!(buf[(2, 5)].symbol(), "⤡");
+    assert_eq!(buf[(2, 5)].fg, state.theme.status_running);
 }

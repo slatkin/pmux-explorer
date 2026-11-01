@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use tmux_agent_sidebar::worktree::{
+use pmux_explorer::worktree::{
     AGENTS, CLAUDE_MODES, CODEX_MODES, agent_command, modes_for, pick_unique_slug, slugify,
     worktree_path_for,
 };

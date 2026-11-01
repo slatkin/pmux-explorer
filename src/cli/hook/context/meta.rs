@@ -1,76 +1,43 @@
-use super::location::{pane_writes_allowed, sync_pane_location};
+use super::location::should_update_cwd;
 use crate::event::WorktreeInfo;
+use crate::pane_store::PaneStore;
 use crate::tmux;
 
-/// Bundle of hook-payload fields shared by 6 `AgentEvent` variants
-/// (SessionStart / UserPromptSubmit / Notification / Stop / StopFailure /
-/// PermissionDenied). Passing this as a single reference keeps each
-/// variant handler's signature short and avoids `too_many_arguments`.
+/// Label fields shared by the events that fire a desktop notification
+/// (Notification / Stop / StopFailure): the agent name and the repo/branch
+/// label sources. The identity fields (permission mode, session id) are
+/// transition-owned now and never leave `handle_event`, so the context
+/// carries only what the notification titles need. Passing this as a
+/// single reference keeps each variant handler's signature short.
 pub(in crate::cli::hook) struct AgentContext<'a> {
     pub(in crate::cli::hook) agent: &'a str,
     pub(in crate::cli::hook) cwd: &'a str,
-    pub(in crate::cli::hook) permission_mode: &'a str,
     pub(in crate::cli::hook) worktree: &'a Option<WorktreeInfo>,
-    pub(in crate::cli::hook) session_id: &'a Option<String>,
 }
 
 pub(in crate::cli::hook) fn make_ctx<'a>(
     agent: &'a str,
     cwd: &'a str,
-    permission_mode: &'a str,
     worktree: &'a Option<WorktreeInfo>,
-    session_id: &'a Option<String>,
 ) -> AgentContext<'a> {
     AgentContext {
         agent,
         cwd,
-        permission_mode,
         worktree,
-        session_id,
     }
 }
 
-pub(in crate::cli::hook) fn set_agent_meta(pane: &str, ctx: &AgentContext<'_>) {
-    tmux::set_pane_option(pane, tmux::PANE_AGENT, ctx.agent);
-    // `@pane_permission_mode` is parent-owned: a child agent can be in
-    // a different mode (e.g. plan vs. default) and overwriting the
-    // parent's value here would flip the badge mid-session. Gate the
-    // write behind the same subagent guard as the cwd/worktree fields.
-    if !ctx.permission_mode.is_empty() && pane_writes_allowed(pane) {
-        tmux::set_pane_option(pane, tmux::PANE_PERMISSION_MODE, ctx.permission_mode);
-    }
-    sync_pane_location(pane, ctx.cwd, ctx.worktree, ctx.session_id);
-}
-
-pub(in crate::cli::hook) fn clear_run_state(pane: &str) {
-    tmux::unset_pane_option(pane, tmux::PANE_STARTED_AT);
-    tmux::unset_pane_option(pane, tmux::PANE_WAIT_REASON);
-}
-
-/// Check if a prompt is a system-injected message (not a real user prompt).
-pub(in crate::cli::hook) fn is_system_message(s: &str) -> bool {
-    s.contains("<task-notification>") || s.contains("<system-reminder>") || s.contains("<task-")
-}
-
-pub(in crate::cli::hook) fn clear_all_meta(pane: &str) {
-    // Every lifecycle key from the single sweep list
-    // `tmux::AGENT_SESSION_PANE_OPTIONS`, except the two handler-owned
-    // keys (`@pane_status` / `@pane_attention` are set and cleared per
-    // event transition) and the run-state pair that `clear_run_state`
-    // below owns.
-    for key in tmux::AGENT_SESSION_PANE_OPTIONS {
-        if matches!(
-            *key,
-            tmux::PANE_STATUS
-                | tmux::PANE_ATTENTION
-                | tmux::PANE_STARTED_AT
-                | tmux::PANE_WAIT_REASON
-        ) {
-            continue;
-        }
-        tmux::unset_pane_option(pane, key);
-    }
-    clear_run_state(pane);
+/// Clear every lifecycle pane option the teardown owns, in one batch.
+/// The keys come from the single sweep list `tmux::AGENT_SESSION_PANE_OPTIONS`
+/// except the two handler-owned keys — `@pane_status` and `@pane_attention`
+/// are set and cleared per event transition, and the closing
+/// `status_writes("clear")` in the teardown covers both. The run-state pair
+/// (`@pane_started_at` / `@pane_wait_reason`) is part of this wipe: the
+/// transition owns their per-event writes, and a session end clears them
+/// with everything else.
+pub(in crate::cli::hook) fn clear_all_meta(pane: &str, store: &dyn PaneStore) {
+    let writes = tmux::agent_session_wipe(&[tmux::PANE_STATUS, tmux::PANE_ATTENTION]);
+    let _ = store.apply(pane, &writes);
 }
 
 /// Write a task-reset marker to the activity log so `parse_task_progress`
@@ -78,64 +45,64 @@ pub(in crate::cli::hook) fn clear_all_meta(pane: &str) {
 /// abandoned tasks from a previous run would accumulate into the next one.
 ///
 /// Skipped while subagents are still active so a parent Stop event doesn't
-/// wipe task state children are still driving.
-pub(in crate::cli::hook) fn mark_task_reset(pane: &str) {
-    if !pane_writes_allowed(pane) {
+/// wipe task state children are still driving. The subagent read goes
+/// through the store so a caller that just applied a Stop batch — which
+/// clears the stale list — sees the post-batch state and the marker lands
+/// the way it did when the handler unset the list inline.
+pub(in crate::cli::hook) fn mark_task_reset(pane: &str, store: &dyn PaneStore) {
+    if !should_update_cwd(&store.get(pane, tmux::PANE_SUBAGENTS)) {
         return;
     }
-    crate::cli::hook::activity::write_activity_entry(pane, crate::activity::TASK_RESET_MARKER, "");
+    if let Err(error) = crate::cli::hook::activity::write_activity_entry(
+        pane,
+        crate::activity::TASK_RESET_MARKER,
+        "",
+    ) {
+        crate::cli::hook::activity::report_write_error(&error);
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::pane_store::{MemPaneStore, PaneWrites};
     use std::fs;
 
     #[test]
     fn make_ctx_wires_all_fields() {
         let agent = "claude".to_string();
         let cwd = "/tmp".to_string();
-        let pm = "auto".to_string();
         let worktree: Option<WorktreeInfo> = None;
-        let sid: Option<String> = None;
-        let ctx = make_ctx(&agent, &cwd, &pm, &worktree, &sid);
+        let ctx = make_ctx(&agent, &cwd, &worktree);
         assert_eq!(ctx.agent, "claude");
         assert_eq!(ctx.cwd, "/tmp");
-        assert_eq!(ctx.permission_mode, "auto");
         assert!(ctx.worktree.is_none());
-        assert!(ctx.session_id.is_none());
     }
 
     #[test]
-    fn make_ctx_preserves_worktree_and_session_id() {
+    fn make_ctx_preserves_worktree() {
         let agent = "codex".to_string();
         let cwd = "/src".to_string();
-        let pm = "plan".to_string();
         let worktree = Some(WorktreeInfo {
             name: "feat".into(),
             path: "/tmp/wt".into(),
             branch: "feature/x".into(),
             original_repo_dir: "/home/user/repo".into(),
         });
-        let sid = Some("sess-abc".to_string());
-        let ctx = make_ctx(&agent, &cwd, &pm, &worktree, &sid);
+        let ctx = make_ctx(&agent, &cwd, &worktree);
         assert_eq!(ctx.agent, "codex");
         assert_eq!(ctx.cwd, "/src");
-        assert_eq!(ctx.permission_mode, "plan");
         assert_eq!(ctx.worktree.as_ref().map(|w| w.name.as_str()), Some("feat"));
-        assert_eq!(ctx.session_id.as_deref(), Some("sess-abc"));
     }
-
-    // ─── mark_task_reset ───────────────────────────────────────────
 
     #[test]
     fn mark_task_reset_writes_marker_when_no_subagents() {
-        let _guard = tmux::test_mock::install();
+        let store = MemPaneStore::new();
         let pane_id = "%CLI_MARK_RESET";
         let path = crate::activity::log_file_path(pane_id);
         let _ = fs::remove_file(&path);
 
-        mark_task_reset(pane_id);
+        mark_task_reset(pane_id, &store);
 
         let content = fs::read_to_string(&path).unwrap();
         let marker = format!("|{}|", crate::activity::TASK_RESET_MARKER);
@@ -145,134 +112,60 @@ mod tests {
 
     #[test]
     fn mark_task_reset_skips_while_subagents_active() {
-        let _guard = tmux::test_mock::install();
+        let store = MemPaneStore::new();
         let pane_id = "%CLI_MARK_RESET_SUBAGENT";
-        tmux::test_mock::set(pane_id, tmux::PANE_SUBAGENTS, "Explore:abc");
+        store.insert(pane_id, tmux::PANE_SUBAGENTS, "Explore:abc");
         let path = crate::activity::log_file_path(pane_id);
         let _ = fs::remove_file(&path);
 
-        mark_task_reset(pane_id);
+        mark_task_reset(pane_id, &store);
 
         // No marker should be written because subagents are still active.
         assert!(!path.exists(), "log file created while subagents active");
     }
 
-    // ─── is_system_message ────────────────────────────────────────
-
     #[test]
-    fn system_message_task_notification() {
-        assert!(is_system_message(
-            "<task-notification><task-id>abc</task-id></task-notification>"
-        ));
+    fn mark_task_reset_sees_the_post_batch_subagent_state() {
+        // A Stop batch clears the stale subagent list first; the reset
+        // marker must land because the store read reflects the batch.
+        let store = MemPaneStore::new();
+        let pane_id = "%CLI_MARK_RESET_AFTER_BATCH";
+        let mut writes = PaneWrites::new();
+        writes.unset(tmux::PANE_SUBAGENTS);
+        store.apply(pane_id, &writes).unwrap();
+        let path = crate::activity::log_file_path(pane_id);
+        let _ = fs::remove_file(&path);
+
+        mark_task_reset(pane_id, &store);
+
+        assert!(
+            path.exists(),
+            "marker must land after the batch cleared the list"
+        );
+        fs::remove_file(&path).ok();
     }
 
-    #[test]
-    fn system_message_system_reminder() {
-        assert!(is_system_message(
-            "<system-reminder>some reminder</system-reminder>"
-        ));
-    }
-
-    #[test]
-    fn system_message_task_prefix() {
-        assert!(is_system_message("<task-id>abc</task-id>"));
-    }
-
-    #[test]
-    fn system_message_normal_prompt() {
-        assert!(!is_system_message("fix the bug"));
-    }
-
-    #[test]
-    fn system_message_empty() {
-        assert!(!is_system_message(""));
-    }
-
-    #[test]
-    fn system_message_mixed_content() {
-        assert!(is_system_message(
-            "hello <system-reminder>noise</system-reminder> world"
-        ));
-    }
+    // ─── is_system_message lives with the transition rules ────────
 
     // ─── set_agent_meta ────────────────────────────────────────────
 
     #[test]
-    fn set_agent_meta_does_not_clobber_parent_permission_mode_under_subagents() {
-        let _guard = tmux::test_mock::install();
-        let pane = "%PARENT_PERM";
-        tmux::test_mock::set(pane, tmux::PANE_SUBAGENTS, "Explore:sub-1");
-        tmux::test_mock::set(pane, tmux::PANE_PERMISSION_MODE, "plan");
-
-        // A subagent fires a hook with `permission_mode: "default"` —
-        // this must NOT flip the parent badge from "plan" back to
-        // "default".
-        let ctx = AgentContext {
-            agent: "claude",
-            cwd: "/repo",
-            permission_mode: "default",
-            worktree: &None,
-            session_id: &None,
-        };
-        set_agent_meta(pane, &ctx);
-
-        assert_eq!(
-            tmux::test_mock::get(pane, tmux::PANE_PERMISSION_MODE).as_deref(),
-            Some("plan"),
-            "child hook must not overwrite parent's permission_mode"
-        );
-    }
-
-    #[test]
-    fn set_agent_meta_writes_permission_mode_when_no_subagents() {
-        let _guard = tmux::test_mock::install();
-        let pane = "%LONE_PERM";
-
-        let ctx = AgentContext {
-            agent: "claude",
-            cwd: "/repo",
-            permission_mode: "plan",
-            worktree: &None,
-            session_id: &None,
-        };
-        set_agent_meta(pane, &ctx);
-
-        assert_eq!(
-            tmux::test_mock::get(pane, tmux::PANE_PERMISSION_MODE).as_deref(),
-            Some("plan"),
-            "regular SessionStart should still write permission_mode"
-        );
-    }
-
-    #[test]
-    fn clear_run_state_removes_started_at_and_wait_reason() {
-        let _guard = tmux::test_mock::install();
-        let pane = "%CLEAR_RUN";
-        tmux::test_mock::set(pane, tmux::PANE_STARTED_AT, "1700");
-        tmux::test_mock::set(pane, tmux::PANE_WAIT_REASON, "permission");
-
-        clear_run_state(pane);
-
-        assert!(!tmux::test_mock::contains(pane, tmux::PANE_STARTED_AT));
-        assert!(!tmux::test_mock::contains(pane, tmux::PANE_WAIT_REASON));
-    }
-
-    #[test]
     fn clear_all_meta_drops_every_pane_option_we_own() {
-        let _guard = tmux::test_mock::install();
+        let store = MemPaneStore::new();
         let pane = "%CLEAR_ALL";
         for key in tmux::AGENT_SESSION_PANE_OPTIONS {
-            tmux::test_mock::set(pane, key, "x");
+            store.insert(pane, key, "x");
         }
 
-        clear_all_meta(pane);
+        clear_all_meta(pane, &store);
 
         // Every lifecycle key is cleared except `@pane_status` and
-        // `@pane_attention`, which the event handlers own directly.
+        // `@pane_attention`, which the closing `status_writes("clear")`
+        // owns.
         for key in tmux::AGENT_SESSION_PANE_OPTIONS {
             let preserved = matches!(*key, tmux::PANE_STATUS | tmux::PANE_ATTENTION);
             assert_eq!(
-                tmux::test_mock::contains(pane, key),
+                store.contains(pane, key),
                 preserved,
                 "expected {key} {}",
                 if preserved { "preserved" } else { "cleared" }

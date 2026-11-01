@@ -9,7 +9,7 @@ supports extensions. The sidebar does not care which.
 ## The call
 
 ```sh
-tmux-agent-sidebar hook <agent> <event>
+pmux-explorer hook <agent> <event>
 ```
 
 The command reads one JSON object from standard input and writes nothing. It
@@ -42,8 +42,16 @@ producer does nothing. It does not warn and it does not retry.
 ## The payload
 
 Every payload is a JSON object. The fields below are the ones the sidebar
-reads. A field that a producer cannot fill is omitted or sent empty; the
-sidebar treats an empty string as "not reported".
+reads, and the sidebar stores each one as it arrives. Which of them an
+event reports is declared per agent: for pi the declaration is the field
+list the `pmux-explorer setup pi` contract prints, and Claude, Codex and
+OpenCode report `session_id`, `cwd` and `worktree` on every event of
+theirs that carries session context. A field the event does not report is
+left alone, so a value stored earlier survives; a `session_id`, `cwd` or
+`worktree` the event reports but sends empty clears the option it backs.
+A Claude `notification` therefore still reports `worktree`, and one that
+leaves it out clears the worktree options instead of keeping their
+values.
 
 ### `session-start`
 
@@ -99,8 +107,10 @@ there is none). The task is the `<name>` part of the file name, that is the
 stem without its `-YYYY-MM-DDTHH-MM-SS` timestamp, with each hyphen turned
 into a space, so `unit1-idle-collapse` gives `unit1 idle collapse`. The task
 is stored, not drawn: the pane name the status row shows already carries the
-same launch name, so the identity row below the status row names only the
-parent (or `ORPHANED`).
+same launch name. The parent link is drawn by position: the subagent is
+nested under its parent inside a rounded `N subagents` box, with no row that
+names the parent. A subagent whose parent pane is not live (or not in its repo group)
+cannot nest and carries an `ORPHANED` tag on its status row instead.
 pmux writes the fallback stems `subagent` (a spawned subagent) and `resume`
 (a resumed subagent) when it has no usable name, and those give no task at
 all. A later recognised prompt replaces them. The identity stays
@@ -116,10 +126,15 @@ attention flag and raises a desktop notification.
 
 | Field | Meaning |
 | --- | --- |
-| `notification_type` | Why the agent waits. Claude sends `permission`; pi sends the kind of prompt it is showing. The value is shown next to the pane. |
+| `notification_type` | Why the agent waits. Claude sends `permission`; pi sends the kind of prompt it is showing (`select`, `confirm`, `input`, `editor`, `custom`). The value is a raw producer token: it is stored as it arrives and shown through the sidebar's label table, so a reason the table names reads as prose and an unnamed one is shown unchanged. |
 
 `wait_reason` is accepted as an alias for `notification_type`, because that is
 the name the OpenCode producer already uses.
+
+A reason that names a blocking user prompt — Claude's permission class, or one
+of pi's prompt kinds — keeps the pane status at `waiting` even while a
+background command is live on that pane. Any other reason lets a live
+background command keep the pane at `background`.
 
 ### `stop`
 
@@ -132,7 +147,7 @@ assistant message.
 | `cwd` | The working directory. |
 | `session_id` | The session identifier. |
 | `permission_mode` | The agent's permission mode. |
-| `worktree` | The worktree object, if any. |
+| `worktree` | The worktree object, if any. pi does not report `worktree` on `stop`, so a pi producer that leaves a worktree says so on `session-start` or `user-prompt-submit`, the events that report it. |
 
 ### `stop-failure`
 
@@ -169,6 +184,11 @@ for `Read`, `Edit` and `Write`, the command for `Bash`, the pattern for
 `to`, `team_name`, `task_id` and `task_subject`. A producer whose agent
 names those arguments differently sends the canonical key beside its own, and
 the adapter rewrites the rest.
+
+A label is written as one line in the log: a line break in it becomes a
+space. Every `|` of a label is kept — the log line's first two `|`
+separate the time and the tool name, and everything after them is the
+label, pipes included.
 
 ### `permission-denied`
 
@@ -217,36 +237,56 @@ A teammate of an agent team went idle.
 
 ## The task command
 
-The bottom panel carries a Tasks tab beside Activity and Git that shows the
+The bottom panel carries a Tasks tab beside Tools and Git that shows the
 todo list of the focused pane. The pane's agent writes that list through a
 shell subcommand rather than an event. This is the one write path every
 agent can use, because every agent can run a shell command, and it needs no
 hook registration.
 
 ```sh
-tmux-agent-sidebar task-set <subject>
-tmux-agent-sidebar task-update <id> <status>
+pmux-explorer task-describe <text>
+pmux-explorer task-set <subject>
+pmux-explorer task-update <id> <status>
 ```
 
-`task-set` records one item as `pending` and prints the id the sidebar
-assigns it, so the agent can name the item in a later `task-update`.
-`task-update` moves one item to `pending`, `in_progress` or `completed`;
-an unknown id or an unknown status changes nothing.
+`task-describe` sets the pane-wide description of the work the list
+covers — one or two lines of goal text the Tasks tab renders pinned
+above the items in the standard text color, with one blank row between
+it and the first item. Later calls replace it, and the agent is expected
+to describe the work before recording items. `task-set` records one item
+as `pending` and prints the id the sidebar assigns it, so the agent can
+name the item in a later `task-update`. `task-update` moves one item to
+`pending`, `in_progress` or `completed`; an unknown id or an unknown
+status changes nothing.
 
 **The pane is taken from the environment.** The task command reads
 `TMUX_PANE` the way the hook command does, so it must run in the
 environment of the pane it describes.
 
-**The command never breaks the turn.** It exits 0 on every path, including
-a missing `TMUX_PANE`, where it records nothing.
+**The command never breaks the turn on bad input.** It exits 0 on every
+path that changes nothing — a missing `TMUX_PANE`, too few or unknown
+arguments, an unknown id or status. The one nonzero path is a store write
+that did not land: the command then reports the io error on stderr and
+exits 1, because printing an id for an item that never reached disk would
+let the agent carry on believing the task was recorded.
 
 The list is one JSON file per pane,
-`/tmp/tmux-agent-tasks<PANE>.json`, written beside the activity log. Each
-item holds an `id`, a `subject` and a `status`, and the pane id is encoded
+`/tmp/pmux-explorer-tasks<PANE>.json`, written beside the activity log. The
+file holds a pane-wide `description` plus the `tasks` array; each item
+carries an `id`, a `subject` and a `status`, and the pane id is encoded
 in the file name the way the activity log encodes it. The store keeps at
 most 50 items and trims completed ones oldest first; when no completed
 item remains, the oldest item is dropped instead. A `session-start`
 event clears the pane's store, so a pane reused for new work starts empty.
+
+**A finished list closes itself.** The sidebar watches every listed
+pane's store, not just the focused one: once every item is `completed`
+and the file has been unchanged for 90 seconds, it removes the store —
+items and description — and the Tasks tab returns to its empty state.
+Every store write restarts the window, so a task added or reopened in
+time keeps the list open; when the list is all-completed again, the 90
+seconds count from that last write. An agent returning to a pane whose
+list closed records a fresh list through `task-set`.
 
 ### The task reminders
 
@@ -261,12 +301,102 @@ none.
 - A turn that starts while the pane's todo list is empty receives, verbatim
   from `RECORD_FIRST_REMINDER`:
 
-  `No tasks recorded yet: before starting work, record your todo list with task-set <subject>.`
+  `No tasks recorded yet: describe the work with task-describe <text>, then record tasks with task-set <subject>.`
 
 - A turn that ends while items are still open receives, verbatim from
   `UPDATE_BEFORE_FINISH_REMINDER`:
 
   `Reminder: make sure the task board is up to date.`
+
+## The thinking feed
+
+The Thought tab shows what a pi session is thinking. That text does not
+travel through the hook command: the pi producer — the pmux extension, which
+writes it through the pmux change `thinking-feed` — records the thinking in a
+per-session file, the thinking feed, and the sidebar reads that file. The
+path rule and the record shape below are shared with pmux, and both sides pin
+the same path vector in a test.
+
+### The path
+
+The feed of a session is `<dir>/<session id>.jsonl`, where `<dir>` is
+`$XDG_RUNTIME_DIR/pmux-thinking`, or `/tmp/pmux-thinking-<uid>` when
+`XDG_RUNTIME_DIR` is unset or empty, and `<session id>` is the session
+identifier the sidebar also holds in `@pane_session_id`. With
+`XDG_RUNTIME_DIR=/run/user/1000` and session id `abc`, the feed is
+`/run/user/1000/pmux-thinking/abc.jsonl`; with `XDG_RUNTIME_DIR` unset and
+uid 1000, it is `/tmp/pmux-thinking-1000/abc.jsonl`. A new session id gets
+its own file, and a resumed session appends to the file of its id.
+
+The producer creates the directory with mode 0700 and the file with mode
+0600, sets those modes again when either already exists with another mode,
+and writes no feed in a directory that another uid owns. The sidebar only
+reads the feed, and it removes the file when the pane's agent state is
+cleared (see "The cleanup rule" below).
+
+A session id that is empty, `.` or `..`, or that holds a `/`, gives no feed:
+a read finds no file, and a teardown removes nothing. The rule keeps a
+strange id from naming a path outside the feed directory.
+
+### The records
+
+Each line is one JSON object `{kind, ts, producer, text?}`. `kind` is `start`
+when a thinking block begins, `delta` for streamed text, and `end` when the
+block completes. `ts` is the ISO 8601 time the phase was seen, `producer` is
+one random token per producer, and `text` carries the streamed text of a
+`delta` and the final content of an `end`. A `start` carries no `text`, and
+an `end` carries `text` only when its content is not empty.
+
+Deltas that arrive within 50 ms are coalesced into one `delta` record,
+stamped with the time of the first of them. Pending deltas are appended
+before a `start`, before an `end`, and when the session shuts down, so a
+record is never lost to a fast-following phase.
+
+### The last thought
+
+The sidebar reduces the records of the feed to one last thought, and the tab
+shows that. The whole reduction is these rules:
+
+- A `start` begins a new last thought, with no text and the `ts` of that
+  record. After a new `start` the previous text is gone.
+- A `delta` appends its text. While the block is open, text longer than
+  16000 characters is trimmed to its last 8000 — the half-drop leaves room
+  for another 8000 before the limit is crossed again, so a block does not
+  trim on every delta.
+- An `end` with text replaces the text with it, and an `end` without text
+  keeps the text it has. Either way the block is closed, and the thought
+  stays on screen until the next `start`.
+- A line that is not a valid record is ignored, and the other lines apply.
+  The `producer` field is part of the shape but is not read: the last
+  thought is the newest block whatever produced it.
+
+The text is made terminal-safe as it is read: control characters other than
+`\n` and `\t` and every terminal escape sequence are removed, and line
+breaks stay. The tab shows the result as plain text at the top of the panel,
+indented one column on each side and wrapped to the panel width less those
+two columns, under the yellow `HH:mm:ss` local time of the record that began
+the thought.
+
+A feed is read only while the Thought tab is drawn, once per refresh tick,
+and only through the bytes it grew by since the previous read. The first
+read of a feed begins at its newest `start` record, not at the start of the
+file, so a large feed costs one backward scan however many blocks it holds.
+
+### The cleanup rule
+
+The sidebar owns feed deletion; keeping the feed is not pmux's job. When the
+sidebar clears the state of a pi pane, it removes that pane's feed file
+through the same path rule and the same session-id checks as a read, with
+the session id taken from `@pane_session_id` before the pane options are
+wiped. Three paths clear a pi pane: the shell-fallback sweep in
+`src/tmux/query.rs`, the port-scan sweep in `src/state/refresh.rs`, and the
+pi `session-end` teardown in `src/cli/hook/context/pending.rs`, and each of
+them goes through `thinking_feed::remove_pi_feed`. A feed file that is
+absent is not an error and does not delay the clearing of the pane's state.
+
+A feed whose pane died while no sidebar ran stays until the feed directory
+is cleared — at logout for `XDG_RUNTIME_DIR`, at reboot for the `/tmp`
+fallback. One file holds one session's thinking, so the leftover is cheap.
 
 ## The pane state the sidebar keeps
 
@@ -279,7 +409,7 @@ writes a tmux option itself.
 | `@pane_agent` | The first event of a session. |
 | `@pane_status` | Every event. One of `running`, `background`, `waiting`, `idle`, `error`. |
 | `@pane_attention` | Set when the agent waits for a human, cleared when the turn moves on. |
-| `@pane_wait_reason` | The reason the agent waits. |
+| `@pane_wait_reason` | The reason the agent waits, stored raw. The sidebar shows it through its label table. |
 | `@pane_prompt` | The prompt, then the response preview. |
 | `@pane_prompt_source` | `user` or `response`, so the sidebar knows which of the two it shows. |
 | `@pane_cwd` | The working directory. |

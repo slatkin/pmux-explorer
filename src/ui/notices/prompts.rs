@@ -2,10 +2,8 @@ use crate::tmux::{CLAUDE_AGENT, CODEX_AGENT};
 
 /// Build the ready-to-paste LLM prompt for the given agent name.
 ///
-/// - **Claude**: emits a *migration* prompt that asks the LLM to delete any
-///   existing `tmux-agent-sidebar/hook.sh` entries from the user's
-///   `~/.claude/settings.json` and then point the user at `/plugin install`.
-///   This is the only supported wiring path going forward — bundled
+/// - **Claude**: emits an *install* prompt that points the user at
+///   `/plugin install`. This is the only supported wiring path — bundled
 ///   hooks via the Claude Code plugin manifest. The prompt embeds the
 ///   plugin root resolved from the running binary so users with custom
 ///   install layouts get a working install path. If `current_exe()`
@@ -19,12 +17,12 @@ use crate::tmux::{CLAUDE_AGENT, CODEX_AGENT};
 /// Returns `None` for unknown agents.
 pub(crate) fn prompt_for_agent(agent: &str) -> Option<String> {
     match agent {
-        CLAUDE_AGENT => Some(build_claude_migration_prompt(
+        CLAUDE_AGENT => Some(build_claude_install_prompt(
             plugin_root_from_exe().as_deref(),
         )),
         CODEX_AGENT => {
             // Shell-quote the path so an install location containing
-            // spaces (e.g. macOS `/Applications/tmux-agent-sidebar/…`)
+            // spaces (e.g. macOS `/Applications/pmux-explorer/…`)
             // still yields a runnable command when the user pastes
             // this prompt into their shell.
             let exe_path =
@@ -47,8 +45,8 @@ pub(crate) fn prompt_for_agent(agent: &str) -> Option<String> {
 
 /// Walk up from the running binary looking for `.claude-plugin/plugin.json`,
 /// matching the install layouts supported elsewhere in the project
-/// (`<plugin>/bin/tmux-agent-sidebar` and
-/// `<plugin>/target/release/tmux-agent-sidebar`). Shares the upward-walk
+/// (`<plugin>/bin/pmux-explorer` and
+/// `<plugin>/target/release/pmux-explorer`). Shares the upward-walk
 /// loop with `cli::setup::resolve_hook_script`.
 fn plugin_root_from_exe() -> Option<String> {
     crate::cli::setup::walk_up_from_exe(3, |dir| {
@@ -60,8 +58,8 @@ fn plugin_root_from_exe() -> Option<String> {
 }
 
 /// Collapse an absolute path to a `~`-prefixed form when it lives
-/// under the user's home directory. Used to make the migration prompt
-/// portable across machines: `/Users/hiroppy/.tmux/plugins/...`
+/// under the user's home directory. Used to make the install prompt
+/// portable across machines: `/Users/slatkin/.tmux/plugins/...`
 /// renders as `~/.tmux/plugins/...` so a screenshot or copy-paste
 /// from one user does not bake in another user's literal home path.
 fn tildify(path: &str) -> String {
@@ -84,7 +82,7 @@ fn tildify_with_home(path: &str, home: &str) -> String {
     path.to_string()
 }
 
-/// Compose the LLM migration prompt for Claude Code users. `plugin_root`
+/// Compose the LLM install prompt for Claude Code users. `plugin_root`
 /// is `Some` when the binary lives next to a `.claude-plugin/plugin.json`
 /// (the common case), in which case the prompt names that exact path so
 /// the user can paste a runnable `/plugin marketplace add` command. The
@@ -92,25 +90,17 @@ fn tildify_with_home(path: &str, home: &str) -> String {
 /// so the rendered command stays portable (and fits narrower sidebars).
 /// The fallback is the canonical TPM install path documented in the
 /// README.
-fn build_claude_migration_prompt(plugin_root: Option<&str>) -> String {
+fn build_claude_install_prompt(plugin_root: Option<&str>) -> String {
     let marketplace_path = plugin_root
         .map(tildify)
-        .unwrap_or_else(|| "~/.tmux/plugins/tmux-agent-sidebar".to_string());
+        .unwrap_or_else(|| "~/.tmux/plugins/pmux-explorer".to_string());
     format!(
-        "Migrate this user from the manual ~/.claude/settings.json setup to the \
-         tmux-agent-sidebar Claude Code plugin:\n\
-         \n\
-         1. Edit ~/.claude/settings.json and remove every \"command\" entry whose \
-         value contains \"tmux-agent-sidebar/hook.sh\" from each \"hooks\" section. \
-         Clean up any \"hooks\" arrays that become empty (drop the trigger key) and \
-         remove the top-level \"hooks\" object if it becomes empty. If no such \
-         entries exist, skip this step silently.\n\
-         \n\
-         2. Then tell the user verbatim:\n\
+        "Install the pmux-explorer Claude Code plugin for this user. \
+         Tell the user verbatim:\n\
          \"Run these two commands in this Claude Code session, then restart \
          Claude Code so the bundled hooks take effect:\n\
          /plugin marketplace add {marketplace_path}\n\
-         /plugin install tmux-agent-sidebar@hiroppy\""
+         /plugin install pmux-explorer@slatkin\""
     )
 }
 
@@ -139,11 +129,11 @@ mod tests {
     }
 
     #[test]
-    fn prompt_for_agent_claude_is_a_migration_prompt() {
-        // The Claude prompt must steer users toward the plugin install
-        // and away from the legacy settings.json hook setup. It also
-        // needs a concrete removal step so users currently on the manual
-        // path get cleaned up before the plugin takes over.
+    fn prompt_for_agent_claude_is_an_install_prompt() {
+        // The Claude prompt must steer users toward the plugin install.
+        // Legacy settings.json cleanup is deliberately NOT part of it —
+        // the product does not detect or migrate old hook entries; the
+        // user removes them by hand.
         let claude = prompt_for_agent("claude").unwrap();
         // Claude Code's `/plugin install` does not accept local paths
         // directly; users must register a marketplace first. The prompt
@@ -153,19 +143,13 @@ mod tests {
             "claude prompt must surface the marketplace add command: {claude}"
         );
         assert!(
-            claude.contains("/plugin install tmux-agent-sidebar@hiroppy"),
+            claude.contains("/plugin install pmux-explorer@slatkin"),
             "claude prompt must surface the plugin install command keyed to \
              the bundled marketplace name: {claude}"
         );
         assert!(
-            claude.contains("~/.claude/settings.json"),
-            "claude prompt must reference settings.json so the LLM knows \
-             which file to clean up: {claude}"
-        );
-        assert!(
-            claude.contains("tmux-agent-sidebar/hook.sh"),
-            "claude prompt must tell the LLM exactly which existing entries \
-             to remove: {claude}"
+            !claude.contains("settings.json") && !claude.contains("hook.sh"),
+            "claude prompt must NOT mention settings.json cleanup: {claude}"
         );
         assert!(
             claude.contains("restart Claude Code"),
@@ -180,22 +164,22 @@ mod tests {
     }
 
     #[test]
-    fn build_claude_migration_prompt_uses_resolved_plugin_root_when_available() {
+    fn build_claude_install_prompt_uses_resolved_plugin_root_when_available() {
         // Use a path that is guaranteed NOT to live under HOME so the
         // tildify pass cannot rewrite it on either the dev machine or
         // CI (where HOME varies). The tilde-collapse behavior is
         // covered directly by the `tildify_with_home` tests below.
-        let prompt = build_claude_migration_prompt(Some("/opt/tmux-agent-sidebar"));
-        assert!(prompt.contains("/opt/tmux-agent-sidebar"));
+        let prompt = build_claude_install_prompt(Some("/opt/pmux-explorer"));
+        assert!(prompt.contains("/opt/pmux-explorer"));
     }
 
     #[test]
-    fn build_claude_migration_prompt_falls_back_to_canonical_path() {
+    fn build_claude_install_prompt_falls_back_to_canonical_path() {
         // No plugin root resolved → fall back to the README-documented
         // TPM install path so the pasted command is still runnable for
         // the typical user.
-        let prompt = build_claude_migration_prompt(None);
-        assert!(prompt.contains("~/.tmux/plugins/tmux-agent-sidebar"));
+        let prompt = build_claude_install_prompt(None);
+        assert!(prompt.contains("~/.tmux/plugins/pmux-explorer"));
     }
 
     // ─── tildify_with_home ───────────────────────────────────────────
@@ -203,11 +187,8 @@ mod tests {
     #[test]
     fn tildify_collapses_paths_under_home_to_tilde() {
         assert_eq!(
-            tildify_with_home(
-                "/Users/alice/.tmux/plugins/tmux-agent-sidebar",
-                "/Users/alice"
-            ),
-            "~/.tmux/plugins/tmux-agent-sidebar"
+            tildify_with_home("/Users/alice/.tmux/plugins/pmux-explorer", "/Users/alice"),
+            "~/.tmux/plugins/pmux-explorer"
         );
     }
 
@@ -219,8 +200,8 @@ mod tests {
     #[test]
     fn tildify_leaves_paths_outside_home_unchanged() {
         assert_eq!(
-            tildify_with_home("/opt/tmux-agent-sidebar", "/Users/alice"),
-            "/opt/tmux-agent-sidebar"
+            tildify_with_home("/opt/pmux-explorer", "/Users/alice"),
+            "/opt/pmux-explorer"
         );
     }
 

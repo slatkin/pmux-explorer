@@ -3,11 +3,12 @@ use std::time::Duration;
 
 use crate::activity::{self, TaskProgress};
 use crate::cli::sanitize_tmux_value;
+use crate::pane_store::{PaneStore, PaneWrites};
 use crate::process::ProcessSnapshot;
 use crate::task_store;
-use crate::tmux::{self, PaneStatus, SessionInfo};
+use crate::tmux::{self, AgentType, PaneStatus, SessionInfo};
 
-use super::AppState;
+use super::{AppState, BottomTab};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TaskProgressDecision {
@@ -66,6 +67,15 @@ pub(crate) fn file_cache_fresh(
     )
 }
 
+/// A pane the port scan found dead, with the identity its feed removal
+/// needs: the agent and the session id, read from the pane list before
+/// any option is wiped.
+struct DeadPane {
+    pane_id: String,
+    agent: AgentType,
+    session_id: Option<String>,
+}
+
 impl AppState {
     pub(crate) fn refresh_now(&mut self) {
         self.now = crate::time::now_epoch_secs();
@@ -79,24 +89,35 @@ impl AppState {
         self.focus_state.sidebar_focused = sidebar_focused;
         self.repo_groups = crate::group::group_panes_by_repo(&sessions);
         self.prune_pane_states_to_current_panes();
-        self.rebuild_row_targets();
+        // Focus before the rebuild: the cursor's fallback row is the
+        // focused pane's, so the rebuild must see this tick's focus and
+        // not the previous one's.
         self.find_focused_pane();
+        self.rebuild_row_targets();
     }
 
-    fn clear_dead_agent_metadata(pane_id: &str) {
-        // The lifecycle set from `tmux::AGENT_SESSION_PANE_OPTIONS`, minus
-        // the pending-teardown markers: the hook-side drain owns those,
-        // and a fresh SessionStart clears both on the next run.
-        for key in tmux::AGENT_SESSION_PANE_OPTIONS {
-            if matches!(
-                *key,
-                tmux::PANE_PENDING_SESSION_END | tmux::PANE_PENDING_WORKTREE_REMOVE
-            ) {
-                continue;
-            }
-            tmux::unset_pane_option(pane_id, key);
-        }
+    fn clear_dead_agent_metadata(
+        pane_id: &str,
+        agent: AgentType,
+        session_id: &str,
+        env: &crate::thinking_feed::FeedEnv,
+        store: &dyn PaneStore,
+    ) {
+        // The feed goes first: the session id is in hand from the pane
+        // list, and a pi pane's thinking feed dies with its state the
+        // same way the shell-fallback sweep clears it (design D7).
+        crate::thinking_feed::remove_pi_feed(agent, session_id, env);
+        // One `Unset` batch over the shared lifecycle list, minus the
+        // pending-teardown markers: the hook-side drain owns those, and
+        // a fresh SessionStart clears both on the next run.
+        let writes = tmux::agent_session_wipe(&[
+            tmux::PANE_PENDING_SESSION_END,
+            tmux::PANE_PENDING_WORKTREE_REMOVE,
+        ]);
+        let _ = store.apply(pane_id, &writes);
 
+        // Best effort: a log that outlives its agent pane keeps stale rows
+        // until the pane is reused, and a poll-side sweep must not fail on it.
         let _ = std::fs::remove_file(activity::log_file_path(pane_id));
     }
 
@@ -123,10 +144,21 @@ impl AppState {
         out
     }
 
-    fn refresh_activity_data(&mut self) {
+    /// One tick of the file-backed refresh pass: the task-store close
+    /// sweep, then the activity log, the focused pane's task list,
+    /// every pane's task progress, and — while the Thought tab is
+    /// displayed — the focused pane's thinking feed. Touches only local
+    /// files (the `/tmp` stores plus the feed under `$XDG_RUNTIME_DIR`
+    /// or `/tmp`) and `AppState` — no tmux I/O — so tests drive it
+    /// directly.
+    /// The close sweep runs first so a focused list that closes renders
+    /// the empty state in the same frame.
+    pub fn refresh_activity_data(&mut self) {
+        self.refresh_task_close();
         self.refresh_activity_log();
         self.refresh_pane_tasks();
         self.refresh_task_progress();
+        self.refresh_thought_feed();
     }
 
     /// Fast refresh: tmux state + activity log (called every 1s).
@@ -144,15 +176,28 @@ impl AppState {
         // `rebuild_row_targets` inside `apply_session_snapshot` already
         // sees the filters another instance wrote. `apply_all` guards
         // every field with its matching `last_saved_*` value, so a local
-        // change that tmux already holds is not reverted.
-        self.global.apply_all(&reading.options);
+        // change that tmux already holds is not reverted. The live
+        // split drag is the third guard, axis-specific: while the mouse
+        // owns a panel, the shared value of the drag's own axis stays
+        // unadopted (a column drag guards the bottom percent, a strip
+        // drag the tab width), or the tick would move the panel under
+        // the mouse ("a drag in progress is not reverted").
+        self.global
+            .apply_all(&reading.options, self.split_drag.map(|drag| drag.axis));
         // The flags are read back from the state (not from a local probe
         // copy) so every field the state holds has a reader.
         let focused = self.sidebar_pane.pane_active;
         let window_active = self.sidebar_pane.window_active;
-        let (mut sessions, mut process_snapshot) = tmux::query_sessions_with_process_snapshot();
-        self.sweep_dead_bg_shells_if_due(&mut sessions, &mut process_snapshot);
-        if let Some(process_snapshot) = self.refresh_port_data(&sessions, process_snapshot.as_ref())
+        // The store is created once per tick, the way `FeedEnv` is
+        // threaded, and passed to everything that touches `@pane_*`
+        // options: the pane query (whose shell-fallback wipe writes
+        // through it), the bg-shell sweep and the dead-pane wipe.
+        let store = tmux::pane_store::TmuxPaneStore;
+        let (mut sessions, mut process_snapshot) =
+            tmux::query_sessions_with_process_snapshot(&self.thought.env, &store);
+        self.sweep_dead_bg_shells_if_due(&mut sessions, &mut process_snapshot, &store);
+        if let Some(process_snapshot) =
+            self.refresh_port_data(&sessions, process_snapshot.as_ref(), &store)
         {
             let sessions = Self::filter_sessions_to_live_agent_panes(
                 sessions,
@@ -170,6 +215,7 @@ impl AppState {
         &mut self,
         sessions: &[SessionInfo],
         process_snapshot: Option<&ProcessSnapshot>,
+        store: &dyn PaneStore,
     ) -> Option<crate::port::PaneProcessSnapshot> {
         const PORT_REFRESH_INTERVAL: Duration = Duration::from_secs(10);
 
@@ -178,12 +224,16 @@ impl AppState {
         {
             let scanned = crate::port::scan_session_process_snapshot(sessions, process_snapshot)?;
             let mut updates: Vec<(String, Vec<u16>, Option<String>)> = Vec::new();
-            let mut dead_panes: Vec<String> = Vec::new();
+            let mut dead_panes: Vec<DeadPane> = Vec::new();
             for session in sessions {
                 for window in &session.windows {
                     for pane in &window.panes {
                         if !scanned.live_agent_panes.contains(&pane.pane_id) {
-                            dead_panes.push(pane.pane_id.clone());
+                            dead_panes.push(DeadPane {
+                                pane_id: pane.pane_id.clone(),
+                                agent: pane.agent.clone(),
+                                session_id: pane.session_id.clone(),
+                            });
                         }
                         updates.push((
                             pane.pane_id.clone(),
@@ -202,9 +252,15 @@ impl AppState {
                 pane_state.ports = ports;
                 pane_state.command = command;
             }
-            for pane_id in dead_panes {
-                Self::clear_dead_agent_metadata(&pane_id);
-                self.clear_pane_state(&pane_id);
+            for dead in dead_panes {
+                Self::clear_dead_agent_metadata(
+                    &dead.pane_id,
+                    dead.agent,
+                    dead.session_id.as_deref().unwrap_or(""),
+                    &self.thought.env,
+                    store,
+                );
+                self.clear_pane_state(&dead.pane_id);
             }
             self.timers.port_scan_initialized = true;
             self.timers.last_port_refresh = std::time::Instant::now();
@@ -212,6 +268,72 @@ impl AppState {
         }
 
         None
+    }
+
+    /// Close finished task lists, for every pane in `repo_groups`,
+    /// focused or not. Each pane's store is statted every tick and
+    /// re-read only when the mtime moved (the all-done half of
+    /// [`task_store::close_due`] is cached in `PaneRuntimeState`); when
+    /// `close_due` holds, `clear_tasks` empties the store — items and
+    /// pane-wide description — and the cache entry is dropped.
+    pub(crate) fn refresh_task_close(&mut self) {
+        /// One pane's sweep outcome, applied back to `pane_states` in
+        /// the second pass so `repo_groups` can stay borrowed.
+        struct CloseUpdate {
+            pane_id: String,
+            mtime: Option<std::time::SystemTime>,
+            all_done: bool,
+            due: bool,
+        }
+
+        let mut updates: Vec<CloseUpdate> = Vec::new();
+        for group in &self.repo_groups {
+            for (pane, _) in &group.panes {
+                let pane_id = &pane.pane_id;
+                let current_mtime = task_store::store_mtime(pane_id);
+                let mtime_epoch = current_mtime.and_then(|mtime| {
+                    mtime
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .ok()
+                        .map(|d| d.as_secs())
+                });
+                let prior = self.pane_state(pane_id);
+                let unchanged = current_mtime.is_some()
+                    && current_mtime == prior.and_then(|s| s.task_store_mtime);
+                let (all_done, due) = if unchanged {
+                    // Same mtime: the cached all-done flag is still
+                    // authoritative; only the clock moved.
+                    let all_done = prior.is_some_and(|s| s.task_store_all_done);
+                    (
+                        all_done,
+                        all_done && task_store::close_window_elapsed(mtime_epoch, self.now),
+                    )
+                } else if current_mtime.is_some() {
+                    let list = task_store::read_task_list(pane_id);
+                    (
+                        task_store::every_item_completed(&list),
+                        task_store::close_due(&list, mtime_epoch, self.now),
+                    )
+                } else {
+                    // No store file: nothing to close, nothing to cache.
+                    (false, false)
+                };
+                updates.push(CloseUpdate {
+                    pane_id: pane_id.clone(),
+                    mtime: current_mtime,
+                    all_done,
+                    due,
+                });
+            }
+        }
+        for update in updates {
+            if update.due {
+                task_store::clear_tasks(&update.pane_id);
+                self.set_pane_task_store_cache(&update.pane_id, None, false);
+            } else {
+                self.set_pane_task_store_cache(&update.pane_id, update.mtime, update.all_done);
+            }
+        }
     }
 
     pub(crate) fn refresh_task_progress(&mut self) {
@@ -313,6 +435,7 @@ impl AppState {
         &mut self,
         sessions: &mut [SessionInfo],
         process_snapshot: &mut Option<ProcessSnapshot>,
+        store: &dyn PaneStore,
     ) {
         const BG_SHELL_SWEEP_INTERVAL: Duration = Duration::from_secs(5);
         let should_run = self
@@ -322,7 +445,7 @@ impl AppState {
         if !should_run {
             return;
         }
-        sweep_dead_bg_shells(sessions, process_snapshot);
+        sweep_dead_bg_shells(sessions, process_snapshot, store);
         self.timers.last_bg_shell_sweep = Some(std::time::Instant::now());
     }
 
@@ -332,6 +455,7 @@ impl AppState {
     pub(crate) fn refresh_pane_tasks(&mut self) {
         let Some(ref pane_id) = self.focus_state.focused_pane_id else {
             self.tasks.items.clear();
+            self.tasks.description.clear();
             self.tasks.store_cache = None;
             return;
         };
@@ -339,7 +463,9 @@ impl AppState {
         if file_cache_fresh(self.tasks.store_cache.as_ref(), pane_id, current_mtime) {
             return;
         }
-        self.tasks.items = task_store::read_tasks(pane_id);
+        let list = task_store::read_task_list(pane_id);
+        self.tasks.items = list.items;
+        self.tasks.description = list.description;
         self.tasks.store_cache = current_mtime.map(|m| (pane_id.clone(), m));
     }
 
@@ -360,11 +486,45 @@ impl AppState {
         self.activity.entries = entries;
         self.activity.log_cache = current_mtime.map(|m| (pane_id.clone(), m));
     }
+
+    /// Read the focused pi pane's thinking feed into `thought.last`
+    /// (design D4) — only while the Thought tab is drawn: a hidden tab
+    /// panel draws no tab and reads no feed, and another displayed tab
+    /// leaves the last thought as the previous read left it. On a
+    /// column the panel is the bottom panel, so its drawn height says
+    /// whether a tab shows; on a strip the drawn
+    /// [`StripLayout`](super::StripLayout) decides — its tab panel is a
+    /// side panel, drawn while `strip.tabs` is `Some`. The feed
+    /// environment was resolved once at startup into `ThoughtState`, so
+    /// the path helper takes the env as an argument.
+    pub(crate) fn refresh_thought_feed(&mut self) {
+        let tab_drawn = match self.layout.strip {
+            Some(strip) => strip.tabs.is_some(),
+            None => self.layout.bottom_panel_height > 0,
+        };
+        if !tab_drawn || self.displayed_bottom_tab() != BottomTab::Thought {
+            return;
+        }
+        let session_id = self
+            .focus_state
+            .focused_pane_id
+            .as_deref()
+            .and_then(|id| self.pane_by_id(id))
+            .and_then(|pane| pane.session_id.clone());
+        let Some(session_id) = session_id else {
+            // No focused pane, or one without a session id: no feed.
+            self.thought.last = self.thought.reader.read("", None);
+            return;
+        };
+        let path = self.thought.env.feed_path(&session_id);
+        self.thought.last = self.thought.reader.read(&session_id, path.as_deref());
+    }
 }
 
 pub(crate) fn sweep_dead_bg_shells(
     sessions: &mut [SessionInfo],
     process_snapshot: &mut Option<ProcessSnapshot>,
+    store: &dyn PaneStore,
 ) {
     let has_any = sessions
         .iter()
@@ -378,13 +538,14 @@ pub(crate) fn sweep_dead_bg_shells(
         *process_snapshot = ProcessSnapshot::scan();
     }
     if let Some(snapshot) = process_snapshot.as_ref() {
-        clear_dead_bg_shells(sessions, snapshot);
+        clear_dead_bg_shells(sessions, snapshot, store);
     }
 }
 
 pub(crate) fn clear_dead_bg_shells(
     sessions: &mut [SessionInfo],
     process_snapshot: &ProcessSnapshot,
+    store: &dyn PaneStore,
 ) {
     for session in sessions.iter_mut() {
         for window in &mut session.windows {
@@ -406,9 +567,16 @@ pub(crate) fn clear_dead_bg_shells(
                 {
                     continue;
                 }
-                tmux::unset_pane_option(&pane.pane_id, tmux::PANE_BG_CMD);
+                // One batch per swept pane (design D9): the command is
+                // cleared, and the status moves to `idle` only when it
+                // is `background` — any other status stays.
+                let mut writes = PaneWrites::new();
+                writes.unset(tmux::PANE_BG_CMD);
                 if pane.status == PaneStatus::Background {
-                    tmux::set_pane_option(&pane.pane_id, tmux::PANE_STATUS, "idle");
+                    writes.set(tmux::PANE_STATUS, "idle");
+                }
+                let _ = store.apply(&pane.pane_id, &writes);
+                if pane.status == PaneStatus::Background {
                     pane.status = PaneStatus::Idle;
                 }
                 pane.bg_shell_cmd = None;
@@ -447,9 +615,57 @@ fn is_cmd_token_byte(b: u8) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::pane_store::{MemPaneStore, PaneSnapshot, PaneWrites};
     use crate::tmux::{
         AgentType, PaneInfo, PaneStatus, PermissionMode, SessionInfo, WindowInfo, WorktreeMetadata,
     };
+
+    /// A `MemPaneStore` that counts `apply` calls so a test can pin that a
+    /// sweep or wipe issues one tmux command.
+    struct CountingStore {
+        inner: MemPaneStore,
+        applies: std::cell::Cell<usize>,
+    }
+
+    impl CountingStore {
+        fn new() -> Self {
+            CountingStore {
+                inner: MemPaneStore::new(),
+                applies: std::cell::Cell::new(0),
+            }
+        }
+
+        fn set(&self, pane: &str, key: &str, value: &str) {
+            self.inner.insert(pane, key, value);
+        }
+
+        fn get(&self, pane: &str, key: &str) -> String {
+            self.inner.get(pane, key)
+        }
+
+        fn contains(&self, pane: &str, key: &str) -> bool {
+            self.inner.contains(pane, key)
+        }
+
+        fn applies(&self) -> usize {
+            self.applies.get()
+        }
+    }
+
+    impl PaneStore for CountingStore {
+        fn snapshot(&self, pane: &str) -> PaneSnapshot {
+            self.inner.snapshot(pane)
+        }
+
+        fn get(&self, pane: &str, key: &str) -> String {
+            self.inner.get(pane, key)
+        }
+
+        fn apply(&self, pane: &str, writes: &PaneWrites) -> Result<(), String> {
+            self.applies.set(self.applies.get() + 1);
+            self.inner.apply(pane, writes)
+        }
+    }
 
     fn test_pane(id: &str) -> PaneInfo {
         PaneInfo {
@@ -505,9 +721,9 @@ mod tests {
 
     #[test]
     fn clear_dead_bg_shells_retains_shell_present_in_ps_output() {
-        let _guard = tmux::test_mock::install();
+        let store = MemPaneStore::new();
         let pane_id = "%BG_ALIVE";
-        tmux::test_mock::set(pane_id, tmux::PANE_BG_CMD, "sleep 300");
+        store.insert(pane_id, tmux::PANE_BG_CMD, "sleep 300");
 
         let mut sessions = test_session(vec![pane_with_bg(
             pane_id,
@@ -516,22 +732,22 @@ mod tests {
         )]);
         let snapshot = process_snapshot("100 1 zsh /bin/zsh -c eval 'sleep 300' < /dev/null\n");
 
-        clear_dead_bg_shells(&mut sessions, &snapshot);
+        clear_dead_bg_shells(&mut sessions, &snapshot, &store);
 
         assert_eq!(
             sessions[0].windows[0].panes[0].bg_shell_cmd.as_deref(),
             Some("sleep 300"),
             "a matching ps line must leave the marker intact",
         );
-        assert!(tmux::test_mock::contains(pane_id, tmux::PANE_BG_CMD));
+        assert!(store.contains(pane_id, tmux::PANE_BG_CMD));
     }
 
     #[test]
     fn clear_dead_bg_shells_ignores_matching_command_in_other_pane_tree() {
-        let _guard = tmux::test_mock::install();
+        let store = MemPaneStore::new();
         let pane_id = "%BG_OTHER_PANE";
-        tmux::test_mock::set(pane_id, tmux::PANE_BG_CMD, "sleep 300");
-        tmux::test_mock::set(pane_id, tmux::PANE_STATUS, "background");
+        store.insert(pane_id, tmux::PANE_BG_CMD, "sleep 300");
+        store.insert(pane_id, tmux::PANE_STATUS, "background");
 
         let mut sessions = test_session(vec![pane_with_bg(
             pane_id,
@@ -540,7 +756,7 @@ mod tests {
         )]);
         let snapshot = process_snapshot("100 1 zsh /bin/zsh\n200 1 zsh /bin/zsh -c 'sleep 300'\n");
 
-        clear_dead_bg_shells(&mut sessions, &snapshot);
+        clear_dead_bg_shells(&mut sessions, &snapshot, &store);
 
         let pane = &sessions[0].windows[0].panes[0];
         assert!(
@@ -552,10 +768,10 @@ mod tests {
 
     #[test]
     fn clear_dead_bg_shells_clears_when_shell_missing_and_downgrades_background() {
-        let _guard = tmux::test_mock::install();
+        let store = MemPaneStore::new();
         let pane_id = "%BG_DEAD";
-        tmux::test_mock::set(pane_id, tmux::PANE_BG_CMD, "sleep 300");
-        tmux::test_mock::set(pane_id, tmux::PANE_STATUS, "background");
+        store.insert(pane_id, tmux::PANE_BG_CMD, "sleep 300");
+        store.insert(pane_id, tmux::PANE_STATUS, "background");
 
         let mut sessions = test_session(vec![pane_with_bg(
             pane_id,
@@ -565,7 +781,7 @@ mod tests {
         // ps output contains nothing matching "sleep 300".
         let snapshot = process_snapshot("100 1 zsh /bin/zsh\n200 1 ssh /usr/bin/ssh host\n");
 
-        clear_dead_bg_shells(&mut sessions, &snapshot);
+        clear_dead_bg_shells(&mut sessions, &snapshot, &store);
 
         let pane = &sessions[0].windows[0].panes[0];
         assert!(
@@ -577,19 +793,16 @@ mod tests {
             PaneStatus::Idle,
             "background with a dead shell must downgrade to idle",
         );
-        assert!(!tmux::test_mock::contains(pane_id, tmux::PANE_BG_CMD));
-        assert_eq!(
-            tmux::test_mock::get(pane_id, tmux::PANE_STATUS).as_deref(),
-            Some("idle"),
-        );
+        assert!(!store.contains(pane_id, tmux::PANE_BG_CMD));
+        assert_eq!(store.get(pane_id, tmux::PANE_STATUS), "idle");
     }
 
     #[test]
     fn clear_dead_bg_shells_does_not_touch_non_background_status() {
-        let _guard = tmux::test_mock::install();
+        let store = MemPaneStore::new();
         let pane_id = "%BG_STALE_RUNNING";
-        tmux::test_mock::set(pane_id, tmux::PANE_STATUS, "running");
-        tmux::test_mock::set(pane_id, tmux::PANE_BG_CMD, "npm run dev");
+        store.insert(pane_id, tmux::PANE_STATUS, "running");
+        store.insert(pane_id, tmux::PANE_BG_CMD, "npm run dev");
 
         let mut sessions = test_session(vec![pane_with_bg(
             pane_id,
@@ -598,7 +811,7 @@ mod tests {
         )]);
         let snapshot = process_snapshot("100 1 zsh /bin/zsh\n");
 
-        clear_dead_bg_shells(&mut sessions, &snapshot);
+        clear_dead_bg_shells(&mut sessions, &snapshot, &store);
 
         let pane = &sessions[0].windows[0].panes[0];
         assert!(pane.bg_shell_cmd.is_none());
@@ -607,17 +820,14 @@ mod tests {
             PaneStatus::Running,
             "non-background status must be left alone",
         );
-        assert_eq!(
-            tmux::test_mock::get(pane_id, tmux::PANE_STATUS).as_deref(),
-            Some("running"),
-        );
+        assert_eq!(store.get(pane_id, tmux::PANE_STATUS), "running");
     }
 
     #[test]
     fn clear_dead_bg_shells_preserves_placeholder_cmd() {
-        let _guard = tmux::test_mock::install();
+        let store = MemPaneStore::new();
         let pane_id = "%BG_PLACEHOLDER";
-        tmux::test_mock::set(pane_id, tmux::PANE_BG_CMD, tmux::BG_CMD_PLACEHOLDER);
+        store.insert(pane_id, tmux::PANE_BG_CMD, tmux::BG_CMD_PLACEHOLDER);
 
         let mut sessions = test_session(vec![pane_with_bg(
             pane_id,
@@ -626,14 +836,14 @@ mod tests {
         )]);
         let snapshot = process_snapshot("");
 
-        clear_dead_bg_shells(&mut sessions, &snapshot);
+        clear_dead_bg_shells(&mut sessions, &snapshot, &store);
 
         assert_eq!(
             sessions[0].windows[0].panes[0].bg_shell_cmd.as_deref(),
             Some(tmux::BG_CMD_PLACEHOLDER),
             "placeholder must survive — we cannot prove the shell is dead",
         );
-        assert!(tmux::test_mock::contains(pane_id, tmux::PANE_BG_CMD));
+        assert!(store.contains(pane_id, tmux::PANE_BG_CMD));
     }
 
     #[test]
@@ -641,9 +851,9 @@ mod tests {
         // Regression: a naive `str::contains` match kept the marker
         // alive forever when a shorter stored cmd was a prefix of a
         // live longer cmd.
-        let _guard = tmux::test_mock::install();
+        let store = MemPaneStore::new();
         let pane_id = "%BG_PREFIX_COLLIDE";
-        tmux::test_mock::set(pane_id, tmux::PANE_BG_CMD, "sleep 3");
+        store.insert(pane_id, tmux::PANE_BG_CMD, "sleep 3");
         let mut sessions = test_session(vec![pane_with_bg(
             pane_id,
             "sleep 3",
@@ -651,7 +861,7 @@ mod tests {
         )]);
         let snapshot = process_snapshot("100 1 zsh /bin/zsh -c 'sleep 30' < /dev/null\n");
 
-        clear_dead_bg_shells(&mut sessions, &snapshot);
+        clear_dead_bg_shells(&mut sessions, &snapshot, &store);
 
         assert!(
             sessions[0].windows[0].panes[0].bg_shell_cmd.is_none(),
@@ -660,12 +870,34 @@ mod tests {
     }
 
     #[test]
+    fn clear_dead_bg_shells_issues_one_write_batch_per_dead_pane() {
+        // The sweep writes through the store, so one dead pane is one
+        // tmux command carrying both the unset and the status move.
+        let store = CountingStore::new();
+        let pane_id = "%BG_ONE_BATCH";
+        store.set(pane_id, tmux::PANE_STATUS, "background");
+        store.set(pane_id, tmux::PANE_BG_CMD, "sleep 300");
+        let mut sessions = test_session(vec![pane_with_bg(
+            pane_id,
+            "sleep 300",
+            PaneStatus::Background,
+        )]);
+        let snapshot = process_snapshot("100 1 zsh /bin/zsh\n");
+
+        clear_dead_bg_shells(&mut sessions, &snapshot, &store);
+
+        assert_eq!(store.applies(), 1, "one dead pane is one write batch");
+        assert!(!store.contains(pane_id, tmux::PANE_BG_CMD));
+        assert_eq!(store.get(pane_id, tmux::PANE_STATUS), "idle");
+    }
+
+    #[test]
     fn clear_dead_bg_shells_no_op_when_no_pane_has_bg_marker() {
-        let _guard = tmux::test_mock::install();
+        let store = MemPaneStore::new();
         let mut sessions = test_session(vec![test_pane("%1")]);
         let snapshot = process_snapshot("100 1 zsh /bin/zsh\n");
 
-        clear_dead_bg_shells(&mut sessions, &snapshot);
+        clear_dead_bg_shells(&mut sessions, &snapshot, &store);
 
         assert!(sessions[0].windows[0].panes[0].bg_shell_cmd.is_none());
     }
@@ -792,18 +1024,30 @@ mod tests {
     }
 
     #[test]
+    fn clear_dead_agent_metadata_issues_one_write_batch() {
+        let store = CountingStore::new();
+        let pane = "%DEAD_ONE_BATCH";
+        let env = crate::thinking_feed::FeedEnv::default();
+
+        AppState::clear_dead_agent_metadata(pane, AgentType::Pi, "", &env, &store);
+
+        assert_eq!(store.applies(), 1, "a wipe is one write batch");
+    }
+
+    #[test]
     fn clear_dead_agent_metadata_clears_the_subagent_identity() {
         // A killed pi subagent must not leave its identity options behind:
         // `@pane_agent` is wiped by the same sweep, and a next agent in
         // this pane would otherwise render as a pmux subagent with a
         // foreign task and lose its permission badge.
-        let _guard = tmux::test_mock::install();
+        let store = MemPaneStore::new();
         let pane = "%DEAD_SUBAGENT";
         for key in tmux::AGENT_SESSION_PANE_OPTIONS {
-            tmux::test_mock::set(pane, key, "x");
+            store.insert(pane, key, "x");
         }
 
-        AppState::clear_dead_agent_metadata(pane);
+        let env = crate::thinking_feed::FeedEnv::default();
+        AppState::clear_dead_agent_metadata(pane, AgentType::Pi, "", &env, &store);
 
         for key in tmux::AGENT_SESSION_PANE_OPTIONS {
             let preserved = matches!(
@@ -811,7 +1055,7 @@ mod tests {
                 tmux::PANE_PENDING_SESSION_END | tmux::PANE_PENDING_WORKTREE_REMOVE
             );
             assert_eq!(
-                tmux::test_mock::contains(pane, key),
+                store.contains(pane, key),
                 preserved,
                 "expected {key} {}",
                 if preserved { "preserved" } else { "cleared" }
@@ -853,14 +1097,20 @@ mod tests {
         let mut state = AppState::new("%99".into());
         let pane_id = "%TASK_FRESH";
         state.focus_state.focused_pane_id = Some(pane_id.into());
-        crate::task_store::record_task(pane_id, "first").unwrap();
-        crate::task_store::record_task(pane_id, "second").unwrap();
+        crate::task_store::record_task(pane_id, "first")
+            .unwrap()
+            .unwrap();
+        crate::task_store::record_task(pane_id, "second")
+            .unwrap()
+            .unwrap();
+        crate::task_store::set_description(pane_id, "the goal").unwrap();
 
         state.refresh_pane_tasks();
 
         assert_eq!(state.tasks.items.len(), 2);
         assert_eq!(state.tasks.items[0].subject, "first");
         assert_eq!(state.tasks.items[1].subject, "second");
+        assert_eq!(state.tasks.description, "the goal");
         assert_eq!(
             state.tasks.store_cache.as_ref().map(|(id, _)| id.as_str()),
             Some(pane_id),
@@ -959,5 +1209,436 @@ mod tests {
 
         cleanup_task_store(pane_a);
         cleanup_task_store(pane_b);
+    }
+
+    // ─── refresh_thought_feed ───────────────────────────────────
+
+    use crate::state::strip_layout;
+    use crate::thinking_feed::scratch_env;
+
+    /// An AppState focused on a pi pane carrying `session_id`, whose
+    /// feed lives under the scratch `dir` (the captured startup env is
+    /// overwritten, so no process env is touched). The bottom panel is
+    /// marked drawn — the feed read runs only while the tab is on
+    /// screen.
+    fn pi_feed_state(dir: &tempfile::TempDir, session_id: &str) -> AppState {
+        let mut pane = test_pane("%PI_FEED");
+        pane.agent = AgentType::Pi;
+        pane.session_id = Some(session_id.into());
+        let mut state = AppState::new("%99".into());
+        state.repo_groups = vec![crate::group::RepoGroup {
+            name: "test".into(),
+            has_focus: true,
+            panes: vec![(pane, crate::group::PaneGitInfo::default())],
+        }];
+        state.focus_state.focused_pane_id = Some("%PI_FEED".into());
+        state.thought.env = scratch_env(dir.path());
+        state.layout.bottom_panel_height = 10;
+        state
+    }
+
+    #[test]
+    fn a_hidden_bottom_panel_reads_no_feed() {
+        // The spec gates the read on the tab being drawn: a stored
+        // Thought with the panel hidden (a percent of 0 drew no panel
+        // last frame) must not stat or read the feed.
+        let dir = tempfile::TempDir::new().unwrap();
+        let env = scratch_env(dir.path());
+        let feed = env.feed_path("sess").unwrap();
+        std::fs::create_dir_all(feed.parent().unwrap()).unwrap();
+        std::fs::write(
+            &feed,
+            format!(
+                "{}\n{}\n",
+                r#"{"kind":"start","ts":"t1","producer":"pmux"}"#,
+                r#"{"kind":"delta","ts":"t2","producer":"pmux","text":"unseen"}"#
+            ),
+        )
+        .unwrap();
+        let mut state = pi_feed_state(&dir, "sess");
+        state.global.bottom_tab = BottomTab::Thought;
+        state.layout.bottom_panel_height = 0;
+
+        state.refresh_activity_data();
+
+        assert!(
+            state.thought.last.is_empty(),
+            "a hidden bottom panel draws no tab and must read no feed"
+        );
+    }
+
+    #[test]
+    fn a_strip_with_a_drawn_tab_panel_reads_the_feed() {
+        // A strip keeps `bottom_panel_height` at 0 — its tab panel is a
+        // side panel, not a bottom one — so the column height must not
+        // gate the read: with the strip's tab panel drawn, the Thought
+        // tab reads the feed.
+        let dir = tempfile::TempDir::new().unwrap();
+        let env = scratch_env(dir.path());
+        let feed = env.feed_path("sess").unwrap();
+        std::fs::create_dir_all(feed.parent().unwrap()).unwrap();
+        std::fs::write(
+            &feed,
+            format!(
+                "{}\n{}\n",
+                r#"{"kind":"start","ts":"t1","producer":"pmux"}"#,
+                r#"{"kind":"delta","ts":"t2","producer":"pmux","text":"strip thought"}"#
+            ),
+        )
+        .unwrap();
+        let mut state = pi_feed_state(&dir, "sess");
+        state.global.bottom_tab = BottomTab::Thought;
+        state.layout.bottom_panel_height = 0;
+        state.layout.strip = Some(strip_layout(120, 12, 40));
+
+        state.refresh_activity_data();
+
+        assert!(
+            !state.thought.last.is_empty(),
+            "a drawn strip tab panel lets the Thought tab read the feed"
+        );
+    }
+
+    #[test]
+    fn a_strip_with_the_tab_panel_hidden_reads_no_feed() {
+        // The strip twin of the hidden-panel gate: a tab width of 0
+        // drew no tab panel, so the feed stays unread.
+        let dir = tempfile::TempDir::new().unwrap();
+        let env = scratch_env(dir.path());
+        let feed = env.feed_path("sess").unwrap();
+        std::fs::create_dir_all(feed.parent().unwrap()).unwrap();
+        std::fs::write(
+            &feed,
+            format!(
+                "{}\n{}\n",
+                r#"{"kind":"start","ts":"t1","producer":"pmux"}"#,
+                r#"{"kind":"delta","ts":"t2","producer":"pmux","text":"unseen"}"#
+            ),
+        )
+        .unwrap();
+        let mut state = pi_feed_state(&dir, "sess");
+        state.global.bottom_tab = BottomTab::Thought;
+        state.layout.bottom_panel_height = 0;
+        state.layout.strip = Some(strip_layout(120, 12, 0));
+
+        state.refresh_activity_data();
+
+        assert!(
+            state.thought.last.is_empty(),
+            "a strip with no drawn tab panel must read no feed"
+        );
+    }
+
+    #[test]
+    fn another_displayed_tab_reads_no_feed() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let env = scratch_env(dir.path());
+        let feed = env.feed_path("sess").unwrap();
+        std::fs::create_dir_all(feed.parent().unwrap()).unwrap();
+        std::fs::write(
+            &feed,
+            format!(
+                "{}\n{}\n",
+                r#"{"kind":"start","ts":"t1","producer":"pmux"}"#,
+                r#"{"kind":"delta","ts":"t2","producer":"pmux","text":"thought"}"#
+            ),
+        )
+        .unwrap();
+        let mut state = pi_feed_state(&dir, "sess");
+        state.global.bottom_tab = BottomTab::Tasks;
+
+        state.refresh_activity_data();
+
+        assert!(
+            state.thought.last.is_empty(),
+            "the Tasks tab must read no thinking feed"
+        );
+
+        // A delta arriving while another tab is displayed stays unread.
+        std::fs::write(
+            &feed,
+            format!(
+                "{}\n{}\n{}\n",
+                r#"{"kind":"start","ts":"t1","producer":"pmux"}"#,
+                r#"{"kind":"delta","ts":"t2","producer":"pmux","text":"thought"}"#,
+                r#"{"kind":"delta","ts":"t3","producer":"pmux","text":" more"}"#
+            ),
+        )
+        .unwrap();
+        state.refresh_activity_data();
+
+        assert!(state.thought.last.is_empty());
+    }
+
+    #[test]
+    fn a_new_delta_shows_on_the_next_refresh() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let env = scratch_env(dir.path());
+        let feed = env.feed_path("sess").unwrap();
+        std::fs::create_dir_all(feed.parent().unwrap()).unwrap();
+        std::fs::write(
+            &feed,
+            format!(
+                "{}\n{}\n",
+                r#"{"kind":"start","ts":"t1","producer":"pmux"}"#,
+                r#"{"kind":"delta","ts":"t2","producer":"pmux","text":"first read"}"#
+            ),
+        )
+        .unwrap();
+        let mut state = pi_feed_state(&dir, "sess");
+        state.global.bottom_tab = BottomTab::Thought;
+
+        state.refresh_activity_data();
+        assert_eq!(state.thought.last.text, "first read");
+
+        // The delta appended after this tick's read shows on the next
+        // one — within a second, per the spec's tick scenario.
+        std::fs::write(
+            &feed,
+            format!(
+                "{}\n{}\n{}\n",
+                r#"{"kind":"start","ts":"t1","producer":"pmux"}"#,
+                r#"{"kind":"delta","ts":"t2","producer":"pmux","text":"first read"}"#,
+                r#"{"kind":"delta","ts":"t3","producer":"pmux","text":" and more"}"#
+            ),
+        )
+        .unwrap();
+        state.refresh_activity_data();
+
+        assert_eq!(state.thought.last.text, "first read and more");
+    }
+
+    #[test]
+    fn a_displayed_thought_tab_without_a_session_id_shows_nothing() {
+        // No focused pane at all: the read is the empty state, and a
+        // later focus with a session id picks its feed up.
+        let dir = tempfile::TempDir::new().unwrap();
+        let env = scratch_env(dir.path());
+        let feed = env.feed_path("sess").unwrap();
+        std::fs::create_dir_all(feed.parent().unwrap()).unwrap();
+        std::fs::write(
+            &feed,
+            format!(
+                "{}\n{}\n",
+                r#"{"kind":"start","ts":"t1","producer":"pmux"}"#,
+                r#"{"kind":"delta","ts":"t2","producer":"pmux","text":"late"}"#
+            ),
+        )
+        .unwrap();
+        let mut state = pi_feed_state(&dir, "sess");
+        state.global.bottom_tab = BottomTab::Thought;
+        state.focus_state.focused_pane_id = None;
+
+        state.refresh_activity_data();
+        assert!(state.thought.last.is_empty());
+
+        state.focus_state.focused_pane_id = Some("%PI_FEED".into());
+        state.refresh_activity_data();
+        assert_eq!(state.thought.last.text, "late");
+    }
+
+    // ─── refresh_task_close ───────────────────────────────────────
+
+    fn groups_with(pane_ids: &[&str]) -> Vec<crate::group::RepoGroup> {
+        vec![crate::group::RepoGroup {
+            name: "test".into(),
+            has_focus: true,
+            panes: pane_ids
+                .iter()
+                .map(|id| (test_pane(id), crate::group::PaneGitInfo::default()))
+                .collect(),
+        }]
+    }
+
+    fn sweep_state(pane_ids: &[&str]) -> AppState {
+        let mut state = AppState::new("%99".into());
+        state.repo_groups = groups_with(pane_ids);
+        state.now = crate::time::now_epoch_secs();
+        state
+    }
+
+    /// A finished one-item store for `pane_id`: one completed task
+    /// plus a pane description, so a close must take both with it.
+    fn finished_store(pane_id: &str) {
+        cleanup_task_store(pane_id);
+        let id = crate::task_store::record_task(pane_id, "done item")
+            .unwrap()
+            .unwrap();
+        crate::task_store::update_task_status(
+            pane_id,
+            &id,
+            crate::task_store::TaskItemStatus::Completed,
+        )
+        .unwrap();
+        crate::task_store::set_description(pane_id, "the goal").unwrap();
+    }
+
+    /// Pin the store file's mtime `secs_ago` into the past, the way a
+    /// list quiet for that long looks to the sweep.
+    fn backdate_store(pane_id: &str, secs_ago: u64) {
+        let file = std::fs::File::options()
+            .write(true)
+            .open(crate::task_store::store_file_path(pane_id))
+            .unwrap();
+        file.set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(secs_ago))
+            .unwrap();
+    }
+
+    #[test]
+    fn refresh_task_close_closes_a_finished_list_once_the_window_passes() {
+        let pane_id = "%TC_BOUNDARY";
+        let mut state = sweep_state(&[pane_id]);
+        finished_store(pane_id);
+
+        // First tick reads the store: all done, but the mtime is fresh.
+        state.refresh_task_close();
+        assert!(crate::task_store::store_file_path(pane_id).exists());
+        assert!(state.pane_task_store_all_done(pane_id));
+
+        // 89 seconds in, the mtime is unchanged so the cached flag
+        // answers — and the list still shows.
+        state.now += task_store::TASK_CLOSE_SECS - 1;
+        state.refresh_task_close();
+        assert!(crate::task_store::store_file_path(pane_id).exists());
+
+        // At 90 seconds the close fires: store gone, description with
+        // it, and the pane's cache entry dropped.
+        state.now += 1;
+        state.refresh_task_close();
+        assert!(!crate::task_store::store_file_path(pane_id).exists());
+        assert!(crate::task_store::read_task_list(pane_id).items.is_empty());
+        assert!(state.pane_task_store_mtime(pane_id).is_none());
+        assert!(!state.pane_task_store_all_done(pane_id));
+    }
+
+    #[test]
+    fn refresh_task_close_closes_a_backdated_store_on_first_sight() {
+        // A list that finished while the sidebar was down "should have
+        // closed" already: the first observation past the window
+        // closes it.
+        let pane_id = "%TC_BACKDATED";
+        let mut state = sweep_state(&[pane_id]);
+        finished_store(pane_id);
+        backdate_store(pane_id, task_store::TASK_CLOSE_SECS + 1);
+
+        state.refresh_task_close();
+
+        assert!(!crate::task_store::store_file_path(pane_id).exists());
+    }
+
+    #[test]
+    fn refresh_task_close_closes_an_unfocused_pane_on_time() {
+        let focused = "%TC_FOCUS_A";
+        let unfocused = "%TC_FOCUS_B";
+        let mut state = sweep_state(&[focused, unfocused]);
+        state.focus_state.focused_pane_id = Some(focused.into());
+        finished_store(unfocused);
+        backdate_store(unfocused, task_store::TASK_CLOSE_SECS + 1);
+        crate::task_store::record_task(focused, "still open")
+            .unwrap()
+            .unwrap();
+
+        state.refresh_task_close();
+
+        assert!(
+            !crate::task_store::store_file_path(unfocused).exists(),
+            "an unfocused pane's finished list closes on the same clock"
+        );
+        assert!(
+            crate::task_store::store_file_path(focused).exists(),
+            "the focused pane's unfinished list is untouched"
+        );
+
+        cleanup_task_store(focused);
+    }
+
+    #[test]
+    fn refresh_task_close_reopened_item_keeps_the_list_open() {
+        let pane_id = "%TC_REOPEN";
+        let mut state = sweep_state(&[pane_id]);
+        finished_store(pane_id);
+
+        // Reopen the item, then age the store past the window: not
+        // every item is completed, so the list must not close.
+        crate::task_store::update_task_status(
+            pane_id,
+            "1",
+            crate::task_store::TaskItemStatus::Pending,
+        )
+        .unwrap();
+        backdate_store(pane_id, task_store::TASK_CLOSE_SECS + 1);
+        state.refresh_task_close();
+
+        assert!(crate::task_store::store_file_path(pane_id).exists());
+        assert_eq!(
+            crate::task_store::read_task_list(pane_id).items[0].status,
+            crate::task_store::TaskItemStatus::Pending
+        );
+        assert!(!state.pane_task_store_all_done(pane_id));
+
+        cleanup_task_store(pane_id);
+    }
+
+    #[test]
+    fn refresh_task_close_refinished_list_gets_a_fresh_window() {
+        let pane_id = "%TC_REFINISH";
+        let mut state = sweep_state(&[pane_id]);
+        finished_store(pane_id);
+
+        // Reopen, then complete again: the re-completion's mtime owns
+        // the next window.
+        crate::task_store::update_task_status(
+            pane_id,
+            "1",
+            crate::task_store::TaskItemStatus::Pending,
+        )
+        .unwrap();
+        crate::task_store::update_task_status(
+            pane_id,
+            "1",
+            crate::task_store::TaskItemStatus::Completed,
+        )
+        .unwrap();
+        state.refresh_task_close();
+        assert!(crate::task_store::store_file_path(pane_id).exists());
+
+        // The fresh window counts from the re-completion, not the
+        // first finish.
+        state.now += task_store::TASK_CLOSE_SECS - 1;
+        state.refresh_task_close();
+        assert!(
+            crate::task_store::store_file_path(pane_id).exists(),
+            "89 seconds after re-completion is still inside the window"
+        );
+
+        state.now += 1;
+        state.refresh_task_close();
+        assert!(!crate::task_store::store_file_path(pane_id).exists());
+    }
+
+    #[test]
+    fn refresh_task_close_leaves_unfinished_and_empty_stores_alone() {
+        let unfinished = "%TC_OPEN";
+        let empty = "%TC_EMPTY";
+        let mut state = sweep_state(&[unfinished, empty]);
+
+        cleanup_task_store(unfinished);
+        crate::task_store::record_task(unfinished, "still pending")
+            .unwrap()
+            .unwrap();
+        backdate_store(unfinished, task_store::TASK_CLOSE_SECS + 1);
+
+        // A description-only store: described, then the agent died.
+        cleanup_task_store(empty);
+        crate::task_store::set_description(empty, "orphan description").unwrap();
+        backdate_store(empty, task_store::TASK_CLOSE_SECS + 1);
+
+        state.refresh_task_close();
+
+        assert!(crate::task_store::store_file_path(unfinished).exists());
+        assert!(crate::task_store::store_file_path(empty).exists());
+
+        cleanup_task_store(unfinished);
+        cleanup_task_store(empty);
     }
 }

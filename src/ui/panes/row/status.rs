@@ -5,9 +5,46 @@ use ratatui::{
 
 use super::ctx::RowCtx;
 use crate::pmux_task::PmuxTaskKind;
-use crate::tmux::PaneStatus;
+use crate::tmux::{PaneStatus, SubagentParent};
+use crate::ui::colors::ColorTheme;
 use crate::ui::icons::StatusIcons;
 use crate::ui::text::{display_width, elapsed_label, truncate_to_width};
+
+/// The badge's colour: a subagent badge carries its own override,
+/// otherwise the permission mode's colour — the same table the
+/// status row has always used.
+fn badge_color(
+    pane: &crate::tmux::PaneInfo,
+    badge_override: Option<Color>,
+    theme: &ColorTheme,
+) -> Color {
+    use crate::tmux::PermissionMode;
+    badge_override.unwrap_or(match pane.permission_mode {
+        PermissionMode::BypassPermissions => theme.badge_danger,
+        PermissionMode::Auto => theme.badge_auto,
+        PermissionMode::DontAsk => theme.badge_auto,
+        PermissionMode::Plan => theme.badge_plan,
+        PermissionMode::AcceptEdits => theme.badge_auto,
+        PermissionMode::Defer => theme.badge_auto,
+        PermissionMode::Default => theme.text_muted,
+    })
+}
+
+/// The lifted branch label for the status row: the branch name after
+/// the pane name, sharing the pane name's budget — the pane name is
+/// the row's identity, the branch only its context, so the branch is
+/// the first thing a tight row drops.
+fn inline_branch_label(
+    ctx: &RowCtx,
+    pane_name: Option<&str>,
+    title_budget: usize,
+) -> Option<String> {
+    let branch = ctx.inline_branch.as_deref()?;
+    let used = pane_name.map_or(0, |name| 1 + display_width(name));
+    let budget = title_budget.saturating_sub(used + 1);
+    let text = (budget > 0).then(|| truncate_to_width(branch, budget))?;
+    (!text.is_empty()).then_some(text)
+}
 
 pub(super) fn status_row(
     pane: &crate::tmux::PaneInfo,
@@ -16,7 +53,6 @@ pub(super) fn status_row(
     spinner_frame: usize,
     now: u64,
 ) -> Line<'static> {
-    use crate::tmux::PermissionMode;
     let theme = ctx.theme;
 
     let (icon, pulse_color) = running_icon_for(&pane.status, spinner_frame, icons);
@@ -24,15 +60,19 @@ pub(super) fn status_row(
         pulse_color.unwrap_or_else(|| theme.status_color(&pane.status, pane.attention));
     // The agent label is always shown; a real pane name (set via pmux's
     // `select-pane -T`) is appended after the badge slot, so the subagent
-    // badge (♟ / ↻) and a permission badge sit between the agent label and
+    // badge (↻ for a resumed one, none for a spawned one) and a permission badge sit between the agent label and
     // the pane name. Only the pane's own name is shown in the title slot —
-    // never the tmux session name.
+    // never the tmux session name. OpenCode renders its label as a padded
+    // Nerd glyph chip on a black background instead of the word, since the
+    // agent's own OSC title ("OpenCode") is filtered from the name slot and
+    // would only duplicate the label.
+    let agent_is_opencode = pane.agent == crate::tmux::AgentType::OpenCode;
     let agent_label = pane.agent.label();
     // A subagent pane owns the badge slot: a pi pane always has the default
     // permission mode, whose badge is empty, so the pmux identity can use it.
     let (badge, badge_override) = match &pane.subagent {
         Some(info) => match info.kind {
-            PmuxTaskKind::Spawned => ("♟", Some(theme.badge_plan)),
+            PmuxTaskKind::Spawned => ("", None),
             PmuxTaskKind::Resumed => ("↻", Some(theme.badge_auto)),
         },
         None => (pane.permission_mode.badge(), None),
@@ -47,12 +87,27 @@ pub(super) fn status_row(
     };
 
     let badge_extra = if badge.is_empty() { 0 } else { 1 };
+    // An orphaned subagent is the only subagent state that carries a tag:
+    // it could not nest under its parent, so the row says so, and the tag
+    // takes its width out of the title budget before the pane name is cut.
+    let orphan_tag = matches!(
+        pane.subagent.as_ref().map(|info| &info.parent),
+        Some(SubagentParent::Orphaned)
+    )
+    .then_some(" ORPHANED");
+    let orphan_width = orphan_tag.map_or(0, display_width);
+    let agent_width = if agent_is_opencode {
+        1 + display_width(crate::ui::icons::OPENCODE_AGENT_GLYPH)
+    } else {
+        1 + display_width(agent_label)
+    };
     let fixed_width =
-        display_width(icon) + 1 + display_width(agent_label) + badge_extra + display_width(badge);
-    // Reserve room for the icon, the agent label, the badge, and the
-    // elapsed label; the pane name gets what remains and takes the
-    // ellipsis when cut. The agent label itself is never truncated, and
-    // the elapsed-truncation fallback below stays in place.
+        display_width(icon) + agent_width + badge_extra + display_width(badge) + orphan_width;
+    // Reserve room for the icon, the agent label, the badge and the
+    // elapsed label; the pane name and the lifted branch share what
+    // remains and take the ellipsis when cut. The agent label itself
+    // is never truncated, and the elapsed-truncation fallback below
+    // stays in place.
     let elapsed_width = display_width(&elapsed);
     let elapsed_gap = usize::from(elapsed_width > 0);
     let title_budget = ctx
@@ -64,10 +119,14 @@ pub(super) fn status_row(
         .as_deref()
         .filter(|_| name_budget > 0)
         .map(|name| truncate_to_width(name, name_budget));
+    let branch_label = inline_branch_label(ctx, pane_name.as_deref(), title_budget);
 
     let mut left_width = fixed_width;
     if let Some(name) = &pane_name {
         left_width += 1 + display_width(name);
+    }
+    if let Some(label) = &branch_label {
+        left_width += 1 + display_width(label);
     }
     let available_for_elapsed = ctx.inner_width.saturating_sub(left_width);
     let elapsed = truncate_to_width(&elapsed, available_for_elapsed);
@@ -78,29 +137,47 @@ pub(super) fn status_row(
         icon.to_string(),
         ctx.apply_bg(Style::default().fg(icon_color)),
     ));
-    left_spans.push(Span::styled(
-        format!(" {agent_label}"),
-        ctx.apply_bg(Style::default().fg(title_fg)),
-    ));
+    if agent_is_opencode {
+        // One row-background cell after the status icon first, so the chip
+        // sits in the same column as the other agents' labels instead of
+        // touching the status icon.
+        left_spans.push(Span::styled(" ", ctx.apply_bg(Style::default())));
+        left_spans.push(Span::styled(
+            crate::ui::icons::OPENCODE_AGENT_GLYPH.to_string(),
+            // Literal black/white, not ANSI: the chip must stay a white
+            // glyph on black under any terminal palette.
+            Style::default()
+                .fg(Color::Rgb(255, 255, 255))
+                .bg(Color::Rgb(0, 0, 0)),
+        ));
+    } else {
+        left_spans.push(Span::styled(
+            format!(" {agent_label}"),
+            ctx.apply_bg(Style::default().fg(title_fg)),
+        ));
+    }
     if !badge.is_empty() {
-        let badge_color = badge_override.unwrap_or(match pane.permission_mode {
-            PermissionMode::BypassPermissions => theme.badge_danger,
-            PermissionMode::Auto => theme.badge_auto,
-            PermissionMode::DontAsk => theme.badge_auto,
-            PermissionMode::Plan => theme.badge_plan,
-            PermissionMode::AcceptEdits => theme.badge_auto,
-            PermissionMode::Defer => theme.badge_auto,
-            PermissionMode::Default => theme.text_muted,
-        });
         left_spans.push(Span::styled(
             format!(" {}", badge),
-            ctx.apply_bg(Style::default().fg(badge_color)),
+            ctx.apply_bg(Style::default().fg(badge_color(pane, badge_override, theme))),
+        ));
+    }
+    if let Some(tag) = orphan_tag {
+        left_spans.push(Span::styled(
+            tag,
+            ctx.apply_bg(Style::default().fg(theme.status_error)),
         ));
     }
     if let Some(name) = &pane_name {
         left_spans.push(Span::styled(
             format!(" {name}"),
             ctx.apply_bg(Style::default().fg(title_fg)),
+        ));
+    }
+    if let Some(label) = &branch_label {
+        left_spans.push(Span::styled(
+            format!(" {label}"),
+            ctx.apply_bg(Style::default().fg(theme.branch)),
         ));
     }
 

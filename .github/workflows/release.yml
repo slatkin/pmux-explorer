@@ -15,16 +15,16 @@ jobs:
         include:
           - target: aarch64-apple-darwin
             os: macos-latest
-            asset: tmux-agent-sidebar-darwin-aarch64
+            asset: pmux-explorer-darwin-aarch64
           - target: x86_64-apple-darwin
             os: macos-latest
-            asset: tmux-agent-sidebar-darwin-x86_64
+            asset: pmux-explorer-darwin-x86_64
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
-            asset: tmux-agent-sidebar-linux-x86_64
+            asset: pmux-explorer-linux-x86_64
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-latest
-            asset: tmux-agent-sidebar-linux-aarch64
+            asset: pmux-explorer-linux-aarch64
 
     runs-on: ${{ matrix.os }}
 
@@ -40,16 +40,21 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc-aarch64-linux-gnu
-          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+          LINKER=aarch64-linux-gnu-gcc
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=$LINKER" \
+            >> $GITHUB_ENV
 
       - name: Build
         run: cargo build --release --target ${{ matrix.target }}
 
       - name: Rename binary
-        run: cp target/${{ matrix.target }}/release/tmux-agent-sidebar ${{ matrix.asset }}
+        run: |
+          cp "target/${{ matrix.target }}/release/pmux-explorer" \
+            "${{ matrix.asset }}"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        # v7.0.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: ${{ matrix.asset }}
           path: ${{ matrix.asset }}
@@ -63,7 +68,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      # v8.0.2
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           merge-multiple: true
 
@@ -72,9 +78,11 @@ jobs:
         run: |
           PREV_TAG=$(git tag --sort=-v:refname | sed -n '2p')
           if [ -z "$PREV_TAG" ]; then
-            CHANGELOG=$(git log --pretty=format:"- %s (%h)" ${{ github.ref_name }})
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" \
+              ${{ github.ref_name }})
           else
-            CHANGELOG=$(git log --pretty=format:"- %s (%h)" "${PREV_TAG}..${{ github.ref_name }}")
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" \
+              "${PREV_TAG}..${{ github.ref_name }}")
           fi
           {
             echo "body<<EOF"
@@ -82,14 +90,18 @@ jobs:
             echo ""
             echo "$CHANGELOG"
             echo ""
-            echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${PREV_TAG}...${{ github.ref_name }}"
+            REPO_URL="https://github.com/${{ github.repository }}"
+            COMPARE="${PREV_TAG}...${{ github.ref_name }}"
+            echo "**Full Changelog**: $REPO_URL/compare/$COMPARE"
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
       - name: Create release
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        # v3.0.3
+        uses:
+          softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64
         with:
           body: ${{ steps.changelog.outputs.body }}
-          files: tmux-agent-sidebar-*
+          files: pmux-explorer-*
 
 # The fork releases and deploys from the same workflows as upstream.

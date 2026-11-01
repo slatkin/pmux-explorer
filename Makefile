@@ -1,4 +1,4 @@
-# Build and install the tmux-agent-sidebar release binary.
+# Build and install the pmux-explorer release binary.
 #
 #   make build      compile the release binary
 #   make install    build, then install it where the sidebar and the hooks find it,
@@ -14,11 +14,11 @@
 CARGO ?= cargo
 PREFIX ?= $(HOME)/.local
 BINDIR ?= $(PREFIX)/bin
-PLUGIN_DIR ?= $(HOME)/.tmux/plugins/tmux-agent-sidebar
+PLUGIN_DIR ?= $(HOME)/.tmux/plugins/pmux-explorer
 CLAUDE ?= claude
 CLAUDE_MARKETPLACE ?= slatkin
-CLAUDE_PLUGIN ?= tmux-agent-sidebar@$(CLAUDE_MARKETPLACE)
-BINARY_NAME := tmux-agent-sidebar
+CLAUDE_PLUGIN ?= pmux-explorer@$(CLAUDE_MARKETPLACE)
+BINARY_NAME := pmux-explorer
 RELEASE_BIN := target/release/$(BINARY_NAME)
 
 .PHONY: all build release install install-claude-hooks uninstall uninstall-claude-hooks restart test fmt fmt-fix clippy check clean
@@ -32,7 +32,7 @@ build release:
 ## Install the release binary.
 #
 # Two destinations, because two different things resolve the binary:
-#   * $(BINDIR) is on PATH. The pmux pi extension calls `tmux-agent-sidebar
+#   * $(BINDIR) is on PATH. The pmux pi extension calls `pmux-explorer
 #     hook pi <event>` for every pi event and finds it there.
 #   * $(PLUGIN_DIR)/target/release is what the tmux launcher runs, when the
 #     plugin directory is a real directory instead of a symlink to this

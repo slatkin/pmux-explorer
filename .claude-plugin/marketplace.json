@@ -5,7 +5,7 @@
   },
   "plugins": [
     {
-      "name": "tmux-agent-sidebar",
+      "name": "pmux-explorer",
       "source": "./",
       "description": "Monitor AI coding agents across tmux panes in a real-time sidebar TUI"
     }

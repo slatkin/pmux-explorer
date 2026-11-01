@@ -11,7 +11,7 @@ Claude Code is the reference agent for the sidebar — every feature is wired th
 
 - Live status (`running` / `background` / `waiting` / `idle` / `error`) from `SessionStart` / `UserPromptSubmit` / `Stop`
 - Prompt text from `UserPromptSubmit`
-- Response preview (`▷ …`) from `Stop`
+- Response preview from `Stop`, headed by the Nerd Font chat glyph (U+F0B79)
 - Elapsed time since the last prompt
 
 ### Attention cues
@@ -34,7 +34,7 @@ Claude Code is the reference agent for the sidebar — every feature is wired th
 
 ### Notifications
 
-Every desktop notification event is available — `stop`, `notification`, `task_completed`, `stop_failure`, `permission_denied`. See [Notifications](/tmux-agent-sidebar/features/notifications/).
+Every desktop notification event is available — `stop`, `notification`, `task_completed`, `stop_failure`, `permission_denied`. See [Notifications](/pmux-explorer/features/notifications/).
 
 ## Known limitation
 
@@ -44,4 +44,4 @@ Every desktop notification event is available — `stop`, `notification`, `task_
 
 ## Setup
 
-Install the plugin — see [Claude Code setup](/tmux-agent-sidebar/getting-started/claude-code/).
+Install the plugin — see [Claude Code setup](/pmux-explorer/getting-started/claude-code/).

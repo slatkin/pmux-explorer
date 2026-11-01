@@ -15,7 +15,7 @@ impl AppState {
     /// Flip the width lock and persist the intent to the shared tmux
     /// options. Enabling seeds the shared docked width with the
     /// floored docked width of this instance — `max(W, floor)` from
-    /// this pane's reading, the captured `docked_width` floored while
+    /// this pane's reading, the captured `docked_size` floored while
     /// floating, or `PANEL_WIDTH` when no capture exists (a pane
     /// floated from the tmux command line) — and never the live
     /// 40-column pane width of the floating panel.
@@ -31,6 +31,12 @@ impl AppState {
     /// writer must not leave every instance locking onto (or seeding
     /// over) a width nobody wrote.
     pub fn toggle_width_lock(&mut self) {
+        // Column-only feature: a strip has no docked width to converge
+        // — its pane width is the window's, and `docked_size` holds a
+        // height — so a strip neither seeds nor toggles the lock.
+        if self.layout_kind != crate::state::LayoutKind::Column {
+            return;
+        }
         if !self.global.width_lock {
             // Seed only on a valid probe — see the doc comment.
             if self.sidebar_pane.window_width > 0 {
@@ -39,7 +45,7 @@ impl AppState {
                 // used by the width guard and the pop-in restore.
                 let floor = width_floor(self.global.min_width);
                 let live_width = if self.sidebar_pane.floating {
-                    self.docked_width.unwrap_or(PANEL_WIDTH)
+                    self.docked_size.unwrap_or(PANEL_WIDTH)
                 } else {
                     self.sidebar_pane.width
                 };
@@ -116,6 +122,8 @@ mod tests {
             window_width,
             window_height: 40,
             floating: false,
+            height: 40,
+            at_top: false,
         }
     }
 
@@ -167,7 +175,7 @@ mod tests {
             floating: true,
             ..docked_pane(PANEL_WIDTH, 80)
         };
-        state.docked_width = Some(55);
+        state.docked_size = Some(55);
 
         state.toggle_width_lock();
 
@@ -319,7 +327,7 @@ mod tests {
         g.shared_docked_width = Some(45);
         g.width_latch.save_pending = true;
 
-        g.retry_pending_width_save();
+        g.retry_pending_saves();
 
         assert!(
             g.width_latch.save_pending,
@@ -336,7 +344,7 @@ mod tests {
         g.width_lock = true;
         g.lock_latch.save_pending = true;
 
-        g.retry_pending_lock_save();
+        g.retry_pending_saves();
 
         assert!(
             g.lock_latch.save_pending,
@@ -347,23 +355,37 @@ mod tests {
 
     #[test]
     fn the_two_width_latches_are_independent() {
+        // The unified retry touches only pending latches, so a retry
+        // that leaves one latch pending cannot have cleared the other.
         let mut g = GlobalState::new();
+        // A width must sit behind the pending flag: the `None` guard in
+        // `save_shared_docked_width` clears the flag without a write,
+        // which is the behavior this test is not about.
+        g.shared_docked_width = Some(45);
         g.width_latch.save_pending = true;
 
-        g.retry_pending_lock_save();
+        g.retry_pending_saves();
 
         assert!(
             g.width_latch.save_pending,
-            "a lock retry must not clear the width latch"
+            "a rejected retry keeps the width latch"
+        );
+        assert!(
+            !g.lock_latch.save_pending,
+            "the width retry must not flag the lock latch"
         );
 
         g.lock_latch.save_pending = true;
         g.width_latch.save_pending = false;
-        g.retry_pending_width_save();
+        g.retry_pending_saves();
 
         assert!(
             g.lock_latch.save_pending,
-            "a width retry must not clear the lock latch"
+            "a rejected retry keeps the lock latch"
+        );
+        assert!(
+            !g.width_latch.save_pending,
+            "the lock retry must not flag the width latch"
         );
     }
 

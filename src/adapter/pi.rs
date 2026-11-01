@@ -1,11 +1,11 @@
 use serde_json::{Map, Value};
 
-use crate::event::{AgentEvent, AgentEventKind, EventAdapter};
+use crate::event::{AgentEvent, AgentEventKind, EventAdapter, Reported};
 use crate::pmux_task::parse_pmux_task;
 use crate::tmux::PI_AGENT;
 use crate::tool_name::CanonicalTool;
 
-use super::{json_str, json_value_or_null, optional_str, parse_worktree};
+use super::{json_str, json_value_or_null, optional_str, parse_worktree, reported_fields};
 
 /// The protocol events the pi adapter accepts, with the kind each one
 /// produces and the fields it reads.
@@ -133,6 +133,17 @@ fn failure_error(input: &Value) -> &str {
 pub struct PiAdapter;
 
 impl EventAdapter for PiAdapter {
+    fn reported(&self, event_name: &str, input: &Value) -> Reported {
+        // The declaration is the field list of the matching `PI_EVENTS`
+        // entry — the same list the `setup pi` contract prints.
+        for (name, _, fields) in PI_EVENTS {
+            if *name == event_name {
+                return reported_fields(fields, input);
+            }
+        }
+        Reported::NONE
+    }
+
     fn parse(&self, event_name: &str, input: &Value) -> Option<AgentEvent> {
         match event_name {
             "session-start" => Some(AgentEvent::SessionStart {
@@ -510,6 +521,71 @@ mod tests {
                 "pi: {:?} is accepted by parse() but {} the table",
                 name,
                 if in_table { "is in" } else { "is not in" }
+            );
+        }
+    }
+
+    // ─── the reported set is the table entry's field list ──────────
+
+    #[test]
+    fn the_reported_set_is_the_table_entry() {
+        let adapter = PiAdapter;
+        for (event_name, _, fields) in PI_EVENTS {
+            let reported = adapter.reported(event_name, &json!({}));
+            assert_eq!(
+                reported.fields(),
+                *fields,
+                "pi: {event_name} reports a set other than its table entry"
+            );
+        }
+    }
+
+    #[test]
+    fn reported_matches_the_parse_arms() {
+        // The reported set is table-driven, but the table itself is not the
+        // parse arms: this pins that a `worktree` the table declares is one
+        // the parse arm really reads. The per-event sets differ, so the
+        // uniform-field leg is off.
+        super::super::assert_reported_matches_parse("pi", true, None);
+    }
+
+    #[test]
+    fn stop_does_not_report_worktree() {
+        let adapter = PiAdapter;
+        let reported = adapter.reported("stop", &json!({"cwd": "/tmp"}));
+        assert!(!reported.contains("worktree"));
+        // The neighbouring events that carry a worktree do report it, so a
+        // pi producer leaves a worktree by saying so on those.
+        assert!(
+            adapter
+                .reported("session-start", &json!({}))
+                .contains("worktree")
+        );
+        assert!(
+            adapter
+                .reported("user-prompt-submit", &json!({}))
+                .contains("worktree")
+        );
+    }
+
+    #[test]
+    fn an_unknown_event_reports_nothing() {
+        let adapter = PiAdapter;
+        assert_eq!(adapter.reported("teleport", &json!({})), Reported::NONE);
+    }
+
+    #[test]
+    fn an_invalid_payload_reports_nothing() {
+        let adapter = PiAdapter;
+        // A payload that is not valid JSON reaches the adapter as `Null`;
+        // it reports nothing, so it clears nothing.
+        let invalid = serde_json::from_str::<Value>("{\"cwd\": ").unwrap_or(Value::Null);
+        assert!(invalid.is_null());
+        for (event_name, _, _) in PI_EVENTS {
+            assert_eq!(
+                adapter.reported(event_name, &invalid),
+                Reported::NONE,
+                "pi: {event_name} reported something for an invalid payload"
             );
         }
     }

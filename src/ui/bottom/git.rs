@@ -190,8 +190,10 @@ mod tests {
                 let cell = &buf[(x, y)];
                 line.push_str(cell.symbol());
                 let mut attrs: Vec<String> = Vec::new();
-                if let Color::Indexed(n) = cell.fg {
-                    attrs.push(format!("fg:{n}"));
+                match cell.fg {
+                    Color::Indexed(n) => attrs.push(format!("fg:{n}")),
+                    Color::Rgb(r, g, b) => attrs.push(format!("fg:#{r:02x}{g:02x}{b:02x}")),
+                    _ => {}
                 }
                 if cell.modifier.contains(Modifier::UNDERLINED) {
                     attrs.push("underline".into());
@@ -323,9 +325,9 @@ mod tests {
         state.git.pr_number = Some("5".into());
         insta::assert_snapshot!(render_styled(&mut state, 30, 4), @"
 
-        m[fg:255]a[fg:255]i[fg:255]n[fg:255]                        #[fg:117,underline]5[fg:117,underline]
+        m[fg:#c0caf5]a[fg:#c0caf5]i[fg:#c0caf5]n[fg:#c0caf5]                        #[fg:#7dcfff,underline]5[fg:#7dcfff,underline]
         ─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]
-              W[fg:252]o[fg:252]r[fg:252]k[fg:252]i[fg:252]n[fg:252]g[fg:252] [fg:252]t[fg:252]r[fg:252]e[fg:252]e[fg:252] [fg:252]c[fg:252]l[fg:252]e[fg:252]a[fg:252]n[fg:252]
+              W[fg:#a9b1d6]o[fg:#a9b1d6]r[fg:#a9b1d6]k[fg:#a9b1d6]i[fg:#a9b1d6]n[fg:#a9b1d6]g[fg:#a9b1d6] [fg:#a9b1d6]t[fg:#a9b1d6]r[fg:#a9b1d6]e[fg:#a9b1d6]e[fg:#a9b1d6] [fg:#a9b1d6]c[fg:#a9b1d6]l[fg:#a9b1d6]e[fg:#a9b1d6]a[fg:#a9b1d6]n[fg:#a9b1d6]
         ");
     }
 
@@ -394,11 +396,11 @@ mod tests {
         state.git.staged_files = vec![file_entry('M', "a.rs", 1, 0)];
         insta::assert_snapshot!(render_styled(&mut state, 40, 6), @"
 
-        m[fg:255]a[fg:255]i[fg:255]n[fg:255]
-                                         1[fg:252] [fg:252]f[fg:252]i[fg:252]l[fg:252]e[fg:252]s[fg:252]
+        m[fg:#c0caf5]a[fg:#c0caf5]i[fg:#c0caf5]n[fg:#c0caf5]
+                                         1[fg:#a9b1d6] [fg:#a9b1d6]f[fg:#a9b1d6]i[fg:#a9b1d6]l[fg:#a9b1d6]e[fg:#a9b1d6]s[fg:#a9b1d6]
         ─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]
-        S[fg:109]t[fg:109]a[fg:109]g[fg:109]e[fg:109]d[fg:109] [fg:109]([fg:109]1[fg:109])[fg:109]
-        M[fg:221] a[fg:252].[fg:252]r[fg:252]s[fg:252]                             +[fg:114]1[fg:114]/[fg:252]-[fg:174]0[fg:174]
+        S[fg:#2ac3de]t[fg:#2ac3de]a[fg:#2ac3de]g[fg:#2ac3de]e[fg:#2ac3de]d[fg:#2ac3de] [fg:#2ac3de]([fg:#2ac3de]1[fg:#2ac3de])[fg:#2ac3de]
+        M[fg:#e0af68] a[fg:#a9b1d6].[fg:#a9b1d6]r[fg:#a9b1d6]s[fg:#a9b1d6]                             +[fg:#9ece6a]1[fg:#9ece6a]/[fg:#a9b1d6]-[fg:#f7768e]0[fg:#f7768e]
         ");
     }
 
@@ -409,11 +411,11 @@ mod tests {
         state.git.untracked_files = vec!["tmp.log".into()];
         insta::assert_snapshot!(render_styled(&mut state, 40, 6), @"
 
-        m[fg:255]a[fg:255]i[fg:255]n[fg:255]
-                                         1[fg:252] [fg:252]f[fg:252]i[fg:252]l[fg:252]e[fg:252]s[fg:252]
+        m[fg:#c0caf5]a[fg:#c0caf5]i[fg:#c0caf5]n[fg:#c0caf5]
+                                         1[fg:#a9b1d6] [fg:#a9b1d6]f[fg:#a9b1d6]i[fg:#a9b1d6]l[fg:#a9b1d6]e[fg:#a9b1d6]s[fg:#a9b1d6]
         ─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]
-        U[fg:109]n[fg:109]t[fg:109]r[fg:109]a[fg:109]c[fg:109]k[fg:109]e[fg:109]d[fg:109] [fg:109]([fg:109]1[fg:109])[fg:109]
-        ?[fg:252] t[fg:252]m[fg:252]p[fg:252].[fg:252]l[fg:252]o[fg:252]g[fg:252]
+        U[fg:#2ac3de]n[fg:#2ac3de]t[fg:#2ac3de]r[fg:#2ac3de]a[fg:#2ac3de]c[fg:#2ac3de]k[fg:#2ac3de]e[fg:#2ac3de]d[fg:#2ac3de] [fg:#2ac3de]([fg:#2ac3de]1[fg:#2ac3de])[fg:#2ac3de]
+        ?[fg:#a9b1d6] t[fg:#a9b1d6]m[fg:#a9b1d6]p[fg:#a9b1d6].[fg:#a9b1d6]l[fg:#a9b1d6]o[fg:#a9b1d6]g[fg:#a9b1d6]
         ");
     }
 

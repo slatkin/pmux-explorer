@@ -1,11 +1,11 @@
 #[allow(dead_code, unused_imports)]
 mod test_helpers;
 
+use pmux_explorer::activity::ActivityEntry;
+use pmux_explorer::state::{AppState, BottomTab, Focus};
+use pmux_explorer::task_store;
+use pmux_explorer::tmux::{AgentType, PaneStatus, SessionInfo, WindowInfo};
 use test_helpers::*;
-use tmux_agent_sidebar::activity::ActivityEntry;
-use tmux_agent_sidebar::state::{BottomTab, Focus};
-use tmux_agent_sidebar::task_store;
-use tmux_agent_sidebar::tmux::{AgentType, PaneStatus, SessionInfo, WindowInfo};
 
 // ─── Bottom Tab Tests ──────────────────────────────────────────────
 
@@ -43,14 +43,14 @@ fn test_scroll_bottom_dispatches() {
 
     // Set up git scroll state
     state.git.unstaged_files = vec![
-        tmux_agent_sidebar::git::GitFileEntry {
+        pmux_explorer::git::GitFileEntry {
             status: 'M',
             name: "file1.rs".into(),
             additions: 0,
             deletions: 0,
             path: String::new(),
         },
-        tmux_agent_sidebar::git::GitFileEntry {
+        pmux_explorer::git::GitFileEntry {
             status: 'M',
             name: "file2.rs".into(),
             additions: 0,
@@ -97,14 +97,14 @@ fn snapshot_git_status_tab_ui() {
     state.git.branch = "feature/sidebar".into();
     state.git.ahead_behind = Some((2, 1));
     state.git.unstaged_files = vec![
-        tmux_agent_sidebar::git::GitFileEntry {
+        pmux_explorer::git::GitFileEntry {
             status: 'M',
             name: "src/ui/panes.rs".into(),
             additions: 30,
             deletions: 10,
             path: String::new(),
         },
-        tmux_agent_sidebar::git::GitFileEntry {
+        pmux_explorer::git::GitFileEntry {
             status: 'M',
             name: "src/state.rs".into(),
             additions: 12,
@@ -117,19 +117,16 @@ fn snapshot_git_status_tab_ui() {
 
     let output = render_to_string(&mut state, 28, 24);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-    ╭ Activity│Tasks│Git ──────╮
-    │feature/sidebar       ↑2↓1│
-    │+42/-15            3 files│
-    │──────────────────────────│
-    │Unstaged (2)              │
-    │M src/ui/panes.rs  +30/-10│
-    │M src/state.rs      +12/-5│
-    │Untracked (1)             │
-    │? new_file.rs             │
-    ╰──────────────────────────╯
+    ┃  
+              │  │ 󰊢
+    feature/sidebar         ↑2↓1
+    +42/-15              3 files
+    ────────────────────────────
+    Unstaged (2)
+    M src/ui/panes.rs    +30/-10
     ");
 }
 
@@ -156,12 +153,12 @@ fn snapshot_git_clean_ui() {
 
     let output = render_to_string(&mut state, 28, 24);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-    ╭ Activity│Tasks│Git ──────╮
-    │    Working tree clean    │
-    ╰──────────────────────────╯
+    ┃  
+              │  │ 󰊢
+         Working tree clean
     ");
 }
 
@@ -192,13 +189,13 @@ fn snapshot_activity_tab_active_ui() {
 
     let output = render_to_string(&mut state, 28, 24);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-    ╭ Activity│Tasks│Git ──────╮
-    │10:32                 Edit│
-    │  src/main.rs             │
-    ╰──────────────────────────╯
+    ┃  
+              │  │ 󰊢
+    10:32                   Edit
+      src/main.rs
     ");
 }
 
@@ -227,17 +224,17 @@ fn activity_tab_leaves_one_blank_row_above_entries() {
         label: "src/main.rs".into(),
     }];
 
-    // The inline snapshot locks in the blank-row spacer: after the `╭ Activity │ Git ╮`
-    // title row, the first row must be empty and the timestamp/tool row must appear
-    // one row further down.
+    // The inline snapshot locks in the blank-row spacer: under the rule
+    // row, the first row must be empty and the timestamp/tool row must
+    // appear one row further down.
     insta::assert_snapshot!(render_to_string(&mut state, 28, 24), @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-    ╭ Activity│Tasks│Git ──────╮
-    │10:32                 Edit│
-    │  src/main.rs             │
-    ╰──────────────────────────╯
+    ┃  
+              │  │ 󰊢
+    10:32                   Edit
+      src/main.rs
     ");
 }
 
@@ -272,11 +269,13 @@ fn snapshot_activity_long_tool_keeps_one_space_gap() {
 
     let output = render_to_string(&mut state, 28, 14);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
-    ╭ Activity│Tasks│Git ──────╮
-    │10:32 mcp__context7__query│
-    │  rust                    │
-    ╰──────────────────────────╯
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
+    ⓘ                        — ▾
+    project
+    ┃  
+              │  │ 󰊢
+    10:32 mcp__context7__query-d
+      rust
     ");
 }
 
@@ -304,11 +303,14 @@ fn snapshot_tab_bar_renders_both_labels() {
 
     let output = render_to_string(&mut state, 28, 14);
     insta::assert_snapshot!(output, @"
-     ≡1 ●0 ◐0 ○1 ✕0          ☐⤢
-    ╭ Activity│Tasks│Git ──────╮
-    │10:32                 Edit│
-    │  test                    │
-    ╰──────────────────────────╯
+     󱓯 1  0 󰥔 0 󰒲 1  0   ⇄ ☐⤢
+    ⓘ                        — ▾
+    project
+    ┃ 󰒲 
+        Waiting for prompt…
+              │  │ 󰊢
+    10:32                   Edit
+      test
     ");
 }
 
@@ -331,6 +333,7 @@ fn snapshot_tasks_empty_tab_ui() {
     state.global.bottom_tab = BottomTab::Tasks;
     state.focus_state.focus = Focus::ActivityLog;
     state.focus_state.sidebar_focused = true;
+    state.tasks.description = "Build the Tasks tab".into();
     state.tasks.items = vec![
         task_store::TaskItem {
             id: "1".into(),
@@ -351,14 +354,15 @@ fn snapshot_tasks_empty_tab_ui() {
 
     let output = render_to_string(&mut state, 28, 24);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-    ╭ Activity│Tasks│Git ──────╮
-    │✔ Record the task path    │
-    │◼ Render the list         │
-    │◻ Prove with a live pane  │
-    ╰──────────────────────────╯
+    ┃  
+              │  │ 󰊢
+     Build the Tasks tab
+     ✔ Record the task path
+     ◼ Render the list
+     ◻ Prove with a live pane
     ");
 }
 
@@ -385,13 +389,69 @@ fn snapshot_tasks_tab_ui() {
 
     let output = render_to_string(&mut state, 28, 24);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-    ╭ Activity│Tasks│Git ──────╮
-    │     No tasks recorded    │
-    ╰──────────────────────────╯
+    ┃  
+              │  │ 󰊢
+          No tasks recorded
     ");
+}
+
+#[test]
+fn snapshot_tasks_tab_after_finished_list_closes() {
+    let pane = make_pane(AgentType::Claude, PaneStatus::Running);
+    let mut state = make_state(vec![SessionInfo {
+        session_name: "main".into(),
+        windows: vec![WindowInfo {
+            window_id: "@1".into(),
+            window_name: "project".into(),
+            window_active: true,
+            auto_rename: false,
+            panes: vec![pane.clone()],
+        }],
+    }]);
+    state.repo_groups = vec![make_repo_group("project", vec![pane])];
+    state.rebuild_row_targets();
+
+    state.global.bottom_tab = BottomTab::Tasks;
+    state.focus_state.focus = Focus::ActivityLog;
+    state.focus_state.sidebar_focused = true;
+
+    // A finished list — completed item plus a pane description —
+    // whose store has been quiet for more than the 90-second close
+    // window, measured against the state's fixed `now`.
+    let pane_id = "%1";
+    let item_id = task_store::record_task(pane_id, "Ship it")
+        .unwrap()
+        .unwrap();
+    task_store::update_task_status(pane_id, &item_id, task_store::TaskItemStatus::Completed)
+        .unwrap();
+    task_store::set_description(pane_id, "a goal nobody sees anymore").unwrap();
+    let backdated = std::time::UNIX_EPOCH
+        + std::time::Duration::from_secs(state.now - task_store::TASK_CLOSE_SECS - 30);
+    std::fs::File::options()
+        .write(true)
+        .open(task_store::store_file_path(pane_id))
+        .unwrap()
+        .set_modified(backdated)
+        .unwrap();
+
+    // One tick: the close sweep empties the store, and the focused
+    // re-read sees the empty state — description gone with it.
+    state.refresh_activity_data();
+
+    let output = render_to_string(&mut state, 28, 24);
+    insta::assert_snapshot!(output, @"
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
+    ⓘ                        — ▾
+    project
+    ┃  
+              │  │ 󰊢
+          No tasks recorded
+    ");
+
+    assert!(!task_store::store_file_path(pane_id).exists());
 }
 
 // ─── Tasks tab: per-status colors (the styled snapshot pins the
@@ -433,34 +493,34 @@ fn snapshot_tasks_status_colors_styled() {
         },
     ];
 
-    // Completed dims to text_muted (252), in-progress takes the
-    // task-progress color (223), queued stays bright text_active (255):
-    // the same glyph/color contract the agent list's task progress uses.
+    // Completed takes task_completed green (114), in-progress keeps
+    // the task-progress color (223), pending takes task_pending blue
+    // (111); all three sit one column in from the panel edge.
     insta::assert_snapshot!(render_to_styled_string(&mut state, 28, 24), @"
-     ≡[fg:111]1[fg:153] ●[fg:114]1[fg:255] ◐[fg:245]0[fg:245] ○[fg:245]0[fg:245] ✕[fg:245]0[fg:245]          ☐[fg:245]⤢[fg:114]
-    ⓘ[fg:221]                        —[fg:252] ▾[fg:252]
-    ┃[fg:153,bg:239] [bg:239]●[fg:82,bg:239] [fg:174,bg:239]c[fg:174,bg:239]l[fg:174,bg:239]a[fg:174,bg:239]u[fg:174,bg:239]d[fg:174,bg:239]e[fg:174,bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239]
-
-    ╭[fg:240] [fg:240]A[fg:252]c[fg:252]t[fg:252]i[fg:252]v[fg:252]i[fg:252]t[fg:252]y[fg:252]│[fg:240]T[fg:153]a[fg:153]s[fg:153]k[fg:153]s[fg:153]│[fg:240]G[fg:252]i[fg:252]t[fg:252] [fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]╮[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240]✔[fg:252] [fg:252]d[fg:252]o[fg:252]n[fg:252]e[fg:252] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240]◼[fg:223] [fg:223]w[fg:223]i[fg:223]p[fg:223] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240]◻[fg:255] [fg:255]q[fg:255]u[fg:255]e[fg:255]u[fg:255]e[fg:255]d[fg:255] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    ╰[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]╯[fg:240]
+     [bg:#414868]󱓯[fg:#7aa2f7,bg:#414868] [bg:#414868]1[fg:#7aa2f7,bg:#414868,bold] [bg:#414868][fg:#9ece6a,bg:#414868] [bg:#414868]1[fg:#c0caf5,bg:#414868] [bg:#414868]󰥔[fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868]󰒲[fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868][fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]⇄[fg:#9ece6a,bg:#414868] [bg:#414868]☐[fg:#9aa5ce,bg:#414868]⤢[fg:#9ece6a,bg:#414868] [bg:#414868]
+    ⓘ[fg:#e0af68,bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]—[fg:#a9b1d6,bg:#1e2336] [bg:#1e2336]▾[fg:#a9b1d6,bg:#1e2336]
+    p[fg:#7aa2f7,bg:#1e2336]r[fg:#7aa2f7,bg:#1e2336]o[fg:#7aa2f7,bg:#1e2336]j[fg:#7aa2f7,bg:#1e2336]e[fg:#7aa2f7,bg:#1e2336]c[fg:#7aa2f7,bg:#1e2336]t[fg:#7aa2f7,bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+    ┃[fg:#7aa2f7,bg:#414868] [bg:#414868][fg:82,bg:#414868] [fg:#ff9e64,bg:#414868][fg:#ff9e64,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]
+     [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+     [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+     [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+     [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+     [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+     [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+     [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+     [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+     [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+     [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+     [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+     [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+     [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+     [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868][fg:#c0caf5,bg:#414868] [fg:#9aa5ce,bg:#414868]│[fg:#9aa5ce,bg:#414868] [fg:#9aa5ce,bg:#414868][fg:#7aa2f7,bg:#414868,bold] [fg:#9aa5ce,bg:#414868]│[fg:#9aa5ce,bg:#414868] [fg:#9aa5ce,bg:#414868]󰊢[fg:#c0caf5,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26]✔[fg:#9ece6a,bg:#1a1b26] [fg:#9ece6a,bg:#1a1b26]d[fg:#9ece6a,bg:#1a1b26]o[fg:#9ece6a,bg:#1a1b26]n[fg:#9ece6a,bg:#1a1b26]e[fg:#9ece6a,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26]◼[fg:#ff9e64,bg:#1a1b26] [fg:#ff9e64,bg:#1a1b26]w[fg:#ff9e64,bg:#1a1b26]i[fg:#ff9e64,bg:#1a1b26]p[fg:#ff9e64,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26]◻[fg:#7aa2f7,bg:#1a1b26] [fg:#7aa2f7,bg:#1a1b26]q[fg:#7aa2f7,bg:#1a1b26]u[fg:#7aa2f7,bg:#1a1b26]e[fg:#7aa2f7,bg:#1a1b26]u[fg:#7aa2f7,bg:#1a1b26]e[fg:#7aa2f7,bg:#1a1b26]d[fg:#7aa2f7,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
     ");
 }
 
@@ -490,8 +550,9 @@ fn tasks_scroll_clamps_when_the_list_shrinks() {
         .collect();
 
     let _ = render_to_string(&mut state, 28, 24);
-    // 10 items + spacer = 11 lines in a 18-row content area
-    // (`BOTTOM_PANEL_HEIGHT` − borders): no clamping needed.
+    // 10 items + spacer = 11 lines; at 30% of a 24-row sidebar the
+    // panel draws 7 rows, so the list already overflows the content
+    // rows and the offset may clamp.
     assert_eq!(state.tasks.scroll.total_lines, 11);
     state.tasks.scroll.offset = 5;
 
@@ -507,7 +568,110 @@ fn tasks_scroll_clamps_when_the_list_shrinks() {
 }
 
 #[test]
-fn snapshot_tasks_subject_truncates_at_narrow_width() {
+fn snapshot_tasks_description_stays_pinned_while_items_scroll() {
+    // The header is not part of the scroll content: a nonzero offset
+    // moves the items, but the description and its padding row stay
+    // at the top of the tab.
+    let pane = make_pane(AgentType::Claude, PaneStatus::Running);
+    let mut state = make_state(vec![SessionInfo {
+        session_name: "main".into(),
+        windows: vec![WindowInfo {
+            window_id: "@1".into(),
+            window_name: "project".into(),
+            window_active: true,
+            auto_rename: false,
+            panes: vec![pane.clone()],
+        }],
+    }]);
+    state.repo_groups = vec![make_repo_group("project", vec![pane])];
+    state.rebuild_row_targets();
+    state.global.bottom_tab = BottomTab::Tasks;
+    state.tasks.description = "Overhaul the sidebar task board".into();
+    state.tasks.items = (0..10)
+        .map(|i| task_store::TaskItem {
+            id: i.to_string(),
+            subject: format!("task {i}"),
+            status: task_store::TaskItemStatus::Pending,
+        })
+        .collect();
+
+    // Prime the scroll bookkeeping, then scroll three rows down.
+    let _ = render_to_string(&mut state, 28, 24);
+    state.tasks.scroll.scroll(3);
+    insta::assert_snapshot!(render_to_string(&mut state, 28, 24), @"
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
+    ⓘ                        — ▾
+    project
+    ┃  
+              │  │ 󰊢
+     Overhaul the sidebar task
+     board
+     ◻ task 3
+     ◻ task 4
+     ◻ task 5
+    ");
+}
+
+#[test]
+fn tasks_description_leaves_one_blank_row_before_items() {
+    // `buffer_to_string` drops contentless rows, so the padding row the
+    // description keeps above the list can only be pinned at the buffer
+    // level: one fully-blank row between the last description row and
+    // the first item.
+    let pane = make_pane(AgentType::Claude, PaneStatus::Running);
+    let mut state = make_state(vec![SessionInfo {
+        session_name: "main".into(),
+        windows: vec![WindowInfo {
+            window_id: "@1".into(),
+            window_name: "project".into(),
+            window_active: true,
+            auto_rename: false,
+            panes: vec![pane.clone()],
+        }],
+    }]);
+    state.repo_groups = vec![make_repo_group("project", vec![pane])];
+    state.rebuild_row_targets();
+    state.global.bottom_tab = BottomTab::Tasks;
+    state.tasks.description = "Build the Tasks tab".into();
+    state.tasks.items = vec![task_store::TaskItem {
+        id: "1".into(),
+        subject: "first item".into(),
+        status: task_store::TaskItemStatus::Pending,
+    }];
+
+    let backend = ratatui::backend::TestBackend::new(28, 24);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| pmux_explorer::ui::draw(frame, &mut state))
+        .unwrap();
+    let buf = terminal.backend().buffer().clone();
+
+    // The bottom-panel rule row is the solid band: the last row whose
+    // cells carry the filter_bar_bg background (the filter bar at row 0
+    // wears the same colour).
+    let rule_y = (0..buf.area.height)
+        .rev()
+        .find(|&y| buf[(0, y)].bg == ratatui::style::Color::Rgb(0x41, 0x48, 0x68))
+        .expect("the tab rule must render");
+    let row_text = |y: u16| -> String {
+        (0..buf.area.width)
+            .map(|x| buf[(x, y)].symbol())
+            .collect::<String>()
+    };
+
+    assert_eq!(row_text(rule_y + 1).trim(), "Build the Tasks tab");
+    assert_eq!(
+        row_text(rule_y + 2).trim(),
+        "",
+        "one blank row must separate the description from the items"
+    );
+    assert_eq!(row_text(rule_y + 3).trim(), "◻ first item");
+}
+
+#[test]
+fn snapshot_tasks_subject_wraps_at_narrow_width() {
+    // A subject wider than the panel wraps instead of truncating;
+    // continuation rows indent under the subject, past the icon.
     let pane = make_pane(AgentType::Claude, PaneStatus::Running);
     let mut state = make_state(vec![SessionInfo {
         session_name: "main".into(),
@@ -529,19 +693,22 @@ fn snapshot_tasks_subject_truncates_at_narrow_width() {
     }];
 
     insta::assert_snapshot!(render_to_string(&mut state, 24, 24), @"
-     ≡1 ●1 ◐0 ○0 ✕0      ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0   ⇄ ☐⤢
     ⓘ                    — ▾
-    ┃ ● claude
-    ╭ Activity│Tasks│Git ──╮
-    │◻ a-very-long-task-su…│
-    ╰──────────────────────╯
+    project
+    ┃  
+            │  │ 󰊢
+     ◻ a-very-long-task-sub
+       ject-that-runs-out-o
+       f-columns
     ");
 }
 
 #[test]
-fn snapshot_tasks_multiline_subject_shows_first_line_only() {
+fn snapshot_tasks_multiline_subject_shows_every_line() {
     // The store round-trips free text with newlines (pinned by the
-    // task-store test); the one-row-per-item list shows its first line.
+    // task-store test); every source line gets its own row, wrapping
+    // as needed.
     let pane = make_pane(AgentType::Claude, PaneStatus::Running);
     let mut state = make_state(vec![SessionInfo {
         session_name: "main".into(),
@@ -563,12 +730,13 @@ fn snapshot_tasks_multiline_subject_shows_first_line_only() {
     }];
 
     insta::assert_snapshot!(render_to_string(&mut state, 28, 24), @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
-    ┃ ● claude
-    ╭ Activity│Tasks│Git ──────╮
-    │◻ first line              │
-    ╰──────────────────────────╯
+    project
+    ┃  
+              │  │ 󰊢
+     ◻ first line
+       second line
     ");
 }
 
@@ -597,14 +765,14 @@ fn snapshot_git_full_info_ui() {
     state.git.ahead_behind = Some((0, 0));
     state.git.diff_stat = Some((120, 30));
     state.git.unstaged_files = vec![
-        tmux_agent_sidebar::git::GitFileEntry {
+        pmux_explorer::git::GitFileEntry {
             status: 'M',
             name: "src/state.rs".into(),
             additions: 42,
             deletions: 10,
             path: String::new(),
         },
-        tmux_agent_sidebar::git::GitFileEntry {
+        pmux_explorer::git::GitFileEntry {
             status: 'M',
             name: "src/ui/bottom.rs".into(),
             additions: 85,
@@ -617,19 +785,16 @@ fn snapshot_git_full_info_ui() {
     // Use plain render since elapsed time varies
     let output = render_to_string(&mut state, 28, 24);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-    ╭ Activity│Tasks│Git ──────╮
-    │main                      │
-    │+120/-30           3 files│
-    │──────────────────────────│
-    │Unstaged (2)              │
-    │M src/state.rs     +42/-10│
-    │M src/ui/bottom.rs +85/-20│
-    │Untracked (1)             │
-    │? new_file.rs             │
-    ╰──────────────────────────╯
+    ┃  
+              │  │ 󰊢
+    main
+    +120/-30             3 files
+    ────────────────────────────
+    Unstaged (2)
+    M src/state.rs       +42/-10
     ");
 }
 
@@ -657,13 +822,13 @@ fn snapshot_git_diff_summary_tight_ui() {
 
     let plain = render_to_string(&mut state, 28, 14);
     insta::assert_snapshot!(plain, @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
-    ╭ Activity│Tasks│Git ──────╮
-    │main                      │
-    │+10/-3             0 files│
-    │──────────────────────────│
-    │    Working tree clean    │
-    ╰──────────────────────────╯
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
+    ⓘ                        — ▾
+    project
+    ┃  
+              │  │ 󰊢
+    main
+    +10/-3               0 files
     ");
 }
 
@@ -688,7 +853,7 @@ fn snapshot_git_staged_file_diff_right_ui() {
     state.focus_state.sidebar_focused = true;
     state.git.branch = "main".into();
     state.git.diff_stat = Some((10, 2));
-    state.git.staged_files = vec![tmux_agent_sidebar::git::GitFileEntry {
+    state.git.staged_files = vec![pmux_explorer::git::GitFileEntry {
         status: 'M',
         name: "app.rs".into(),
         additions: 10,
@@ -698,14 +863,14 @@ fn snapshot_git_staged_file_diff_right_ui() {
 
     let plain = render_to_string(&mut state, 28, 18);
     insta::assert_snapshot!(plain, @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
-    ╭ Activity│Tasks│Git ──────╮
-    │main                      │
-    │+10/-2             1 files│
-    │──────────────────────────│
-    │Staged (1)                │
-    │M app.rs            +10/-2│
-    ╰──────────────────────────╯
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
+    ⓘ                        — ▾
+    project
+    ┃  
+              │  │ 󰊢
+    main
+    +10/-2               1 files
+    ────────────────────────────
     ");
 }
 
@@ -730,7 +895,7 @@ fn snapshot_git_unstaged_long_name_diff_right_ui() {
     state.focus_state.sidebar_focused = true;
     state.git.branch = "main".into();
     state.git.diff_stat = Some((150, 50));
-    state.git.unstaged_files = vec![tmux_agent_sidebar::git::GitFileEntry {
+    state.git.unstaged_files = vec![pmux_explorer::git::GitFileEntry {
         status: 'M',
         name: "very-long-filename-that-should-be-truncated.rs".into(),
         additions: 150,
@@ -740,14 +905,14 @@ fn snapshot_git_unstaged_long_name_diff_right_ui() {
 
     let plain = render_to_string(&mut state, 28, 18);
     insta::assert_snapshot!(plain, @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
-    ╭ Activity│Tasks│Git ──────╮
-    │main                      │
-    │+150/-50           1 files│
-    │──────────────────────────│
-    │Unstaged (1)              │
-    │M very-long-file… +150/-50│
-    ╰──────────────────────────╯
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
+    ⓘ                        — ▾
+    project
+    ┃  
+              │  │ 󰊢
+    main
+    +150/-50             1 files
+    ────────────────────────────
     ");
 }
 
@@ -772,14 +937,14 @@ fn snapshot_git_long_filename_truncated_ui() {
     state.focus_state.sidebar_focused = true;
     state.git.branch = "main".into();
     state.git.unstaged_files = vec![
-        tmux_agent_sidebar::git::GitFileEntry {
+        pmux_explorer::git::GitFileEntry {
             status: 'M',
             name: "very-long-filename-that-should-be-truncated.rs".into(),
             additions: 150,
             deletions: 50,
             path: String::new(),
         },
-        tmux_agent_sidebar::git::GitFileEntry {
+        pmux_explorer::git::GitFileEntry {
             status: 'M',
             name: "short.rs".into(),
             additions: 8,
@@ -791,17 +956,16 @@ fn snapshot_git_long_filename_truncated_ui() {
     // Verify the long filename is truncated (contains ellipsis)
     let plain = render_to_string(&mut state, 28, 24);
     insta::assert_snapshot!(plain, @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-    ╭ Activity│Tasks│Git ──────╮
-    │main                      │
-    │                   2 files│
-    │──────────────────────────│
-    │Unstaged (2)              │
-    │M very-long-file… +150/-50│
-    │M short.rs           +8/-2│
-    ╰──────────────────────────╯
+    ┃  
+              │  │ 󰊢
+    main
+                         2 files
+    ────────────────────────────
+    Unstaged (2)
+    M very-long-filena… +150/-50
     ");
 }
 
@@ -826,49 +990,49 @@ fn snapshot_git_more_than_5_files() {
     state.focus_state.sidebar_focused = true;
     state.git.branch = "main".into();
     state.git.unstaged_files = vec![
-        tmux_agent_sidebar::git::GitFileEntry {
+        pmux_explorer::git::GitFileEntry {
             status: 'M',
             name: "a.rs".into(),
             additions: 100,
             deletions: 0,
             path: String::new(),
         },
-        tmux_agent_sidebar::git::GitFileEntry {
+        pmux_explorer::git::GitFileEntry {
             status: 'M',
             name: "b.rs".into(),
             additions: 80,
             deletions: 0,
             path: String::new(),
         },
-        tmux_agent_sidebar::git::GitFileEntry {
+        pmux_explorer::git::GitFileEntry {
             status: 'M',
             name: "c.rs".into(),
             additions: 60,
             deletions: 0,
             path: String::new(),
         },
-        tmux_agent_sidebar::git::GitFileEntry {
+        pmux_explorer::git::GitFileEntry {
             status: 'M',
             name: "d.rs".into(),
             additions: 40,
             deletions: 0,
             path: String::new(),
         },
-        tmux_agent_sidebar::git::GitFileEntry {
+        pmux_explorer::git::GitFileEntry {
             status: 'M',
             name: "e.rs".into(),
             additions: 20,
             deletions: 0,
             path: String::new(),
         },
-        tmux_agent_sidebar::git::GitFileEntry {
+        pmux_explorer::git::GitFileEntry {
             status: 'M',
             name: "f.rs".into(),
             additions: 10,
             deletions: 0,
             path: String::new(),
         },
-        tmux_agent_sidebar::git::GitFileEntry {
+        pmux_explorer::git::GitFileEntry {
             status: 'M',
             name: "g.rs".into(),
             additions: 5,
@@ -880,50 +1044,48 @@ fn snapshot_git_more_than_5_files() {
     // Verify file list rendering (scroll to see overflow)
     let plain = render_to_string(&mut state, 28, 40);
     insta::assert_snapshot!(plain, @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-    ┃ ● claude
-    ╭ Activity│Tasks│Git ──────╮
-    │main                      │
-    │                   7 files│
-    │──────────────────────────│
-    │Unstaged (7)              │
-    │M a.rs             +100/-0│
-    │M b.rs              +80/-0│
-    │M c.rs              +60/-0│
-    │M d.rs              +40/-0│
-    │M e.rs              +20/-0│
-    │M f.rs              +10/-0│
-    │M g.rs               +5/-0│
-    ╰──────────────────────────╯
+    ┃  
+              │  │ 󰊢
+    main
+                         7 files
+    ────────────────────────────
+    Unstaged (7)
+    M a.rs               +100/-0
+    M b.rs                +80/-0
+    M c.rs                +60/-0
+    M d.rs                +40/-0
+    M e.rs                +20/-0
+    M f.rs                +10/-0
     ");
 
-    // Setting `offset = 5` when the viewport can show all 8 content
-    // rows (no overflow) is clamped back to 0 by `ScrollState::scroll(0)`
-    // in `draw_git_content`, so the rendered view still includes the
-    // whole file list. The clamp guards against stale over-scroll state
-    // when the file list shrinks between frames.
+    // Setting `offset = 5` clamps it to 1: the 30% of the 40-row
+    // sidebar leaves a 7-row list viewport (12 drawn rows − the rule and
+    // the 4-row git header), which cannot show all 8 list rows.
+    // `ScrollState::scroll(0)` in `draw_git_content` keeps the offset
+    // inside [0, total − visible], so the view drops the `Unstaged (7)`
+    // header row and shows all 7 files. The clamp guards against stale
+    // over-scroll state when the file list shrinks between frames.
     state.scrolls.git.offset = 5;
     let scrolled = render_to_string(&mut state, 28, 40);
     insta::assert_snapshot!(scrolled, @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-    ┃ ● claude
-    ╭ Activity│Tasks│Git ──────╮
-    │main                      │
-    │                   7 files│
-    │──────────────────────────│
-    │Unstaged (7)              │
-    │M a.rs             +100/-0│
-    │M b.rs              +80/-0│
-    │M c.rs              +60/-0│
-    │M d.rs              +40/-0│
-    │M e.rs              +20/-0│
-    │M f.rs              +10/-0│
-    │M g.rs               +5/-0│
-    ╰──────────────────────────╯
+    ┃  
+              │  │ 󰊢
+    main
+                         7 files
+    ────────────────────────────
+    M a.rs               +100/-0
+    M b.rs                +80/-0
+    M c.rs                +60/-0
+    M d.rs                +40/-0
+    M e.rs                +20/-0
+    M f.rs                +10/-0
+    M g.rs                 +5/-0
     ");
 }
 
@@ -951,12 +1113,14 @@ fn snapshot_git_branch_only_no_changes() {
 
     let plain = render_to_string(&mut state, 38, 20);
     insta::assert_snapshot!(plain, @"
-     ≡1 ●1 ◐0 ○0 ✕0                    ☐⤢
-    ╭ Activity│Tasks│Git ────────────────╮
-    │feature/long-branch-name          ↑5│
-    │────────────────────────────────────│
-    │         Working tree clean         │
-    ╰────────────────────────────────────╯
+     󱓯 1  1 󰥔 0 󰒲 0  0             ⇄ ☐⤢
+    ⓘ                                  — ▾
+    project
+    ┃  
+                   │  │ 󰊢
+    feature/long-branch-name            ↑5
+    ──────────────────────────────────────
+              Working tree clean
     ");
 }
 
@@ -986,31 +1150,31 @@ fn snapshot_git_pr_number_ui() {
 
     let plain = render_to_string(&mut state, 28, 14);
     insta::assert_snapshot!(plain, @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
-    ╭ Activity│Tasks│Git ──────╮
-    │feature/fix            #42│
-    │+10/-3             0 files│
-    │──────────────────────────│
-    │    Working tree clean    │
-    ╰──────────────────────────╯
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
+    ⓘ                        — ▾
+    project
+    ┃  
+              │  │ 󰊢
+    feature/fix              #42
+    +10/-3               0 files
     ");
     // Styled snapshot locks in the PR link's underline + pr_link color (fg:117)
     // so future style regressions surface as a diff rather than a missed grep.
     insta::assert_snapshot!(render_to_styled_string(&mut state, 28, 14), @"
-     ≡[fg:111]1[fg:153] ●[fg:114]1[fg:255] ◐[fg:245]0[fg:245] ○[fg:245]0[fg:245] ✕[fg:245]0[fg:245]          ☐[fg:245]⤢[fg:114]
-
-    ╭[fg:153] [fg:153]A[fg:252]c[fg:252]t[fg:252]i[fg:252]v[fg:252]i[fg:252]t[fg:252]y[fg:252]│[fg:240]T[fg:252]a[fg:252]s[fg:252]k[fg:252]s[fg:252]│[fg:240]G[fg:153]i[fg:153]t[fg:153] [fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]╮[fg:153]
-    │[fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153]│[fg:153]
-    │[fg:153]f[fg:255]e[fg:255]a[fg:255]t[fg:255]u[fg:255]r[fg:255]e[fg:255]/[fg:255]f[fg:255]i[fg:255]x[fg:255] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153]#[fg:117,underline]4[fg:117,underline]2[fg:117,underline]│[fg:153]
-    │[fg:153]+[fg:114]1[fg:114]0[fg:114]/[fg:252]-[fg:174]3[fg:174] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153]0[fg:252] [fg:252]f[fg:252]i[fg:252]l[fg:252]e[fg:252]s[fg:252]│[fg:153]
-    │[fg:153]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]│[fg:153]
-    │[fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153]│[fg:153]
-    │[fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153]│[fg:153]
-    │[fg:153] [fg:153] [fg:153] [fg:153] [fg:153]W[fg:252]o[fg:252]r[fg:252]k[fg:252]i[fg:252]n[fg:252]g[fg:252] [fg:252]t[fg:252]r[fg:252]e[fg:252]e[fg:252] [fg:252]c[fg:252]l[fg:252]e[fg:252]a[fg:252]n[fg:252] [fg:153] [fg:153] [fg:153] [fg:153]│[fg:153]
-    │[fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153]│[fg:153]
-    │[fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153]│[fg:153]
-    │[fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153] [fg:153]│[fg:153]
-    ╰[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]─[fg:153]╯[fg:153]
+     [bg:#414868]󱓯[fg:#7aa2f7,bg:#414868] [bg:#414868]1[fg:#7aa2f7,bg:#414868,bold] [bg:#414868][fg:#9ece6a,bg:#414868] [bg:#414868]1[fg:#c0caf5,bg:#414868] [bg:#414868]󰥔[fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868]󰒲[fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868][fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]⇄[fg:#9ece6a,bg:#414868] [bg:#414868]☐[fg:#9aa5ce,bg:#414868]⤢[fg:#9ece6a,bg:#414868] [bg:#414868]
+    ⓘ[fg:#e0af68,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]—[fg:#a9b1d6,bg:#1a1b26] [bg:#1a1b26]▾[fg:#a9b1d6,bg:#1a1b26]
+    p[fg:#7aa2f7,bg:#1a1b26]r[fg:#7aa2f7,bg:#1a1b26]o[fg:#7aa2f7,bg:#1a1b26]j[fg:#7aa2f7,bg:#1a1b26]e[fg:#7aa2f7,bg:#1a1b26]c[fg:#7aa2f7,bg:#1a1b26]t[fg:#7aa2f7,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+    ┃[fg:#7aa2f7,bg:#414868] [bg:#414868][fg:82,bg:#414868] [fg:#ff9e64,bg:#414868][fg:#ff9e64,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868][fg:#c0caf5,bg:#414868] [fg:#9aa5ce,bg:#414868]│[fg:#9aa5ce,bg:#414868] [fg:#9aa5ce,bg:#414868][fg:#c0caf5,bg:#414868] [fg:#9aa5ce,bg:#414868]│[fg:#9aa5ce,bg:#414868] [fg:#9aa5ce,bg:#414868]󰊢[fg:#7aa2f7,bg:#414868,bold] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]
+     [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+    f[fg:#c0caf5,bg:#1e2336]e[fg:#c0caf5,bg:#1e2336]a[fg:#c0caf5,bg:#1e2336]t[fg:#c0caf5,bg:#1e2336]u[fg:#c0caf5,bg:#1e2336]r[fg:#c0caf5,bg:#1e2336]e[fg:#c0caf5,bg:#1e2336]/[fg:#c0caf5,bg:#1e2336]f[fg:#c0caf5,bg:#1e2336]i[fg:#c0caf5,bg:#1e2336]x[fg:#c0caf5,bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]#[fg:#7dcfff,bg:#1e2336,underline]4[fg:#7dcfff,bg:#1e2336,underline]2[fg:#7dcfff,bg:#1e2336,underline]
+    +[fg:#9ece6a,bg:#1e2336]1[fg:#9ece6a,bg:#1e2336]0[fg:#9ece6a,bg:#1e2336]/[fg:#a9b1d6,bg:#1e2336]-[fg:#f7768e,bg:#1e2336]3[fg:#f7768e,bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]0[fg:#a9b1d6,bg:#1e2336] [fg:#a9b1d6,bg:#1e2336]f[fg:#a9b1d6,bg:#1e2336]i[fg:#a9b1d6,bg:#1e2336]l[fg:#a9b1d6,bg:#1e2336]e[fg:#a9b1d6,bg:#1e2336]s[fg:#a9b1d6,bg:#1e2336]
     ");
 }
 
@@ -1048,13 +1212,13 @@ fn snapshot_git_pr_with_diff_ui() {
 
     let plain = render_to_string(&mut state, 28, 14);
     insta::assert_snapshot!(plain, @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
-    ╭ Activity│Tasks│Git ──────╮
-    │main                  #123│
-    │+55/-20            0 files│
-    │──────────────────────────│
-    │    Working tree clean    │
-    ╰──────────────────────────╯
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
+    ⓘ                        — ▾
+    project
+    ┃  
+              │  │ 󰊢
+    main                    #123
+    +55/-20              0 files
     ");
 }
 
@@ -1078,16 +1242,15 @@ fn snapshot_subagents_tree_ui() {
 
     let output = render_to_string(&mut state, 40, 28);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0                      ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0               ⇄ ☐⤢
     ⓘ                                    — ▾
     project
-    ┃ ● claude
+    ┃  
         ├ Explore #1
         ├ Plan #2
         └ Explore #2
-    ╭ Activity│Tasks│Git ──────────────────╮
-    │            No activity yet           │
-    ╰──────────────────────────────────────╯
+                    │  │ 󰊢
+                  No tools yet
     ");
 }
 
@@ -1115,15 +1278,14 @@ fn snapshot_subagent_long_name_truncated_ui() {
     // Narrow width (28) to force truncation of long subagent names
     let output = render_to_string(&mut state, 28, 27);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-    ┃ ● claude
+    ┃  
         ├ superpowers:code-revi…
         └ claude-code-guide #2
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+              │  │ 󰊢
+            No tools yet
     ");
 
     assert_right_border_intact(&output);
@@ -1151,14 +1313,13 @@ fn snapshot_activity_empty_centered_ui() {
 
     let output = render_to_string(&mut state, 28, 26);
     insta::assert_snapshot!(output, @"
-     ≡1 ●0 ◐0 ○1 ✕0          ☐⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-    ┃ ○ claude
+    ┃ 󰒲 
         Waiting for prompt…
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+              │  │ 󰊢
+            No tools yet
     ");
 }
 
@@ -1182,14 +1343,13 @@ fn snapshot_git_clean_centered_ui() {
 
     let output = render_to_string(&mut state, 28, 26);
     insta::assert_snapshot!(output, @"
-     ≡1 ●0 ◐0 ○1 ✕0          ☐⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-    ┃ ○ claude
+    ┃ 󰒲 
         Waiting for prompt…
-    ╭ Activity│Tasks│Git ──────╮
-    │    Working tree clean    │
-    ╰──────────────────────────╯
+              │  │ 󰊢
+         Working tree clean
     ");
 }
 
@@ -1222,14 +1382,14 @@ fn snapshot_git_branch_loaded_no_changes_shows_inline_clean() {
 
     let plain = render_to_string(&mut state, 28, 24);
     insta::assert_snapshot!(plain, @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-    ╭ Activity│Tasks│Git ──────╮
-    │main                      │
-    │──────────────────────────│
-    │    Working tree clean    │
-    ╰──────────────────────────╯
+    ┃  
+              │  │ 󰊢
+    main
+    ────────────────────────────
+         Working tree clean
     ");
 }
 
@@ -1257,12 +1417,12 @@ fn snapshot_git_no_data_shows_centered_clean() {
 
     let output = render_to_string(&mut state, 28, 24);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-    ╭ Activity│Tasks│Git ──────╮
-    │    Working tree clean    │
-    ╰──────────────────────────╯
+    ┃  
+              │  │ 󰊢
+         Working tree clean
     ");
 }
 
@@ -1292,12 +1452,13 @@ fn test_git_behind_only() {
 
     let plain = render_to_string(&mut state, 28, 14);
     insta::assert_snapshot!(plain, @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
-    ╭ Activity│Tasks│Git ──────╮
-    │main                    ↓3│
-    │──────────────────────────│
-    │    Working tree clean    │
-    ╰──────────────────────────╯
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
+    ⓘ                        — ▾
+    project
+    ┃  
+              │  │ 󰊢
+    main                      ↓3
+    ────────────────────────────
     ");
 }
 
@@ -1325,12 +1486,13 @@ fn test_git_ahead_and_behind() {
 
     let plain = render_to_string(&mut state, 38, 14);
     insta::assert_snapshot!(plain, @"
-     ≡1 ●1 ◐0 ○0 ✕0                    ☐⤢
-    ╭ Activity│Tasks│Git ────────────────╮
-    │main                            ↑2↓3│
-    │────────────────────────────────────│
-    │         Working tree clean         │
-    ╰────────────────────────────────────╯
+     󱓯 1  1 󰥔 0 󰒲 0  0             ⇄ ☐⤢
+    ⓘ                                  — ▾
+    project
+    ┃  
+                   │  │ 󰊢
+    main                              ↑2↓3
+    ──────────────────────────────────────
     ");
 }
 
@@ -1360,13 +1522,13 @@ fn test_git_diff_insertions_only() {
 
     let plain = render_to_string(&mut state, 28, 14);
     insta::assert_snapshot!(plain, @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
-    ╭ Activity│Tasks│Git ──────╮
-    │main                      │
-    │+25/-0             0 files│
-    │──────────────────────────│
-    │    Working tree clean    │
-    ╰──────────────────────────╯
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
+    ⓘ                        — ▾
+    project
+    ┃  
+              │  │ 󰊢
+    main
+    +25/-0               0 files
     ");
 }
 
@@ -1394,13 +1556,13 @@ fn test_git_diff_deletions_only() {
 
     let plain = render_to_string(&mut state, 28, 14);
     insta::assert_snapshot!(plain, @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
-    ╭ Activity│Tasks│Git ──────╮
-    │main                      │
-    │+0/-15             0 files│
-    │──────────────────────────│
-    │    Working tree clean    │
-    ╰──────────────────────────╯
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
+    ⓘ                        — ▾
+    project
+    ┃  
+              │  │ 󰊢
+    main
+    +0/-15               0 files
     ");
 }
 
@@ -1418,12 +1580,12 @@ fn snapshot_branch_truncated_ui() {
         }],
     }]);
     // Use a repo group with a long branch name via PaneGitInfo
-    state.repo_groups = vec![tmux_agent_sidebar::group::RepoGroup {
+    state.repo_groups = vec![pmux_explorer::group::RepoGroup {
         name: "dotfiles".into(),
         has_focus: true,
         panes: vec![(
             pane,
-            tmux_agent_sidebar::group::PaneGitInfo {
+            pmux_explorer::group::PaneGitInfo {
                 repo_root: Some("/home/user/dotfiles".into()),
                 branch: Some("feature/tmux-sidebar-dashboard-refactor".into()),
                 is_worktree: false,
@@ -1435,14 +1597,13 @@ fn snapshot_branch_truncated_ui() {
 
     let plain = render_to_string(&mut state, 28, 30);
     insta::assert_snapshot!(plain, @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     dotfiles                   +
-    ┃ ● claude
-    ┃   feature/tmux-sidebar-da…
-    ╭ Activity│Tasks│Git ──────╮
-    │      No activity yet     │
-    ╰──────────────────────────╯
+    ┃  
+    ┃    feature/tmux-sidebar-…
+              │  │ 󰊢
+            No tools yet
     ");
 }
 
@@ -1469,14 +1630,14 @@ fn snapshot_git_staged_unstaged_untracked_ui() {
     state.git.pr_number = Some("5".into());
     state.git.diff_stat = Some((12, 3));
     state.git.staged_files = vec![
-        tmux_agent_sidebar::git::GitFileEntry {
+        pmux_explorer::git::GitFileEntry {
             status: 'M',
             name: "app.rs".into(),
             additions: 10,
             deletions: 2,
             path: String::new(),
         },
-        tmux_agent_sidebar::git::GitFileEntry {
+        pmux_explorer::git::GitFileEntry {
             status: 'A',
             name: "new.rs".into(),
             additions: 2,
@@ -1484,7 +1645,7 @@ fn snapshot_git_staged_unstaged_untracked_ui() {
             path: String::new(),
         },
     ];
-    state.git.unstaged_files = vec![tmux_agent_sidebar::git::GitFileEntry {
+    state.git.unstaged_files = vec![pmux_explorer::git::GitFileEntry {
         status: 'M',
         name: "config.toml".into(),
         additions: 0,
@@ -1495,22 +1656,17 @@ fn snapshot_git_staged_unstaged_untracked_ui() {
 
     let output = render_to_string(&mut state, 28, 30);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-    ┃ ● claude
-    ╭ Activity│Tasks│Git ──────╮
-    │main                    #5│
-    │+12/-3             4 files│
-    │──────────────────────────│
-    │Staged (2)                │
-    │M app.rs            +10/-2│
-    │A new.rs             +2/-0│
-    │Unstaged (1)              │
-    │M config.toml        +0/-1│
-    │Untracked (1)             │
-    │? debug.log               │
-    ╰──────────────────────────╯
+    ┃  
+              │  │ 󰊢
+    main                      #5
+    +12/-3               4 files
+    ────────────────────────────
+    Staged (2)
+    M app.rs              +10/-2
+    A new.rs               +2/-0
     ");
 }
 
@@ -1536,7 +1692,7 @@ fn snapshot_git_long_branch_with_pr_ui() {
     state.git.branch = "feature/very-long-branch-name".into();
     state.git.pr_number = Some("123".into());
     state.git.diff_stat = Some((5, 2));
-    state.git.unstaged_files = vec![tmux_agent_sidebar::git::GitFileEntry {
+    state.git.unstaged_files = vec![pmux_explorer::git::GitFileEntry {
         status: 'M',
         name: "main.rs".into(),
         additions: 5,
@@ -1546,16 +1702,16 @@ fn snapshot_git_long_branch_with_pr_ui() {
 
     let output = render_to_string(&mut state, 28, 24);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-    ╭ Activity│Tasks│Git ──────╮
-    │feature/very-long-br… #123│
-    │+5/-2              1 files│
-    │──────────────────────────│
-    │Unstaged (1)              │
-    │M main.rs            +5/-2│
-    ╰──────────────────────────╯
+    ┃  
+              │  │ 󰊢
+    feature/very-long-bran… #123
+    +5/-2                1 files
+    ────────────────────────────
+    Unstaged (1)
+    M main.rs              +5/-2
     ");
     assert_right_border_intact(&output);
 }
@@ -1581,7 +1737,7 @@ fn snapshot_git_staged_only_ui() {
     state.focus_state.sidebar_focused = true;
     state.git.branch = "main".into();
     state.git.diff_stat = Some((20, 0));
-    state.git.staged_files = vec![tmux_agent_sidebar::git::GitFileEntry {
+    state.git.staged_files = vec![pmux_explorer::git::GitFileEntry {
         status: 'A',
         name: "new_feature.rs".into(),
         additions: 20,
@@ -1591,16 +1747,16 @@ fn snapshot_git_staged_only_ui() {
 
     let output = render_to_string(&mut state, 28, 24);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-    ╭ Activity│Tasks│Git ──────╮
-    │main                      │
-    │+20/-0             1 files│
-    │──────────────────────────│
-    │Staged (1)                │
-    │A new_feature.rs    +20/-0│
-    ╰──────────────────────────╯
+    ┃  
+              │  │ 󰊢
+    main
+    +20/-0               1 files
+    ────────────────────────────
+    Staged (1)
+    A new_feature.rs      +20/-0
     ");
 }
 
@@ -1625,7 +1781,7 @@ fn snapshot_git_many_files_more_indicator_ui() {
     state.focus_state.sidebar_focused = true;
     state.git.branch = "dev".into();
     state.git.unstaged_files = (0..7)
-        .map(|i| tmux_agent_sidebar::git::GitFileEntry {
+        .map(|i| pmux_explorer::git::GitFileEntry {
             status: 'M',
             name: format!("f{i}.rs"),
             additions: 1,
@@ -1636,23 +1792,18 @@ fn snapshot_git_many_files_more_indicator_ui() {
 
     let output = render_to_string(&mut state, 28, 30);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-    ┃ ● claude
-    ╭ Activity│Tasks│Git ──────╮
-    │dev                       │
-    │                   7 files│
-    │──────────────────────────│
-    │Unstaged (7)              │
-    │M f0.rs              +1/-0│
-    │M f1.rs              +1/-0│
-    │M f2.rs              +1/-0│
-    │M f3.rs              +1/-0│
-    │M f4.rs              +1/-0│
-    │M f5.rs              +1/-0│
-    │M f6.rs              +1/-0│
-    ╰──────────────────────────╯
+    ┃  
+              │  │ 󰊢
+    dev
+                         7 files
+    ────────────────────────────
+    Unstaged (7)
+    M f0.rs                +1/-0
+    M f1.rs                +1/-0
+    M f2.rs                +1/-0
     ");
     assert_right_border_intact(&output);
 }
@@ -1678,7 +1829,7 @@ fn snapshot_git_more_than_10_files_ui() {
     state.focus_state.sidebar_focused = true;
     state.git.branch = "dev".into();
     state.git.unstaged_files = (0..12)
-        .map(|i| tmux_agent_sidebar::git::GitFileEntry {
+        .map(|i| pmux_explorer::git::GitFileEntry {
             status: 'M',
             name: format!("f{i}.rs"),
             additions: 1,
@@ -1689,27 +1840,18 @@ fn snapshot_git_more_than_10_files_ui() {
 
     let output = render_to_string(&mut state, 28, 30);
     insta::assert_snapshot!(output, @"
-     ≡1 ●1 ◐0 ○0 ✕0          ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
-    ┃ ● claude
-    ╭ Activity│Tasks│Git ──────╮
-    │dev                       │
-    │                  12 files│
-    │──────────────────────────│
-    │Unstaged (12)             │
-    │M f0.rs              +1/-0│
-    │M f1.rs              +1/-0│
-    │M f2.rs              +1/-0│
-    │M f3.rs              +1/-0│
-    │M f4.rs              +1/-0│
-    │M f5.rs              +1/-0│
-    │M f6.rs              +1/-0│
-    │M f7.rs              +1/-0│
-    │M f8.rs              +1/-0│
-    │M f9.rs              +1/-0│
-    │                   +2 more│
-    ╰──────────────────────────╯
+    ┃  
+              │  │ 󰊢
+    dev
+                        12 files
+    ────────────────────────────
+    Unstaged (12)
+    M f0.rs                +1/-0
+    M f1.rs                +1/-0
+    M f2.rs                +1/-0
     ");
     assert_right_border_intact(&output);
 }
@@ -1733,64 +1875,64 @@ fn snapshot_focused_group_active_border_styled() {
         }],
     }]);
     state.repo_groups = vec![
-        tmux_agent_sidebar::group::RepoGroup {
+        pmux_explorer::group::RepoGroup {
             name: "dotfiles".into(),
             has_focus: true,
-            panes: vec![(
-                pane1.clone(),
-                tmux_agent_sidebar::group::PaneGitInfo::default(),
-            )],
+            panes: vec![(pane1.clone(), pmux_explorer::group::PaneGitInfo::default())],
         },
-        tmux_agent_sidebar::group::RepoGroup {
+        pmux_explorer::group::RepoGroup {
             name: "my-app".into(),
             has_focus: false,
-            panes: vec![(
-                pane2.clone(),
-                tmux_agent_sidebar::group::PaneGitInfo::default(),
-            )],
+            panes: vec![(pane2.clone(), pmux_explorer::group::PaneGitInfo::default())],
         },
     ];
     state.focus_state.focused_pane_id = Some("%1".into());
     state.rebuild_row_targets();
 
-    // Styled snapshot locks in the focused group's accent color (fg:153) on
-    // the active pane marker and the active bottom-panel border.
+    // Styled snapshot locks in the focused group's accent color (fg:153)
+    // on the active pane marker; the unfocused panel's rule stays
+    // border_inactive (fg:240) with the selected Activity label in accent.
     insta::assert_snapshot!(render_to_styled_string(&mut state, 28, 30), @"
-     ≡[fg:111]2[fg:153] ●[fg:114]1[fg:255] ◐[fg:245]0[fg:245] ○[fg:245]1[fg:255] ✕[fg:245]0[fg:245]          ☐[fg:245]⤢[fg:114]
-    ⓘ[fg:221]                        —[fg:252] ▾[fg:252]
-    d[fg:153]o[fg:153]t[fg:153]f[fg:153]i[fg:153]l[fg:153]e[fg:153]s[fg:153]
-    ┃[fg:153,bg:239] [bg:239]●[fg:82,bg:239] [fg:174,bg:239]c[fg:174,bg:239]l[fg:174,bg:239]a[fg:174,bg:239]u[fg:174,bg:239]d[fg:174,bg:239]e[fg:174,bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239] [bg:239]
-
-    m[fg:255]y[fg:255]-[fg:255]a[fg:255]p[fg:255]p[fg:255]
-      ○[fg:110] [fg:141]c[fg:141]o[fg:141]d[fg:141]e[fg:141]x[fg:141]
-       [fg:244] [fg:244]W[fg:244]a[fg:244]i[fg:244]t[fg:244]i[fg:244]n[fg:244]g[fg:244] [fg:244]f[fg:244]o[fg:244]r[fg:244] [fg:244]p[fg:244]r[fg:244]o[fg:244]m[fg:244]p[fg:244]t[fg:244]…[fg:244]
-
-
-    ╭[fg:240] [fg:240]A[fg:153]c[fg:153]t[fg:153]i[fg:153]v[fg:153]i[fg:153]t[fg:153]y[fg:153]│[fg:240]T[fg:252]a[fg:252]s[fg:252]k[fg:252]s[fg:252]│[fg:240]G[fg:252]i[fg:252]t[fg:252] [fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]╮[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]N[fg:252]o[fg:252] [fg:252]a[fg:252]c[fg:252]t[fg:252]i[fg:252]v[fg:252]i[fg:252]t[fg:252]y[fg:252] [fg:252]y[fg:252]e[fg:252]t[fg:252] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    │[fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240] [fg:240]│[fg:240]
-    ╰[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]─[fg:240]╯[fg:240]
+     [bg:#414868]󱓯[fg:#7aa2f7,bg:#414868] [bg:#414868]2[fg:#7aa2f7,bg:#414868,bold] [bg:#414868][fg:#9ece6a,bg:#414868] [bg:#414868]1[fg:#c0caf5,bg:#414868] [bg:#414868]󰥔[fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868]󰒲[fg:#7dcfff,bg:#414868] [bg:#414868]1[fg:#c0caf5,bg:#414868] [bg:#414868][fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]⇄[fg:#9ece6a,bg:#414868] [bg:#414868]☐[fg:#9aa5ce,bg:#414868]⤢[fg:#9ece6a,bg:#414868] [bg:#414868]
+    ⓘ[fg:#e0af68,bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]—[fg:#a9b1d6,bg:#1e2336] [bg:#1e2336]▾[fg:#a9b1d6,bg:#1e2336]
+    d[fg:#7aa2f7,bg:#1e2336]o[fg:#7aa2f7,bg:#1e2336]t[fg:#7aa2f7,bg:#1e2336]f[fg:#7aa2f7,bg:#1e2336]i[fg:#7aa2f7,bg:#1e2336]l[fg:#7aa2f7,bg:#1e2336]e[fg:#7aa2f7,bg:#1e2336]s[fg:#7aa2f7,bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+    ┃[fg:#7aa2f7,bg:#414868] [bg:#414868][fg:82,bg:#414868] [fg:#ff9e64,bg:#414868][fg:#ff9e64,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]
+     [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+    m[fg:#c0caf5,bg:#1e2336]y[fg:#c0caf5,bg:#1e2336]-[fg:#c0caf5,bg:#1e2336]a[fg:#c0caf5,bg:#1e2336]p[fg:#c0caf5,bg:#1e2336]p[fg:#c0caf5,bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+     [bg:#1e2336] [bg:#1e2336]󰒲[fg:#7dcfff,bg:#1e2336] [fg:#bb9af7,bg:#1e2336]c[fg:#bb9af7,bg:#1e2336]o[fg:#bb9af7,bg:#1e2336]d[fg:#bb9af7,bg:#1e2336]e[fg:#bb9af7,bg:#1e2336]x[fg:#bb9af7,bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+     [bg:#1e2336] [bg:#1e2336] [fg:#565f89,bg:#1e2336] [fg:#565f89,bg:#1e2336]W[fg:#565f89,bg:#1e2336]a[fg:#565f89,bg:#1e2336]i[fg:#565f89,bg:#1e2336]t[fg:#565f89,bg:#1e2336]i[fg:#565f89,bg:#1e2336]n[fg:#565f89,bg:#1e2336]g[fg:#565f89,bg:#1e2336] [fg:#565f89,bg:#1e2336]f[fg:#565f89,bg:#1e2336]o[fg:#565f89,bg:#1e2336]r[fg:#565f89,bg:#1e2336] [fg:#565f89,bg:#1e2336]p[fg:#565f89,bg:#1e2336]r[fg:#565f89,bg:#1e2336]o[fg:#565f89,bg:#1e2336]m[fg:#565f89,bg:#1e2336]p[fg:#565f89,bg:#1e2336]t[fg:#565f89,bg:#1e2336]…[fg:#565f89,bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+     [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+     [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+     [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+     [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+     [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+     [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+     [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+     [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+     [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+     [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+     [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+     [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+     [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+     [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868][fg:#7aa2f7,bg:#414868,bold] [fg:#9aa5ce,bg:#414868]│[fg:#9aa5ce,bg:#414868] [fg:#9aa5ce,bg:#414868][fg:#c0caf5,bg:#414868] [fg:#9aa5ce,bg:#414868]│[fg:#9aa5ce,bg:#414868] [fg:#9aa5ce,bg:#414868]󰊢[fg:#c0caf5,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]N[fg:#a9b1d6,bg:#1a1b26]o[fg:#a9b1d6,bg:#1a1b26] [fg:#a9b1d6,bg:#1a1b26]t[fg:#a9b1d6,bg:#1a1b26]o[fg:#a9b1d6,bg:#1a1b26]o[fg:#a9b1d6,bg:#1a1b26]l[fg:#a9b1d6,bg:#1a1b26]s[fg:#a9b1d6,bg:#1a1b26] [fg:#a9b1d6,bg:#1a1b26]y[fg:#a9b1d6,bg:#1a1b26]e[fg:#a9b1d6,bg:#1a1b26]t[fg:#a9b1d6,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
     ");
 }
 
+// ─── The rule row and the 2.5 snapshot set ─────────────────────────
+
 #[test]
-fn test_pet_enabled_preserves_bottom_panel_border() {
+fn snapshot_rule_with_full_width_content() {
+    // The bottom panel is a split part under the agent list: one rule
+    // row, then content at the full sidebar width (40 columns here) with
+    // no border characters at the left, right or bottom edge.
     let pane = make_pane(AgentType::Claude, PaneStatus::Idle);
     let mut state = make_state(vec![SessionInfo {
         session_name: "main".into(),
@@ -1805,19 +1947,282 @@ fn test_pet_enabled_preserves_bottom_panel_border() {
     state.repo_groups = vec![make_repo_group("project", vec![pane])];
     state.rebuild_row_targets();
     state.focus_state.sidebar_focused = false;
-    state.pet_enabled = true;
+    state.global.bottom_percent = 30;
+    state.activity.entries = vec![ActivityEntry {
+        timestamp: "10:32".into(),
+        tool: "Edit".into(),
+        label: "src/main.rs".into(),
+    }];
 
-    insta::assert_snapshot!(render_to_string(&mut state, 40, 30), @"
-     ≡1 ●0 ◐0 ○1 ✕0                      ☐⤢
+    insta::assert_snapshot!(render_to_string(&mut state, 40, 14), @"
+     󱓯 1  0 󰥔 0 󰒲 1  0               ⇄ ☐⤢
     ⓘ                                    — ▾
     project
-    ┃ ○ claude
+    ┃ 󰒲 
         Waiting for prompt…
-      ▄ ▄
-     ▄▀▀▀▄                             ████
-      ▀ ▀                           ██ █  █
-    ╭ Activity│Tasks│Git ──────────────────╮
-    │            No activity yet           │
-    ╰──────────────────────────────────────╯
+                    │  │ 󰊢
+    10:32                               Edit
+      src/main.rs
     ");
+}
+
+#[test]
+fn snapshot_rule_is_a_solid_band() {
+    // The rule row is a solid band in filter_bar_bg at all times —
+    // focused or not — and the tab labels sit on it: the displayed tab
+    // keeps the accent foreground, the rest stay muted. The ActivityLog
+    // focus here exercises the focused case; the band must not change.
+    // (No `─` characters: the band is the background, not a drawn line.)
+    let pane = make_pane(AgentType::Claude, PaneStatus::Idle);
+    let mut state = make_state(vec![SessionInfo {
+        session_name: "main".into(),
+        windows: vec![WindowInfo {
+            window_id: "@1".into(),
+            window_name: "project".into(),
+            window_active: true,
+            auto_rename: false,
+            panes: vec![pane.clone()],
+        }],
+    }]);
+    state.repo_groups = vec![make_repo_group("project", vec![pane])];
+    state.rebuild_row_targets();
+    state.focus_state.sidebar_focused = true;
+    state.focus_state.focus = Focus::ActivityLog;
+    state.global.bottom_percent = 30;
+
+    insta::assert_snapshot!(render_to_styled_string(&mut state, 40, 14), @"
+     [bg:#414868]󱓯[fg:#7aa2f7,bg:#414868] [bg:#414868]1[fg:#7aa2f7,bg:#414868,bold] [bg:#414868][fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868]󰥔[fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868]󰒲[fg:#7dcfff,bg:#414868] [bg:#414868]1[fg:#c0caf5,bg:#414868] [bg:#414868][fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]⇄[fg:#9ece6a,bg:#414868] [bg:#414868]☐[fg:#9aa5ce,bg:#414868]⤢[fg:#9ece6a,bg:#414868] [bg:#414868]
+    ⓘ[fg:#e0af68,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]—[fg:#a9b1d6,bg:#1a1b26] [bg:#1a1b26]▾[fg:#a9b1d6,bg:#1a1b26]
+    p[fg:#7aa2f7,bg:#1a1b26]r[fg:#7aa2f7,bg:#1a1b26]o[fg:#7aa2f7,bg:#1a1b26]j[fg:#7aa2f7,bg:#1a1b26]e[fg:#7aa2f7,bg:#1a1b26]c[fg:#7aa2f7,bg:#1a1b26]t[fg:#7aa2f7,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+    ┃[fg:#7aa2f7,bg:#414868] [bg:#414868]󰒲[fg:#7dcfff,bg:#414868] [fg:#ff9e64,bg:#414868][fg:#ff9e64,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]
+     [bg:#1a1b26] [bg:#1a1b26] [fg:#c0caf5,bg:#1a1b26] [fg:#c0caf5,bg:#1a1b26]W[fg:#c0caf5,bg:#1a1b26]a[fg:#c0caf5,bg:#1a1b26]i[fg:#c0caf5,bg:#1a1b26]t[fg:#c0caf5,bg:#1a1b26]i[fg:#c0caf5,bg:#1a1b26]n[fg:#c0caf5,bg:#1a1b26]g[fg:#c0caf5,bg:#1a1b26] [fg:#c0caf5,bg:#1a1b26]f[fg:#c0caf5,bg:#1a1b26]o[fg:#c0caf5,bg:#1a1b26]r[fg:#c0caf5,bg:#1a1b26] [fg:#c0caf5,bg:#1a1b26]p[fg:#c0caf5,bg:#1a1b26]r[fg:#c0caf5,bg:#1a1b26]o[fg:#c0caf5,bg:#1a1b26]m[fg:#c0caf5,bg:#1a1b26]p[fg:#c0caf5,bg:#1a1b26]t[fg:#c0caf5,bg:#1a1b26]…[fg:#c0caf5,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
+     [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868][fg:#7aa2f7,bg:#414868,bold] [fg:#9aa5ce,bg:#414868]│[fg:#9aa5ce,bg:#414868] [fg:#9aa5ce,bg:#414868][fg:#c0caf5,bg:#414868] [fg:#9aa5ce,bg:#414868]│[fg:#9aa5ce,bg:#414868] [fg:#9aa5ce,bg:#414868]󰊢[fg:#c0caf5,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]
+     [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+     [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]N[fg:#a9b1d6,bg:#1e2336]o[fg:#a9b1d6,bg:#1e2336] [fg:#a9b1d6,bg:#1e2336]t[fg:#a9b1d6,bg:#1e2336]o[fg:#a9b1d6,bg:#1e2336]o[fg:#a9b1d6,bg:#1e2336]l[fg:#a9b1d6,bg:#1e2336]s[fg:#a9b1d6,bg:#1e2336] [fg:#a9b1d6,bg:#1e2336]y[fg:#a9b1d6,bg:#1e2336]e[fg:#a9b1d6,bg:#1e2336]t[fg:#a9b1d6,bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+     [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
+    ");
+}
+
+#[test]
+fn snapshot_bottom_percent_zero_hides_panel() {
+    // A percent of 0 hides the bottom panel entirely: no rule row and
+    // all rows to the agent list.
+    let pane = make_pane(AgentType::Claude, PaneStatus::Idle);
+    let mut state = make_state(vec![SessionInfo {
+        session_name: "main".into(),
+        windows: vec![WindowInfo {
+            window_id: "@1".into(),
+            window_name: "project".into(),
+            window_active: true,
+            auto_rename: false,
+            panes: vec![pane.clone()],
+        }],
+    }]);
+    state.repo_groups = vec![make_repo_group("project", vec![pane])];
+    state.rebuild_row_targets();
+    state.focus_state.sidebar_focused = false;
+    state.global.bottom_percent = 0;
+
+    insta::assert_snapshot!(render_to_string(&mut state, 28, 20), @"
+     󱓯 1  0 󰥔 0 󰒲 1  0   ⇄ ☐⤢
+    ⓘ                        — ▾
+    project
+    ┃ 󰒲 
+        Waiting for prompt…
+    ");
+}
+
+// ─── Thought tab ───────────────────────────────────────────────────
+
+/// A pi-pane state with the Thought tab displayed, focused, and the
+/// given last thought in `state.thought.last` — the draw reads only
+/// that, so no feed file is needed. The stamp formatter is fixed to
+/// UTC so the `HH:mm:ss` snapshots hold on any machine — the state's
+/// own seam, so no test mutates the process timezone.
+fn thought_state_with(last: pmux_explorer::thinking_feed::LastThought) -> AppState {
+    let pane = make_pane(AgentType::Pi, PaneStatus::Running);
+    let mut state = make_state(vec![SessionInfo {
+        session_name: "main".into(),
+        windows: vec![WindowInfo {
+            window_id: "@1".into(),
+            window_name: "project".into(),
+            window_active: true,
+            auto_rename: false,
+            panes: vec![pane.clone()],
+        }],
+    }]);
+    state.repo_groups = vec![make_repo_group("project", vec![pane])];
+    state.rebuild_row_targets();
+    state.global.bottom_tab = BottomTab::Thought;
+    state.focus_state.focus = Focus::ActivityLog;
+    state.thought.last = last;
+    state.thought.hhmmss = pmux_explorer::time::utc_hhmmss_from_ts;
+    state
+}
+
+fn thought(text: &str, start_ts: Option<&str>) -> pmux_explorer::thinking_feed::LastThought {
+    pmux_explorer::thinking_feed::LastThought {
+        text: text.into(),
+        start_ts: start_ts.map(str::to_string),
+        open: true,
+    }
+}
+
+#[test]
+fn snapshot_thought_short_ui() {
+    let mut state = thought_state_with(thought(
+        "I should read the file first.",
+        Some("2026-10-27T08:00:07Z"),
+    ));
+
+    insta::assert_snapshot!(render_to_string(&mut state, 28, 24), @"
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
+    ⓘ                        — ▾
+    project
+    ┃  
+            │ 󰟶 │  │ 󰊢
+     08:00:07
+     I should read the file
+     first.
+    ");
+}
+
+#[test]
+fn snapshot_thought_tall_follows_the_end_ui() {
+    // Thirty wrapped rows; the follow keeps the last rows on screen.
+    let text: String = (1..=30)
+        .map(|i| format!("thought row {i:02}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let mut state = thought_state_with(thought(&text, Some("2026-10-27T08:00:07Z")));
+    state.global.bottom_percent = 60;
+
+    insta::assert_snapshot!(render_to_string(&mut state, 40, 30), @"
+     󱓯 1  1 󰥔 0 󰒲 0  0               ⇄ ☐⤢
+    ⓘ                                    — ▾
+    project
+    ┃  
+                  │ 󰟶 │  │ 󰊢
+     thought row 14
+     thought row 15
+     thought row 16
+     thought row 17
+     thought row 18
+     thought row 19
+     thought row 20
+     thought row 21
+     thought row 22
+     thought row 23
+     thought row 24
+     thought row 25
+     thought row 26
+     thought row 27
+     thought row 28
+     thought row 29
+     thought row 30
+    ");
+}
+
+#[test]
+fn snapshot_thought_scrolled_up_ui() {
+    let text: String = (1..=30)
+        .map(|i| format!("thought row {i:02}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let mut state = thought_state_with(thought(&text, Some("2026-10-27T08:00:07Z")));
+    state.global.bottom_percent = 60;
+    // The user scrolled to the top: the follow is suspended and the
+    // view holds the first rows. The seen ts matches the thought, so
+    // the draw does not read this as a new `start`.
+    state.thought.follow = false;
+    state.thought.seen_start_ts = Some("2026-10-27T08:00:07Z".into());
+    state.scrolls.thought.offset = 0;
+
+    insta::assert_snapshot!(render_to_string(&mut state, 40, 30), @"
+     󱓯 1  1 󰥔 0 󰒲 0  0               ⇄ ☐⤢
+    ⓘ                                    — ▾
+    project
+    ┃  
+                  │ 󰟶 │  │ 󰊢
+     08:00:07
+     thought row 01
+     thought row 02
+     thought row 03
+     thought row 04
+     thought row 05
+     thought row 06
+     thought row 07
+     thought row 08
+     thought row 09
+     thought row 10
+     thought row 11
+     thought row 12
+     thought row 13
+     thought row 14
+     thought row 15
+     thought row 16
+    ");
+}
+
+#[test]
+fn snapshot_thought_empty_notice_ui() {
+    let mut state = thought_state_with(thought("", None));
+
+    insta::assert_snapshot!(render_to_string(&mut state, 28, 24), @"
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
+    ⓘ                        — ▾
+    project
+    ┃  
+            │ 󰟶 │  │ 󰊢
+           No thinking yet
+    ");
+}
+
+#[test]
+fn a_scroll_up_suspends_the_follow_and_the_bottom_re_arms_it() {
+    let pane = make_pane(AgentType::Pi, PaneStatus::Running);
+    let mut state = make_state(vec![]);
+    state.repo_groups = vec![make_repo_group("project", vec![pane])];
+    state.global.bottom_tab = BottomTab::Thought;
+    state.scrolls.thought = pmux_explorer::state::ScrollState {
+        offset: 0,
+        total_lines: 30,
+        visible_height: 10,
+    };
+
+    state.scroll_bottom(-5);
+    assert!(!state.thought.follow, "a scroll up suspends the follow");
+    assert_eq!(state.scrolls.thought.offset, 0);
+
+    // Scrolling down but not reaching the bottom keeps the follow off.
+    state.scroll_bottom(5);
+    assert!(!state.thought.follow);
+
+    // Reaching the bottom re-arms it.
+    state.scroll_bottom(100);
+    assert!(state.thought.follow);
+}
+
+#[test]
+fn a_new_start_resets_the_follow() {
+    let pane = make_pane(AgentType::Pi, PaneStatus::Running);
+    let mut state = make_state(vec![]);
+    state.repo_groups = vec![make_repo_group("project", vec![pane])];
+    state.global.bottom_tab = BottomTab::Thought;
+    state.thought.last = thought("first block", Some("t1"));
+    state.thought.seen_start_ts = Some("t1".into());
+    state.thought.follow = false;
+    state.scrolls.thought.offset = 3;
+
+    // A later block carries a new start ts: the draw resets to follow.
+    state.thought.last = thought("second block", Some("t2"));
+    render_to_string(&mut state, 28, 24);
+    assert!(state.thought.follow, "a new start resets to follow");
+    assert_eq!(state.thought.seen_start_ts.as_deref(), Some("t2"));
+    assert_eq!(state.scrolls.thought.offset, 0); // content fits, max 0
 }

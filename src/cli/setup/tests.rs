@@ -7,17 +7,17 @@ const FAKE_HOOK: &str = "/fake/hook.sh";
 fn shell_quote_safe_string_passes_through() {
     // Fast path: common paths have no shell-special characters and are
     // returned verbatim. This is what keeps the fallback
-    // `~/.tmux/plugins/tmux-agent-sidebar/hook.sh` eligible for tilde
+    // `~/.tmux/plugins/pmux-explorer/hook.sh` eligible for tilde
     // expansion in the generated command.
     assert_eq!(shell_quote("hello"), "hello");
     assert_eq!(shell_quote("/fake/hook.sh"), "/fake/hook.sh");
     assert_eq!(
-        shell_quote("~/.tmux/plugins/tmux-agent-sidebar/hook.sh"),
-        "~/.tmux/plugins/tmux-agent-sidebar/hook.sh"
+        shell_quote("~/.tmux/plugins/pmux-explorer/hook.sh"),
+        "~/.tmux/plugins/pmux-explorer/hook.sh"
     );
     assert_eq!(
-        shell_quote("/Users/alice/.tmux/plugins/tmux-agent-sidebar/hook.sh"),
-        "/Users/alice/.tmux/plugins/tmux-agent-sidebar/hook.sh"
+        shell_quote("/Users/alice/.tmux/plugins/pmux-explorer/hook.sh"),
+        "/Users/alice/.tmux/plugins/pmux-explorer/hook.sh"
     );
 }
 
@@ -565,7 +565,7 @@ fn run_setup_pi_returns_the_producer_contract() {
     let v = json.unwrap();
     assert_eq!(
         v.get("command").and_then(Value::as_str),
-        Some("tmux-agent-sidebar hook pi <event>")
+        Some("pmux-explorer hook pi <event>")
     );
     let events = v.get("events").and_then(Value::as_array).unwrap();
     let names: Vec<&str> = events
@@ -958,7 +958,7 @@ const EXPECTED_FULL_OUTPUT: &str = r#"{
     },
     "pi": {
       "agent": "pi",
-      "command": "tmux-agent-sidebar hook pi <event>",
+      "command": "pmux-explorer hook pi <event>",
       "events": [
         {
           "event": "session-start",

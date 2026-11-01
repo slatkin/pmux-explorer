@@ -1,9 +1,9 @@
 use crate::tmux;
 
-pub const SPAWNED_OPTION: &str = "@agent-sidebar-spawned";
-pub const SPAWNED_FROM_OPTION: &str = "@agent-sidebar-spawned-from";
-pub const SPAWNED_WORKTREE_OPTION: &str = "@agent-sidebar-spawned-worktree";
-pub const SPAWNED_BRANCH_OPTION: &str = "@agent-sidebar-spawned-branch";
+pub const SPAWNED_OPTION: &str = "@pmux-explorer-spawned";
+pub const SPAWNED_FROM_OPTION: &str = "@pmux-explorer-spawned-from";
+pub const SPAWNED_WORKTREE_OPTION: &str = "@pmux-explorer-spawned-worktree";
+pub const SPAWNED_BRANCH_OPTION: &str = "@pmux-explorer-spawned-branch";
 
 /// Build the tmux `display-message` template used by [`read_spawn_markers`]. One
 /// call, five fields: the truthy flag, the owning repo, the worktree

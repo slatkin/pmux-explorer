@@ -2,10 +2,10 @@
 //! binary: `$TMUX_PANE` dispatch and the exact stdout payloads are
 //! child-process behavior the in-crate unit tests cannot observe.
 
+use pmux_explorer::task_store;
 use std::fs;
-use tmux_agent_sidebar::task_store;
 
-const BIN: &str = env!("CARGO_BIN_EXE_tmux-agent-sidebar");
+const BIN: &str = env!("CARGO_BIN_EXE_pmux-explorer");
 
 #[test]
 fn task_commands_round_trip_through_the_binary() {
@@ -41,6 +41,19 @@ fn task_commands_round_trip_through_the_binary() {
 
     let items = task_store::read_tasks(pane);
     assert_eq!(items[0].status, task_store::TaskItemStatus::Completed);
+
+    // `task-describe` joins its args the same way and stores the
+    // pane-wide description beside the items.
+    let describe = std::process::Command::new(BIN)
+        .args(["task-describe", "Fix the login crash end to end"])
+        .env("TMUX_PANE", pane)
+        .output()
+        .expect("compiled binary must run");
+    assert!(describe.status.success());
+
+    let list = task_store::read_task_list(pane);
+    assert_eq!(list.description, "Fix the login crash end to end");
+    assert_eq!(list.items.len(), 1, "describe must not touch items");
 
     let _ = fs::remove_file(&path);
 }

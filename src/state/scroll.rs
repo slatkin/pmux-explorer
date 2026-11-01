@@ -11,12 +11,22 @@ impl ScrollState {
         let next = self.offset as isize + delta;
         self.offset = next.max(0).min(max as isize) as usize;
     }
+
+    /// Whether the offset sits on the last page — the bottom of the
+    /// content. The Thought tab's follow-the-end scroll uses this to
+    /// re-arm the follow when the user scrolls back down.
+    pub fn at_end(&self) -> bool {
+        self.offset >= self.total_lines.saturating_sub(self.visible_height)
+    }
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct ScrollStates {
     pub panes: ScrollState,
     pub git: ScrollState,
+    /// The Thought tab's scroll offset (follow-the-end while the user
+    /// has not scrolled up — see the drawing in `ui/bottom/thought`).
+    pub thought: ScrollState,
 }
 
 #[cfg(test)]
@@ -82,7 +92,7 @@ mod tests {
     }
 
     #[test]
-    fn scroll_states_default_both_at_default() {
+    fn scroll_states_default_all_at_default() {
         let states = ScrollStates::default();
         assert_eq!(states.panes.offset, 0);
         assert_eq!(states.panes.total_lines, 0);
@@ -90,5 +100,8 @@ mod tests {
         assert_eq!(states.git.offset, 0);
         assert_eq!(states.git.total_lines, 0);
         assert_eq!(states.git.visible_height, 0);
+        assert_eq!(states.thought.offset, 0);
+        assert_eq!(states.thought.total_lines, 0);
+        assert_eq!(states.thought.visible_height, 0);
     }
 }

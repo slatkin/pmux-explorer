@@ -9,18 +9,13 @@ use crate::adapter::HookRegistration;
 use crate::adapter::claude::ClaudeAdapter;
 use crate::adapter::codex::CodexAdapter;
 
-#[allow(dead_code)]
-const _CLAUDE_TABLE_REACHABLE: &[HookRegistration] = ClaudeAdapter::HOOK_REGISTRATIONS;
-#[allow(dead_code)]
-const _CODEX_TABLE_REACHABLE: &[HookRegistration] = CodexAdapter::HOOK_REGISTRATIONS;
-
 /// POSIX-quote a string for safe use as a single shell argument.
 ///
 /// Fast path: when the string consists only of characters that bash does
 /// not interpret specially, it is returned as-is. This matters for the
 /// common case (`/Users/alice/.../hook.sh`) because aggressive quoting
 /// would suppress tilde expansion on the fallback path
-/// `~/.tmux/plugins/tmux-agent-sidebar/hook.sh` and break the emitted
+/// `~/.tmux/plugins/pmux-explorer/hook.sh` and break the emitted
 /// hook commands. This mirrors Python's `shlex.quote` behaviour.
 ///
 /// Slow path: wrap the value in single quotes and escape any internal
@@ -82,14 +77,13 @@ pub(crate) fn build_agent_snippet(agent: &str, hook_script: &str) -> Option<serd
             .entry(reg.trigger.to_string())
             .or_insert_with(|| serde_json::Value::Array(Vec::new()))
             .as_array_mut()
-            .expect("trigger entry must be an array");
+            .expect("trigger entries are created only as arrays by or_insert_with above");
         arr.push(entry);
     }
 
     Some(serde_json::json!({ "hooks": serde_json::Value::Object(hooks) }))
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct HookSpec {
     trigger: String,
@@ -97,12 +91,10 @@ struct HookSpec {
     command: String,
 }
 
-#[allow(dead_code)]
 fn normalize_matcher(value: Option<&serde_json::Value>) -> String {
     value.and_then(|v| v.as_str()).unwrap_or("").to_string()
 }
 
-#[allow(dead_code)]
 fn collect_hook_specs(config: &serde_json::Value) -> Vec<HookSpec> {
     let Some(hooks) = config.get("hooks").and_then(serde_json::Value::as_object) else {
         return Vec::new();
@@ -144,12 +136,11 @@ fn collect_hook_specs(config: &serde_json::Value) -> Vec<HookSpec> {
 ///
 /// Comparison uses `trigger`, `matcher`, and the canonicalized hook command.
 /// The command path is resolved through `std::fs::canonicalize` so a
-/// symlinked plugin directory (`~/.tmux/plugins/tmux-agent-sidebar/hook.sh`
-/// → `~/Programming/tmux-agent-sidebar/hook.sh`) still compares equal, while
+/// symlinked plugin directory (`~/.tmux/plugins/pmux-explorer/hook.sh`
+/// → `~/Programming/pmux-explorer/hook.sh`) still compares equal, while
 /// configs pointing at a stale or renamed checkout canonicalize to a
 /// different real path (or fail to canonicalize at all) and are flagged as
 /// missing.
-#[allow(dead_code)]
 pub(crate) fn missing_hooks(
     agent: &str,
     current_config: &serde_json::Value,
@@ -256,7 +247,7 @@ fn expand_home_tilde(path: &str) -> String {
     p.to_string_lossy().into_owned()
 }
 
-#[allow(dead_code)]
+#[cfg(test)]
 pub(crate) fn has_missing_hooks(
     agent: &str,
     current_config: &serde_json::Value,
@@ -288,7 +279,7 @@ pub(crate) fn build_pi_contract() -> serde_json::Value {
 
     serde_json::json!({
         "agent": "pi",
-        "command": "tmux-agent-sidebar hook pi <event>",
+        "command": "pmux-explorer hook pi <event>",
         "events": events,
         "notes": [
             "The pane is the one in $TMUX_PANE, read from the environment of the command.",
@@ -374,7 +365,7 @@ pub(crate) struct ResolvedHookScript {
     pub detected: bool,
 }
 
-const FALLBACK_HOOK_SCRIPT: &str = "~/.tmux/plugins/tmux-agent-sidebar/hook.sh";
+const FALLBACK_HOOK_SCRIPT: &str = "~/.tmux/plugins/pmux-explorer/hook.sh";
 
 /// Resolve the absolute path of `hook.sh` to embed in the generated
 /// commands. Strategy:
@@ -383,9 +374,9 @@ const FALLBACK_HOOK_SCRIPT: &str = "~/.tmux/plugins/tmux-agent-sidebar/hook.sh";
 /// 2. Walk up at most 3 directories from its parent, checking for a
 ///    sibling `hook.sh` at each level. Matches the two layouts the
 ///    project already supports:
-///      - `<plugin>/bin/tmux-agent-sidebar` → `<plugin>/hook.sh`
-///      - `<plugin>/target/release/tmux-agent-sidebar` → `<plugin>/hook.sh`
-/// 3. Fallback: the literal string `~/.tmux/plugins/tmux-agent-sidebar/hook.sh`
+///      - `<plugin>/bin/pmux-explorer` → `<plugin>/hook.sh`
+///      - `<plugin>/target/release/pmux-explorer` → `<plugin>/hook.sh`
+/// 3. Fallback: the literal string `~/.tmux/plugins/pmux-explorer/hook.sh`
 ///    (tilde intentionally not expanded, matches README).
 ///
 /// When step 1 or 2 succeeds, `detected = true`. When step 3 kicks in,
@@ -431,7 +422,6 @@ where
 }
 
 /// Return the default config path for `agent` under the current user's home.
-#[allow(dead_code)]
 pub(crate) fn config_path_for_agent(agent: &str) -> Option<PathBuf> {
     let home = std::env::var_os("HOME")?;
     let home = PathBuf::from(home);
@@ -447,7 +437,6 @@ pub(crate) fn config_path_for_agent(agent: &str) -> Option<PathBuf> {
 /// Missing files, unreadable files, or invalid JSON all map to `Value::Null`
 /// so callers can still use `missing_hooks()` and surface the full expected
 /// hook set.
-#[allow(dead_code)]
 pub(crate) fn load_current_config(agent: &str) -> serde_json::Value {
     let Some(path) = config_path_for_agent(agent) else {
         return serde_json::Value::Null;
@@ -476,7 +465,7 @@ fn run_setup(args: &[String], hook_script: &str) -> (i32, Option<serde_json::Val
             }
         },
         _ => {
-            eprintln!("usage: tmux-agent-sidebar setup [claude|codex|pi]");
+            eprintln!("usage: pmux-explorer setup [claude|codex|pi]");
             (2, None)
         }
     }

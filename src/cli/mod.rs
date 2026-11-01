@@ -1,6 +1,6 @@
 pub mod capture;
 mod hook;
-mod label;
+pub(crate) mod label;
 pub mod plugin_state;
 pub(crate) mod setup;
 pub(crate) mod shared_html;
@@ -9,6 +9,7 @@ pub(crate) mod toggle;
 
 use std::io::Read;
 
+use crate::pane_store::PaneStore;
 use crate::task_reminders;
 use crate::tmux;
 
@@ -26,6 +27,7 @@ pub fn run(args: &[String]) -> Option<i32> {
         "set-status" => cmd_set_status(rest),
         "task-set" => cmd_task_set(rest),
         "task-update" => cmd_task_update(rest),
+        "task-describe" => cmd_task_describe(rest),
         "spawn" => spawn::cmd_spawn(rest),
         "capture" => capture::cmd_capture(rest),
         "--version" | "version" => {
@@ -40,11 +42,18 @@ pub fn run(args: &[String]) -> Option<i32> {
 // ─── Shared helpers ──────────────────────────────────────────────────────────
 
 fn read_stdin_json() -> serde_json::Value {
+    // SAFETY: `isatty` reads the descriptor only and writes nothing; it
+    // accepts any fd value and reports an unusable one as 0.
     let is_tty = unsafe { libc::isatty(libc::STDIN_FILENO) != 0 };
     if is_tty {
         return serde_json::Value::Null;
     }
     let mut buf = String::new();
+    // A read error leaves `buf` empty and malformed JSON yields `Null`,
+    // which the adapter still parses into an all-default-fields event —
+    // handlers run on it, they do not no-op. The failure itself is
+    // deliberately unreported: producers are same-project, the hook has no
+    // channel to act on it, and the exit-0 contract holds either way.
     let _ = std::io::stdin().read_to_string(&mut buf);
     serde_json::from_str(&buf).unwrap_or(serde_json::Value::Null)
 }
@@ -54,48 +63,46 @@ fn tmux_pane() -> String {
 }
 
 fn local_time_hhmm() -> String {
-    unsafe {
-        let now = libc::time(std::ptr::null_mut());
-        let mut tm: libc::tm = std::mem::zeroed();
-        libc::localtime_r(&now, &mut tm);
-        format!("{:02}:{:02}", tm.tm_hour, tm.tm_min)
+    // SAFETY: `time` writes only through its pointer argument; a null
+    // pointer asks for the current time and the return value carries it.
+    let now = unsafe { libc::time(std::ptr::null_mut()) };
+    // SAFETY: `zeroed` is the valid initial state for `libc::tm` — all
+    // integer fields zero and `tm_zone` a null pointer, valid for every
+    // field's type — and every field `localtime_r` does not write stays
+    // zero. Nothing below dereferences `tm_zone`.
+    let mut tm: libc::tm = unsafe { std::mem::zeroed() };
+    // SAFETY: `localtime_r` reads `now` and writes only `tm`; both are valid
+    // for the call. It reports failure by returning null, checked here.
+    if unsafe { libc::localtime_r(&now, &mut tm) }.is_null() {
+        // The zeroed `tm` would otherwise format as a plausible "00:00" and
+        // hide the failure; this sentinel keeps it greppable in the log.
+        return "??:??".to_string();
     }
-}
-
-fn set_status(pane: &str, status: &str) {
-    if status == "clear" {
-        tmux::unset_pane_option(pane, tmux::PANE_STATUS);
-        tmux::unset_pane_option(pane, tmux::PANE_ATTENTION);
-    } else {
-        tmux::set_pane_option(pane, tmux::PANE_STATUS, status);
-        match status {
-            "running" | "idle" => {
-                tmux::unset_pane_option(pane, tmux::PANE_ATTENTION);
-            }
-            _ => {}
-        }
-    }
-}
-
-fn set_attention(pane: &str, state: &str) {
-    if state == "clear" {
-        tmux::unset_pane_option(pane, tmux::PANE_ATTENTION);
-    } else {
-        tmux::set_pane_option(pane, tmux::PANE_ATTENTION, state);
-    }
+    format!("{:02}:{:02}", tm.tm_hour, tm.tm_min)
 }
 
 /// Canonicalize a string before storing it in a tmux pane option. Tmux's
-/// pane-option format uses `|` as a field separator and `\n` as a record
-/// terminator, so both must be replaced with spaces to keep the stored
-/// value a single safe field. Readers that compare against raw process
-/// data (e.g. the bg-shell ps sweep) must apply the same normalization
-/// so round-tripping through storage doesn't silently break equality.
+/// pane-option format uses `|` as a field separator and a newline as a
+/// record terminator, so all three — `|`, `\n` and `\r` — must become a
+/// space to keep the stored value a single safe field. Readers that compare
+/// against raw process data (e.g. the bg-shell ps sweep) must apply the same
+/// normalization so round-tripping through storage doesn't silently break
+/// equality.
 pub(crate) fn sanitize_tmux_value(s: &str) -> String {
-    s.replace(['\n', '|'], " ")
+    s.replace(['\n', '\r', '|'], " ")
 }
 
-// ─── set-status subcommand ──────────────────────────────────────────────────
+/// Canonicalize a label before writing it to the activity log. The log is
+/// one entry per line, so only `\n` and `\r` must become a space; a `|`
+/// inside a label is kept, because `parse_entry` reads the label with
+/// `splitn(3, '|')`, which leaves every later `|` in the third field.
+/// The pane-option writes keep [`sanitize_tmux_value`], where the `|`
+/// replacement is what keeps a stored value a single field.
+pub(crate) fn sanitize_log_label(s: &str) -> String {
+    s.replace(['\n', '\r'], " ")
+}
+
+// ─── set-status subcommand ──────────────────────────────────────────────────────
 
 fn cmd_set_status(args: &[String]) -> i32 {
     let status = match args.first() {
@@ -106,7 +113,11 @@ fn cmd_set_status(args: &[String]) -> i32 {
     if pane.is_empty() {
         return 0;
     }
-    set_status(&pane, status);
+    // The status↔attention coupling has one owner, `status_writes`; the
+    // command applies its write list through the tmux adapter like a hook
+    // event does, so `set-status` and the transition cannot drift apart.
+    let store = tmux::pane_store::TmuxPaneStore;
+    let _ = store.apply(&pane, &crate::pane_state::status_writes(status));
     0
 }
 
@@ -133,6 +144,7 @@ fn task_help_text() -> String {
     format!(
         "task-set <subject>             record a pending task item for the calling pane\n\
          task-update <id> <status>      update one item's status (pending|in_progress|completed)\n\
+         task-describe <text>           set the pane's task list description\n\
          \n\
          reminders:\n\
          a turn starting with an empty todo list gets: {}\n\
@@ -143,10 +155,12 @@ fn task_help_text() -> String {
 }
 
 /// Record a pending task item for the calling pane. Exits 0 on every
-/// path — including a missing `$TMUX_PANE` — so a task command can
-/// never break the agent's turn, same contract as the hook command.
-/// On success the assigned item id is printed so the agent can name it
-/// in a later `task-update`.
+/// path that changes nothing — including a missing `$TMUX_PANE` — so bad
+/// arguments never break the agent's turn, same contract as the hook
+/// command. On success the assigned item id is printed so the agent can
+/// name it in a later `task-update`; a store that could not be written
+/// exits 1 with the io error on stderr, so the id is never reported for
+/// an item that was not persisted.
 fn cmd_task_set(args: &[String]) -> i32 {
     if task_wants_help(args, 1) {
         println!("{}", task_help_text());
@@ -165,14 +179,52 @@ fn cmd_task_set(args: &[String]) -> i32 {
 }
 
 fn task_set_for_pane(pane: &str, subject: &str) -> i32 {
-    if let Some(id) = crate::task_store::record_task(pane, subject) {
-        println!("{id}");
+    match crate::task_store::record_task(pane, subject) {
+        Ok(Some(id)) => {
+            println!("{id}");
+            0
+        }
+        Ok(None) => 0,
+        Err(error) => store_write_error("task-set", &error),
     }
-    0
 }
 
-/// Update one task item's status for the calling pane. Exits 0 on
-/// every path; an unknown id or status name changes nothing.
+/// Map a failed task-store write onto the command's exit code: report the
+/// io error on stderr and exit 1, so a write that never landed does not
+/// read as success.
+fn store_write_error(command: &str, error: &std::io::Error) -> i32 {
+    eprintln!("{command}: the task store was not written ({error})");
+    1
+}
+
+/// Set the pane-wide description shown above the Tasks tab's item
+/// list. Same join-the-args and exit contract as `task-set`: the
+/// agent's turn is never broken by bad arguments, and a description
+/// that could not be stored exits 1 with the io error on stderr.
+fn cmd_task_describe(args: &[String]) -> i32 {
+    if task_wants_help(args, 1) {
+        println!("{}", task_help_text());
+        return 0;
+    }
+    let description = args.join(" ");
+    let pane = tmux_pane();
+    if pane.is_empty() {
+        return 0;
+    }
+    task_describe_for_pane(&pane, &description)
+}
+
+fn task_describe_for_pane(pane: &str, description: &str) -> i32 {
+    match crate::task_store::set_description(pane, description) {
+        Ok(_) => 0,
+        Err(error) => store_write_error("task-describe", &error),
+    }
+}
+
+/// Update one task item's status for the calling pane. Exits 0 when
+/// nothing changed — an unknown id or status name changes nothing — and
+/// exits 1 with the io error on stderr when the store could not be
+/// written.
 fn cmd_task_update(args: &[String]) -> i32 {
     if task_wants_help(args, 2) {
         println!("{}", task_help_text());
@@ -188,12 +240,17 @@ fn cmd_task_update(args: &[String]) -> i32 {
 }
 
 fn task_update_for_pane(pane: &str, id: &str, status: &str) -> i32 {
-    if let Some(status) = crate::task_store::parse_task_status(status)
-        && crate::task_store::update_task_status(pane, id, status)
-    {
-        println!("{} {}", id, status.as_str());
+    let Some(status) = crate::task_store::parse_task_status(status) else {
+        return 0;
+    };
+    match crate::task_store::update_task_status(pane, id, status) {
+        Ok(true) => {
+            println!("{} {}", id, status.as_str());
+            0
+        }
+        Ok(false) => 0,
+        Err(error) => store_write_error("task-update", &error),
     }
-    0
 }
 
 #[cfg(test)]
@@ -217,6 +274,15 @@ mod tests {
     #[test]
     fn run_returns_none_for_tui_mode_no_args() {
         assert_eq!(run(&[]), None);
+    }
+
+    #[test]
+    fn the_removed_channel_subcommands_start_the_tui_again() {
+        // D3: no tombstone. `channel-ready` and `--mcp` match no arm, so
+        // `run` returns `None` and `main` launches the TUI instead of a
+        // clean failure.
+        assert_eq!(run(&["channel-ready".into()]), None);
+        assert_eq!(run(&["--mcp".into()]), None);
     }
 
     // ─── json_str tests ──────────────────────────────────────────────
@@ -273,6 +339,11 @@ mod tests {
     }
 
     #[test]
+    fn sanitize_replaces_carriage_returns() {
+        assert_eq!(sanitize_tmux_value("a\rb\r\nc"), "a b  c");
+    }
+
+    #[test]
     fn sanitize_leaves_clean_text() {
         assert_eq!(sanitize_tmux_value("hello world"), "hello world");
     }
@@ -285,6 +356,34 @@ mod tests {
     #[test]
     fn sanitize_consecutive_pipes_and_newlines() {
         assert_eq!(sanitize_tmux_value("a||\n\nb"), "a    b");
+    }
+
+    // ─── sanitize_log_label tests ────────────────────────────────────
+
+    #[test]
+    fn sanitize_log_label_replaces_newlines() {
+        assert_eq!(
+            sanitize_log_label("line1\nline2\nline3"),
+            "line1 line2 line3"
+        );
+    }
+
+    #[test]
+    fn sanitize_log_label_replaces_carriage_returns() {
+        assert_eq!(sanitize_log_label("a\rb"), "a b");
+    }
+
+    #[test]
+    fn sanitize_log_label_keeps_pipes() {
+        assert_eq!(
+            sanitize_log_label("cat file | grep foo bar"),
+            "cat file | grep foo bar"
+        );
+    }
+
+    #[test]
+    fn sanitize_log_label_empty() {
+        assert_eq!(sanitize_log_label(""), "");
     }
 
     // ─── local_time_hhmm tests ──────────────────────────────────────
@@ -300,7 +399,7 @@ mod tests {
         assert!(m < 60);
     }
 
-    // ─── task-set / task-update tests ───────────────────────────────
+    // ─── task-set / task-update tests ────────────────────────────────
 
     #[test]
     fn task_commands_exit_zero_without_a_pane() {
@@ -311,6 +410,7 @@ mod tests {
 
         assert_eq!(task_set_for_pane("", "orphan subject"), 0);
         assert_eq!(task_update_for_pane("", "1", "completed"), 0);
+        assert_eq!(task_describe_for_pane("", "orphan description"), 0);
 
         assert_eq!(
             crate::task_store::store_mtime(""),
@@ -325,6 +425,7 @@ mod tests {
         // dispatch mapping can be asserted without touching $TMUX_PANE.
         assert_eq!(run(&["task-set".into()]), Some(0));
         assert_eq!(run(&["task-update".into()]), Some(0));
+        assert_eq!(run(&["task-describe".into()]), Some(0));
     }
 
     #[test]
@@ -358,6 +459,23 @@ mod tests {
 
         assert_eq!(code, 0);
         assert_eq!(crate::task_store::store_mtime(""), before);
+    }
+
+    #[test]
+    fn a_store_write_that_fails_exits_one_instead_of_claiming_success() {
+        // A directory in the store's place makes every write fail, the
+        // one way a unit test can force the io error the CLI boundary
+        // must now report: the command exits 1 rather than printing an
+        // id for an item that was never persisted.
+        let pane = "%CLI_TASK_WRITE_FAIL";
+        let path = crate::task_store::store_file_path(pane);
+        let _ = std::fs::remove_file(&path);
+        std::fs::create_dir_all(&path).unwrap();
+
+        assert_eq!(task_set_for_pane(pane, "unwritable"), 1);
+        assert_eq!(task_describe_for_pane(pane, "unwritable"), 1);
+
+        std::fs::remove_dir_all(&path).unwrap();
     }
 
     #[test]

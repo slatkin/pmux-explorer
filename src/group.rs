@@ -1,7 +1,7 @@
 use indexmap::IndexMap;
 
 use crate::git::run_git;
-use crate::tmux::PaneInfo;
+use crate::tmux::{PaneInfo, SubagentParent};
 
 /// Per-pane git metadata resolved from the pane's working directory.
 #[derive(Debug, Clone, Default)]
@@ -89,61 +89,211 @@ pub fn group_panes_by_repo(sessions: &[crate::tmux::SessionInfo]) -> Vec<RepoGro
     for session in sessions {
         for window in &session.windows {
             for pane in &window.panes {
-                // Cache the base git info per path. `get` first avoids a key
-                // clone on cache hits; misses fall through to `insert` which
-                // owns the key plus the (expensive) git-command lookup.
-                let mut git_info = match git_cache.get(pane.path.as_str()) {
-                    Some(cached) => cached.clone(),
-                    None => {
-                        let resolved = resolve_pane_git_info(&pane.path);
-                        git_cache.insert(pane.path.clone(), resolved.clone());
-                        resolved
-                    }
-                };
-
-                // Override with hook-provided worktree info (Claude Code
-                // provides this; Codex does not, so the git-command base
-                // remains as fallback).
-                if !pane.worktree.name.is_empty() {
-                    git_info.worktree_name = Some(pane.worktree.name.clone());
-                    git_info.is_worktree = true;
-                }
-                if !pane.worktree.branch.is_empty() {
-                    git_info.branch = Some(pane.worktree.branch.clone());
-                    git_info.is_worktree = true;
-                }
-
-                let group_key = match &git_info.repo_root {
-                    Some(root) => root.clone(),
-                    None => pane.path.clone(),
-                };
-
-                let display_name = group_key
-                    .rsplit('/')
-                    .next()
-                    .unwrap_or(&group_key)
-                    .to_string();
-
-                let has_focus = window.window_active && pane.pane_active;
-
-                let group = groups.entry(group_key).or_insert_with(|| RepoGroup {
-                    name: display_name,
-                    has_focus: false,
-                    panes: Vec::new(),
-                });
-
-                if has_focus {
-                    group.has_focus = true;
-                }
-
-                group.panes.push((pane.clone(), git_info));
+                add_pane_to_groups(&mut groups, &mut git_cache, window, pane);
             }
         }
     }
 
     let mut result: Vec<RepoGroup> = groups.into_values().collect();
     result.sort_by_key(|a| a.name.to_lowercase());
+    for group in &mut result {
+        order_group_with_nests(&mut group.panes);
+    }
     result
+}
+
+/// Map each subagent pane of one group to the pane id of its **ultimate**
+/// parent: the top of the parent chain that is reachable inside the group.
+///
+/// A chain follows [`SubagentParent::Pane`] while the named pane is in the
+/// same group and is itself a subagent; it ends at the last pane before a
+/// parent that is orphaned, outside the group, or not given at all. That
+/// ends pane is the root. A chain that revisits a pane is a cycle: the
+/// visited set stops it there and the root is the cycle pane first in
+/// tmux order, which includes a pane that names itself as its parent.
+/// Panes without a root (non-subagents, orphaned subagents) are absent.
+pub fn nest_roots(panes: &[(PaneInfo, PaneGitInfo)]) -> std::collections::HashMap<String, String> {
+    let mut order: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
+    let mut parents: std::collections::HashMap<&str, &str> = std::collections::HashMap::new();
+    for (index, (pane, _)) in panes.iter().enumerate() {
+        order.insert(pane.pane_id.as_str(), index);
+        if let Some(SubagentParent::Pane(parent_id)) =
+            pane.subagent.as_ref().map(|info| &info.parent)
+        {
+            parents.insert(pane.pane_id.as_str(), parent_id.as_str());
+        }
+    }
+
+    let mut roots = std::collections::HashMap::new();
+    for (pane, _) in panes {
+        let Some(root) = ultimate_root(pane.pane_id.as_str(), &parents, &order) else {
+            continue;
+        };
+        if root != pane.pane_id {
+            roots.insert(pane.pane_id.clone(), root.to_string());
+        }
+    }
+    roots
+}
+
+/// Walk one pane's parent chain inside a group and return its root, or
+/// `None` when the pane has no parent to follow at all.
+fn ultimate_root<'a>(
+    start: &'a str,
+    parents: &std::collections::HashMap<&'a str, &'a str>,
+    order: &std::collections::HashMap<&'a str, usize>,
+) -> Option<&'a str> {
+    let mut chain: Vec<&'a str> = vec![start];
+    let mut seen: std::collections::HashMap<&'a str, usize> = std::collections::HashMap::new();
+    seen.insert(start, 0);
+    let mut current = start;
+    loop {
+        let next = parents
+            .get(current)
+            .copied()
+            .filter(|parent_id| order.contains_key(parent_id));
+        let Some(next) = next else {
+            // No in-group parent left: an ancestor heads the reachable
+            // chain; `start` itself is top-level.
+            return (current != start).then_some(current);
+        };
+        let Some(&cycle_start) = seen.get(next) else {
+            seen.insert(next, chain.len());
+            chain.push(next);
+            current = next;
+            continue;
+        };
+        // A cycle: its root is the cycle pane tmux lists first.
+        return chain[cycle_start..]
+            .iter()
+            .min_by_key(|pane_id| order.get(**pane_id).copied().unwrap_or(usize::MAX))
+            .copied();
+    }
+}
+
+/// Whether `pane_id` is drawn indented, that is, whether it has a root and
+/// that root survived the filters.
+pub fn nested_under(
+    roots: &std::collections::HashMap<String, String>,
+    visible_ids: &std::collections::HashSet<&str>,
+    pane_id: &str,
+) -> bool {
+    roots
+        .get(pane_id)
+        .is_some_and(|root| visible_ids.contains(root.as_str()))
+}
+
+/// Reorder one group's panes so each root is directly followed by its
+/// children, in their original (tmux) order. A pane that is not a child
+/// keeps its relative position, and every pane appears exactly once.
+fn order_group_with_nests(panes: &mut Vec<(PaneInfo, PaneGitInfo)>) {
+    let roots = nest_roots(panes);
+    if roots.is_empty() {
+        return;
+    }
+    let mut children: std::collections::HashMap<&str, Vec<usize>> =
+        std::collections::HashMap::new();
+    for (index, (pane, _)) in panes.iter().enumerate() {
+        if let Some(root) = roots.get(&pane.pane_id) {
+            children.entry(root.as_str()).or_default().push(index);
+        }
+    }
+
+    let mut order: Vec<usize> = Vec::with_capacity(panes.len());
+    for (index, (pane, _)) in panes.iter().enumerate() {
+        if roots.contains_key(&pane.pane_id) {
+            continue;
+        }
+        order.push(index);
+        if let Some(child_indices) = children.get(pane.pane_id.as_str()) {
+            order.extend(child_indices.iter().copied());
+        }
+    }
+
+    let mut slots: Vec<Option<(PaneInfo, PaneGitInfo)>> = panes.drain(..).map(Some).collect();
+    let mut reordered = Vec::with_capacity(order.len());
+    for index in order {
+        if let Some(item) = slots[index].take() {
+            reordered.push(item);
+        }
+    }
+    *panes = reordered;
+}
+
+/// Fold one pane into its repo group, resolving git info through the cache.
+fn add_pane_to_groups(
+    groups: &mut IndexMap<String, RepoGroup>,
+    git_cache: &mut std::collections::HashMap<String, PaneGitInfo>,
+    window: &crate::tmux::WindowInfo,
+    pane: &PaneInfo,
+) {
+    let mut git_info = cached_git_info(git_cache, &pane.path);
+    apply_worktree_overrides(&mut git_info, &pane.worktree);
+
+    let group_key = pane_group_key(&git_info, &pane.path);
+    let display_name = repo_display_name(&group_key);
+    let has_focus = window.window_active && pane.pane_active;
+
+    let group = groups.entry(group_key).or_insert_with(|| RepoGroup {
+        name: display_name,
+        has_focus: false,
+        panes: Vec::new(),
+    });
+
+    if has_focus {
+        group.has_focus = true;
+    }
+
+    group.panes.push((pane.clone(), git_info));
+}
+
+/// Look up cached git info for a pane path, resolving (and caching) on miss.
+fn cached_git_info(
+    git_cache: &mut std::collections::HashMap<String, PaneGitInfo>,
+    path: &str,
+) -> PaneGitInfo {
+    // Cache the base git info per path. `get` first avoids a key
+    // clone on cache hits; misses fall through to `insert` which
+    // owns the key plus the (expensive) git-command lookup.
+    match git_cache.get(path) {
+        Some(cached) => cached.clone(),
+        None => {
+            let resolved = resolve_pane_git_info(path);
+            git_cache.insert(path.to_string(), resolved.clone());
+            resolved
+        }
+    }
+}
+
+/// Override base git info with hook-provided worktree metadata when present.
+/// (Claude Code provides this; Codex does not, so the git-command base
+/// remains as fallback.)
+fn apply_worktree_overrides(git_info: &mut PaneGitInfo, worktree: &crate::tmux::WorktreeMetadata) {
+    if !worktree.name.is_empty() {
+        git_info.worktree_name = Some(worktree.name.clone());
+        git_info.is_worktree = true;
+    }
+    if !worktree.branch.is_empty() {
+        git_info.branch = Some(worktree.branch.clone());
+        git_info.is_worktree = true;
+    }
+}
+
+/// Group key: repo root when known, otherwise the pane's raw path.
+fn pane_group_key(git_info: &PaneGitInfo, path: &str) -> String {
+    git_info
+        .repo_root
+        .clone()
+        .unwrap_or_else(|| path.to_string())
+}
+
+/// Display name: the repo directory basename, or the raw key for non-git paths.
+fn repo_display_name(group_key: &str) -> String {
+    group_key
+        .rsplit('/')
+        .next()
+        .unwrap_or(group_key)
+        .to_string()
 }
 
 /// Resolve a possibly-relative git path to an absolute canonical path.
@@ -422,5 +572,252 @@ mod tests {
         assert_eq!(groups[1].name, "mmm");
         assert_eq!(groups[2].name, "zzz");
         assert_eq!(groups[2].panes.len(), 2, "zzz should have 2 panes");
+    }
+
+    // ─── nesting tests ──────────────────────────────────────────────
+
+    fn subagent_pane(id: &str, parent: crate::tmux::SubagentParent) -> PaneInfo {
+        let mut pane = test_pane(id, env!("CARGO_MANIFEST_DIR"));
+        pane.subagent = Some(crate::tmux::SubagentInfo {
+            kind: crate::pmux_task::PmuxTaskKind::Spawned,
+            task: None,
+            parent,
+        });
+        pane
+    }
+
+    fn pane_parent(id: &str) -> crate::tmux::SubagentParent {
+        crate::tmux::SubagentParent::Pane(id.to_string())
+    }
+
+    fn with_git(panes: Vec<PaneInfo>) -> Vec<(PaneInfo, PaneGitInfo)> {
+        panes
+            .into_iter()
+            .map(|pane| (pane, PaneGitInfo::default()))
+            .collect()
+    }
+
+    fn ids(panes: &[(PaneInfo, PaneGitInfo)]) -> Vec<&str> {
+        panes
+            .iter()
+            .map(|(pane, _)| pane.pane_id.as_str())
+            .collect()
+    }
+
+    /// Group the panes through `group_panes_by_repo` and return each group's
+    /// pane ids in drawn order.
+    fn grouped(panes: Vec<PaneInfo>) -> Vec<Vec<String>> {
+        let sessions = vec![test_session(vec![test_window(panes, true)])];
+        group_panes_by_repo(&sessions)
+            .into_iter()
+            .map(|group| group.panes.iter().map(|(p, _)| p.pane_id.clone()).collect())
+            .collect()
+    }
+
+    #[test]
+    fn nest_roots_maps_a_child_to_its_parent() {
+        let panes = with_git(vec![
+            test_pane("%0", env!("CARGO_MANIFEST_DIR")),
+            subagent_pane("%1", pane_parent("%0")),
+        ]);
+        let roots = nest_roots(&panes);
+
+        assert_eq!(roots.get("%1").map(String::as_str), Some("%0"));
+        assert!(!roots.contains_key("%0"), "a root maps to no parent");
+    }
+
+    #[test]
+    fn nest_roots_maps_a_grandchild_to_the_same_root() {
+        let panes = with_git(vec![
+            test_pane("%0", env!("CARGO_MANIFEST_DIR")),
+            subagent_pane("%1", pane_parent("%0")),
+            subagent_pane("%2", pane_parent("%1")),
+        ]);
+        let roots = nest_roots(&panes);
+
+        assert_eq!(roots.get("%1").map(String::as_str), Some("%0"));
+        assert_eq!(
+            roots.get("%2").map(String::as_str),
+            Some("%0"),
+            "every depth resolves to the ultimate parent"
+        );
+    }
+
+    #[test]
+    fn nested_under_is_true_only_when_the_root_is_visible() {
+        let panes = with_git(vec![
+            test_pane("%0", env!("CARGO_MANIFEST_DIR")),
+            subagent_pane("%1", pane_parent("%0")),
+        ]);
+        let roots = nest_roots(&panes);
+        let visible: std::collections::HashSet<&str> = ["%0", "%1"].into_iter().collect();
+
+        assert!(
+            nested_under(&roots, &visible, "%1"),
+            "a child indents when its root is drawn"
+        );
+        assert!(
+            !nested_under(&roots, &visible, "%0"),
+            "a root is not indented"
+        );
+    }
+
+    #[test]
+    fn nested_under_is_false_when_a_filter_hides_the_root() {
+        let panes = with_git(vec![
+            test_pane("%0", env!("CARGO_MANIFEST_DIR")),
+            subagent_pane("%1", pane_parent("%0")),
+        ]);
+        let roots = nest_roots(&panes);
+        let visible: std::collections::HashSet<&str> = ["%1"].into_iter().collect();
+
+        assert!(
+            !nested_under(&roots, &visible, "%1"),
+            "a child draws top-level when its root is hidden"
+        );
+        assert!(
+            !nested_under(&roots, &visible, "%2"),
+            "a pane without a root never indents"
+        );
+    }
+
+    #[test]
+    fn group_panes_puts_a_child_directly_after_its_parent() {
+        let groups = grouped(vec![
+            test_pane("%0", env!("CARGO_MANIFEST_DIR")),
+            subagent_pane("%1", pane_parent("%0")),
+            test_pane("%2", env!("CARGO_MANIFEST_DIR")),
+        ]);
+
+        assert_eq!(groups, vec![vec!["%0", "%1", "%2"]]);
+    }
+
+    #[test]
+    fn group_panes_keeps_children_in_tmux_order() {
+        let groups = grouped(vec![
+            test_pane("%0", env!("CARGO_MANIFEST_DIR")),
+            subagent_pane("%3", pane_parent("%0")),
+            subagent_pane("%1", pane_parent("%0")),
+        ]);
+
+        assert_eq!(groups, vec![vec!["%0", "%3", "%1"]]);
+    }
+
+    #[test]
+    fn group_panes_adds_no_pane_when_a_parent_follows_its_children() {
+        let panes = vec![
+            subagent_pane("%2", pane_parent("%1")),
+            subagent_pane("%1", pane_parent("%0")),
+            test_pane("%0", env!("CARGO_MANIFEST_DIR")),
+        ];
+        let input_count = panes.len();
+        let groups = grouped(panes);
+
+        // The children keep their tmux order (`%2` before `%1`); only the
+        // root moves ahead of them.
+        assert_eq!(groups, vec![vec!["%0", "%2", "%1"]]);
+        assert_eq!(groups[0].len(), input_count, "no pane is lost or repeated");
+    }
+
+    #[test]
+    fn nest_roots_ignores_a_parent_in_another_group() {
+        let groups = grouped(vec![
+            subagent_pane("%1", pane_parent("%0")),
+            test_pane("%0", "/tmp/pmux-nest-other"),
+        ]);
+
+        assert_eq!(groups.len(), 2, "the two paths form two groups");
+        let parent_group = groups
+            .iter()
+            .find(|ids| ids.iter().any(|id| id == "%0"))
+            .expect("the parent's group");
+        let child_group = groups
+            .iter()
+            .find(|ids| ids.iter().any(|id| id == "%1"))
+            .expect("the child's group");
+        assert_eq!(parent_group, &vec!["%0".to_string()]);
+        assert_eq!(
+            child_group,
+            &vec!["%1".to_string()],
+            "a cross-group child stays top-level"
+        );
+    }
+
+    #[test]
+    fn nest_roots_nests_children_under_an_orphaned_subagent() {
+        let panes = with_git(vec![
+            subagent_pane("%1", crate::tmux::SubagentParent::Orphaned),
+            subagent_pane("%2", pane_parent("%1")),
+        ]);
+        let roots = nest_roots(&panes);
+
+        assert_eq!(
+            roots.get("%2").map(String::as_str),
+            Some("%1"),
+            "the reachable top of the chain is the orphan itself"
+        );
+        assert!(!roots.contains_key("%1"), "the orphan is a root");
+    }
+
+    #[test]
+    fn group_panes_orders_children_after_an_orphaned_root() {
+        let groups = grouped(vec![
+            subagent_pane("%1", crate::tmux::SubagentParent::Orphaned),
+            subagent_pane("%2", pane_parent("%1")),
+            test_pane("%0", env!("CARGO_MANIFEST_DIR")),
+        ]);
+
+        assert_eq!(groups, vec![vec!["%1", "%2", "%0"]]);
+    }
+
+    #[test]
+    fn nest_roots_breaks_a_two_pane_cycle_at_the_first_pane() {
+        let panes = with_git(vec![
+            subagent_pane("%0", pane_parent("%1")),
+            subagent_pane("%1", pane_parent("%0")),
+        ]);
+        let roots = nest_roots(&panes);
+
+        assert_eq!(roots.get("%1").map(String::as_str), Some("%0"));
+        assert!(!roots.contains_key("%0"), "the first pane is the root");
+
+        // The same cycle, listed the other way round, roots at `%1`.
+        let flipped = with_git(vec![
+            subagent_pane("%1", pane_parent("%0")),
+            subagent_pane("%0", pane_parent("%1")),
+        ]);
+        assert_eq!(
+            nest_roots(&flipped).get("%0").map(String::as_str),
+            Some("%1")
+        );
+    }
+
+    #[test]
+    fn group_panes_keeps_every_pane_of_a_cycle() {
+        let groups = grouped(vec![
+            subagent_pane("%0", pane_parent("%1")),
+            subagent_pane("%1", pane_parent("%0")),
+        ]);
+
+        assert_eq!(groups, vec![vec!["%0", "%1"]]);
+    }
+
+    #[test]
+    fn nest_roots_treats_a_self_parent_as_a_root() {
+        let panes = with_git(vec![subagent_pane("%0", pane_parent("%0"))]);
+        let roots = nest_roots(&panes);
+
+        assert!(roots.is_empty(), "a self-parent is its own root");
+        assert_eq!(ids(&panes), vec!["%0"]);
+    }
+
+    #[test]
+    fn group_panes_keeps_a_self_parented_pane_alone() {
+        let groups = grouped(vec![
+            subagent_pane("%0", pane_parent("%0")),
+            test_pane("%1", env!("CARGO_MANIFEST_DIR")),
+        ]);
+
+        assert_eq!(groups, vec![vec!["%0", "%1"]]);
     }
 }

@@ -1,5 +1,6 @@
 use std::time::Instant;
 
+use crate::cli::toggle::SidebarPosition;
 use crate::tmux::SidebarPaneInfo;
 use crate::ui::colors::ColorTheme;
 use crate::ui::icons::StatusIcons;
@@ -16,8 +17,10 @@ mod popout;
 mod popup;
 mod refresh;
 mod scroll;
+mod side_switch;
 mod tab;
 mod tasks;
+mod thought;
 mod timers;
 mod width;
 
@@ -25,8 +28,12 @@ pub use activity::ActivityState;
 pub use filter::{RepoFilter, StatusCounts, StatusFilter};
 pub use focus::{Focus, FocusState};
 pub use global::GlobalState;
-pub(crate) use layout::{FilterBarControl, filter_bar_layout};
-pub use layout::{FrameLayout, HyperlinkOverlay, RepoSpawnTarget, RowTarget, SpawnRemoveTarget};
+pub use layout::{
+    BottomTabTarget, FrameLayout, HyperlinkOverlay, LayoutKind, RepoSpawnTarget, RowTarget,
+    SpawnRemoveTarget, SplitDrag, StripLayout,
+};
+pub(crate) use layout::{FilterBarControl, filter_bar_layout, split_rows};
+pub use layout::{cols_for_percent, filter_column_layout, strip_layout, strip_layout_for_tab_cols};
 pub(crate) use notices::debug_forced_display;
 pub use notices::{ClaudePluginNotice, NoticesCopyTarget, NoticesMissingHookGroup, NoticesState};
 pub use pane_runtime::{PaneRuntimeMap, PaneRuntimeState};
@@ -36,37 +43,36 @@ pub use popup::{PopupState, SpawnField};
 pub(crate) use refresh::{TaskProgressDecision, classify_task_progress};
 pub use scroll::{ScrollState, ScrollStates};
 pub use tasks::TasksState;
+pub use thought::ThoughtState;
 pub use timers::RefreshTimers;
 pub(crate) use width::{width_adopt_target, width_floor};
 
-/// Bottom-panel tabs in cycle order. The selected tab is shared state:
-/// it lives in [`GlobalState`], is written with `set -g
-/// @sidebar_bottom_tab`, and changes only through an explicit selection
-/// (the manual cycle, a tab-title click) or through the shared value a
-/// peer instance selected.
+/// Bottom-panel tabs. The selected tab is shared state: it lives in
+/// [`GlobalState`], is written with `set -g @sidebar_bottom_tab`, and
+/// changes only through an explicit selection (the manual cycle, a
+/// tab-title click) or through the shared value a peer instance
+/// selected.
+///
+/// `Thought` is stored in the shared value like the others, but the
+/// rule draws it only while the focused pane runs pi; a stored Thought
+/// displays as Activity otherwise (see
+/// [`AppState::displayed_bottom_tab`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BottomTab {
     Activity,
     Tasks,
     GitStatus,
+    Thought,
 }
 
 impl BottomTab {
-    /// The next tab in cycle order.
-    pub fn next(self) -> Self {
-        match self {
-            Self::Activity => Self::Tasks,
-            Self::Tasks => Self::GitStatus,
-            Self::GitStatus => Self::Activity,
-        }
-    }
-
     /// Whether this tab drives the background git poller.
     pub fn is_git_status(self) -> bool {
         matches!(self, Self::GitStatus)
     }
 
-    /// The label persisted in the `@sidebar_bottom_tab` tmux option.
+    /// The label drawn on the rule and persisted in the
+    /// `@sidebar_bottom_tab` tmux option (lower case, see `as_str`).
     /// The values contain no space, so they ride the space-split parse
     /// of the shared reading safely.
     pub fn as_str(&self) -> &'static str {
@@ -74,6 +80,7 @@ impl BottomTab {
             Self::Activity => "activity",
             Self::Tasks => "tasks",
             Self::GitStatus => "git",
+            Self::Thought => "thought",
         }
     }
 
@@ -84,7 +91,22 @@ impl BottomTab {
         match s {
             "tasks" => Self::Tasks,
             "git" => Self::GitStatus,
+            "thought" => Self::Thought,
             _ => Self::Activity,
+        }
+    }
+
+    /// The Nerd Font glyph the rule draws for this tab (Tools ,
+    /// Tasks , Git 󰊢, Thought 󰟶). The click hitboxes are computed from
+    /// the same strings, so a glyph and its hitbox cannot drift apart.
+    /// The persisted option keeps the lowercase words of `as_str`;
+    /// only the drawing changes.
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Activity => "\u{f0ad}",
+            Self::Tasks => "\u{f0ae}",
+            Self::GitStatus => "\u{f02a2}",
+            Self::Thought => "\u{f07f6}",
         }
     }
 }
@@ -104,21 +126,42 @@ pub struct AppState {
     /// the UI layer; consumed by mouse/keyboard handlers before the
     /// next render.
     pub layout: FrameLayout,
+    /// Live split drag: a press on the rule (a column) or the divider
+    /// (a strip) until its release. While a moved drag is set the
+    /// matching panel renders [`SplitDrag::size`] instead of the shared
+    /// percent's geometry, and `apply_all` holds that axis's shared
+    /// percent back so a tick cannot move the rule or the divider under
+    /// the mouse (a column drag blocks `@sidebar_bottom_height`, a
+    /// strip drag `@sidebar_tab_width`). Set by a press on the rule or
+    /// the divider, consumed by the release (or the stale-drag end on a
+    /// new press).
+    pub split_drag: Option<SplitDrag>,
     pub activity: ActivityState,
     /// Focused pane's task store for the Tasks tab (refreshed by
     /// `refresh_pane_tasks` with the activity log's mtime check).
     pub tasks: TasksState,
+    /// The Thought tab's feed reader state (refreshed by
+    /// `refresh_thought_feed` only while the tab is drawn).
+    pub thought: ThoughtState,
     pub tmux_pane: String,
     /// The sidebar's own pane state as tmux reported it on the last
     /// refresh: focus, size, window size and the floating flag. The
     /// docked-vs-floating mode is read from this, never remembered
     /// separately.
     pub sidebar_pane: SidebarPaneInfo,
-    /// Docked width captured when the sidebar was popped out, restored
-    /// by the pop-in with `resize-pane -x`. `None` while docked and when
-    /// the pane was already floating when the sidebar started (nothing
-    /// to restore).
-    pub docked_width: Option<u16>,
+    /// Docked size captured when the sidebar was popped out, restored
+    /// by the pop-in (`resize-pane -x` for a column, `-y` for a strip):
+    /// the width of a column, the height of a strip. `None` while
+    /// docked and when the pane was already floating when the sidebar
+    /// started (nothing to restore).
+    pub docked_size: Option<u16>,
+    /// The edge a popped-out strip was docked at, captured with the
+    /// docked size on the way out — a floating pane is no longer at an
+    /// edge, so the pop-in cannot read the edge off the pane. `None`
+    /// for a column and when the pane was already floating when the
+    /// sidebar started; the strip pop-in then falls back to the bare
+    /// join.
+    pub docked_edge: Option<SidebarPosition>,
     /// Scroll offsets for the agents list and git tab. The Activity
     /// tab's scroll lives in [`ActivityState::scroll`], the Tasks tab's
     /// in [`TasksState::scroll`].
@@ -182,15 +225,21 @@ pub struct AppState {
     pub version_notice: Option<crate::version::UpdateNotice>,
     /// Shared state across sidebar instances, persisted to tmux global variables.
     pub global: GlobalState,
+    /// Whether this sidebar is a full-height column or a full-width
+    /// strip. Read once at startup from the `PMUX_SIDEBAR_LAYOUT`
+    /// process environment (`split-window -e`, decision 1 of the
+    /// `add-strip-layout` design) and never from a pane option: the TUI
+    /// starts before `toggle` can write `@pane_sidebar_layout`. A
+    /// missing or unknown value gives [`LayoutKind::Column`], so a
+    /// sidebar from before the strip layout existed keeps its behavior.
+    /// The layout is fixed for the life of the pane.
+    pub layout_kind: LayoutKind,
     /// Cross-tick state of the width-lock step (design D4): the last
     /// observed docked width and the echo suppressor for this instance's
     /// own resizes. The step itself lives in `app/width_guard.rs`;
     /// `apply_pop_in` (`state/popout.rs`) arms the suppressor so a pop-in
     /// restore does not echo back as a publish.
     pub width_guard: crate::app::width_guard::WidthGuardState,
-    /// Height of the bottom panel in lines. Loaded once at startup from
-    /// the `@sidebar_bottom_height` tmux option. A value of 0 hides the panel.
-    pub bottom_panel_height: u16,
     /// Whether the pet animation is drawn and ticked. Loaded once at startup
     /// from the `@sidebar_pet` tmux option. Defaults to `false`.
     pub pet_enabled: bool,
@@ -205,15 +254,18 @@ impl AppState {
             flash: None,
             spinner_frame: 0,
             layout: FrameLayout::default(),
+            split_drag: None,
             activity: ActivityState::new(),
             tasks: TasksState::new(),
+            thought: ThoughtState::from_process(),
             tmux_pane,
             scrolls: ScrollStates::default(),
             theme: ColorTheme::default(),
             icons: StatusIcons::default(),
             git: crate::git::GitData::default(),
             sidebar_pane: SidebarPaneInfo::FALLBACK,
-            docked_width: None,
+            docked_size: None,
+            docked_edge: None,
             pane_states: PaneRuntimeMap::new(),
             timers: RefreshTimers::default(),
             popup: PopupState::None,
@@ -240,8 +292,8 @@ impl AppState {
             pet_working_paper_seed: 1,
             version_notice: None,
             global: GlobalState::new(),
+            layout_kind: LayoutKind::Column,
             width_guard: crate::app::width_guard::WidthGuardState::default(),
-            bottom_panel_height: crate::ui::BOTTOM_PANEL_HEIGHT,
             pet_enabled: false,
         };
         crate::state::pet::reseed_pet_idle_motion(&mut state);
@@ -281,7 +333,7 @@ mod tests {
         assert!(!state.sidebar_pane.pane_active);
 
         // A click on the busy chip, while the sidebar is not the active pane.
-        state.handle_filter_click(4);
+        state.handle_filter_click(5);
 
         assert_eq!(
             state.global.status_filter,
@@ -1038,6 +1090,20 @@ mod tests {
         // directly, so we don't assert it here (tmux not available in tests).
     }
 
+    // ─── BottomTab label parse ──────────────────────────────────────
+
+    #[test]
+    fn thought_parses_to_thought_and_unknown_still_falls_back_to_activity() {
+        // The shared option may name the Thought tab a newer sidebar
+        // wrote; an old binary reading it must not invent a tab, and
+        // any unknown value stays on the Activity default.
+        assert_eq!(BottomTab::from_label("thought"), BottomTab::Thought);
+        assert_eq!(BottomTab::from_label("activity"), BottomTab::Activity);
+        assert_eq!(BottomTab::from_label("nonsense"), BottomTab::Activity);
+        assert_eq!(BottomTab::Thought.as_str(), "thought");
+        assert_eq!(BottomTab::Thought.label(), "\u{f07f6}");
+    }
+
     // ─── next_bottom_tab / scroll_bottom tests ──────────────────────
 
     #[test]
@@ -1113,7 +1179,7 @@ mod tests {
         };
         // term_height=50, bottom_panel=20 → bottom starts at row 30
         // mouse at row 35 → in bottom panel
-        state.handle_mouse_scroll(35, 50, 20, 3);
+        state.handle_mouse_scroll(35, 5, 50, 20, 3);
         assert_eq!(state.activity.scroll.offset, 3);
         assert_eq!(state.scrolls.panes.offset, 0);
     }
@@ -1128,7 +1194,7 @@ mod tests {
         };
         // term_height=50, bottom_panel=20 → bottom starts at row 30
         // mouse at row 10 → in agents panel
-        state.handle_mouse_scroll(10, 50, 20, 3);
+        state.handle_mouse_scroll(10, 5, 50, 20, 3);
         assert_eq!(state.scrolls.panes.offset, 3);
         assert_eq!(state.activity.scroll.offset, 0);
     }
@@ -1141,7 +1207,7 @@ mod tests {
             total_lines: 40,
             visible_height: 20,
         };
-        state.handle_mouse_scroll(10, 50, 20, -3);
+        state.handle_mouse_scroll(10, 5, 50, 20, -3);
         assert_eq!(state.scrolls.panes.offset, 2);
     }
 
@@ -1156,7 +1222,7 @@ mod tests {
         };
         // term_height=50, bottom_panel=20 → bottom starts at row 30
         // mouse at exactly row 30 → in bottom panel
-        state.handle_mouse_scroll(30, 50, 20, 3);
+        state.handle_mouse_scroll(30, 5, 50, 20, 3);
         assert_eq!(state.scrolls.git.offset, 3);
         assert_eq!(state.scrolls.panes.offset, 0);
     }
@@ -1170,7 +1236,7 @@ mod tests {
             visible_height: 20,
         };
         // row 29, just above bottom_start=30
-        state.handle_mouse_scroll(29, 50, 20, 3);
+        state.handle_mouse_scroll(29, 5, 50, 20, 3);
         assert_eq!(state.scrolls.panes.offset, 3);
         assert_eq!(state.activity.scroll.offset, 0);
     }
@@ -1187,7 +1253,7 @@ mod tests {
             visible_height: 10,
         };
 
-        state.handle_mouse_scroll(35, 50, 20, 3);
+        state.handle_mouse_scroll(35, 5, 50, 20, 3);
         assert_eq!(state.tasks.scroll.offset, 3);
         assert_eq!(state.scrolls.panes.offset, 0);
     }
@@ -1198,10 +1264,26 @@ mod tests {
     fn terminal_click_on_the_tab_row_switches_the_tab() {
         let mut state = AppState::new("%99".into());
         state.layout.bottom_panel_height = 20;
+        crate::ui::bottom::draw_tab_targets(&mut state, 40);
         state.global.bottom_tab = BottomTab::GitStatus;
-        // term_height=50, bottom panel 20 → tab row at row 30
-        assert!(state.handle_terminal_click(30, 3, 50));
-        assert_eq!(state.global.bottom_tab, BottomTab::Activity);
+        // term_height=50, bottom panel 20 → rule at row 30. The press
+        // starts a split drag (any press column resizes — decision 4);
+        // only the release, if the mouse never left the rule, selects.
+        assert!(state.handle_terminal_click(30, 15, 50));
+        assert_eq!(
+            state.global.bottom_tab,
+            BottomTab::GitStatus,
+            "the press alone must not select a tab"
+        );
+
+        state.end_split_drag(50);
+
+        assert_eq!(
+            state.global.bottom_tab,
+            BottomTab::Activity,
+            "the unmoved release is the click that selects"
+        );
+        assert!(state.split_drag.is_none(), "the release ends the drag");
     }
 
     #[test]
@@ -1236,7 +1318,9 @@ mod tests {
         // the agent instead of being swallowed.
         let mut state = AppState::new("%99".into());
         state.sidebar_pane.floating = true;
-        state.bottom_panel_height = 20;
+        // 53% of a 38-row sidebar is 20 rows — the unclamped height the
+        // frame's drawn 12 rows replaced.
+        state.global.bottom_percent = 53;
         state.layout.bottom_panel_height = 12;
         state.layout.pane_row_targets = vec![
             RowTarget {
@@ -1250,11 +1334,16 @@ mod tests {
         // clamped panel (rows 18..25) is clickable agent list.
         state.layout.line_to_row = vec![Some(1); 24];
         state.global.selected_pane_row = 0;
+        crate::ui::bottom::draw_tab_targets(&mut state, 40);
         state.global.bottom_tab = BottomTab::GitStatus;
 
         // Row 26 is the drawn tab row (38 - 12); the unclamped height
         // would have put the boundary at row 18 and swallowed this click.
-        assert!(state.handle_terminal_click(26, 3, 38));
+        // The press starts a drag on the drawn geometry; the unmoved
+        // release is the click that selects.
+        assert!(state.handle_terminal_click(26, 15, 38));
+        assert_eq!(state.global.bottom_tab, BottomTab::GitStatus);
+        state.end_split_drag(38);
         assert_eq!(state.global.bottom_tab, BottomTab::Activity);
 
         // Row 25 is a drawn agent-list row above the clamped panel.
@@ -1273,11 +1362,704 @@ mod tests {
             total_lines: 30,
             visible_height: 10,
         };
-        state.handle_mouse_scroll(24, 38, state.layout.bottom_panel_height, 3);
+        state.handle_mouse_scroll(24, 5, 38, state.layout.bottom_panel_height, 3);
         assert_eq!(state.scrolls.panes.offset, 3);
-        state.handle_mouse_scroll(28, 38, state.layout.bottom_panel_height, 3);
+        state.handle_mouse_scroll(28, 5, 38, state.layout.bottom_panel_height, 3);
         assert_eq!(state.activity.scroll.offset, 3);
         assert_eq!(state.scrolls.panes.offset, 3);
+    }
+
+    // ─── split drag: press, move, release ─────────────────────────────
+
+    #[test]
+    fn a_split_drag_resizes_and_the_release_saves_the_percent() {
+        // Spec "a drag up": 30% of a 40-row sidebar draws the rule on
+        // row 28; dragging to row 20 keeps 20 bottom rows during the
+        // drag and the release saves the percent. In tests every tmux
+        // write hits the isolated socket and is refused, so the save
+        // shows as the pending latch.
+        let mut state = AppState::new("%99".into());
+        state.layout.bottom_panel_height = 12;
+        state.global.bottom_percent = 30;
+        state.global.bottom_tab = BottomTab::GitStatus;
+
+        // Press on the dash fill of the rule.
+        assert!(state.handle_terminal_click(28, 30, 40));
+        assert_eq!(
+            state.global.bottom_percent, 30,
+            "the press alone must not resize"
+        );
+        assert!(state.split_drag.is_some(), "the press starts the drag");
+
+        state.handle_split_drag_move(20, 30, 40);
+        let drag = state.split_drag.expect("the drag must still be live");
+        assert!(drag.moved, "moving to row 20 is a drag, not a held press");
+        assert_eq!(drag.size, 20, "the rule follows the mouse row");
+
+        state.end_split_drag(40);
+        assert!(state.split_drag.is_none());
+        assert_eq!(
+            state.global.bottom_percent, 50,
+            "20 bottom rows of a 40-row sidebar are 50 percent"
+        );
+        assert!(
+            state.global.percent_save_pending(),
+            "the release must hand the percent to the tmux write"
+        );
+    }
+
+    #[test]
+    fn a_split_drag_past_the_agent_minimum_stops_at_the_limit() {
+        // Spec "a drag past the limit": the rule dragged to row 1 of a
+        // 40-row sidebar stops at row 3 — 37 bottom rows — so the agent
+        // list keeps its 3 minimum rows.
+        let mut state = AppState::new("%99".into());
+        state.layout.bottom_panel_height = 12;
+
+        assert!(state.handle_terminal_click(28, 30, 40));
+        state.handle_split_drag_move(1, 30, 40);
+
+        let drag = state.split_drag.expect("the drag must still be live");
+        assert_eq!(drag.size, 37, "37 bottom rows put the drawn rule on row 3");
+    }
+
+    #[test]
+    fn an_unmoved_release_on_git_selects_the_git_tab() {
+        // Spec "a click on a tab label": press and release on the Git
+        // label with no move — the release selects the tab and the
+        // split height does not change.
+        let mut state = AppState::new("%99".into());
+        state.layout.bottom_panel_height = 12;
+        state.global.bottom_percent = 30;
+        crate::ui::bottom::draw_tab_targets(&mut state, 40);
+
+        // Press on col 23, the centered Git glyph.
+        assert!(state.handle_terminal_click(28, 23, 40));
+        assert_eq!(
+            state.global.bottom_tab,
+            BottomTab::Activity,
+            "a press on a label must not select it yet"
+        );
+
+        state.end_split_drag(40);
+
+        assert_eq!(
+            state.global.bottom_tab,
+            BottomTab::GitStatus,
+            "col 23 is the Git glyph"
+        );
+        assert_eq!(
+            state.global.bottom_percent, 30,
+            "a click must not resize the split"
+        );
+    }
+
+    #[test]
+    fn an_unmoved_release_on_the_dash_fill_changes_nothing() {
+        // Spec "a click on the dashes": the fill right of the labels is
+        // outside every label's hitbox, so neither the tab nor the
+        // split may change.
+        let mut state = AppState::new("%99".into());
+        state.layout.bottom_panel_height = 12;
+        state.global.bottom_percent = 30;
+        state.global.bottom_tab = BottomTab::Tasks;
+        crate::ui::bottom::draw_tab_targets(&mut state, 40);
+
+        state.handle_terminal_click(28, 30, 40);
+        state.end_split_drag(40);
+
+        assert_eq!(state.global.bottom_tab, BottomTab::Tasks);
+        assert_eq!(
+            state.global.bottom_percent, 30,
+            "a click must not resize the split"
+        );
+    }
+
+    #[test]
+    fn a_drag_that_starts_on_a_label_resizes_without_selecting_the_tab() {
+        // Spec "a drag that starts on a tab label": pressing the Tasks
+        // label and dragging to another row resizes the split; the tab
+        // selection must not follow the press.
+        let mut state = AppState::new("%99".into());
+        state.layout.bottom_panel_height = 12;
+        state.global.bottom_percent = 30;
+        state.global.bottom_tab = BottomTab::Tasks;
+        crate::ui::bottom::draw_tab_targets(&mut state, 40);
+
+        // Press on col 19, the Tasks glyph, then drag.
+        state.handle_terminal_click(28, 19, 40);
+        state.handle_split_drag_move(20, 30, 40);
+        state.end_split_drag(40);
+
+        assert_eq!(
+            state.global.bottom_percent, 50,
+            "the drag resized the split"
+        );
+        assert_eq!(
+            state.global.bottom_tab,
+            BottomTab::Tasks,
+            "the drag selected no tab"
+        );
+    }
+
+    #[test]
+    fn drag_and_release_without_a_press_change_nothing() {
+        // crossterm can deliver a Drag or an Up whose Down never reached
+        // this pane (pane focus mid-press). The handlers must no-op on
+        // them instead of inventing a split resize or a tab click.
+        let mut state = AppState::new("%99".into());
+        state.layout.bottom_panel_height = 12;
+
+        state.handle_split_drag_move(20, 30, 40);
+        state.end_split_drag(40);
+
+        assert!(state.split_drag.is_none());
+        assert_eq!(state.global.bottom_percent, 30);
+        assert_eq!(state.global.bottom_tab, BottomTab::Activity);
+    }
+
+    // ─── a live drag ends when a new press arrives ───────────────────────
+
+    #[test]
+    fn a_new_press_ends_a_moved_drag_at_its_saved_rows() {
+        // A release consumed elsewhere (tmux routed it to another pane)
+        // must not leave the drag live blocking percent adoption: the
+        // next press ends the stale drag as if released at its last
+        // rows — the moved branch runs, so the percent save happens —
+        // and the new press is then handled, starting a fresh drag of
+        // its own here.
+        let mut state = AppState::new("%99".into());
+        state.layout.bottom_panel_height = 12;
+        state.global.bottom_percent = 30;
+        state.global.bottom_tab = BottomTab::GitStatus;
+
+        // Drag: press on the rule at row 28, move to row 35 (5 rows),
+        // no release reaches the pane.
+        state.handle_terminal_click(28, 30, 40);
+        state.handle_split_drag_move(35, 30, 40);
+
+        // A new press on the rule (row 28 — the frame never redrew, so
+        // the drawn geometry is unchanged) ends the stale drag and
+        // starts a fresh drag at col 3.
+        state.handle_terminal_click(28, 3, 40);
+
+        assert_eq!(
+            state.global.bottom_percent, 13,
+            "the stale drag saved its last rows (5 of 40 ≈ 13%)"
+        );
+        assert!(
+            state.global.percent_save_pending(),
+            "the stale release must hand the percent to the tmux write"
+        );
+        assert_eq!(
+            state.global.bottom_tab,
+            BottomTab::GitStatus,
+            "the stale end's moved branch selects no tab"
+        );
+        let drag = state
+            .split_drag
+            .expect("the new press must start a fresh drag");
+        assert_eq!(drag.press_col, 3);
+        assert!(!drag.moved, "the fresh press is not yet a drag");
+        assert_eq!(drag.size, state.layout.bottom_panel_height);
+    }
+
+    #[test]
+    fn a_new_press_ends_an_unmoved_drag_without_a_tab_click() {
+        // An unmoved drag is only a held press: its stale end runs no
+        // save and no tab click, because the user never let the button
+        // go on that label and nothing was resized. The fixture makes a
+        // save observable: 1% of a 40-row sidebar draws 3 clipped rows
+        // (the 3-row minimum) and a save would round-trip them to 8% —
+        // the drift the moved branch must not run on this end. The new
+        // press — here on Git while the stale one sat on Tasks — is the
+        // only thing that resolves into a click.
+        let mut state = AppState::new("%99".into());
+        state.layout.bottom_panel_height = 3;
+        state.global.bottom_percent = 1;
+        crate::ui::bottom::draw_tab_targets(&mut state, 40);
+        state.global.bottom_tab = BottomTab::Activity;
+
+        // An unmoved press on the Tasks glyph, then a second press on
+        // the Git glyph (both on the drawn rule row 37 = 40 - 3).
+        state.handle_terminal_click(37, 19, 40);
+        state.handle_terminal_click(37, 23, 40);
+
+        assert_eq!(
+            state.global.bottom_percent, 1,
+            "the stale unmoved drag must end without saving its rows"
+        );
+        assert!(
+            !state.global.percent_save_pending(),
+            "the unmoved stale end must leave no tmux write pending"
+        );
+        assert_eq!(
+            state.global.bottom_tab,
+            BottomTab::Activity,
+            "the stale unmoved press must not release on its label"
+        );
+        let drag = state
+            .split_drag
+            .expect("the new press started a fresh drag");
+        assert_eq!(drag.press_col, 23);
+
+        state.end_split_drag(40);
+        assert_eq!(
+            state.global.bottom_tab,
+            BottomTab::GitStatus,
+            "the new press's unmoved release is the click that selects"
+        );
+    }
+
+    // ─── strip press routing ──────────────────────────────────────
+
+    /// A strip state whose frame drew the 120×12, 40-percent layout:
+    /// filter 0..4, agents 4..72, the divider line on column 72, tabs
+    /// 73..120, and the tab bar on row 0 spanning 72..120. The
+    /// press routing tests read only the drawn `StripLayout`, the way
+    /// the handlers do.
+    fn strip_state() -> AppState {
+        let mut state = AppState::new("%99".into());
+        state.layout_kind = LayoutKind::Strip;
+        state.layout.strip = Some(strip_layout(120, 12, 40));
+        state
+    }
+
+    #[test]
+    fn a_strip_chip_click_selects_the_category() {
+        // The strip filter bar draws one chip per row — row 2 is the
+        // waiting chip on a 12-row bar — and a click on it selects the
+        // category the column's filter row click would.
+        let mut state = strip_state();
+        state.global.status_filter = StatusFilter::All;
+        reset_filter_debounce(&mut state);
+
+        state.handle_terminal_click(2, 1, 12);
+
+        assert_eq!(
+            state.global.status_filter,
+            StatusFilter::Waiting,
+            "the click on row 2 selects the waiting chip"
+        );
+        assert!(state.split_drag.is_none(), "a chip click starts no drag");
+    }
+
+    #[test]
+    fn a_strip_click_on_the_repo_header_row_changes_no_filter() {
+        // The agent panel's first row is the repo header, not a filter
+        // row: a click on it must not touch the status filter — it
+        // routes to the secondary header, where the repo button opens
+        // the repo popup.
+        let mut state = strip_state();
+        state.global.status_filter = StatusFilter::All;
+        state.repo_groups = vec![
+            RepoGroup {
+                name: "alpha".into(),
+                has_focus: true,
+                panes: vec![(test_pane("%1"), PaneGitInfo::default())],
+            },
+            RepoGroup {
+                name: "beta".into(),
+                has_focus: false,
+                panes: vec![(test_pane("%2"), PaneGitInfo::default())],
+            },
+        ];
+        state.layout.repo_button_col = Some(20);
+        reset_filter_debounce(&mut state);
+
+        // agents.y is 0: row 0 is the header. Left of the repo button.
+        state.handle_terminal_click(0, 10, 12);
+        assert_eq!(
+            state.global.status_filter,
+            StatusFilter::All,
+            "the header row must not change the status filter"
+        );
+        assert!(!state.is_repo_popup_open());
+
+        // On the repo button: the header's button column is relative
+        // to the header area (absolute col 24 = agents.x 4 + 20), and
+        // the header click toggles the popup, exactly as row 1 of a
+        // column does.
+        state.handle_terminal_click(0, 24, 12);
+        assert!(state.is_repo_popup_open());
+        assert_eq!(state.global.status_filter, StatusFilter::All);
+    }
+
+    #[test]
+    fn a_strip_click_on_an_agent_row_selects_through_the_scroll_offset() {
+        // List rows start one row under the header (no filter row in a
+        // strip) and are offset by the scroll the frame drew with: row
+        // 2 with offset 2 is line (2 - 0 - 1) + 2 = 3, the third
+        // rendered agent row.
+        let mut state = strip_state();
+        state.layout.pane_row_targets = vec![
+            RowTarget {
+                pane_id: "%1".into(),
+            },
+            RowTarget {
+                pane_id: "%2".into(),
+            },
+            RowTarget {
+                pane_id: "%3".into(),
+            },
+        ];
+        state.layout.line_to_row = vec![None, Some(0), Some(1), Some(2)];
+        state.scrolls.panes.offset = 2;
+        state.global.selected_pane_row = 0;
+
+        state.handle_terminal_click(2, 10, 12);
+
+        assert_eq!(
+            state.global.selected_pane_row, 2,
+            "the clicked list row is the third rendered agent row"
+        );
+        assert!(state.split_drag.is_none());
+    }
+
+    #[test]
+    fn a_strip_click_on_a_spawn_button_opens_the_spawn_input() {
+        // The + spawn buttons are hit-tested in absolute frame
+        // coordinates, before the list-row fallback, so a click on one
+        // opens the spawn modal and never shifts the selection.
+        let mut state = strip_state();
+        // Inside the drawn agent panel (columns 4..72): the + button
+        // on list row 3, hit at its middle column.
+        state.layout.repo_spawn_targets = vec![RepoSpawnTarget {
+            rect: ratatui::layout::Rect::new(50, 3, 3, 1),
+            repo_name: "alpha".into(),
+            repo_root: "/tmp/alpha".into(),
+        }];
+        state.global.selected_pane_row = 0;
+
+        state.handle_terminal_click(3, 51, 12);
+
+        assert!(
+            matches!(state.popup, PopupState::SpawnInput { .. }),
+            "the click on the + button opens the spawn modal"
+        );
+        assert_eq!(state.global.selected_pane_row, 0);
+    }
+
+    #[test]
+    fn a_strip_press_on_the_divider_starts_a_strip_drag() {
+        // The spec's geometry: at 40 percent of 120 columns the
+        // divider line sits on column 72 and holds 48 tab columns. A
+        // press anywhere on the drawn divider starts a strip drag with
+        // that size — and touches no column-side value.
+        let mut state = strip_state();
+        state.global.bottom_percent = 30;
+
+        assert!(
+            state.handle_terminal_click(5, 72, 12),
+            "the press on the divider is the press that starts the drag"
+        );
+        let drag = state.split_drag.expect("the press starts the drag");
+        assert_eq!(drag.axis, LayoutKind::Strip);
+        assert!(!drag.moved, "the press is not yet a drag");
+        assert_eq!(drag.size, 48, "the drawn tab columns at the press");
+        assert_eq!(
+            state.global.bottom_percent, 30,
+            "a strip press must not touch the column's percent"
+        );
+        assert!(!state.global.percent_save_pending());
+    }
+
+    #[test]
+    fn a_strip_press_outside_the_divider_starts_no_drag() {
+        // The divider line and the tab-bar row are the regions that
+        // start a drag — a press on a mid-strip row of the agent
+        // panel, the tab panel or the filter column starts none.
+        let mut state = strip_state();
+        for (row, col) in [(5, 10), (5, 80), (5, 0)] {
+            state.handle_terminal_click(row, col, 12);
+            assert!(
+                state.split_drag.is_none(),
+                "a press at ({row}, {col}) must not start a drag"
+            );
+        }
+    }
+
+    #[test]
+    fn a_strip_drag_stale_end_saves_the_tab_percent() {
+        // The stale-drag end on a new press saves the axis's own value:
+        // a strip drag's last tab columns become @sidebar_tab_width,
+        // and the column's bottom percent is never touched. The drag
+        // here is forced moved (its release was lost elsewhere), with
+        // 60 tab columns of the 120-column strip — 50 percent.
+        let mut state = strip_state();
+        state.global.bottom_percent = 30;
+        state.handle_terminal_click(5, 72, 12);
+        let drag = state.split_drag.as_mut().expect("the drag is live");
+        drag.size = 60;
+        drag.moved = true;
+
+        // A new press anywhere ends the stale drag with its save.
+        state.handle_terminal_click(5, 10, 12);
+
+        assert_eq!(
+            state.global.tab_percent, 50,
+            "the stale strip drag saved 60 tab columns of 120 as 50 percent"
+        );
+        assert!(
+            state.global.tab_percent_save_pending(),
+            "the stale release must hand the tab width to the tmux write"
+        );
+        assert_eq!(
+            state.global.bottom_percent, 30,
+            "a strip drag's save must not touch the bottom percent"
+        );
+        assert!(!state.global.percent_save_pending());
+    }
+
+    #[test]
+    fn a_strip_drag_to_column_60_saves_50_percent() {
+        // Spec "a drag to the left": a 120-column strip with the
+        // divider on column 72 dragged to column 60 relays the
+        // divider there and saves the 60 tab columns as 50 percent on
+        // release — the column's bottom percent is never touched.
+        let mut state = strip_state();
+        state.global.bottom_percent = 30;
+        state.global.tab_percent = 40;
+
+        assert!(state.handle_terminal_click(5, 72, 12));
+        state.handle_split_drag_move(5, 60, 12);
+
+        let drag = state.split_drag.expect("the drag must still be live");
+        assert!(drag.moved, "moving to column 60 is a drag, not a hold");
+        assert_eq!(drag.size, 60, "the divider follows the mouse column");
+        assert_eq!(
+            state.global.tab_percent, 40,
+            "the drag itself must not write the tab width"
+        );
+
+        state.end_split_drag(12);
+        assert_eq!(
+            state.global.tab_percent, 50,
+            "60 tab columns of a 120-column strip are 50 percent"
+        );
+        assert!(
+            state.global.tab_percent_save_pending(),
+            "the release must hand the tab width to the tmux write"
+        );
+        assert_eq!(
+            state.global.bottom_percent, 30,
+            "a strip drag's save must not touch the bottom percent"
+        );
+        assert!(!state.global.percent_save_pending());
+    }
+
+    #[test]
+    fn a_strip_drag_writes_the_tab_width_only_on_release() {
+        // Spec "no tmux write during the drag": moves across several
+        // columns leave the tab width and its save latch alone; the
+        // single write happens on release.
+        let mut state = strip_state();
+        state.global.tab_percent = 40;
+
+        state.handle_terminal_click(5, 72, 12);
+        state.handle_split_drag_move(5, 60, 12);
+        assert!(!state.global.tab_percent_save_pending());
+        state.handle_split_drag_move(5, 65, 12);
+        assert!(!state.global.tab_percent_save_pending());
+        assert_eq!(
+            state.global.tab_percent, 40,
+            "no move may write the tab width"
+        );
+
+        state.end_split_drag(12);
+        assert!(
+            state.global.tab_percent_save_pending(),
+            "the release is the one write"
+        );
+    }
+
+    /// The tab-bar column the Git glyph's drawn hitbox starts on:
+    /// read back off the published targets, the same values the
+    /// frame's own right-aligning produced.
+    fn drawn_glyph_col(state: &AppState, tab: BottomTab) -> u16 {
+        state
+            .layout
+            .bottom_tab_targets
+            .iter()
+            .find(|target| target.tab == tab)
+            .map(|target| target.start)
+            .expect("the tab glyph is drawn on the tab bar")
+    }
+
+    #[test]
+    fn a_strip_drag_from_a_glyph_resizes_without_selecting_the_tab() {
+        // Spec "a drag that starts on a glyph": pressing the tab bar
+        // on the Git glyph's column and dragging to another column
+        // resizes the two panels; the tab selection must not follow
+        // the press.
+        let mut state = strip_state();
+        state.global.bottom_tab = BottomTab::GitStatus;
+        crate::ui::bottom::draw_strip_tab_targets(&mut state, 72, 48);
+        let git_col = drawn_glyph_col(&state, BottomTab::GitStatus);
+
+        // Row 0 is the tab-bar row of the drawn 12-row strip.
+        state.handle_terminal_click(0, git_col, 12);
+        state.handle_split_drag_move(0, 60, 12);
+        state.end_split_drag(12);
+
+        assert_eq!(
+            state.global.tab_percent, 50,
+            "the drag resized the two panels"
+        );
+        assert_eq!(
+            state.global.bottom_tab,
+            BottomTab::GitStatus,
+            "the drag selected no tab"
+        );
+    }
+
+    #[test]
+    fn an_unmoved_release_on_a_tab_bar_glyph_selects_its_tab() {
+        // Spec "a click on a glyph": press and release on the Git
+        // glyph's column of the tab bar with no move — the release
+        // selects the tab and the panel widths do not change.
+        let mut state = strip_state();
+        state.global.bottom_tab = BottomTab::Activity;
+        crate::ui::bottom::draw_strip_tab_targets(&mut state, 72, 48);
+        let git_col = drawn_glyph_col(&state, BottomTab::GitStatus);
+
+        state.handle_terminal_click(0, git_col, 12);
+        state.end_split_drag(12);
+
+        assert_eq!(
+            state.global.bottom_tab,
+            BottomTab::GitStatus,
+            "the press column is the Git glyph's"
+        );
+        assert_eq!(
+            state.global.tab_percent, 40,
+            "a click must not resize the panels"
+        );
+        assert!(!state.global.tab_percent_save_pending());
+    }
+
+    #[test]
+    fn a_click_on_the_tab_bar_band_changes_nothing() {
+        // Spec "a click on the band": a tab-bar column with no glyph —
+        // the bar's left edge, before the right-aligned run — is
+        // outside every hitbox, so neither the tab nor the panel
+        // widths may change. The thin divider line keeps the same
+        // rule: a press released on the line below the bar selects
+        // nothing.
+        let mut state = strip_state();
+        state.global.bottom_tab = BottomTab::Tasks;
+        crate::ui::bottom::draw_strip_tab_targets(&mut state, 72, 48);
+
+        state.handle_terminal_click(0, 72, 12);
+        state.end_split_drag(12);
+        state.handle_terminal_click(5, 72, 12);
+        state.end_split_drag(12);
+
+        assert_eq!(state.global.bottom_tab, BottomTab::Tasks);
+        assert_eq!(
+            state.global.tab_percent, 40,
+            "a click on the band must not resize the panels"
+        );
+        assert!(!state.global.tab_percent_save_pending());
+    }
+
+    #[test]
+    fn a_column_drag_saves_only_the_bottom_height() {
+        // The two axes keep their own saves: a column drag's release
+        // writes @sidebar_bottom_height and never @sidebar_tab_width.
+        let mut state = AppState::new("%99".into());
+        state.layout.bottom_panel_height = 12;
+        state.global.bottom_percent = 30;
+        state.global.tab_percent = 40;
+
+        assert!(state.handle_terminal_click(28, 30, 40));
+        state.handle_split_drag_move(20, 30, 40);
+        state.end_split_drag(40);
+
+        assert_eq!(state.global.bottom_percent, 50);
+        assert!(state.global.percent_save_pending());
+        assert_eq!(
+            state.global.tab_percent, 40,
+            "a column drag must not touch the tab width"
+        );
+        assert!(!state.global.tab_percent_save_pending());
+    }
+
+    #[test]
+    fn a_strip_move_within_the_divider_columns_stays_unmoved() {
+        // The divider is one column wide: a move that stays inside
+        // it (press on column 72, drag event still on column 72,
+        // another row) is still the held press a release treats as a
+        // click — and the line holds no glyphs, so that click selects
+        // nothing — the same rule the column keeps for moves along
+        // its one-row rule.
+        let mut state = strip_state();
+        state.global.bottom_tab = BottomTab::GitStatus;
+        crate::ui::bottom::draw_strip_tab_targets(&mut state, 72, 48);
+
+        state.handle_terminal_click(2, 72, 12);
+        state.handle_split_drag_move(7, 72, 12);
+        state.end_split_drag(12);
+
+        assert!(!state.global.tab_percent_save_pending());
+        assert_eq!(
+            state.global.bottom_tab,
+            BottomTab::GitStatus,
+            "an unmoved release on the line selects no tab"
+        );
+    }
+
+    // ─── strip mouse scroll routing ──────────────────────────────
+
+    #[test]
+    fn a_strip_wheel_over_the_agent_panel_scrolls_the_agents() {
+        // Column routing: column 10 is inside the drawn agent panel
+        // (4..72), so the wheel scrolls the agent list and never the
+        // tab panel — on any row, the strip has no bottom band.
+        let mut state = strip_state();
+        state.scrolls.panes = ScrollState {
+            offset: 0,
+            total_lines: 40,
+            visible_height: 20,
+        };
+        state.activity.scroll = ScrollState {
+            offset: 0,
+            total_lines: 30,
+            visible_height: 10,
+        };
+
+        state.handle_mouse_scroll(7, 10, 12, 0, 3);
+
+        assert_eq!(state.scrolls.panes.offset, 3);
+        assert_eq!(state.activity.scroll.offset, 0);
+    }
+
+    #[test]
+    fn a_strip_wheel_over_the_tab_panel_scrolls_the_tab() {
+        // Column routing: column 80 is inside the drawn tab panel
+        // (73..120), so the wheel scrolls the displayed tab and never
+        // the agent list; the divider line (column 72) scrolls nothing.
+        let mut state = strip_state();
+        state.scrolls.panes = ScrollState {
+            offset: 0,
+            total_lines: 40,
+            visible_height: 20,
+        };
+        state.activity.scroll = ScrollState {
+            offset: 0,
+            total_lines: 30,
+            visible_height: 10,
+        };
+
+        state.handle_mouse_scroll(7, 80, 12, 0, 3);
+        assert_eq!(state.activity.scroll.offset, 3);
+        assert_eq!(state.scrolls.panes.offset, 0);
+
+        state.handle_mouse_scroll(7, 72, 12, 0, 3);
+        assert_eq!(
+            state.activity.scroll.offset, 3,
+            "the divider has nothing to scroll"
+        );
     }
 
     // ─── move_pane_selection edge cases ─────────────────────────────
@@ -1467,9 +2249,9 @@ mod tests {
         state.handle_mouse_click(0, 1);
         assert_eq!(state.global.status_filter, StatusFilter::All);
 
-        // Click on the busy icon area (x=4..) should switch to Busy
+        // Click on the busy icon area (x=5..) should switch to Busy
         reset_filter_debounce(&mut state);
-        state.handle_mouse_click(0, 4);
+        state.handle_mouse_click(0, 5);
         assert_eq!(state.global.status_filter, StatusFilter::Busy);
 
         // agent selection unchanged
@@ -1658,38 +2440,65 @@ mod tests {
     fn filter_click_all_positions() {
         let mut state = AppState::new("%99".into());
         state.layout.filter_bar_width = 30;
-        // With 0 agents, counts are all 0, so layout: " ≡0 ●0 ◐0 ○0 ✕0"
+        // With 0 agents, counts are all 0, so layout: " 󱓯 0  0 󰥔 0 󰒲 0  0"
         //                                              0123456789...
 
-        // "≡0" at x=1..2
+        // "󱓯 0" at x=1..3
         state.global.status_filter = StatusFilter::Busy;
         reset_filter_debounce(&mut state);
         state.handle_filter_click(1);
         assert_eq!(state.global.status_filter, StatusFilter::All);
 
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(2);
+        state.handle_filter_click(3);
         assert_eq!(state.global.status_filter, StatusFilter::All);
 
-        // "●0" at x=4..5
+        // " 0" at x=5..7
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(4);
+        state.handle_filter_click(5);
         assert_eq!(state.global.status_filter, StatusFilter::Busy);
 
-        // "◐0" at x=7..8
+        // "󰥔 0" at x=9..11
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(7);
+        state.handle_filter_click(9);
         assert_eq!(state.global.status_filter, StatusFilter::Waiting);
 
-        // "○0" at x=10..11
-        reset_filter_debounce(&mut state);
-        state.handle_filter_click(10);
-        assert_eq!(state.global.status_filter, StatusFilter::Idle);
-
-        // "✕0" at x=13..14
+        // "󰒲 0" at x=13..15
         reset_filter_debounce(&mut state);
         state.handle_filter_click(13);
+        assert_eq!(state.global.status_filter, StatusFilter::Idle);
+
+        // " 0" at x=17..19
+        reset_filter_debounce(&mut state);
+        state.handle_filter_click(17);
         assert_eq!(state.global.status_filter, StatusFilter::Error);
+    }
+
+    #[test]
+    fn filter_click_on_the_side_switch_routes_to_the_switch_action() {
+        // The switch column (26 of 30) wins before the chip walk: the
+        // click neither changes the status filter nor reaches the
+        // pop-out branch. On the isolated test tmux the docked switch
+        // sweeps a server with no sidebars and stays silent.
+        let mut state = AppState::new("%99".into());
+        state.layout.filter_bar_width = 30;
+        state.global.status_filter = StatusFilter::All;
+        reset_filter_debounce(&mut state);
+        state.handle_filter_click(26);
+        assert_eq!(state.global.status_filter, StatusFilter::All);
+        assert!(state.flash.is_none());
+
+        // Floating, the same click is a no-op — while the neighbouring
+        // pop-out column would flash a refusal, so silence here proves
+        // the switch branch ran (and did nothing) rather than the
+        // pop-out one.
+        let mut state = AppState::new("%99".into());
+        state.layout.filter_bar_width = 30;
+        state.sidebar_pane.floating = true;
+        reset_filter_debounce(&mut state);
+        state.handle_filter_click(26);
+        assert!(state.flash.is_none());
+        assert!(state.sidebar_pane.floating);
     }
 
     #[test]
@@ -1698,14 +2507,14 @@ mod tests {
         state.layout.filter_bar_width = 30;
         state.global.status_filter = StatusFilter::All;
 
-        // x=0 is leading space, x=3/6/9/12 are separators
+        // x=0 is leading space, x=4/8/12/16 are separators
         state.handle_filter_click(0);
         assert_eq!(state.global.status_filter, StatusFilter::All);
 
-        state.handle_filter_click(3);
+        state.handle_filter_click(4);
         assert_eq!(state.global.status_filter, StatusFilter::All);
 
-        state.handle_filter_click(6);
+        state.handle_filter_click(8);
         assert_eq!(state.global.status_filter, StatusFilter::All);
     }
 
@@ -1717,12 +2526,12 @@ mod tests {
 
         // First click within debounce window should be ignored
         // (AppState::new sets last_filter_click to now)
-        state.handle_filter_click(4); // would be Busy
+        state.handle_filter_click(5); // would be Busy
         assert_eq!(state.global.status_filter, StatusFilter::All); // unchanged due to debounce
 
         // After resetting debounce, click should work
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(4);
+        state.handle_filter_click(5);
         assert_eq!(state.global.status_filter, StatusFilter::Busy);
 
         // Immediate second click should be debounced
@@ -1747,19 +2556,19 @@ mod tests {
             has_focus: true,
             panes,
         }];
-        // Layout: " ≡10 ●10 ◐0 ○0 ✕0"
+        // Layout: " 󱓯 10  10 󰥔 0 󰒲 0  0"
         //          0123456789...
-        // "●10" at x=5..7 (icon + "10")
+        // " 10" at x=6..9 (icon + "10")
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(5);
+        state.handle_filter_click(6);
         assert_eq!(state.global.status_filter, StatusFilter::Busy);
-        reset_filter_debounce(&mut state);
-        state.handle_filter_click(7);
-        assert_eq!(state.global.status_filter, StatusFilter::Busy);
-
-        // "◐0" shifts to x=9..10
         reset_filter_debounce(&mut state);
         state.handle_filter_click(9);
+        assert_eq!(state.global.status_filter, StatusFilter::Busy);
+
+        // "󰥔 0" shifts to x=11..13
+        reset_filter_debounce(&mut state);
+        state.handle_filter_click(11);
         assert_eq!(state.global.status_filter, StatusFilter::Waiting);
     }
 
@@ -1787,18 +2596,18 @@ mod tests {
         assert_eq!(state.layout.pane_row_targets.len(), 3);
 
         // Click Busy filter — row_targets should update immediately
-        // Layout: " ≡3 ●2 ◐0 ○1 ✕0" → Busy at x=4
+        // Layout: " 󱓯 3  2 󰥔 0 󰒲 1  0" → Busy at x=5
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(4);
+        state.handle_filter_click(5);
         assert_eq!(state.global.status_filter, StatusFilter::Busy);
         assert_eq!(state.layout.pane_row_targets.len(), 2);
         assert_eq!(state.layout.pane_row_targets[0].pane_id, "%1");
         assert_eq!(state.layout.pane_row_targets[1].pane_id, "%3");
 
         // Click Idle filter — row_targets should update again
-        // Layout: " ≡3 ●2 ◐0 ○1 ✕0" → Idle at x=10
+        // Layout: " 󱓯 3  2 󰥔 0 󰒲 1  0" → Idle at x=13
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(10);
+        state.handle_filter_click(13);
         assert_eq!(state.global.status_filter, StatusFilter::Idle);
         assert_eq!(state.layout.pane_row_targets.len(), 1);
         assert_eq!(state.layout.pane_row_targets[0].pane_id, "%2");
@@ -1832,7 +2641,7 @@ mod tests {
         // it must not pop out.
         state.flash = None;
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(4); // "●" busy chip
+        state.handle_filter_click(5); // busy chip
         assert_eq!(state.global.status_filter, StatusFilter::Busy);
         assert!(state.flash.is_none(), "a chip click must not pop out");
     }

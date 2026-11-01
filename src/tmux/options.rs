@@ -1,4 +1,5 @@
 use super::commands::run_tmux;
+use crate::pane_store::PaneWrites;
 
 // ─── Pane-scoped option keys ─────────────────────────────────────────
 //
@@ -62,6 +63,13 @@ pub const PANE_PROMPT_SOURCE: &str = "@pane_prompt_source";
 /// sidebar pane itself) so the TUI can exclude itself from the
 /// agent list.
 pub const PANE_ROLE: &str = "@pane_role";
+/// Layout the sidebar pane was made with (`column` or `strip`), written
+/// by the toggle flow next to [`PANE_ROLE`]. Only the side-switch sweep
+/// reads it, per pane, in its `list-panes -a` format: the sweep runs
+/// long after the pane is made, so the write is always done by then. A
+/// pane without the value is a sidebar from before the strip layout
+/// existed and is treated as a column.
+pub const PANE_SIDEBAR_LAYOUT: &str = "@pane_sidebar_layout";
 /// Agent-provided session id, surfaced in the status line for
 /// quick reference.
 pub const PANE_SESSION_ID: &str = "@pane_session_id";
@@ -90,15 +98,29 @@ pub const PANE_WORKTREE_BRANCH: &str = "@pane_worktree_branch";
 /// Worktree slug (directory basename) for the attached worktree.
 pub const PANE_WORKTREE_NAME: &str = "@pane_worktree_name";
 
+/// Build the `Unset` batch a teardown sweep applies: every key of
+/// [`AGENT_SESSION_PANE_OPTIONS`] except the keys in `skip`. Each sweep
+/// passes its own skip list — the key set is shared, the skips are not.
+/// The caller applies the result through a
+/// [`PaneStore`](crate::pane_store::PaneStore) as one batch, so one wipe
+/// is one tmux command.
+pub fn agent_session_wipe(skip: &[&'static str]) -> PaneWrites {
+    let mut writes = PaneWrites::new();
+    for key in AGENT_SESSION_PANE_OPTIONS {
+        if skip.contains(key) {
+            continue;
+        }
+        writes.unset(key);
+    }
+    writes
+}
+
 /// Every `@pane_*` option that belongs to an agent session's lifecycle —
 /// the set the teardown sweeps clear. This is the single enumeration of
 /// those keys: `clear_all_meta` (hook session-end), `clear_agent_pane_state`
 /// (shell-fallback sweep) and `clear_dead_agent_metadata` (dead-pane sweep)
-/// all iterate this list and skip only the keys they deliberately keep
-/// (the skip conditions live at each sweep). Add a new lifecycle option
-/// to this list once and every sweep picks it up; keys no sweep may
-/// clear stay out and are named in [`NEVER_SWEPT_PANE_OPTIONS`]. The test
-/// below keeps both lists in lock-step with the constants above.
+/// all apply [`agent_session_wipe`] through the pane store, each with its
+/// own skip list.
 pub const AGENT_SESSION_PANE_OPTIONS: &[&str] = &[
     PANE_AGENT,
     PANE_ATTENTION,
@@ -133,16 +155,27 @@ pub const NEVER_SWEPT_PANE_OPTIONS: &[&str] = &[
     PANE_OS_NOTIFY_TASK_COMPLETED,
     PANE_OS_NOTIFY_TASK_FAILED,
     PANE_ROLE,
+    PANE_SIDEBAR_LAYOUT,
 ];
 
 // ─── Sidebar global option keys ─────────────────────────────────────
 
 pub const SIDEBAR_PID: &str = "@sidebar_pid";
 pub const SIDEBAR_WIDTH: &str = "@sidebar_width";
+/// Height of a strip sidebar (the `top`/`bottom` positions), as a row
+/// count or a percent of the window height. A column ignores it, and
+/// [`SIDEBAR_WIDTH`] does not size a strip.
+pub const SIDEBAR_HEIGHT: &str = "@sidebar_height";
 /// Floor for the sidebar pane's width in columns. When other panes squeeze
 /// the sidebar below this, the sidebar grows itself back with `resize-pane`.
 /// `0` disables the enforcement.
 pub const SIDEBAR_MIN_WIDTH: &str = "@sidebar_min_width";
+/// Ceiling for the sidebar pane's width in columns. When tmux's resize
+/// behaviour hands the sidebar more columns than it asked for, the
+/// sidebar shrinks itself back with `resize-pane`. `0` (the default)
+/// disables the enforcement, and a ceiling at or below the effective
+/// minimum is ignored — the floor wins.
+pub const SIDEBAR_MAX_WIDTH: &str = "@sidebar_max_width";
 pub const SIDEBAR_POSITION: &str = "@sidebar_position";
 pub const SIDEBAR_FILTER: &str = "@sidebar_filter";
 pub const SIDEBAR_CURSOR: &str = "@sidebar_cursor";
@@ -163,6 +196,12 @@ pub const SIDEBAR_DOCKED_WIDTH: &str = "@sidebar_docked_width";
 pub const SIDEBAR_WIDTH_LOCK: &str = "@sidebar_width_lock";
 pub const SIDEBAR_REPO_FILTER: &str = "@sidebar_repo_filter";
 pub const SIDEBAR_BOTTOM_HEIGHT: &str = "@sidebar_bottom_height";
+/// Width of a strip's tab panel, divider included, as a percent of the
+/// strip width. Shared server-wide like the bottom height; `0` hides
+/// the divider and the tab panel. A column ignores it, and a strip
+/// drag never writes [`SIDEBAR_BOTTOM_HEIGHT`], so a column and a
+/// strip on the same server keep their own split.
+pub const SIDEBAR_TAB_WIDTH: &str = "@sidebar_tab_width";
 pub const SIDEBAR_PET: &str = "@sidebar_pet";
 pub const SIDEBAR_NOTIFICATIONS: &str = "@sidebar_notifications";
 pub const SIDEBAR_NOTIFICATIONS_EVENTS: &str = "@sidebar_notifications_events";
@@ -175,6 +214,9 @@ pub const SIDEBAR_COLOR_WAITING: &str = "@sidebar_color_waiting";
 pub const SIDEBAR_COLOR_IDLE: &str = "@sidebar_color_idle";
 pub const SIDEBAR_COLOR_ERROR: &str = "@sidebar_color_error";
 pub const SIDEBAR_COLOR_FILTER_INACTIVE: &str = "@sidebar_color_filter_inactive";
+/// Background of the filter bar row, painted at all times — focused or
+/// not — so the bar reads as a header band rather than part of the list.
+pub const SIDEBAR_COLOR_FILTER_BAR_BG: &str = "@sidebar_color_filter_bar_bg";
 pub const SIDEBAR_COLOR_AGENT_CLAUDE: &str = "@sidebar_color_agent_claude";
 pub const SIDEBAR_COLOR_AGENT_CODEX: &str = "@sidebar_color_agent_codex";
 pub const SIDEBAR_COLOR_AGENT_OPENCODE: &str = "@sidebar_color_agent_opencode";
@@ -187,10 +229,35 @@ pub const SIDEBAR_COLOR_TEXT_INACTIVE: &str = "@sidebar_color_text_inactive";
 pub const SIDEBAR_COLOR_SESSION: &str = "@sidebar_color_session";
 pub const SIDEBAR_COLOR_PORT: &str = "@sidebar_color_port";
 pub const SIDEBAR_COLOR_WAIT_REASON: &str = "@sidebar_color_wait_reason";
+/// Wait-reason text for a reason that demands the user (the permission
+/// class, or a blocking prompt), so it stands apart from the agent title.
+pub const SIDEBAR_COLOR_WAIT_REASON_ACTION: &str = "@sidebar_color_wait_reason_action";
+/// The dimmed phase of an action-required reason's blink — the same hue
+/// family as [`SIDEBAR_COLOR_WAIT_REASON_ACTION`], darker, so the label
+/// pulses red rather than fading to grey.
+pub const SIDEBAR_COLOR_WAIT_REASON_ACTION_DIM: &str = "@sidebar_color_wait_reason_action_dim";
 pub const SIDEBAR_COLOR_SELECTION: &str = "@sidebar_color_selection";
+/// Base focus background, painted over the whole sidebar while its tmux
+/// pane is the active one.
+pub const SIDEBAR_COLOR_FOCUS_BG: &str = "@sidebar_color_focus_bg";
+/// Active focus background, painted over the keyboard-owning section on
+/// top of the base focus background.
+pub const SIDEBAR_COLOR_FOCUS_ACTIVE_BG: &str = "@sidebar_color_focus_active_bg";
+/// Border colour tmux uses for the sidebar pane while it is the active
+/// pane of its window (per-pane `pane-active-border-style`).
+pub const SIDEBAR_COLOR_FOCUS_BORDER: &str = "@sidebar_color_focus_border";
 pub const SIDEBAR_COLOR_BRANCH: &str = "@sidebar_color_branch";
 pub const SIDEBAR_COLOR_TASK_PROGRESS: &str = "@sidebar_color_task_progress";
+/// Tasks tab `◻` icon + subject color for pending items.
+pub const SIDEBAR_COLOR_TASK_PENDING: &str = "@sidebar_color_task_pending";
+/// Tasks tab `✔` icon + subject color for completed items.
+pub const SIDEBAR_COLOR_TASK_COMPLETED: &str = "@sidebar_color_task_completed";
 pub const SIDEBAR_COLOR_SUBAGENT: &str = "@sidebar_color_subagent";
+/// Background of a nested subagent's row block, so a child reads as one
+/// card under its parent rather than as another sibling.
+pub const SIDEBAR_COLOR_SUBAGENT_BG: &str = "@sidebar_color_subagent_bg";
+/// Bottom-panel tab rule's ` │ ` delimiter between tab glyphs.
+pub const SIDEBAR_COLOR_TAB_SEPARATOR: &str = "@sidebar_color_tab_separator";
 pub const SIDEBAR_COLOR_COMMIT_HASH: &str = "@sidebar_color_commit_hash";
 pub const SIDEBAR_COLOR_DIFF_ADDED: &str = "@sidebar_color_diff_added";
 pub const SIDEBAR_COLOR_DIFF_DELETED: &str = "@sidebar_color_diff_deleted";
@@ -198,7 +265,15 @@ pub const SIDEBAR_COLOR_FILE_CHANGE: &str = "@sidebar_color_file_change";
 pub const SIDEBAR_COLOR_PR_LINK: &str = "@sidebar_color_pr_link";
 pub const SIDEBAR_COLOR_SECTION_TITLE: &str = "@sidebar_color_section_title";
 pub const SIDEBAR_COLOR_ACTIVITY_TIMESTAMP: &str = "@sidebar_color_activity_timestamp";
+pub const SIDEBAR_COLOR_THOUGHT_TIMESTAMP: &str = "@sidebar_color_thought_timestamp";
 pub const SIDEBAR_COLOR_RESPONSE_ARROW: &str = "@sidebar_color_response_arrow";
+/// Tools tab shell-command token colors, one per `shell_highlight::Class`.
+pub const SIDEBAR_COLOR_CMD_COMMAND: &str = "@sidebar_color_cmd_command";
+pub const SIDEBAR_COLOR_CMD_FLAG: &str = "@sidebar_color_cmd_flag";
+pub const SIDEBAR_COLOR_CMD_STRING: &str = "@sidebar_color_cmd_string";
+pub const SIDEBAR_COLOR_CMD_VARIABLE: &str = "@sidebar_color_cmd_variable";
+pub const SIDEBAR_COLOR_CMD_OPERATOR: &str = "@sidebar_color_cmd_operator";
+pub const SIDEBAR_COLOR_CMD_COMMENT: &str = "@sidebar_color_cmd_comment";
 
 pub const SIDEBAR_ICON_ALL: &str = "@sidebar_icon_all";
 pub const SIDEBAR_ICON_RUNNING: &str = "@sidebar_icon_running";
@@ -230,127 +305,17 @@ pub fn get_all_global_options() -> std::collections::HashMap<String, String> {
 }
 
 pub fn set_pane_option(pane: &str, key: &str, value: &str) {
-    #[cfg(test)]
-    if test_mock::intercept_set(pane, key, value) {
-        return;
-    }
     let _ = run_tmux(&["set", "-t", pane, "-p", key, value]);
 }
 
 pub fn unset_pane_option(pane: &str, key: &str) {
-    #[cfg(test)]
-    if test_mock::intercept_unset(pane, key) {
-        return;
-    }
     let _ = run_tmux(&["set", "-t", pane, "-p", "-u", key]);
 }
 
 pub fn get_pane_option_value(pane: &str, key: &str) -> String {
-    #[cfg(test)]
-    if let Some(value) = test_mock::intercept_get(pane, key) {
-        return value;
-    }
     run_tmux(&["show", "-t", pane, "-pv", key])
         .map(|s| s.trim().to_string())
         .unwrap_or_default()
-}
-
-/// Per-thread in-memory tmux pane store used by tests. Activated by
-/// installing a mock with [`test_mock::install`]; until then, all
-/// `set/unset/get_pane_option*` calls fall through to the real `tmux`
-/// command. The whole module is `cfg(test)` so it has zero cost in
-/// release builds.
-#[cfg(test)]
-pub mod test_mock {
-    use std::cell::RefCell;
-    use std::collections::HashMap;
-
-    type Store = HashMap<(String, String), String>;
-
-    thread_local! {
-        static MOCK: RefCell<Option<Store>> = const { RefCell::new(None) };
-    }
-
-    /// Install a fresh mock store for the current thread. Returns a guard
-    /// that uninstalls the mock on drop so concurrent tests don't leak
-    /// state across each other.
-    pub fn install() -> MockGuard {
-        MOCK.with(|m| *m.borrow_mut() = Some(Store::new()));
-        MockGuard
-    }
-
-    pub struct MockGuard;
-
-    impl Drop for MockGuard {
-        fn drop(&mut self) {
-            MOCK.with(|m| *m.borrow_mut() = None);
-        }
-    }
-
-    /// Pre-populate a pane option in the mock store. Call after `install`.
-    pub fn set(pane: &str, key: &str, value: &str) {
-        MOCK.with(|m| {
-            if let Some(store) = m.borrow_mut().as_mut() {
-                store.insert((pane.to_string(), key.to_string()), value.to_string());
-            }
-        });
-    }
-
-    /// Read a pane option from the mock store. Returns `None` if no mock
-    /// is installed (so production code paths still hit real tmux).
-    pub fn get(pane: &str, key: &str) -> Option<String> {
-        MOCK.with(|m| {
-            m.borrow().as_ref().map(|store| {
-                store
-                    .get(&(pane.to_string(), key.to_string()))
-                    .cloned()
-                    .unwrap_or_default()
-            })
-        })
-    }
-
-    /// Returns true if a key exists in the mock store. Useful for
-    /// asserting that a teardown DID NOT remove a key.
-    pub fn contains(pane: &str, key: &str) -> bool {
-        MOCK.with(|m| {
-            m.borrow()
-                .as_ref()
-                .is_some_and(|store| store.contains_key(&(pane.to_string(), key.to_string())))
-        })
-    }
-
-    pub(super) fn intercept_set(pane: &str, key: &str, value: &str) -> bool {
-        MOCK.with(|m| {
-            if let Some(store) = m.borrow_mut().as_mut() {
-                store.insert((pane.to_string(), key.to_string()), value.to_string());
-                true
-            } else {
-                false
-            }
-        })
-    }
-
-    pub(super) fn intercept_unset(pane: &str, key: &str) -> bool {
-        MOCK.with(|m| {
-            if let Some(store) = m.borrow_mut().as_mut() {
-                store.remove(&(pane.to_string(), key.to_string()));
-                true
-            } else {
-                false
-            }
-        })
-    }
-
-    pub(super) fn intercept_get(pane: &str, key: &str) -> Option<String> {
-        MOCK.with(|m| {
-            m.borrow().as_ref().map(|store| {
-                store
-                    .get(&(pane.to_string(), key.to_string()))
-                    .cloned()
-                    .unwrap_or_default()
-            })
-        })
-    }
 }
 
 #[cfg(test)]
@@ -358,41 +323,29 @@ mod tests {
     use super::*;
 
     #[test]
-    fn mock_install_round_trips_pane_option() {
-        let _guard = test_mock::install();
-        set_pane_option("%1", PANE_STATUS, "running");
-        assert_eq!(get_pane_option_value("%1", PANE_STATUS), "running");
-        assert!(test_mock::contains("%1", PANE_STATUS));
-        unset_pane_option("%1", PANE_STATUS);
-        assert!(!test_mock::contains("%1", PANE_STATUS));
-        // `get` on missing key returns empty string (mock semantics).
-        assert!(get_pane_option_value("%1", PANE_STATUS).is_empty());
-    }
+    fn agent_session_wipe_unsets_every_key_except_the_skip_list() {
+        let skip = [PANE_STATUS, PANE_ATTENTION];
+        let writes = agent_session_wipe(&skip);
 
-    #[test]
-    fn mock_helpers_get_and_contains_when_installed() {
-        let _guard = test_mock::install();
-        test_mock::set("%9", "@foo", "bar");
-        assert_eq!(test_mock::get("%9", "@foo").as_deref(), Some("bar"));
-        assert_eq!(test_mock::get("%9", "@missing").as_deref(), Some(""));
-    }
-
-    #[test]
-    fn mock_guard_uninstalls_on_drop() {
-        {
-            let _guard = test_mock::install();
-            test_mock::set("%7", "@x", "y");
-            assert!(test_mock::contains("%7", "@x"));
+        for key in AGENT_SESSION_PANE_OPTIONS {
+            let swept = writes.iter().any(|write| {
+                matches!(write, crate::pane_store::PaneWrite::Unset(unset) if *unset == *key)
+            });
+            assert_eq!(
+                swept,
+                !skip.contains(key),
+                "{key} is {} by the wipe",
+                if swept { "unset" } else { "kept" }
+            );
         }
-        // No mock installed now — `contains` returns false.
-        assert!(!test_mock::contains("%7", "@x"));
     }
 
     #[test]
     fn every_pane_scoped_option_is_swept_or_marked_never_swept() {
         // The checklist of pane-scoped constants declared above. A new
         // `@pane_*` constant must be classified into exactly one of the
-        // two lists so a teardown sweep cannot silently forget it.
+        // two lists so a teardown sweep cannot silently forget it. The
+        // wipe builder above keeps the swept set in one place.
         let all = [
             PANE_AGENT,
             PANE_ATTENTION,
@@ -410,6 +363,7 @@ mod tests {
             PANE_PROMPT_SOURCE,
             PANE_ROLE,
             PANE_SESSION_ID,
+            PANE_SIDEBAR_LAYOUT,
             PANE_STARTED_AT,
             PANE_STATUS,
             PANE_SUBAGENTS,

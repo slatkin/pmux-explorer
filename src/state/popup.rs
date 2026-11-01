@@ -400,7 +400,7 @@ impl AppState {
         };
         match crate::worktree::spawn(&req) {
             Ok(_) => self.popup = PopupState::None,
-            Err(e) => self.set_spawn_error(e),
+            Err(e) => self.set_spawn_error(e.to_string()),
         }
     }
 
@@ -462,7 +462,7 @@ impl AppState {
         };
         match crate::worktree::remove(&pane_id, mode) {
             Ok(_) => self.popup = PopupState::None,
-            Err(e) => self.set_remove_error(e),
+            Err(e) => self.set_remove_error(e.to_string()),
         }
     }
 }
