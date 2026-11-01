@@ -57,7 +57,38 @@ the ticks after the release adopt the server value again.
 
 ### Per-pane State (keyed by pane ID)
 
-Written by `cli/hook.rs` on agent events, read by `query_sessions()` every **1 second**.
+Written through the pane-write seam, read by `query_sessions()` every **1 second**.
+
+Every write to an agent pane's `@pane_*` options goes through a `PaneStore`
+(`src/pane_store.rs`; the tmux adapter lives in `src/tmux/pane_store.rs`): the
+caller reads one `PaneSnapshot` of the four rule options (`@pane_status`,
+`@pane_bg_cmd`, `@pane_subagents`, `@pane_started_at`), builds a `PaneWrites`
+list with the pure `transition(&PaneSnapshot, &AgentEvent, &Reported)` in
+`src/pane_state.rs`, and applies the list as one batch. The store is created
+once at the `hook` entry and passed down; the sidebar's sweeps and wipes take
+it as an argument the same way. The rules the transition owns:
+
+- **One event, one batch** — a `PaneWrites` list becomes one tmux invocation
+  of `;`-joined `set` commands, so the poll reads the pane from before the
+  event or from after it, never from between; an empty list applies as a no-op
+- **Reported fields** — an option clears only when the event reports its
+  field: a reported field with an empty value clears, an unreported field is
+  left alone (each adapter declares the set per event)
+- **The subagent guard** — while `@pane_subagents` is non-empty, the identity
+  writes (agent label, permission mode, session id, cwd, worktree pair, the
+  task reset and clear, the worktree-remove teardown, `SessionEnd`) are
+  skipped; status, attention and prompt writes are not
+- **One-field encoding** — `apply` encodes every value with
+  `sanitize_tmux_value`, so a newline, a carriage return or a `|` in a value
+  reads back as one field of the pane list
+
+What the transition does not own stays with the handlers, which run their
+non-option effects after `apply`: the activity log file, the desktop
+notifications and their dedup stamps and run id (the stamp and run-id writes
+go through the same store as their own commands), the task store, and the
+pending teardown markers. `SessionEnd`, `SubagentStart`, `SubagentStop` and
+`WorktreeRemove` keep their guarded plain-list and read-modify-write paths,
+expressed as `get` + `apply`.
 
 Each pane's runtime data is split into two buckets:
 
@@ -67,23 +98,24 @@ Each pane's runtime data is split into two buckets:
 | `PaneRuntimeState` in `AppState` | Refresh cycle + cleanup on agent exit | `ports`, `command`, `task_progress`, `task_dismissed_total`, `inactive_since`, `task_store_mtime`, `task_store_all_done` |
 | `PaneInfo` (query result, `src/tmux/types.rs`) | Every 1s (refresh cycle) | Per-pane snapshot read from tmux in one `list-panes -a` call: agent type, status, cwd, prompt, pane PID, worktree, session id, and `pane_name` — the pane's own title (`pane_title`) when it is a real name: non-empty, different from the host name, and not an agent-set OSC title (`π - …` from pi, `✳ …` from Claude Code); other agents' OSC titles are a known gap. A title carrying an em dash keeps only the text before it (a suffix like a branch or a cwd is decoration), and a title that trims to empty is not a name. `None` otherwise. Rendered after the badge slot (subagent ♟/↻ or permission badge) in the status row |
 
-Pane options written to tmux:
+Pane options written to tmux (each row's trigger names the transition arms —
+`src/pane_state.rs` — or the sweep that writes it):
 
 | Tmux Option | Update Trigger | Description |
 |-------------|----------------|-------------|
-| `@pane_agent` | SessionStart | Agent type ("claude" / "codex" / "opencode") |
-| `@pane_status` | Every event | Status ("running" / "background" / "waiting" / "idle" / "error") |
+| `@pane_agent` | SessionStart, UserPromptSubmit, Stop, StopFailure, Notification, PermissionDenied (identity writes, guarded while subagents are active) | Agent type ("claude" / "codex" / "opencode" / "pi") |
+| `@pane_status` | SessionStart (`idle`), UserPromptSubmit (`running`), Stop (`idle`/`background`), StopFailure (`error`), Notification/PermissionDenied (`waiting`), ActivityLog (`waiting`/`error` → `running`), the bg-shell sweep (`background` → `idle`), `set-status` | Status ("running" / "background" / "waiting" / "idle" / "error") |
 | `@pane_cwd` | SessionStart, CwdChanged | Working directory |
-| `@pane_permission_mode` | SessionStart, hook event | Permission mode |
+| `@pane_permission_mode` | SessionStart and the other identity events (guarded while subagents are active); plan-mode tools via ActivityLog | Permission mode |
 | `@pane_prompt` | UserPromptSubmit, Stop | Latest prompt or response text |
 | `@pane_prompt_source` | UserPromptSubmit, Stop | "user" or "response" |
-| `@pane_started_at` | UserPromptSubmit | Unix epoch when agent started |
-| `@pane_attention` | SessionStart, Stop, StopFailure (clear); Notification, PermissionDenied, TeammateIdle (set) | "notification" or "clear" |
-| `@pane_wait_reason` | StopFailure, PermissionDenied, TeammateIdle | Reason for waiting/error (`permission_denied`, `teammate_idle:<name>`, or error text) |
+| `@pane_started_at` | UserPromptSubmit; Stop clears it only without a live bg shell; ActivityLog sets it on the first move to `running`; StopFailure and SessionStart clear it | Unix epoch when agent started |
+| `@pane_attention` | SessionStart, Stop, StopFailure (clear); Notification, PermissionDenied, TeammateIdle, TaskCompleted (set) | "notification" or "clear" |
+| `@pane_wait_reason` | Notification, StopFailure, PermissionDenied, TeammateIdle; SessionStart (resume variants); Stop and UserPromptSubmit clear it | Reason for waiting/error (`permission_denied`, `teammate_idle:<name>`, or error text) |
 | `@pane_bg_cmd` | ActivityLog (bg Bash), Refresh sweep (clear), SessionEnd (clear) | Latest sanitized command of a Bash tool started with `run_in_background`. Its presence is the single source of truth for "live bg shell" — Stop routes to `background` while it is set, and the row body renders the command. Persists across UserPromptSubmit so shells spanning turns stay visible; overwritten by the next bg Bash. The refresh loop runs a `ps`-based liveness sweep each tick and clears the marker (plus downgrades `background → idle`) when no process matches the stored command. Only the most recent bg Bash is tracked; older ones are not retained. |
 | `@pane_subagents` | SubagentStart/Stop | Comma-separated active subagent list |
-| `@pane_worktree_name` | SessionStart | Worktree name (if applicable) |
-| `@pane_worktree_branch` | SessionStart | Worktree branch (if applicable) |
+| `@pane_worktree_name` | Session-context events that report `worktree` (an empty value clears) | Worktree name (if applicable) |
+| `@pane_worktree_branch` | Session-context events that report `worktree` (an empty value clears) | Worktree branch (if applicable) |
 | `@pane_session_id` | SessionStart, UserPromptSubmit, Notification, Stop, StopFailure, PermissionDenied, CwdChanged | Agent-reported session id (skipped when subagents are active) |
 | `@pane_subagent_kind` | UserPromptSubmit (recognised pmux task prompt, pi only) | "spawned" or "resumed" |
 | `@pane_subagent_parent` | UserPromptSubmit (recognised pmux task prompt, pi only) | The parent session id from the prompt path |
@@ -93,7 +125,9 @@ The three `@pane_subagent_*` options mark a pi pane that pmux started as a
 subagent. A later recognised prompt replaces them; a prompt that does not
 match leaves them alone. `clear_all_meta()` (session end) and
 `clear_agent_pane_state()` (the sweep that clears a pi pane whose agent
-process is gone) remove all three with the rest of the pane's metadata.
+process is gone) remove all three with the rest of the pane's metadata — each
+wipe path is one `Unset` batch over the shared lifecycle option list, applied
+through the store.
 
 In-memory per-pane runtime state. Every field lives inside
 `PaneRuntimeState` so the whole record is dropped together when its
@@ -182,7 +216,8 @@ Per-pane file-based state:
 │  git (branch, diff, ahead/behind, PR)                       │
 ├─────────────────────────────────────────────────────────────┤
 │  Event-driven (agent hooks)                                 │
-│  @pane_* tmux options, activity log files                   │
+│  @pane_* tmux options (one batched apply per event),        │
+│  activity log files                                         │
 ├─────────────────────────────────────────────────────────────┤
 │  On user input                                              │
 │  focus_state.focus, scrolls.*, activity.scroll,             │
@@ -205,7 +240,10 @@ Per-pane file-based state:
 Agent hooks (hook.sh)
   → CLI `hook` subcommand (cli/hook.rs)
     → resolve_adapter() (event.rs) → adapter.parse() → AgentEvent
-    → handle_event() writes @pane_* tmux options + /tmp activity log files
+    → handle_event(): one store snapshot, one transition, one batched
+      apply of the PaneWrites through the PaneStore (one tmux command),
+      then the non-option effects (activity log files, notifications,
+      task store)
                         ↓
 TUI main loop (app::run in app.rs; submodules app/{setup,workers,input,render,panel_guard})
   → startup plugin-state reads (cli/plugin_state.rs)
@@ -249,6 +287,49 @@ TUI main loop (app::run in app.rs; submodules app/{setup,workers,input,render,pa
 ## Key Types
 
 ```rust
+/// One entry of a write list: set an option, or unset it. The keys are
+/// the `&'static str` option-name constants of `tmux::options`.
+enum PaneWrite {
+    Set(&'static str, String),
+    Unset(&'static str),
+}
+
+/// An ordered write list, applied as one batch — one tmux invocation of
+/// `;`-joined `set` commands. Later entries win over earlier ones for
+/// the same key; an empty list applies as a no-op.
+struct PaneWrites {
+    entries: Vec<PaneWrite>,
+}
+
+/// The four rule options, read with one call. An absent option — or one
+/// set to an empty value — is `None`.
+struct PaneSnapshot {
+    status: Option<String>,
+    bg_cmd: Option<String>,
+    subagents: Option<String>,
+    started_at: Option<String>,
+}
+
+/// The store seam every agent pane option access goes through: one
+/// snapshot read, one single-option read, one batched apply. Created
+/// once at a command's entry and passed down; the tmux adapter
+/// (`src/tmux/pane_store.rs`) is production, `MemPaneStore` is tests.
+trait PaneStore {
+    fn snapshot(&self, pane: &str) -> PaneSnapshot;
+    fn get(&self, pane: &str, key: &str) -> String;
+    fn apply(&self, pane: &str, writes: &PaneWrites) -> Result<(), String>;
+}
+
+/// The write rules for one producer event: pure, owned by
+/// `src/pane_state.rs` together with `status_writes` (the
+/// status↔attention coupling) and `identity_guarded` (the subagent
+/// guard). Values are raw; the store encodes them at `apply` time.
+fn transition(
+    snapshot: &PaneSnapshot,
+    event: &AgentEvent,
+    reported: &Reported,
+) -> PaneWrites;
+
 enum Focus { Filter, Panes, ActivityLog }
 enum StatusFilter { All, Busy, Waiting, Idle, Error }
 enum RepoFilter { All, Repo(String) }
