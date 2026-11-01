@@ -103,11 +103,13 @@ fn handle_event(
         AgentEvent::SubagentStop { agent_id, .. } => {
             handlers::on_subagent_stop(pane, agent_id.as_deref(), store)
         }
-        AgentEvent::ActivityLog {
-            tool_name,
-            tool_input,
-            tool_response,
-        } => activity::handle_activity_log(pane, store, tool_name, tool_input, tool_response),
+        AgentEvent::ActivityLog { .. } => {
+            // The transition owns the activity-log option writes: the
+            // status move, the background-Bash command and the guarded
+            // plan-mode permission write. The activity log file entry is
+            // the handler's own effect.
+            activity::handle_activity_log(pane, &event, &reported, store)
+        }
         AgentEvent::PermissionDenied {
             agent,
             cwd,

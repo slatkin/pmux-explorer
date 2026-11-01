@@ -1,13 +1,10 @@
-use crate::pane_state::status_writes;
-use crate::pane_store::{PaneStore, PaneWrites};
-use crate::time::now_epoch_secs;
-use crate::tmux;
-use crate::tool_name::CanonicalTool;
+use crate::event::{AgentEvent, Reported};
+use crate::pane_state::transition;
+use crate::pane_store::PaneStore;
 
 use super::super::label::extract_tool_label;
 use super::super::local_time_hhmm;
 use super::super::sanitize_log_label;
-use super::context::pane_writes_allowed;
 
 /// Write a single activity entry to the log file and trim if needed.
 /// The io error is returned because the hook command's whole job for an
@@ -65,54 +62,27 @@ pub(super) fn trim_log_file(
 }
 
 /// Activity-log handler, called from `hook <agent> activity-log` event.
-/// Every option write goes through the store as one batch — the rules stay
-/// in the handler until the `ActivityLog` arm lands in the transition.
+/// The option writes come from the transition's `ActivityLog` arm and go
+/// through the store as one batch; the activity log file entry is the
+/// handler's own non-option effect and runs after the batch.
 pub(super) fn handle_activity_log(
     pane: &str,
+    event: &AgentEvent,
+    reported: &Reported,
     store: &dyn PaneStore,
-    tool_name: &str,
-    tool_input: &serde_json::Value,
-    tool_response: &serde_json::Value,
 ) -> i32 {
+    let AgentEvent::ActivityLog {
+        tool_name,
+        tool_input,
+        tool_response,
+    } = event
+    else {
+        return 0;
+    };
     let label = extract_tool_label(tool_name, tool_input, tool_response);
-    let mut writes = PaneWrites::new();
-    if is_background_bash(tool_name, tool_input) {
-        let stored = if label.is_empty() {
-            tmux::BG_CMD_PLACEHOLDER
-        } else {
-            label.as_str()
-        };
-        // No sanitizer call here: the store's apply is the one place every
-        // written value passes through the encoder.
-        writes.set(tmux::PANE_BG_CMD, stored);
-    }
 
-    let current_status = store.get(pane, tmux::PANE_STATUS);
-    if current_status != "running" && !current_status.is_empty() {
-        writes.merge(&status_writes("running"));
-        if current_status == "waiting" {
-            // status_writes("running") already unsets the attention flag;
-            // the stale wait reason goes with it.
-            writes.unset(tmux::PANE_WAIT_REASON);
-        }
-        let existing_started = store.get(pane, tmux::PANE_STARTED_AT);
-        if existing_started.is_empty() {
-            writes.set(tmux::PANE_STARTED_AT, now_epoch_secs().to_string());
-        }
-    }
-
-    // Update permission mode when plan mode tools are used.
-    // Same parent-protection rule as `set_agent_meta`: a subagent that
-    // enters/exits plan mode must not flip the parent pane's badge. The
-    // subagent list is not touched by the writes above, so reading it
-    // before the batch sees the same state the old post-status read did.
-    if pane_writes_allowed(pane, store) {
-        match tool_name {
-            "EnterPlanMode" => writes.set(tmux::PANE_PERMISSION_MODE, "plan"),
-            "ExitPlanMode" => writes.set(tmux::PANE_PERMISSION_MODE, "default"),
-            _ => {}
-        }
-    }
+    let snapshot = store.snapshot(pane);
+    let writes = transition(&snapshot, event, reported);
     let _ = store.apply(pane, &writes);
 
     if let Err(error) = write_activity_entry(pane, tool_name, &label) {
@@ -121,19 +91,14 @@ pub(super) fn handle_activity_log(
     0
 }
 
-fn is_background_bash(tool_name: &str, tool_input: &serde_json::Value) -> bool {
-    tool_name == CanonicalTool::Bash.as_str()
-        && ["run_in_background", "runInBackground"]
-            .iter()
-            .any(|key| tool_input.get(key).and_then(|v| v.as_bool()) == Some(true))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pane_store::MemPaneStore;
+    use crate::pane_store::{MemPaneStore, PaneSnapshot, PaneWrites};
+    use crate::tmux;
     use serde_json::Value;
     use serde_json::json;
+    use std::cell::Cell;
     use std::fs;
 
     // ─── trim_log_file tests ────────────────────────────────────────
@@ -253,6 +218,116 @@ mod tests {
 
     // ─── handle_activity_log tests ──────────────────────────────────
 
+    fn activity_event(tool_name: &str, tool_input: Value) -> AgentEvent {
+        AgentEvent::ActivityLog {
+            tool_name: tool_name.into(),
+            tool_input,
+            tool_response: Value::Null,
+        }
+    }
+
+    /// A `MemPaneStore` that counts reads and applies so a test can pin
+    /// that the handler takes one snapshot, makes no second read, and
+    /// applies at most one batch.
+    struct CountingStore {
+        inner: MemPaneStore,
+        snapshots: Cell<usize>,
+        gets: Cell<usize>,
+        applies: Cell<usize>,
+    }
+
+    impl CountingStore {
+        fn new() -> Self {
+            CountingStore {
+                inner: MemPaneStore::new(),
+                snapshots: Cell::new(0),
+                gets: Cell::new(0),
+                applies: Cell::new(0),
+            }
+        }
+
+        fn set(&self, pane: &str, key: &str, value: &str) {
+            self.inner.insert(pane, key, value);
+        }
+
+        fn snapshots(&self) -> usize {
+            self.snapshots.get()
+        }
+
+        fn gets(&self) -> usize {
+            self.gets.get()
+        }
+
+        fn applies(&self) -> usize {
+            self.applies.get()
+        }
+    }
+
+    impl PaneStore for CountingStore {
+        fn snapshot(&self, pane: &str) -> PaneSnapshot {
+            self.snapshots.set(self.snapshots.get() + 1);
+            self.inner.snapshot(pane)
+        }
+
+        fn get(&self, pane: &str, key: &str) -> String {
+            self.gets.set(self.gets.get() + 1);
+            self.inner.get(pane, key)
+        }
+
+        fn apply(&self, pane: &str, writes: &PaneWrites) -> Result<(), String> {
+            self.applies.set(self.applies.get() + 1);
+            self.inner.apply(pane, writes)
+        }
+    }
+
+    #[test]
+    fn handle_activity_log_takes_one_snapshot_and_at_most_one_apply() {
+        for status in ["", "waiting", "idle"] {
+            let store = CountingStore::new();
+            let pane_id = "%CLI_ONE_BATCH";
+            if !status.is_empty() {
+                store.set(pane_id, tmux::PANE_STATUS, status);
+            }
+
+            handle_activity_log(
+                pane_id,
+                &activity_event("Read", json!({"file_path": "/a/b.rs"})),
+                &Reported::NONE,
+                &store,
+            );
+
+            assert_eq!(store.snapshots(), 1, "status {status:?}: one snapshot");
+            assert_eq!(store.gets(), 0, "status {status:?}: no second read");
+            assert!(store.applies() <= 1, "status {status:?}: at most one apply");
+        }
+    }
+
+    #[test]
+    fn handle_activity_log_writes_the_entry_in_every_scenario() {
+        // The status move changes the option writes, never the log: every
+        // previous status still logs its activity entry.
+        for status in ["", "running", "waiting", "error", "idle", "background"] {
+            let store = MemPaneStore::new();
+            let pane_id = format!("%CLI_EVERY_{status}");
+            let path = crate::activity::log_file_path(&pane_id);
+            let _ = fs::remove_file(&path);
+            if !status.is_empty() {
+                store.insert(&pane_id, tmux::PANE_STATUS, status);
+            }
+
+            handle_activity_log(
+                &pane_id,
+                &activity_event("Read", json!({"file_path": "/a/b.rs"})),
+                &Reported::NONE,
+                &store,
+            );
+
+            let content = fs::read_to_string(&path).unwrap();
+            assert!(content.contains("|Read|b.rs"), "status {status:?}");
+            fs::remove_file(&path).ok();
+        }
+    }
+
     #[test]
     fn handle_activity_log_writes_entry() {
         let store = MemPaneStore::new();
@@ -262,10 +337,9 @@ mod tests {
 
         handle_activity_log(
             pane_id,
+            &activity_event("Read", json!({"file_path": "/home/user/src/main.rs"})),
+            &Reported::NONE,
             &store,
-            "Read",
-            &json!({"file_path": "/home/user/src/main.rs"}),
-            &Value::Null,
         );
 
         let content = fs::read_to_string(&path).unwrap();
@@ -282,10 +356,12 @@ mod tests {
 
         handle_activity_log(
             pane_id,
+            &activity_event(
+                "Bash",
+                json!({"command": "npm run dev", "run_in_background": true}),
+            ),
+            &Reported::NONE,
             &store,
-            "Bash",
-            &json!({"command": "npm run dev", "run_in_background": true}),
-            &Value::Null,
         );
 
         assert_eq!(
@@ -305,10 +381,9 @@ mod tests {
 
         handle_activity_log(
             pane_id,
+            &activity_event("Bash", json!({"run_in_background": true})),
+            &Reported::NONE,
             &store,
-            "Bash",
-            &json!({"run_in_background": true}),
-            &Value::Null,
         );
 
         assert_eq!(
@@ -327,10 +402,12 @@ mod tests {
 
         handle_activity_log(
             pane_id,
+            &activity_event(
+                "Bash",
+                json!({"command": "cat a.log | grep foo\nbar", "run_in_background": true}),
+            ),
+            &Reported::NONE,
             &store,
-            "Bash",
-            &json!({"command": "cat a.log | grep foo\nbar", "run_in_background": true}),
-            &Value::Null,
         );
 
         // The log label keeps `|` (only line breaks become spaces).
@@ -349,9 +426,10 @@ mod tests {
     }
 
     #[test]
-    fn handle_activity_log_preserves_bg_cmd_when_background_resumes_running() {
-        // Regression: a tool-use burst must not clear @pane_bg_cmd, or
-        // the next Stop would land in `idle` instead of `background`.
+    fn handle_activity_log_keeps_background_and_its_command_on_a_late_tool_event() {
+        // The status move only lifts `waiting` and `error`: a background
+        // pane stays background, its command survives the tool-use burst,
+        // and the start time is not rewritten.
         let store = MemPaneStore::new();
         let pane_id = "%CLI_BG_PRESERVE";
         let path = crate::activity::log_file_path(pane_id);
@@ -361,14 +439,14 @@ mod tests {
 
         handle_activity_log(
             pane_id,
+            &activity_event("Read", json!({"file_path": "/home/user/src/main.rs"})),
+            &Reported::NONE,
             &store,
-            "Read",
-            &json!({"file_path": "/home/user/src/main.rs"}),
-            &Value::Null,
         );
 
-        assert_eq!(store.get(pane_id, tmux::PANE_STATUS), "running");
+        assert_eq!(store.get(pane_id, tmux::PANE_STATUS), "background");
         assert_eq!(store.get(pane_id, tmux::PANE_BG_CMD), "npm run dev");
+        assert!(!store.contains(pane_id, tmux::PANE_STARTED_AT));
         fs::remove_file(&path).ok();
     }
 
@@ -384,15 +462,57 @@ mod tests {
 
         handle_activity_log(
             pane_id,
+            &activity_event("Read", json!({"file_path": "/home/user/src/main.rs"})),
+            &Reported::NONE,
             &store,
-            "Read",
-            &json!({"file_path": "/home/user/src/main.rs"}),
-            &Value::Null,
         );
 
         assert_eq!(store.get(pane_id, tmux::PANE_STATUS), "running");
         assert!(!store.contains(pane_id, tmux::PANE_ATTENTION));
         assert!(!store.contains(pane_id, tmux::PANE_WAIT_REASON));
+        assert!(store.contains(pane_id, tmux::PANE_STARTED_AT));
+        fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn handle_activity_log_does_not_revive_idle() {
+        // The behaviour fix: a delayed tool event after a stop must not
+        // restart an idle pane's run.
+        let store = MemPaneStore::new();
+        let pane_id = "%CLI_IDLE_STAYS";
+        let path = crate::activity::log_file_path(pane_id);
+        let _ = fs::remove_file(&path);
+        store.insert(pane_id, tmux::PANE_STATUS, "idle");
+
+        handle_activity_log(
+            pane_id,
+            &activity_event("Read", json!({"file_path": "/home/user/src/main.rs"})),
+            &Reported::NONE,
+            &store,
+        );
+
+        assert_eq!(store.get(pane_id, tmux::PANE_STATUS), "idle");
+        assert!(!store.contains(pane_id, tmux::PANE_STARTED_AT));
+        assert!(!store.contains(pane_id, tmux::PANE_ATTENTION));
+        fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn handle_activity_log_moves_error_to_running() {
+        let store = MemPaneStore::new();
+        let pane_id = "%CLI_ERROR_TO_RUN";
+        let path = crate::activity::log_file_path(pane_id);
+        let _ = fs::remove_file(&path);
+        store.insert(pane_id, tmux::PANE_STATUS, "error");
+
+        handle_activity_log(
+            pane_id,
+            &activity_event("Read", json!({"file_path": "/home/user/src/main.rs"})),
+            &Reported::NONE,
+            &store,
+        );
+
+        assert_eq!(store.get(pane_id, tmux::PANE_STATUS), "running");
         fs::remove_file(&path).ok();
     }
 
@@ -403,12 +523,17 @@ mod tests {
         let path = crate::activity::log_file_path(pane_id);
         let _ = fs::remove_file(&path);
 
-        // With the adapter pattern, empty tool_name is filtered by the adapter
-        // before reaching handle_activity_log. We still test that handle_activity_log
-        // writes an entry even with empty tool_name (label extraction handles it).
-        let result = handle_activity_log(pane_id, &store, "", &Value::Null, &Value::Null);
+        // Empty tool_name is filtered by the adapter before reaching
+        // handle_activity_log; the handler itself still writes an entry
+        // and returns 0.
+        let result = handle_activity_log(
+            pane_id,
+            &activity_event("", Value::Null),
+            &Reported::NONE,
+            &store,
+        );
         assert_eq!(result, 0);
-        // Empty tool_name still writes an entry now (adapter filters upstream)
+        fs::remove_file(&path).ok();
     }
 
     #[test]
@@ -420,10 +545,9 @@ mod tests {
 
         handle_activity_log(
             pane_id,
+            &activity_event("Edit", json!({"file_path": "/a/b/test.rs"})),
+            &Reported::NONE,
             &store,
-            "Edit",
-            &json!({"file_path": "/a/b/test.rs"}),
-            &Value::Null,
         );
 
         let content = fs::read_to_string(&path).unwrap();
@@ -438,7 +562,12 @@ mod tests {
         let path = crate::activity::log_file_path(pane_id);
         let _ = fs::remove_file(&path);
 
-        handle_activity_log(pane_id, &store, "UnknownTool", &Value::Null, &Value::Null);
+        handle_activity_log(
+            pane_id,
+            &activity_event("UnknownTool", Value::Null),
+            &Reported::NONE,
+            &store,
+        );
 
         let content = fs::read_to_string(&path).unwrap();
         assert!(content.contains("|UnknownTool|"));
@@ -451,14 +580,13 @@ mod tests {
         let pane_id = "%CLI_TASK_CREATE";
         let path = crate::activity::log_file_path(pane_id);
         let _ = fs::remove_file(&path);
+        let event = AgentEvent::ActivityLog {
+            tool_name: "TaskCreate".into(),
+            tool_input: json!({"subject": "Fix bug"}),
+            tool_response: json!({"task": {"id": "42"}}),
+        };
 
-        handle_activity_log(
-            pane_id,
-            &store,
-            "TaskCreate",
-            &json!({"subject": "Fix bug"}),
-            &json!({"task": {"id": "42"}}),
-        );
+        handle_activity_log(pane_id, &event, &Reported::NONE, &store);
 
         let content = fs::read_to_string(&path).unwrap();
         assert!(content.contains("|TaskCreate|#42 Fix bug"));
@@ -474,8 +602,36 @@ mod tests {
 
         // A subagent's EnterPlanMode tool use must not flip the parent
         // badge to "plan".
-        handle_activity_log(pane, &store, "EnterPlanMode", &Value::Null, &Value::Null);
+        handle_activity_log(
+            pane,
+            &activity_event("EnterPlanMode", Value::Null),
+            &Reported::NONE,
+            &store,
+        );
 
+        assert_eq!(store.get(pane, tmux::PANE_PERMISSION_MODE), "default");
+    }
+
+    #[test]
+    fn handle_activity_log_plan_mode_tools_move_the_badge_without_subagents() {
+        let store = MemPaneStore::new();
+        let pane = "%PARENT_PLAN_FREE";
+        store.insert(pane, tmux::PANE_PERMISSION_MODE, "default");
+
+        handle_activity_log(
+            pane,
+            &activity_event("EnterPlanMode", Value::Null),
+            &Reported::NONE,
+            &store,
+        );
+        assert_eq!(store.get(pane, tmux::PANE_PERMISSION_MODE), "plan");
+
+        handle_activity_log(
+            pane,
+            &activity_event("ExitPlanMode", Value::Null),
+            &Reported::NONE,
+            &store,
+        );
         assert_eq!(store.get(pane, tmux::PANE_PERMISSION_MODE), "default");
     }
 }

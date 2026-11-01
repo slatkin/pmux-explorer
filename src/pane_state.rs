@@ -18,15 +18,20 @@
 //! shell is alive — the user still has to act on the prompt, so a live bg
 //! shell does not lower the signal.
 
+use serde_json::Value;
+
+use crate::cli::label::extract_tool_label;
 use crate::event::{AgentEvent, Reported, WorktreeInfo};
 use crate::pane_store::{PaneSnapshot, PaneWrites};
 use crate::pmux_task::PmuxTask;
 use crate::time::now_epoch_secs;
 use crate::tmux::{
-    PANE_AGENT, PANE_ATTENTION, PANE_CWD, PANE_PERMISSION_MODE, PANE_PROMPT, PANE_PROMPT_SOURCE,
-    PANE_SESSION_ID, PANE_STARTED_AT, PANE_STATUS, PANE_SUBAGENT_KIND, PANE_SUBAGENT_PARENT,
-    PANE_SUBAGENT_TASK, PANE_SUBAGENTS, PANE_WAIT_REASON, PANE_WORKTREE_BRANCH, PANE_WORKTREE_NAME,
+    BG_CMD_PLACEHOLDER, PANE_AGENT, PANE_ATTENTION, PANE_BG_CMD, PANE_CWD, PANE_PERMISSION_MODE,
+    PANE_PROMPT, PANE_PROMPT_SOURCE, PANE_SESSION_ID, PANE_STARTED_AT, PANE_STATUS,
+    PANE_SUBAGENT_KIND, PANE_SUBAGENT_PARENT, PANE_SUBAGENT_TASK, PANE_SUBAGENTS, PANE_WAIT_REASON,
+    PANE_WORKTREE_BRANCH, PANE_WORKTREE_NAME,
 };
+use crate::tool_name::CanonicalTool;
 use crate::ui::text::wait_reason_entry;
 
 /// The session-context fields a Claude-shaped event reports, the same set
@@ -40,9 +45,9 @@ pub(crate) const SESSION_CONTEXT: Reported = Reported::new(&["session_id", "cwd"
 /// the store encodes them at `apply` time.
 ///
 /// What the transition does not own stays with the handlers: the activity
-/// log and the desktop notifications themselves, the notification run id
+/// log file and the desktop notifications themselves, the notification run id
 /// and dedup stamps, the task-store clear, and the pending teardown
-/// markers. `ActivityLog` moves here in its own change step; `SessionEnd`,
+/// markers. `SessionEnd`,
 /// `SubagentStart`, `SubagentStop` and `WorktreeRemove` keep their guarded
 /// plain-list and read-modify-write paths; `TaskCreated` and
 /// `WorktreeCreate` write nothing.
@@ -275,6 +280,50 @@ pub fn transition(snapshot: &PaneSnapshot, event: &AgentEvent, reported: &Report
             };
             writes.set(PANE_WAIT_REASON, reason);
         }
+        AgentEvent::ActivityLog {
+            tool_name,
+            tool_input,
+            tool_response,
+        } => {
+            // A background Bash registers its command so the row body can
+            // show what is running and the sweep can watch for its end.
+            if is_background_bash(tool_name, tool_input) {
+                let label = extract_tool_label(tool_name, tool_input, tool_response);
+                let stored = if label.is_empty() {
+                    BG_CMD_PLACEHOLDER
+                } else {
+                    label.as_str()
+                };
+                writes.set(PANE_BG_CMD, stored);
+            }
+            // A tool call after a permission grant is the only sign that a
+            // wait ended: `waiting` and `error` move to `running`, while
+            // `idle`, `background` and an absent status stay as they are —
+            // a finished pane stays finished. `status_writes("running")`
+            // already unsets the attention flag; the stale wait reason goes
+            // with the waiting move. The start stamp lands on the first
+            // move to `running`, like the other run arms.
+            let previous_status = snapshot.status.as_deref();
+            if matches!(previous_status, Some("waiting") | Some("error")) {
+                writes.merge(&status_writes("running"));
+                if previous_status == Some("waiting") {
+                    writes.unset(PANE_WAIT_REASON);
+                }
+                if snapshot.started_at.is_none() {
+                    writes.set(PANE_STARTED_AT, now_epoch_secs().to_string());
+                }
+            }
+            // Plan mode tools move the permission badge, under the same
+            // parent-protection rule as the identity writes: a subagent's
+            // EnterPlanMode must not flip the parent pane's badge.
+            if identity_guarded(snapshot) {
+                match tool_name.as_str() {
+                    "EnterPlanMode" => writes.set(PANE_PERMISSION_MODE, "plan"),
+                    "ExitPlanMode" => writes.set(PANE_PERMISSION_MODE, "default"),
+                    _ => {}
+                }
+            }
+        }
         // The events above carry the transition's rules; every other event
         // keeps today's write path for now (see the module docs).
         _ => {}
@@ -363,6 +412,15 @@ fn live_bg_shell(snapshot: &PaneSnapshot) -> bool {
         .bg_cmd
         .as_deref()
         .is_some_and(|cmd| !cmd.is_empty())
+}
+
+/// Whether an `activity-log` event's Bash tool call runs in the
+/// background, which registers `@pane_bg_cmd`.
+fn is_background_bash(tool_name: &str, tool_input: &Value) -> bool {
+    tool_name == CanonicalTool::Bash.as_str()
+        && ["run_in_background", "runInBackground"]
+            .iter()
+            .any(|key| tool_input.get(key).and_then(|v| v.as_bool()) == Some(true))
 }
 
 /// Append the identity-scoped writes of one event: the agent label, the
@@ -1073,11 +1131,6 @@ mod tests {
                 last_message: String::new(),
                 transcript_path: String::new(),
             },
-            AgentEvent::ActivityLog {
-                tool_name: "Bash".into(),
-                tool_input: serde_json::Value::Null,
-                tool_response: serde_json::Value::Null,
-            },
             AgentEvent::TaskCreated {
                 task_id: "t1".into(),
                 task_subject: "ship it".into(),
@@ -1356,6 +1409,188 @@ mod tests {
                 "status {status}"
             );
         }
+    }
+
+    // ─── 5.1 the activity-log rule ────────────────────────────────────
+
+    fn activity_log(tool_name: &str, tool_input: serde_json::Value) -> AgentEvent {
+        AgentEvent::ActivityLog {
+            tool_name: tool_name.into(),
+            tool_input,
+            tool_response: serde_json::Value::Null,
+        }
+    }
+
+    #[test]
+    fn a_tool_call_ends_a_wait_clearing_attention_and_the_wait_reason() {
+        let writes = transition(
+            &snapshot_with_status("waiting"),
+            &activity_log("Read", serde_json::json!({"file_path": "/a/b.rs"})),
+            &Reported::NONE,
+        );
+        let list = entries(&writes);
+        assert!(list.contains(&(PANE_STATUS, Some("running".into()))));
+        assert!(list.contains(&(PANE_ATTENTION, None)));
+        assert!(list.contains(&(PANE_WAIT_REASON, None)));
+        // The move to running starts the run clock: the stamp is epoch
+        // seconds.
+        let started = list
+            .iter()
+            .find(|(key, _)| *key == PANE_STARTED_AT)
+            .unwrap_or_else(|| panic!("no start stamp in {list:?}"));
+        assert!(
+            matches!(started, (PANE_STARTED_AT, Some(v))
+                if !v.is_empty() && v.chars().all(|c| c.is_ascii_digit())),
+            "started_at must be a fresh epoch-seconds stamp, got {started:?}"
+        );
+        // A plain Read touches nothing else.
+        assert!(!list.iter().any(|(key, _)| *key == PANE_BG_CMD));
+        assert!(!list.iter().any(|(key, _)| *key == PANE_PERMISSION_MODE));
+    }
+
+    #[test]
+    fn a_late_tool_event_after_stop_leaves_idle_and_the_start_time_unset() {
+        let writes = transition(
+            &snapshot_with_status("idle"),
+            &activity_log("Read", serde_json::Value::Null),
+            &Reported::NONE,
+        );
+        assert!(
+            writes.is_empty(),
+            "idle stays idle and started_at stays unset, got {writes:?}"
+        );
+    }
+
+    #[test]
+    fn a_late_tool_event_while_a_background_shell_lives_stays_background() {
+        let writes = transition(
+            &snapshot_with_status("background"),
+            &activity_log("Read", serde_json::Value::Null),
+            &Reported::NONE,
+        );
+        assert!(
+            writes.is_empty(),
+            "background stays background, got {writes:?}"
+        );
+    }
+
+    #[test]
+    fn a_tool_call_during_a_run_writes_nothing() {
+        // `snapshot_with` carries a start stamp, so this also pins that a
+        // running pane's stamp is not rewritten.
+        let writes = transition(
+            &snapshot_with("running", "", ""),
+            &activity_log("Read", serde_json::Value::Null),
+            &Reported::NONE,
+        );
+        assert!(writes.is_empty(), "running stays running, got {writes:?}");
+    }
+
+    #[test]
+    fn a_tool_call_after_an_error_moves_to_running() {
+        let writes = transition(
+            &snapshot_with_status("error"),
+            &activity_log("Read", serde_json::Value::Null),
+            &Reported::NONE,
+        );
+        let list = entries(&writes);
+        assert!(list.contains(&(PANE_STATUS, Some("running".into()))));
+        assert!(list.contains(&(PANE_ATTENTION, None)));
+        // Only the waiting move clears the wait reason; the error reason
+        // survives the move, as it does today.
+        assert!(!list.iter().any(|(key, _)| *key == PANE_WAIT_REASON));
+    }
+
+    #[test]
+    fn the_start_stamp_is_set_only_on_the_first_move_to_running() {
+        // `snapshot_with` carries started_at = "1700": the move to running
+        // must not rewrite it.
+        let snapshot = snapshot_with("waiting", "", "");
+        let writes = transition(
+            &snapshot,
+            &activity_log("Read", serde_json::Value::Null),
+            &Reported::NONE,
+        );
+        assert!(
+            !entries(&writes)
+                .iter()
+                .any(|(key, _)| *key == PANE_STARTED_AT),
+            "an existing start stamp must survive"
+        );
+    }
+
+    #[test]
+    fn a_background_bash_registers_its_command() {
+        let writes = transition(
+            &snapshot_with_status("running"),
+            &activity_log(
+                "Bash",
+                serde_json::json!({"command": "npm run dev", "run_in_background": true}),
+            ),
+            &Reported::NONE,
+        );
+        assert!(
+            entries(&writes).contains(&(PANE_BG_CMD, Some("npm run dev".into()))),
+            "the background command must be stored"
+        );
+    }
+
+    #[test]
+    fn a_background_bash_without_a_command_stores_the_placeholder() {
+        let writes = transition(
+            &snapshot_with_status("running"),
+            &activity_log("Bash", serde_json::json!({"run_in_background": true})),
+            &Reported::NONE,
+        );
+        assert!(entries(&writes).contains(&(PANE_BG_CMD, Some(BG_CMD_PLACEHOLDER.into()))));
+    }
+
+    #[test]
+    fn a_foreground_bash_and_other_tools_touch_nothing() {
+        for event in [
+            activity_log("Bash", serde_json::json!({"command": "ls"})),
+            activity_log("Read", serde_json::json!({"file_path": "/a"})),
+        ] {
+            let writes = transition(&snapshot_with_status("running"), &event, &Reported::NONE);
+            assert!(writes.is_empty(), "{event:?} must not write");
+        }
+    }
+
+    #[test]
+    fn plan_mode_tools_move_the_permission_badge() {
+        let writes = transition(
+            &snapshot_with_status("running"),
+            &activity_log("EnterPlanMode", serde_json::Value::Null),
+            &Reported::NONE,
+        );
+        assert!(
+            entries(&writes).contains(&(PANE_PERMISSION_MODE, Some("plan".into()))),
+            "EnterPlanMode must set the plan badge"
+        );
+
+        let writes = transition(
+            &snapshot_with_status("running"),
+            &activity_log("ExitPlanMode", serde_json::Value::Null),
+            &Reported::NONE,
+        );
+        assert!(
+            entries(&writes).contains(&(PANE_PERMISSION_MODE, Some("default".into()))),
+            "ExitPlanMode must set the default badge"
+        );
+    }
+
+    #[test]
+    fn a_subagents_plan_mode_does_not_flip_the_parent_badge() {
+        let snapshot = snapshot_with("running", "", SUBAGENTS);
+        let writes = transition(
+            &snapshot,
+            &activity_log("EnterPlanMode", serde_json::Value::Null),
+            &Reported::NONE,
+        );
+        assert!(
+            writes.is_empty(),
+            "a guarded plan-mode write must be skipped"
+        );
     }
 
     // ─── the moved status resolvers ────────────────────────────────────
