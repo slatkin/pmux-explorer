@@ -39,8 +39,8 @@ pub use options::{
     SIDEBAR_ICON_IDLE, SIDEBAR_ICON_RUNNING, SIDEBAR_ICON_UNKNOWN, SIDEBAR_ICON_WAITING,
     SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH, SIDEBAR_NOTIFICATIONS, SIDEBAR_NOTIFICATIONS_EVENTS,
     SIDEBAR_PET, SIDEBAR_PID, SIDEBAR_POSITION, SIDEBAR_REPO_FILTER, SIDEBAR_TAB_WIDTH,
-    SIDEBAR_WIDTH, get_all_global_options, get_option, get_pane_option_value, set_pane_option,
-    unset_pane_option,
+    SIDEBAR_WIDTH, agent_session_wipe, get_all_global_options, get_option, get_pane_option_value,
+    set_pane_option, unset_pane_option,
 };
 pub use panes::{
     SidebarPaneInfo, SidebarPaneReading, WindowPane, find_active_pane, focused_pane_path,

@@ -1,6 +1,6 @@
 use super::location::should_update_cwd;
 use crate::event::WorktreeInfo;
-use crate::pane_store::{PaneStore, PaneWrites};
+use crate::pane_store::PaneStore;
 use crate::tmux;
 
 /// Label fields shared by the events that fire a desktop notification
@@ -36,13 +36,7 @@ pub(in crate::cli::hook) fn make_ctx<'a>(
 /// transition owns their per-event writes, and a session end clears them
 /// with everything else.
 pub(in crate::cli::hook) fn clear_all_meta(pane: &str, store: &dyn PaneStore) {
-    let mut writes = PaneWrites::new();
-    for key in tmux::AGENT_SESSION_PANE_OPTIONS {
-        if matches!(*key, tmux::PANE_STATUS | tmux::PANE_ATTENTION) {
-            continue;
-        }
-        writes.unset(key);
-    }
+    let writes = tmux::agent_session_wipe(&[tmux::PANE_STATUS, tmux::PANE_ATTENTION]);
     let _ = store.apply(pane, &writes);
 }
 

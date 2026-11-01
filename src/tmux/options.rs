@@ -1,4 +1,5 @@
 use super::commands::run_tmux;
+use crate::pane_store::PaneWrites;
 
 // ─── Pane-scoped option keys ─────────────────────────────────────────
 //
@@ -97,15 +98,29 @@ pub const PANE_WORKTREE_BRANCH: &str = "@pane_worktree_branch";
 /// Worktree slug (directory basename) for the attached worktree.
 pub const PANE_WORKTREE_NAME: &str = "@pane_worktree_name";
 
+/// Build the `Unset` batch a teardown sweep applies: every key of
+/// [`AGENT_SESSION_PANE_OPTIONS`] except the keys in `skip`. Each sweep
+/// passes its own skip list — the key set is shared, the skips are not.
+/// The caller applies the result through a
+/// [`PaneStore`](crate::pane_store::PaneStore) as one batch, so one wipe
+/// is one tmux command.
+pub fn agent_session_wipe(skip: &[&'static str]) -> PaneWrites {
+    let mut writes = PaneWrites::new();
+    for key in AGENT_SESSION_PANE_OPTIONS {
+        if skip.contains(key) {
+            continue;
+        }
+        writes.unset(key);
+    }
+    writes
+}
+
 /// Every `@pane_*` option that belongs to an agent session's lifecycle —
 /// the set the teardown sweeps clear. This is the single enumeration of
 /// those keys: `clear_all_meta` (hook session-end), `clear_agent_pane_state`
 /// (shell-fallback sweep) and `clear_dead_agent_metadata` (dead-pane sweep)
-/// all iterate this list and skip only the keys they deliberately keep
-/// (the skip conditions live at each sweep). Add a new lifecycle option
-/// to this list once and every sweep picks it up; keys no sweep may
-/// clear stay out and are named in [`NEVER_SWEPT_PANE_OPTIONS`]. The test
-/// below keeps both lists in lock-step with the constants above.
+/// all apply [`agent_session_wipe`] through the pane store, each with its
+/// own skip list.
 pub const AGENT_SESSION_PANE_OPTIONS: &[&str] = &[
     PANE_AGENT,
     PANE_ATTENTION,
@@ -302,7 +317,6 @@ pub fn get_pane_option_value(pane: &str, key: &str) -> String {
         .map(|s| s.trim().to_string())
         .unwrap_or_default()
 }
-
 /// Per-thread in-memory tmux pane store used by tests. Activated by
 /// installing a mock with [`test_mock::install`]; until then, all
 /// `set/unset/get_pane_option*` calls fall through to the real `tmux`
@@ -437,10 +451,29 @@ mod tests {
     }
 
     #[test]
+    fn agent_session_wipe_unsets_every_key_except_the_skip_list() {
+        let skip = [PANE_STATUS, PANE_ATTENTION];
+        let writes = agent_session_wipe(&skip);
+
+        for key in AGENT_SESSION_PANE_OPTIONS {
+            let swept = writes.iter().any(|write| {
+                matches!(write, crate::pane_store::PaneWrite::Unset(unset) if *unset == *key)
+            });
+            assert_eq!(
+                swept,
+                !skip.contains(key),
+                "{key} is {} by the wipe",
+                if swept { "unset" } else { "kept" }
+            );
+        }
+    }
+
+    #[test]
     fn every_pane_scoped_option_is_swept_or_marked_never_swept() {
         // The checklist of pane-scoped constants declared above. A new
         // `@pane_*` constant must be classified into exactly one of the
-        // two lists so a teardown sweep cannot silently forget it.
+        // two lists so a teardown sweep cannot silently forget it. The
+        // wipe builder above keeps the swept set in one place.
         let all = [
             PANE_AGENT,
             PANE_ATTENTION,
