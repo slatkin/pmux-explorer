@@ -23,7 +23,8 @@ See `proposal.md` for the motivation. State today:
 
 **Goals:**
 - One owner for the rules in `specs/pane-state-writes/spec.md`.
-- One tmux process per event for the writes, and one for the read.
+- One tmux process per event for the transition's writes, and one for the
+  read.
 - A second adapter that is a real implementation of the seam.
 
 **Non-Goals:**
@@ -33,9 +34,11 @@ See `proposal.md` for the motivation. State today:
 - The read side (`list-panes` format and decoder).
 - The read-modify-write race on `@pane_subagents` and on the task store.
   Batching does not fix it: two hook processes can still read the same value.
-- Non-option effects: the activity log file, desktop notifications, the
-  notification stamps, the `println!` of a hook response, the task store.
-  They stay in the handlers.
+- Non-option effects: the activity log file, the desktop notifications
+  themselves, the `println!` of a hook response, the task store. They stay in
+  the handlers. (The notification stamps and run id are option writes and ride
+  the store; what stays in the handlers is their call site and the send
+  decision, not a second write path.)
 
 ## Decisions
 
@@ -55,8 +58,9 @@ rules would still live in the callers, which is the problem.
 `PaneSnapshot` holds `status`, `bg_cmd`, `subagents` and `started_at`, read
 with one `display-message -p -t <pane>` whose format names those four options.
 It uses the same escaping as the `list-panes` read. Handlers that need other
-values today (notification stamps) keep reading them directly, because those
-are not in scope.
+values today (notification stamps, the run id, pending markers, pane-label
+lookups) keep reading them directly — through `store.get`, not the snapshot,
+because those reads do not feed the transition rules.
 
 *Alternative:* `show-options -p`, which lists every pane option. Rejected: its
 output quotes and escapes values, so it needs its own parser.
@@ -76,7 +80,7 @@ The one read plus one write replace about 20 calls for a `Stop`. A race
 between two hook processes remains (both read the same snapshot); it is no
 wider than today.
 
-### D4. `PaneStore` has `snapshot` and `apply`; handlers get it as an argument
+### D4. `PaneStore` has `snapshot`, `get` and `apply`; every option access takes it as an argument
 
 ```text
  hook dispatch --builds--> &dyn PaneStore
@@ -89,28 +93,47 @@ wider than today.
 
 The store is created once at the `hook` entry and passed down, as `FeedEnv` is.
 There is no global. `apply` returns a `Result` that hook callers ignore, as
-they ignore tmux errors today.
+they ignore tmux errors today, and `apply` on an empty list is a no-op. `get`
+reads one option (`show -pv`), for the reads the transition does not own.
 
-The sidebar's sweeps use the tmux adapter directly. The shell-fallback wipe in
-`tmux/query.rs` stays inside the parser until finding 6 makes the parser pure.
+Non-transition option access goes through the same store. The dispatch arms
+for `cwd-changed` and `task-completed` run the same
+`snapshot` → `transition` → `apply` path. `cmd_set_status` applies
+`status_writes(status)` — the helper `transition` uses for the
+status↔attention coupling — so that rule keeps its one owner. The notification
+stamps and run id stay call-site writes (the stamp depends on whether the
+desktop notification actually sent), but they go through `store.get` /
+`store.apply` like everything else; the pending markers and the pane-label
+reads in `context/labels.rs` do the same. With no caller left on the raw
+`set/get/unset_pane_option` helpers, `tmux::test_mock` is removed, not merely
+shadowed.
 
-The in-memory adapter replaces `test_mock`. `test_mock` is removed once no
-caller is left.
+Handlers run their non-option effects after `apply`, and an effect that
+consults `@pane_subagents` — `mark_task_reset`, the teardown drains, the
+`SessionEnd` bail — must see the post-batch state: the Stop batch clears the
+stale list first, so the reset marker still lands the way it does today.
+
+The sidebar's sweeps take the store as an argument, constructed at the sweep's
+entry (`apply_session_snapshot`, `query_sessions_with_process_snapshot`) the
+way `FeedEnv` is threaded today. The shell-fallback wipe in `tmux/query.rs`
+stays inside the parser until finding 6 makes the parser pure.
 
 *Alternative:* a trait object kept in a `thread_local`. Rejected: it hides the
 dependency, which is how `test_mock` works today.
 
-### D5. The subagent guard keeps today's set, and is stated once
+### D5. The subagent guard is stated once, with the spec's set
 
-Today the guard skips: agent label and permission mode (`set_agent_meta`),
-session id, working directory and worktree (`sync_pane_location`), the task
-reset, the task-store clear on `SessionStart`, the worktree-remove teardown,
-and `SessionEnd`. It does not skip status, attention, prompt or the response
-preview.
+Today the guard skips: permission mode, session id, working directory and
+worktree (`sync_pane_location` via `pane_writes_allowed`), the task reset, the
+task-store clear on `SessionStart`, the worktree-remove teardown, and
+`SessionEnd`. The agent label is written unconditionally today; the spec adds
+it to the guarded set. The guard does not skip status, attention, prompt or
+the response preview.
 
-`transition` encodes exactly that set as one `identity_guarded` check and
-applies it to the listed writes. The comment in `status_priority.rs` that says
-all writes are skipped is corrected.
+`transition` encodes that set as one `identity_guarded` check and applies it
+to the listed writes. The overstated comment on `sync_pane_location` in
+`context/location.rs` — it claims every pane-scoped write is skipped while
+subagents are active — is corrected.
 
 *Alternative:* guard every write. Rejected: it changes behaviour that nobody
 asked to change, and I cannot tell from the code whether a child's status
@@ -132,12 +155,14 @@ The adapter hands `transition` a `Reported` set per event.
   `worktree`, so a pi `stop` keeps it. `PI_EVENTS` is unchanged, so `setup pi`
   prints the same contract.
 - Claude, Codex, OpenCode: `session_id`, `cwd` and `worktree` for every event
-  that carries session context. This keeps today's behaviour for those agents.
+  that carries session context. This keeps today's behaviour for those agents
+  with one deliberate divergence, noted below (`cwd`).
 
 A reported field that is absent counts as empty and clears its option. This is
 needed because Claude omits `worktree` outside a worktree, and that omission
 has to clear stale metadata. Key presence alone cannot tell the two cases
-apart.
+apart. Note `cwd` diverges from today here: an absent or empty `cwd` is
+currently ignored, so the stored value survives; under the rule it clears.
 
 An invalid payload becomes `Null` and reports nothing, so it clears nothing.
 
@@ -159,6 +184,13 @@ to `\r`. Handlers drop their own calls; the double encoding is harmless
 because the function is idempotent. The bg-shell sweep already compares
 sanitized process lines with the stored command, so it keeps using the same
 function and still matches.
+
+One value cannot survive the encoder as written: the notification stamp is
+`ts|fingerprint`, and `|` is exactly what gets replaced. `encode_stamp` /
+`parse_stamp` move to `:` as the separator (the timestamp is digits-only, so
+splitting on the first `:` is unambiguous even though fingerprints contain
+`:`). A `|`-stamp left by an old binary fails to parse, which costs at most
+one duplicate desktop notification after upgrade.
 
 `sanitize_log_label` is for the activity log file and is unchanged.
 

@@ -10,9 +10,12 @@ reach tmux. Hooks and the sidebar's own sweeps follow the same rules.
 
 ### Requirement: one event is applied as one batch
 
-The sidebar SHALL apply all pane option changes that one producer event causes
-as a single tmux command, so that the sidebar's poll reads the pane state from
-before the event or from after it, and never from between.
+The sidebar SHALL apply all pane option changes that one producer event's
+transition returns as a single tmux command, so that the sidebar's poll reads
+the pane state from before the event or from after it, and never from between.
+Writes the event causes that the transition does not own — the notification
+run id and the notification dedup stamps — go through the same store as their
+own commands.
 
 #### Scenario: A stop event changes several options
 - **WHEN** a `stop` event sets the status, the response preview and the prompt source, and clears the run state

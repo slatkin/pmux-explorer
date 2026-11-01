@@ -35,8 +35,13 @@ Issue 15, finding 1, names the missing seam. The rules need one owner.
   whole write list in one batched `tmux` call, and an in-memory adapter that
   replaces the `cfg(test)` `tmux::test_mock`.
 - Route every write to an agent `@pane_*` option through the store: the hook
-  handlers, the activity-log handler, the bg-shell sweep in `state/refresh.rs`
-  and the option wipes of the three teardown paths.
+  handlers and the dispatch-inline writes in `cli/hook.rs` (`cwd-changed`,
+  `task-completed`), the `set-status` subcommand, the activity-log handler,
+  the notification stamps and run id, the pending-teardown markers, the
+  bg-shell sweep in `state/refresh.rs` and the option wipes of the three
+  teardown paths. Option reads the rules do not need (notification titles,
+  dedup stamps) go through the store too, so `tmux::test_mock` is fully
+  replaced.
 - Encode every written value in one place, so a value is always one field.
   This closes the newline-in-`wait_reason` hole.
 - **Behaviour fix:** an `activity-log` event may move a pane out of `waiting`,
@@ -73,10 +78,13 @@ rule for every agent.
 
 ## Impact
 
-- Code: `src/cli/hook/handlers/*`, `src/cli/hook/activity.rs`,
-  `src/cli/hook/context/*`, `src/cli/mod.rs` (`set_status`, `set_attention`,
-  `sanitize_tmux_value`), `src/tmux/options.rs`, `src/state/refresh.rs`,
-  `src/tmux/query.rs` (wipe call only), `src/adapter/*` (the "reports" list).
+- Code: `src/cli/hook.rs` (the dispatch arms), `src/cli/hook/handlers/*`,
+  `src/cli/hook/activity.rs`, `src/cli/hook/context/*`,
+  `src/cli/hook/notifications.rs`, `src/desktop_notification.rs` (the stamp
+  separator), `src/cli/mod.rs` (`set_status`, `set_attention`,
+  `sanitize_tmux_value`, `set-status`), `src/tmux/options.rs`,
+  `src/state/refresh.rs`, `src/tmux/query.rs` (wipe call only), `src/adapter/*`
+  (the "reports" list).
 - Docs: `docs/agent-protocol.md`, `docs/state-management.md`.
 - Behaviour visible to a user: an idle pane no longer flips to running on a
   late tool event; a pi pane keeps its worktree label across turns; a wait
