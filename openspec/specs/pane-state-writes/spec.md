@@ -53,10 +53,14 @@ that the wait ended. It SHALL NOT change a pane status of `idle` or
 
 ### Requirement: a field that is not reported does not clear
 
-A producer event SHALL clear a pane option only when that event is declared to
-report the field behind the option. When the event reports the field and the
-value is empty, the option SHALL be cleared. When the event does not report
-the field, the option SHALL keep its value. This SHALL hold for every agent.
+The pane's identity fields are `session_id`, `cwd` and the worktree name and
+branch. For these, a producer event SHALL clear the option only when that
+event is declared to report the field behind the option. When the event
+reports the field and the value is empty, the option SHALL be cleared. When
+the event does not report the field, the option SHALL keep its value. This
+SHALL hold for every agent. A reported event that carries an empty value for
+any other field — the permission mode, the prompt, the last assistant
+message — SHALL leave the option that field backs unchanged.
 
 #### Scenario: A pi stop keeps the worktree
 - **WHEN** a pi pane has worktree name and branch options and a pi `stop` event arrives without a `worktree` field
