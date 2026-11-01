@@ -1,5 +1,5 @@
-use super::location::resolve_cwd;
 use super::meta::AgentContext;
+use crate::pane_state::resolve_cwd;
 use crate::tmux;
 
 pub(in crate::cli::hook) fn repo_label_from_ctx(ctx: &AgentContext<'_>) -> Option<String> {

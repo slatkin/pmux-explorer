@@ -14,7 +14,7 @@ use super::super::notifications::{
     stop_body, stop_failure_body, stop_failure_fingerprint, task_completed_body,
     task_completed_fingerprint,
 };
-use super::status_priority::resolve_stop_status;
+use crate::pane_state::resolve_stop_status;
 
 /// Records the pmux subagent identity carried by a recognised task prompt.
 /// A later match replaces the earlier identity; the task option is unset

@@ -1,4 +1,5 @@
 use crate::event::WorktreeInfo;
+use crate::pane_state::resolve_cwd;
 use crate::tmux;
 
 /// Returns whether the pane's cwd should be updated.
@@ -6,21 +7,6 @@ use crate::tmux;
 /// worktree, so we should NOT overwrite the parent agent's cwd.
 pub(in crate::cli::hook) fn should_update_cwd(current_subagents: &str) -> bool {
     current_subagents.is_empty()
-}
-
-/// Resolve the effective cwd for pane metadata.
-/// When a worktree is active, prefer `original_repo_dir` so the sidebar
-/// groups the pane under the original repository, not the worktree path.
-pub(in crate::cli::hook) fn resolve_cwd<'a>(
-    raw_cwd: &'a str,
-    worktree: &'a Option<WorktreeInfo>,
-) -> &'a str {
-    if let Some(wt) = worktree
-        && !wt.original_repo_dir.is_empty()
-    {
-        return &wt.original_repo_dir;
-    }
-    raw_cwd
 }
 
 /// Sync worktree name/branch pane options from hook payload.
@@ -55,9 +41,11 @@ pub(in crate::cli::hook) fn sync_pane_location(
 ) {
     // Subagents share the parent's $TMUX_PANE and can fire their own hook
     // events with a different session_id, cwd, or worktree. While children
-    // are active, every pane-scoped write must be skipped so the parent's
-    // identity is preserved — including `@pane_worktree_*`, which used to
-    // leak through and misgroup the pane under the child's repo.
+    // are active the identity writes — the session id, the cwd and the
+    // worktree pair — are skipped so the parent's identity is preserved
+    // (including `@pane_worktree_*`, which used to leak through and
+    // misgroup the pane under the child's repo). Status, attention and
+    // prompt writes are not guarded and still go through.
     let current_subagents = tmux::get_pane_option_value(pane, tmux::PANE_SUBAGENTS);
     if !should_update_cwd(&current_subagents) {
         return;

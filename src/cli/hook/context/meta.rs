@@ -1,4 +1,5 @@
-use super::location::{pane_writes_allowed, sync_pane_location};
+use super::location::pane_writes_allowed;
+use super::location::sync_pane_location;
 use crate::event::WorktreeInfo;
 use crate::tmux;
 
@@ -48,9 +49,9 @@ pub(in crate::cli::hook) fn clear_run_state(pane: &str) {
 }
 
 /// Check if a prompt is a system-injected message (not a real user prompt).
-pub(in crate::cli::hook) fn is_system_message(s: &str) -> bool {
-    s.contains("<task-notification>") || s.contains("<system-reminder>") || s.contains("<task-")
-}
+// `is_system_message` moved next to the transition rules in
+// `crate::pane_state`, which encodes the same check on the prompt write.
+pub(in crate::cli::hook) use crate::pane_state::is_system_message;
 
 pub(in crate::cli::hook) fn clear_all_meta(pane: &str) {
     // Every lifecycle key from the single sweep list
@@ -163,43 +164,7 @@ mod tests {
         assert!(!path.exists(), "log file created while subagents active");
     }
 
-    // ─── is_system_message ────────────────────────────────────────
-
-    #[test]
-    fn system_message_task_notification() {
-        assert!(is_system_message(
-            "<task-notification><task-id>abc</task-id></task-notification>"
-        ));
-    }
-
-    #[test]
-    fn system_message_system_reminder() {
-        assert!(is_system_message(
-            "<system-reminder>some reminder</system-reminder>"
-        ));
-    }
-
-    #[test]
-    fn system_message_task_prefix() {
-        assert!(is_system_message("<task-id>abc</task-id>"));
-    }
-
-    #[test]
-    fn system_message_normal_prompt() {
-        assert!(!is_system_message("fix the bug"));
-    }
-
-    #[test]
-    fn system_message_empty() {
-        assert!(!is_system_message(""));
-    }
-
-    #[test]
-    fn system_message_mixed_content() {
-        assert!(is_system_message(
-            "hello <system-reminder>noise</system-reminder> world"
-        ));
-    }
+    // ─── is_system_message lives with the transition rules ────────
 
     // ─── set_agent_meta ────────────────────────────────────────────
 

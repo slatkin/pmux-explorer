@@ -7,7 +7,7 @@ use super::super::context::{AgentContext, set_agent_meta};
 use super::super::notifications::{
     NotifyLabels, NotifyPayload, notification_body, notification_fingerprint, notify_lifecycle,
 };
-use super::status_priority::resolve_notification_status;
+use crate::pane_state::resolve_notification_status;
 
 pub(in crate::cli::hook) fn on_notification(
     pane: &str,

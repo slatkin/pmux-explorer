@@ -69,6 +69,12 @@ impl PaneWrites {
     pub fn iter(&self) -> impl Iterator<Item = &PaneWrite> {
         self.entries.iter()
     }
+
+    /// Append every entry of `other`, keeping its order after the entries
+    /// already present. A later key wins over an earlier one at apply time.
+    pub fn merge(&mut self, other: &PaneWrites) {
+        self.entries.extend(other.entries.iter().cloned());
+    }
 }
 
 /// The pane options the write rules consult, read with one call. An absent
