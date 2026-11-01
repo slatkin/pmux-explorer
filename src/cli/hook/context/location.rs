@@ -1,3 +1,4 @@
+use crate::pane_store::PaneStore;
 use crate::tmux;
 
 /// Returns whether the pane's cwd should be updated.
@@ -9,15 +10,16 @@ pub(in crate::cli::hook) fn should_update_cwd(current_subagents: &str) -> bool {
 
 /// Returns true if pane-scoped writes from this hook event are safe to
 /// apply to the pane's metadata. False while subagents are active so a
-/// child hook cannot clobber the parent pane's identity.
-pub(in crate::cli::hook) fn pane_writes_allowed(pane: &str) -> bool {
-    let current_subagents = tmux::get_pane_option_value(pane, tmux::PANE_SUBAGENTS);
-    should_update_cwd(&current_subagents)
+/// child hook cannot clobber the parent pane's identity. The subagent
+/// list is read through the store like every other option access.
+pub(in crate::cli::hook) fn pane_writes_allowed(pane: &str, store: &dyn PaneStore) -> bool {
+    should_update_cwd(&store.get(pane, tmux::PANE_SUBAGENTS))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::pane_store::MemPaneStore;
 
     #[test]
     fn should_update_cwd_when_no_subagents() {
@@ -36,10 +38,10 @@ mod tests {
 
     #[test]
     fn pane_writes_allowed_tracks_subagent_presence() {
-        let _guard = tmux::test_mock::install();
+        let store = MemPaneStore::new();
         let pane = "%ALLOWED";
-        assert!(pane_writes_allowed(pane));
-        tmux::test_mock::set(pane, tmux::PANE_SUBAGENTS, "Explore:sub-1");
-        assert!(!pane_writes_allowed(pane));
+        assert!(pane_writes_allowed(pane, &store));
+        store.insert(pane, tmux::PANE_SUBAGENTS, "Explore:sub-1");
+        assert!(!pane_writes_allowed(pane, &store));
     }
 }

@@ -1,6 +1,6 @@
 use super::location::should_update_cwd;
 use crate::event::WorktreeInfo;
-use crate::pane_store::PaneStore;
+use crate::pane_store::{PaneStore, PaneWrites};
 use crate::tmux;
 
 /// Label fields shared by the events that fire a desktop notification
@@ -27,33 +27,23 @@ pub(in crate::cli::hook) fn make_ctx<'a>(
     }
 }
 
-/// Clear the current run's markers. The transition owns this write list for
-/// the events it covers; the raw helper stays for `clear_all_meta`'s teardown
-/// sweep until that path moves onto the store.
-pub(in crate::cli::hook) fn clear_run_state(pane: &str) {
-    tmux::unset_pane_option(pane, tmux::PANE_STARTED_AT);
-    tmux::unset_pane_option(pane, tmux::PANE_WAIT_REASON);
-}
-
-pub(in crate::cli::hook) fn clear_all_meta(pane: &str) {
-    // Every lifecycle key from the single sweep list
-    // `tmux::AGENT_SESSION_PANE_OPTIONS`, except the two handler-owned
-    // keys (`@pane_status` / `@pane_attention` are set and cleared per
-    // event transition) and the run-state pair that `clear_run_state`
-    // below owns.
+/// Clear every lifecycle pane option the teardown owns, in one batch.
+/// The keys come from the single sweep list `tmux::AGENT_SESSION_PANE_OPTIONS`
+/// except the two handler-owned keys — `@pane_status` and `@pane_attention`
+/// are set and cleared per event transition, and the closing
+/// `status_writes("clear")` in the teardown covers both. The run-state pair
+/// (`@pane_started_at` / `@pane_wait_reason`) is part of this wipe: the
+/// transition owns their per-event writes, and a session end clears them
+/// with everything else.
+pub(in crate::cli::hook) fn clear_all_meta(pane: &str, store: &dyn PaneStore) {
+    let mut writes = PaneWrites::new();
     for key in tmux::AGENT_SESSION_PANE_OPTIONS {
-        if matches!(
-            *key,
-            tmux::PANE_STATUS
-                | tmux::PANE_ATTENTION
-                | tmux::PANE_STARTED_AT
-                | tmux::PANE_WAIT_REASON
-        ) {
+        if matches!(*key, tmux::PANE_STATUS | tmux::PANE_ATTENTION) {
             continue;
         }
-        tmux::unset_pane_option(pane, key);
+        writes.unset(key);
     }
-    clear_run_state(pane);
+    let _ = store.apply(pane, &writes);
 }
 
 /// Write a task-reset marker to the activity log so `parse_task_progress`
@@ -166,34 +156,22 @@ mod tests {
     // ─── set_agent_meta ────────────────────────────────────────────
 
     #[test]
-    fn clear_run_state_removes_started_at_and_wait_reason() {
-        let _guard = tmux::test_mock::install();
-        let pane = "%CLEAR_RUN";
-        tmux::test_mock::set(pane, tmux::PANE_STARTED_AT, "1700");
-        tmux::test_mock::set(pane, tmux::PANE_WAIT_REASON, "permission");
-
-        clear_run_state(pane);
-
-        assert!(!tmux::test_mock::contains(pane, tmux::PANE_STARTED_AT));
-        assert!(!tmux::test_mock::contains(pane, tmux::PANE_WAIT_REASON));
-    }
-
-    #[test]
     fn clear_all_meta_drops_every_pane_option_we_own() {
-        let _guard = tmux::test_mock::install();
+        let store = MemPaneStore::new();
         let pane = "%CLEAR_ALL";
         for key in tmux::AGENT_SESSION_PANE_OPTIONS {
-            tmux::test_mock::set(pane, key, "x");
+            store.insert(pane, key, "x");
         }
 
-        clear_all_meta(pane);
+        clear_all_meta(pane, &store);
 
         // Every lifecycle key is cleared except `@pane_status` and
-        // `@pane_attention`, which the event handlers own directly.
+        // `@pane_attention`, which the closing `status_writes("clear")`
+        // owns.
         for key in tmux::AGENT_SESSION_PANE_OPTIONS {
             let preserved = matches!(*key, tmux::PANE_STATUS | tmux::PANE_ATTENTION);
             assert_eq!(
-                tmux::test_mock::contains(pane, key),
+                store.contains(pane, key),
                 preserved,
                 "expected {key} {}",
                 if preserved { "preserved" } else { "cleared" }

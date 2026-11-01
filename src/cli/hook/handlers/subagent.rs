@@ -115,38 +115,32 @@ mod tests {
         // parent's `$TMUX_PANE`, there is no way to guarantee the
         // SessionEnd came from the parent — so the safer default is to
         // skip the event entirely and leave the parent's state alone.
-        //
-        // Two stores: `on_session_end` still reads its guard through the
-        // raw helpers (row 4.5), so the guard seed goes in the tmux mock;
-        // the subagent lifecycle under test here reads the store.
-        let _guard = tmux::test_mock::install();
         let store = MemPaneStore::new();
         let pane = "%CHILD_SESSIONEND";
-        tmux::test_mock::set(pane, tmux::PANE_SUBAGENTS, "Explore:sub-1");
-        tmux::test_mock::set(pane, tmux::PANE_AGENT, "claude");
-        tmux::test_mock::set(pane, tmux::PANE_CWD, "/repo/parent");
-        tmux::test_mock::set(pane, tmux::PANE_STATUS, "running");
         store.insert(pane, tmux::PANE_SUBAGENTS, "Explore:sub-1");
+        store.insert(pane, tmux::PANE_AGENT, "claude");
+        store.insert(pane, tmux::PANE_CWD, "/repo/parent");
+        store.insert(pane, tmux::PANE_STATUS, "running");
         let log_path = crate::activity::log_file_path(pane);
         let _ = fs::create_dir_all(log_path.parent().unwrap());
         fs::write(&log_path, "1234567890|Read|main.rs\n").unwrap();
 
         on_session_end(pane, "claude", "", &default_notifications(), &store);
         assert!(
-            !tmux::test_mock::contains(pane, PENDING_SESSION_END),
+            !store.contains(pane, PENDING_SESSION_END),
             "child SessionEnd must not record a pending teardown"
         );
         // Every parent field must survive.
-        assert!(tmux::test_mock::contains(pane, tmux::PANE_AGENT));
-        assert!(tmux::test_mock::contains(pane, tmux::PANE_CWD));
-        assert!(tmux::test_mock::contains(pane, tmux::PANE_STATUS));
+        assert!(store.contains(pane, tmux::PANE_AGENT));
+        assert!(store.contains(pane, tmux::PANE_CWD));
+        assert!(store.contains(pane, tmux::PANE_STATUS));
         assert!(log_path.exists());
 
         // A SubagentStop that drains the list to empty must not trigger a
         // teardown either — the pending marker was never recorded.
         on_subagent_stop(pane, Some("sub-1"), &store);
         assert!(
-            tmux::test_mock::contains(pane, tmux::PANE_AGENT),
+            store.contains(pane, tmux::PANE_AGENT),
             "SubagentStop draining an empty list must not tear down a live parent"
         );
         assert!(log_path.exists());

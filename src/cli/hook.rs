@@ -107,7 +107,7 @@ fn handle_event(
             tool_name,
             tool_input,
             tool_response,
-        } => activity::handle_activity_log(pane, tool_name, tool_input, tool_response),
+        } => activity::handle_activity_log(pane, store, tool_name, tool_input, tool_response),
         AgentEvent::PermissionDenied {
             agent,
             cwd,

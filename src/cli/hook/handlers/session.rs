@@ -77,7 +77,7 @@ pub(in crate::cli::hook) fn on_session_end(
     // metadata until the next SessionStart clears it. Compared to
     // clobbering a live parent, the stale-metadata failure mode is
     // far safer and the one the user can recover from.
-    if !pane_writes_allowed(pane) {
+    if !pane_writes_allowed(pane, store) {
         return 0;
     }
 
@@ -104,7 +104,7 @@ pub(in crate::cli::hook) fn on_session_end(
     // edge, the way the polling-side sweeps resolve it, so the
     // teardown body takes it as an argument and tests inject a
     // scratch env.
-    run_session_end_teardown(pane, &crate::thinking_feed::FeedEnv::from_process());
+    run_session_end_teardown(pane, store, &crate::thinking_feed::FeedEnv::from_process());
     0
 }
 
@@ -136,14 +136,13 @@ mod tests {
 
     #[test]
     fn on_session_end_preserves_parent_state_when_subagents_active() {
-        let _guard = tmux::test_mock::install();
         let store = MemPaneStore::new();
         let pane = "%PARENT_END";
-        tmux::test_mock::set(pane, tmux::PANE_SUBAGENTS, "Explore:sub-1");
-        tmux::test_mock::set(pane, tmux::PANE_AGENT, "claude");
-        tmux::test_mock::set(pane, tmux::PANE_CWD, "/repo/parent");
-        tmux::test_mock::set(pane, tmux::PANE_SESSION_ID, "parent-session");
-        tmux::test_mock::set(pane, tmux::PANE_STATUS, "running");
+        store.insert(pane, tmux::PANE_SUBAGENTS, "Explore:sub-1");
+        store.insert(pane, tmux::PANE_AGENT, "claude");
+        store.insert(pane, tmux::PANE_CWD, "/repo/parent");
+        store.insert(pane, tmux::PANE_SESSION_ID, "parent-session");
+        store.insert(pane, tmux::PANE_STATUS, "running");
         // Seed an activity log so we can prove the file is NOT removed.
         let log_path = crate::activity::log_file_path(pane);
         let _ = fs::create_dir_all(log_path.parent().unwrap());
@@ -153,18 +152,18 @@ mod tests {
 
         assert_eq!(exit, 0);
         assert!(
-            tmux::test_mock::contains(pane, tmux::PANE_AGENT),
+            store.contains(pane, tmux::PANE_AGENT),
             "child SessionEnd must not clear parent @pane_agent"
         );
-        assert!(tmux::test_mock::contains(pane, tmux::PANE_CWD));
-        assert!(tmux::test_mock::contains(pane, tmux::PANE_SESSION_ID));
-        assert!(tmux::test_mock::contains(pane, tmux::PANE_SUBAGENTS));
+        assert!(store.contains(pane, tmux::PANE_CWD));
+        assert!(store.contains(pane, tmux::PANE_SESSION_ID));
+        assert!(store.contains(pane, tmux::PANE_SUBAGENTS));
         assert!(
             log_path.exists(),
             "child SessionEnd must not delete parent activity log"
         );
         assert!(
-            !tmux::test_mock::contains(pane, PENDING_SESSION_END),
+            !store.contains(pane, PENDING_SESSION_END),
             "child SessionEnd must not record a pending teardown that \
              `on_subagent_stop` would later replay against the parent"
         );
@@ -174,22 +173,21 @@ mod tests {
 
     #[test]
     fn on_session_end_clears_state_when_no_subagents() {
-        let _guard = tmux::test_mock::install();
         let store = MemPaneStore::new();
         let pane = "%LONE_END";
-        tmux::test_mock::set(pane, tmux::PANE_AGENT, "claude");
-        tmux::test_mock::set(pane, tmux::PANE_CWD, "/repo");
-        tmux::test_mock::set(pane, tmux::PANE_STATUS, "running");
+        store.insert(pane, tmux::PANE_AGENT, "claude");
+        store.insert(pane, tmux::PANE_CWD, "/repo");
+        store.insert(pane, tmux::PANE_STATUS, "running");
 
         let exit = on_session_end(pane, "claude", "", &default_notifications(), &store);
 
         assert_eq!(exit, 0);
         assert!(
-            !tmux::test_mock::contains(pane, tmux::PANE_AGENT),
+            !store.contains(pane, tmux::PANE_AGENT),
             "lone SessionEnd should clear @pane_agent"
         );
-        assert!(!tmux::test_mock::contains(pane, tmux::PANE_CWD));
-        assert!(!tmux::test_mock::contains(pane, tmux::PANE_STATUS));
+        assert!(!store.contains(pane, tmux::PANE_CWD));
+        assert!(!store.contains(pane, tmux::PANE_STATUS));
     }
 
     #[test]
@@ -364,7 +362,6 @@ mod tests {
 
     #[test]
     fn on_session_end_routine_reason_does_not_notify() {
-        let _guard = tmux::test_mock::install();
         let store = MemPaneStore::new();
         let pane = "%END_ROUTINE";
         on_session_end(
@@ -377,16 +374,13 @@ mod tests {
         // The notification helper writes a dedup stamp only when a notification
         // actually goes out; a missing stamp is proof the gate rejected it.
         assert!(
-            !tmux::test_mock::contains(pane, tmux::PANE_OS_NOTIFY_TASK_COMPLETED),
+            !store.contains(pane, tmux::PANE_OS_NOTIFY_TASK_COMPLETED),
             "routine end_reason must not fire a desktop notification"
         );
     }
 
     #[test]
     fn on_session_end_logout_attempts_notification() {
-        let _guard = tmux::test_mock::install();
-        // The run id is read through the store, so the seed goes here; the
-        // dedup stamp is still written through the raw helpers (row 4.5).
         let store = MemPaneStore::new();
         let pane = "%END_LOGOUT";
         store.insert(pane, tmux::PANE_NOTIFICATION_RUN_ID, "1700000000000");
@@ -404,8 +398,8 @@ mod tests {
         // `SIDEBAR_DISABLE_DESKTOP_NOTIFICATIONS` guard), so the stamp is
         // always written and the fingerprint assertion below always runs.
         let stamp_key = tmux::PANE_OS_NOTIFY_TASK_COMPLETED;
-        if tmux::test_mock::contains(pane, stamp_key) {
-            let raw = tmux::test_mock::get(pane, stamp_key).unwrap_or_default();
+        if store.contains(pane, stamp_key) {
+            let raw = store.get(pane, stamp_key);
             assert!(
                 raw.contains("session-ended:logout"),
                 "stamp must record the session-end fingerprint, got {raw}"
@@ -415,7 +409,6 @@ mod tests {
 
     #[test]
     fn on_session_end_bypass_disabled_attempts_notification() {
-        let _guard = tmux::test_mock::install();
         let store = MemPaneStore::new();
         let pane = "%END_BYPASS";
         store.insert(pane, tmux::PANE_NOTIFICATION_RUN_ID, "1700000000000");
@@ -427,8 +420,8 @@ mod tests {
             &store,
         );
         let stamp_key = tmux::PANE_OS_NOTIFY_TASK_COMPLETED;
-        if tmux::test_mock::contains(pane, stamp_key) {
-            let raw = tmux::test_mock::get(pane, stamp_key).unwrap_or_default();
+        if store.contains(pane, stamp_key) {
+            let raw = store.get(pane, stamp_key);
             assert!(
                 raw.contains("session-ended:bypass_permissions_disabled"),
                 "stamp must record the session-end fingerprint, got {raw}"

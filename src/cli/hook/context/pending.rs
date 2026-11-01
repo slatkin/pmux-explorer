@@ -1,5 +1,5 @@
 use super::meta::clear_all_meta;
-use crate::cli::{set_attention, set_status};
+use crate::pane_state::status_writes;
 use crate::pane_store::{PaneStore, PaneWrites};
 use crate::tmux::{self, AgentType};
 
@@ -50,16 +50,19 @@ pub(in crate::cli::hook) fn drain_pending_teardowns(pane: &str, store: &dyn Pane
 /// error.
 pub(in crate::cli::hook) fn run_session_end_teardown(
     pane: &str,
+    store: &dyn PaneStore,
     env: &crate::thinking_feed::FeedEnv,
 ) {
-    set_attention(pane, "clear");
-    let agent = AgentType::from_label(&tmux::get_pane_option_value(pane, tmux::PANE_AGENT));
+    // The agent and session id are read before the wipe below removes them.
+    let agent = AgentType::from_label(&store.get(pane, tmux::PANE_AGENT));
     if let Some(agent) = agent {
-        let session_id = tmux::get_pane_option_value(pane, tmux::PANE_SESSION_ID);
+        let session_id = store.get(pane, tmux::PANE_SESSION_ID);
         crate::thinking_feed::remove_pi_feed(agent, &session_id, env);
     }
-    clear_all_meta(pane);
-    set_status(pane, "clear");
+    clear_all_meta(pane, store);
+    // The final status write also clears the attention flag, so the old
+    // leading `set_attention("clear")` folded into this one write.
+    let _ = store.apply(pane, &status_writes("clear"));
     let log_path = crate::activity::log_file_path(pane);
     // Best effort: a log that survives teardown keeps stale tool rows until
     // the next SessionStart clears it, and teardown must not fail on it.

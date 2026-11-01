@@ -81,29 +81,6 @@ fn local_time_hhmm() -> String {
     format!("{:02}:{:02}", tm.tm_hour, tm.tm_min)
 }
 
-fn set_status(pane: &str, status: &str) {
-    if status == "clear" {
-        tmux::unset_pane_option(pane, tmux::PANE_STATUS);
-        tmux::unset_pane_option(pane, tmux::PANE_ATTENTION);
-    } else {
-        tmux::set_pane_option(pane, tmux::PANE_STATUS, status);
-        match status {
-            "running" | "idle" => {
-                tmux::unset_pane_option(pane, tmux::PANE_ATTENTION);
-            }
-            _ => {}
-        }
-    }
-}
-
-fn set_attention(pane: &str, state: &str) {
-    if state == "clear" {
-        tmux::unset_pane_option(pane, tmux::PANE_ATTENTION);
-    } else {
-        tmux::set_pane_option(pane, tmux::PANE_ATTENTION, state);
-    }
-}
-
 /// Canonicalize a string before storing it in a tmux pane option. Tmux's
 /// pane-option format uses `|` as a field separator and a newline as a
 /// record terminator, so all three — `|`, `\n` and `\r` — must become a
