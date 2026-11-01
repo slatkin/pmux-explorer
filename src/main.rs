@@ -42,6 +42,20 @@ impl Drop for TuiSession {
     }
 }
 
+/// Owns the pane's `@sidebar_pid` option for the life of the process. The
+/// option marks the pane as a sidebar (key bindings and the focus hook read
+/// it), so it must not outlive the process: a pane that falls back to a
+/// shell and then runs an agent would otherwise still pass for a sidebar.
+struct SidebarPidGuard {
+    pane: String,
+}
+
+impl Drop for SidebarPidGuard {
+    fn drop(&mut self) {
+        tmux::unset_pane_option(&self.pane, tmux::SIDEBAR_PID);
+    }
+}
+
 fn main() -> io::Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if let Some(code) = pmux_explorer::cli::run(&args) {
@@ -77,6 +91,9 @@ fn main() -> io::Result<()> {
             &pid.to_string(),
         ])
         .output();
+    let _sidebar_pid = SidebarPidGuard {
+        pane: tmux_pane.clone(),
+    };
 
     let mut stdout = io::stdout();
     let _tui_session = TuiSession::enter(&mut stdout)?;
