@@ -1,6 +1,6 @@
 pub mod capture;
 mod hook;
-mod label;
+pub(crate) mod label;
 pub mod plugin_state;
 pub(crate) mod setup;
 pub(crate) mod shared_html;
@@ -9,6 +9,7 @@ pub(crate) mod toggle;
 
 use std::io::Read;
 
+use crate::pane_store::PaneStore;
 use crate::task_reminders;
 use crate::tmux;
 
@@ -80,37 +81,15 @@ fn local_time_hhmm() -> String {
     format!("{:02}:{:02}", tm.tm_hour, tm.tm_min)
 }
 
-fn set_status(pane: &str, status: &str) {
-    if status == "clear" {
-        tmux::unset_pane_option(pane, tmux::PANE_STATUS);
-        tmux::unset_pane_option(pane, tmux::PANE_ATTENTION);
-    } else {
-        tmux::set_pane_option(pane, tmux::PANE_STATUS, status);
-        match status {
-            "running" | "idle" => {
-                tmux::unset_pane_option(pane, tmux::PANE_ATTENTION);
-            }
-            _ => {}
-        }
-    }
-}
-
-fn set_attention(pane: &str, state: &str) {
-    if state == "clear" {
-        tmux::unset_pane_option(pane, tmux::PANE_ATTENTION);
-    } else {
-        tmux::set_pane_option(pane, tmux::PANE_ATTENTION, state);
-    }
-}
-
 /// Canonicalize a string before storing it in a tmux pane option. Tmux's
-/// pane-option format uses `|` as a field separator and `\n` as a record
-/// terminator, so both must be replaced with spaces to keep the stored
-/// value a single safe field. Readers that compare against raw process
-/// data (e.g. the bg-shell ps sweep) must apply the same normalization
-/// so round-tripping through storage doesn't silently break equality.
+/// pane-option format uses `|` as a field separator and a newline as a
+/// record terminator, so all three — `|`, `\n` and `\r` — must become a
+/// space to keep the stored value a single safe field. Readers that compare
+/// against raw process data (e.g. the bg-shell ps sweep) must apply the same
+/// normalization so round-tripping through storage doesn't silently break
+/// equality.
 pub(crate) fn sanitize_tmux_value(s: &str) -> String {
-    s.replace(['\n', '|'], " ")
+    s.replace(['\n', '\r', '|'], " ")
 }
 
 /// Canonicalize a label before writing it to the activity log. The log is
@@ -134,7 +113,11 @@ fn cmd_set_status(args: &[String]) -> i32 {
     if pane.is_empty() {
         return 0;
     }
-    set_status(&pane, status);
+    // The status↔attention coupling has one owner, `status_writes`; the
+    // command applies its write list through the tmux adapter like a hook
+    // event does, so `set-status` and the transition cannot drift apart.
+    let store = tmux::pane_store::TmuxPaneStore;
+    let _ = store.apply(&pane, &crate::pane_state::status_writes(status));
     0
 }
 
@@ -353,6 +336,11 @@ mod tests {
     #[test]
     fn sanitize_replaces_both() {
         assert_eq!(sanitize_tmux_value("a|b\nc"), "a b c");
+    }
+
+    #[test]
+    fn sanitize_replaces_carriage_returns() {
+        assert_eq!(sanitize_tmux_value("a\rb\r\nc"), "a b  c");
     }
 
     #[test]

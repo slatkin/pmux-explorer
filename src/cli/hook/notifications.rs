@@ -1,3 +1,4 @@
+use crate::pane_store::{PaneStore, PaneWrites};
 use crate::time::now_epoch_millis;
 use crate::tmux;
 use crate::ui::text::wait_reason_label;
@@ -7,6 +8,8 @@ use super::context::{
     AgentContext, branch_label_from_ctx, branch_label_from_pane, repo_label_from_ctx,
     repo_label_from_pane,
 };
+
+// labels.rs's pane reads go through the store too.
 
 /// How to resolve the repo/branch labels and agent name that appear in
 /// the desktop-notification title. The handlers split cleanly in two:
@@ -44,6 +47,7 @@ pub(super) fn notify_lifecycle(
     settings: &desktop_notification::DesktopNotificationSettings,
     run_id: Option<u64>,
     payload: NotifyPayload<'_>,
+    store: &dyn PaneStore,
 ) -> bool {
     let (repo, branch, agent) = match labels {
         NotifyLabels::FromCtx(ctx) => (
@@ -52,12 +56,12 @@ pub(super) fn notify_lifecycle(
             ctx.agent,
         ),
         NotifyLabels::FromPane { agent } => (
-            repo_label_from_pane(pane),
-            branch_label_from_pane(pane),
+            repo_label_from_pane(pane, store),
+            branch_label_from_pane(pane, store),
             agent,
         ),
     };
-    let run_id = run_id.or_else(|| notification_run_id(pane));
+    let run_id = run_id.or_else(|| notification_run_id(pane, store));
     let fingerprint =
         desktop_notification::run_scoped_fingerprint(run_id, payload.fingerprint_suffix);
     notify_desktop(
@@ -68,6 +72,7 @@ pub(super) fn notify_lifecycle(
         &fingerprint,
         &desktop_notification::format_title(repo.as_deref(), branch.as_deref(), agent),
         payload.body,
+        store,
     )
 }
 
@@ -75,20 +80,24 @@ pub(super) fn notification_settings() -> desktop_notification::DesktopNotificati
     desktop_notification::DesktopNotificationSettings::from_tmux()
 }
 
-pub(super) fn set_notification_run_id(pane: &str) {
-    tmux::set_pane_option(
-        pane,
+/// Append the fresh notification run id to a write batch. The run id stays
+/// a call-site write — the transition does not own it — but it rides the
+/// event's single `apply` instead of costing its own tmux call.
+pub(super) fn set_notification_run_id(writes: &mut PaneWrites) {
+    writes.set(
         tmux::PANE_NOTIFICATION_RUN_ID,
-        &now_epoch_millis().to_string(),
+        now_epoch_millis().to_string(),
     );
 }
 
-pub(super) fn notification_run_id(pane: &str) -> Option<u64> {
-    tmux::get_pane_option_value(pane, tmux::PANE_NOTIFICATION_RUN_ID)
+pub(super) fn notification_run_id(pane: &str, store: &dyn PaneStore) -> Option<u64> {
+    store
+        .get(pane, tmux::PANE_NOTIFICATION_RUN_ID)
         .parse::<u64>()
         .ok()
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn notify_desktop(
     pane: &str,
     kind: DesktopNotificationKind,
@@ -97,8 +106,18 @@ pub(super) fn notify_desktop(
     fingerprint: &str,
     title: &str,
     body: &str,
+    store: &dyn PaneStore,
 ) -> bool {
-    desktop_notification::notify_if_allowed(settings, pane, kind, event, fingerprint, title, body)
+    desktop_notification::notify_if_allowed(
+        settings,
+        pane,
+        kind,
+        event,
+        fingerprint,
+        title,
+        body,
+        store,
+    )
 }
 
 pub(super) fn task_completed_fingerprint<'a>(task_id: &'a str, task_subject: &'a str) -> &'a str {
@@ -190,13 +209,14 @@ pub(super) fn session_end_body(end_reason: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::pane_store::{MemPaneStore, PaneWrites};
 
     #[test]
     fn notification_run_id_reads_tmux_option() {
-        let _guard = tmux::test_mock::install();
+        let store = MemPaneStore::new();
         let pane = "%PANE_STARTED";
-        tmux::test_mock::set(pane, tmux::PANE_NOTIFICATION_RUN_ID, "1700000123456");
-        assert_eq!(notification_run_id(pane), Some(1_700_000_123_456));
+        store.insert(pane, tmux::PANE_NOTIFICATION_RUN_ID, "1700000123456");
+        assert_eq!(notification_run_id(pane, &store), Some(1_700_000_123_456));
     }
 
     #[test]
@@ -248,16 +268,15 @@ mod tests {
 
     #[test]
     fn set_notification_run_id_writes_millis_value() {
-        let _guard = tmux::test_mock::install();
+        let mut writes = PaneWrites::new();
+        set_notification_run_id(&mut writes);
+        let store = MemPaneStore::new();
         let pane = "%PANE_SET_RUN_ID";
-        set_notification_run_id(pane);
-        let written = tmux::test_mock::get(pane, tmux::PANE_NOTIFICATION_RUN_ID);
+        store.apply(pane, &writes).unwrap();
+        let written = store.get(pane, tmux::PANE_NOTIFICATION_RUN_ID);
         assert!(
-            written
-                .as_deref()
-                .and_then(|s| s.parse::<u64>().ok())
-                .is_some(),
-            "expected a millisecond timestamp to be written"
+            written.parse::<u64>().is_ok(),
+            "expected a millisecond timestamp to be written, got {written:?}"
         );
     }
 }

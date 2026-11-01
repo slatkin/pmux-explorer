@@ -1,10 +1,10 @@
 use serde_json::{Map, Value};
 
-use crate::event::{AgentEvent, EventAdapter};
+use crate::event::{AgentEvent, EventAdapter, Reported};
 use crate::tmux::OPENCODE_AGENT;
 use crate::tool_name::CanonicalTool;
 
-use super::{json_str, json_value_or_null, optional_str};
+use super::{json_str, json_value_or_null, optional_str, session_context_reported};
 
 pub struct OpenCodeAdapter;
 
@@ -59,6 +59,17 @@ fn copy_keys(map: &mut Map<String, Value>, pairs: &[(&str, &str)]) {
 }
 
 impl EventAdapter for OpenCodeAdapter {
+    fn reported(&self, event_name: &str, input: &Value) -> Reported {
+        // Every event OpenCode sends apart from `activity-log` carries
+        // session context.
+        match event_name {
+            "session-start" | "user-prompt-submit" | "notification" | "stop" | "stop-failure" => {
+                session_context_reported(input)
+            }
+            _ => Reported::NONE,
+        }
+    }
+
     fn parse(&self, event_name: &str, input: &Value) -> Option<AgentEvent> {
         match event_name {
             "session-start" => Some(AgentEvent::SessionStart {
@@ -132,6 +143,17 @@ impl EventAdapter for OpenCodeAdapter {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn reported_matches_the_parse_arms() {
+        // OpenCode's session-context arms hardcode `worktree: None`, so the
+        // worktree leg of the pin does not apply.
+        super::super::assert_reported_matches_parse(
+            "opencode",
+            false,
+            Some(super::super::SESSION_CONTEXT_FIELDS),
+        );
+    }
 
     #[test]
     fn session_start() {
@@ -357,5 +379,64 @@ mod tests {
                 session_id: Some("ses-1".into()),
             }
         );
+    }
+
+    // ─── the reported set per event ──────────────────────────────
+
+    #[test]
+    fn the_session_context_events_report_the_session_fields() {
+        let adapter = OpenCodeAdapter;
+        for event_name in [
+            "session-start",
+            "user-prompt-submit",
+            "notification",
+            "stop",
+            "stop-failure",
+        ] {
+            let reported = adapter.reported(event_name, &json!({}));
+            assert_eq!(
+                reported.fields(),
+                &["session_id", "cwd", "worktree"],
+                "{event_name} should report the session-context fields"
+            );
+        }
+    }
+
+    #[test]
+    fn the_events_without_session_context_report_nothing() {
+        let adapter = OpenCodeAdapter;
+        for event_name in [
+            "session-end",
+            "activity-log",
+            "permission-denied",
+            "cwd-changed",
+            "subagent-start",
+            "subagent-stop",
+            "task-created",
+            "task-completed",
+            "teammate-idle",
+            "worktree-create",
+            "worktree-remove",
+        ] {
+            let reported = adapter.reported(event_name, &json!({}));
+            assert!(reported.is_empty(), "{event_name} should report nothing");
+        }
+    }
+
+    #[test]
+    fn an_invalid_payload_reports_nothing() {
+        let adapter = OpenCodeAdapter;
+        // A payload that is not valid JSON reaches the adapter as `Null`;
+        // it reports nothing, so it clears nothing.
+        let invalid = serde_json::from_str::<serde_json::Value>("{\"cwd\": ")
+            .unwrap_or(serde_json::Value::Null);
+        assert!(invalid.is_null());
+        for event_name in ["session-start", "stop", "stop-failure"] {
+            assert_eq!(
+                adapter.reported(event_name, &invalid),
+                Reported::NONE,
+                "{event_name} reported something for an invalid payload"
+            );
+        }
     }
 }

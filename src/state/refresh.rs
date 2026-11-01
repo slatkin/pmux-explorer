@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use crate::activity::{self, TaskProgress};
 use crate::cli::sanitize_tmux_value;
+use crate::pane_store::{PaneStore, PaneWrites};
 use crate::process::ProcessSnapshot;
 use crate::task_store;
 use crate::tmux::{self, AgentType, PaneStatus, SessionInfo};
@@ -100,23 +101,20 @@ impl AppState {
         agent: AgentType,
         session_id: &str,
         env: &crate::thinking_feed::FeedEnv,
+        store: &dyn PaneStore,
     ) {
         // The feed goes first: the session id is in hand from the pane
         // list, and a pi pane's thinking feed dies with its state the
         // same way the shell-fallback sweep clears it (design D7).
         crate::thinking_feed::remove_pi_feed(agent, session_id, env);
-        // The lifecycle set from `tmux::AGENT_SESSION_PANE_OPTIONS`, minus
-        // the pending-teardown markers: the hook-side drain owns those,
-        // and a fresh SessionStart clears both on the next run.
-        for key in tmux::AGENT_SESSION_PANE_OPTIONS {
-            if matches!(
-                *key,
-                tmux::PANE_PENDING_SESSION_END | tmux::PANE_PENDING_WORKTREE_REMOVE
-            ) {
-                continue;
-            }
-            tmux::unset_pane_option(pane_id, key);
-        }
+        // One `Unset` batch over the shared lifecycle list, minus the
+        // pending-teardown markers: the hook-side drain owns those, and
+        // a fresh SessionStart clears both on the next run.
+        let writes = tmux::agent_session_wipe(&[
+            tmux::PANE_PENDING_SESSION_END,
+            tmux::PANE_PENDING_WORKTREE_REMOVE,
+        ]);
+        let _ = store.apply(pane_id, &writes);
 
         // Best effort: a log that outlives its agent pane keeps stale rows
         // until the pane is reused, and a poll-side sweep must not fail on it.
@@ -190,10 +188,16 @@ impl AppState {
         // copy) so every field the state holds has a reader.
         let focused = self.sidebar_pane.pane_active;
         let window_active = self.sidebar_pane.window_active;
+        // The store is created once per tick, the way `FeedEnv` is
+        // threaded, and passed to everything that touches `@pane_*`
+        // options: the pane query (whose shell-fallback wipe writes
+        // through it), the bg-shell sweep and the dead-pane wipe.
+        let store = tmux::pane_store::TmuxPaneStore;
         let (mut sessions, mut process_snapshot) =
-            tmux::query_sessions_with_process_snapshot(&self.thought.env);
-        self.sweep_dead_bg_shells_if_due(&mut sessions, &mut process_snapshot);
-        if let Some(process_snapshot) = self.refresh_port_data(&sessions, process_snapshot.as_ref())
+            tmux::query_sessions_with_process_snapshot(&self.thought.env, &store);
+        self.sweep_dead_bg_shells_if_due(&mut sessions, &mut process_snapshot, &store);
+        if let Some(process_snapshot) =
+            self.refresh_port_data(&sessions, process_snapshot.as_ref(), &store)
         {
             let sessions = Self::filter_sessions_to_live_agent_panes(
                 sessions,
@@ -211,6 +215,7 @@ impl AppState {
         &mut self,
         sessions: &[SessionInfo],
         process_snapshot: Option<&ProcessSnapshot>,
+        store: &dyn PaneStore,
     ) -> Option<crate::port::PaneProcessSnapshot> {
         const PORT_REFRESH_INTERVAL: Duration = Duration::from_secs(10);
 
@@ -253,6 +258,7 @@ impl AppState {
                     dead.agent,
                     dead.session_id.as_deref().unwrap_or(""),
                     &self.thought.env,
+                    store,
                 );
                 self.clear_pane_state(&dead.pane_id);
             }
@@ -429,6 +435,7 @@ impl AppState {
         &mut self,
         sessions: &mut [SessionInfo],
         process_snapshot: &mut Option<ProcessSnapshot>,
+        store: &dyn PaneStore,
     ) {
         const BG_SHELL_SWEEP_INTERVAL: Duration = Duration::from_secs(5);
         let should_run = self
@@ -438,7 +445,7 @@ impl AppState {
         if !should_run {
             return;
         }
-        sweep_dead_bg_shells(sessions, process_snapshot);
+        sweep_dead_bg_shells(sessions, process_snapshot, store);
         self.timers.last_bg_shell_sweep = Some(std::time::Instant::now());
     }
 
@@ -517,6 +524,7 @@ impl AppState {
 pub(crate) fn sweep_dead_bg_shells(
     sessions: &mut [SessionInfo],
     process_snapshot: &mut Option<ProcessSnapshot>,
+    store: &dyn PaneStore,
 ) {
     let has_any = sessions
         .iter()
@@ -530,13 +538,14 @@ pub(crate) fn sweep_dead_bg_shells(
         *process_snapshot = ProcessSnapshot::scan();
     }
     if let Some(snapshot) = process_snapshot.as_ref() {
-        clear_dead_bg_shells(sessions, snapshot);
+        clear_dead_bg_shells(sessions, snapshot, store);
     }
 }
 
 pub(crate) fn clear_dead_bg_shells(
     sessions: &mut [SessionInfo],
     process_snapshot: &ProcessSnapshot,
+    store: &dyn PaneStore,
 ) {
     for session in sessions.iter_mut() {
         for window in &mut session.windows {
@@ -558,9 +567,16 @@ pub(crate) fn clear_dead_bg_shells(
                 {
                     continue;
                 }
-                tmux::unset_pane_option(&pane.pane_id, tmux::PANE_BG_CMD);
+                // One batch per swept pane (design D9): the command is
+                // cleared, and the status moves to `idle` only when it
+                // is `background` — any other status stays.
+                let mut writes = PaneWrites::new();
+                writes.unset(tmux::PANE_BG_CMD);
                 if pane.status == PaneStatus::Background {
-                    tmux::set_pane_option(&pane.pane_id, tmux::PANE_STATUS, "idle");
+                    writes.set(tmux::PANE_STATUS, "idle");
+                }
+                let _ = store.apply(&pane.pane_id, &writes);
+                if pane.status == PaneStatus::Background {
                     pane.status = PaneStatus::Idle;
                 }
                 pane.bg_shell_cmd = None;
@@ -599,9 +615,57 @@ fn is_cmd_token_byte(b: u8) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::pane_store::{MemPaneStore, PaneSnapshot, PaneWrites};
     use crate::tmux::{
         AgentType, PaneInfo, PaneStatus, PermissionMode, SessionInfo, WindowInfo, WorktreeMetadata,
     };
+
+    /// A `MemPaneStore` that counts `apply` calls so a test can pin that a
+    /// sweep or wipe issues one tmux command.
+    struct CountingStore {
+        inner: MemPaneStore,
+        applies: std::cell::Cell<usize>,
+    }
+
+    impl CountingStore {
+        fn new() -> Self {
+            CountingStore {
+                inner: MemPaneStore::new(),
+                applies: std::cell::Cell::new(0),
+            }
+        }
+
+        fn set(&self, pane: &str, key: &str, value: &str) {
+            self.inner.insert(pane, key, value);
+        }
+
+        fn get(&self, pane: &str, key: &str) -> String {
+            self.inner.get(pane, key)
+        }
+
+        fn contains(&self, pane: &str, key: &str) -> bool {
+            self.inner.contains(pane, key)
+        }
+
+        fn applies(&self) -> usize {
+            self.applies.get()
+        }
+    }
+
+    impl PaneStore for CountingStore {
+        fn snapshot(&self, pane: &str) -> PaneSnapshot {
+            self.inner.snapshot(pane)
+        }
+
+        fn get(&self, pane: &str, key: &str) -> String {
+            self.inner.get(pane, key)
+        }
+
+        fn apply(&self, pane: &str, writes: &PaneWrites) -> Result<(), String> {
+            self.applies.set(self.applies.get() + 1);
+            self.inner.apply(pane, writes)
+        }
+    }
 
     fn test_pane(id: &str) -> PaneInfo {
         PaneInfo {
@@ -657,9 +721,9 @@ mod tests {
 
     #[test]
     fn clear_dead_bg_shells_retains_shell_present_in_ps_output() {
-        let _guard = tmux::test_mock::install();
+        let store = MemPaneStore::new();
         let pane_id = "%BG_ALIVE";
-        tmux::test_mock::set(pane_id, tmux::PANE_BG_CMD, "sleep 300");
+        store.insert(pane_id, tmux::PANE_BG_CMD, "sleep 300");
 
         let mut sessions = test_session(vec![pane_with_bg(
             pane_id,
@@ -668,22 +732,22 @@ mod tests {
         )]);
         let snapshot = process_snapshot("100 1 zsh /bin/zsh -c eval 'sleep 300' < /dev/null\n");
 
-        clear_dead_bg_shells(&mut sessions, &snapshot);
+        clear_dead_bg_shells(&mut sessions, &snapshot, &store);
 
         assert_eq!(
             sessions[0].windows[0].panes[0].bg_shell_cmd.as_deref(),
             Some("sleep 300"),
             "a matching ps line must leave the marker intact",
         );
-        assert!(tmux::test_mock::contains(pane_id, tmux::PANE_BG_CMD));
+        assert!(store.contains(pane_id, tmux::PANE_BG_CMD));
     }
 
     #[test]
     fn clear_dead_bg_shells_ignores_matching_command_in_other_pane_tree() {
-        let _guard = tmux::test_mock::install();
+        let store = MemPaneStore::new();
         let pane_id = "%BG_OTHER_PANE";
-        tmux::test_mock::set(pane_id, tmux::PANE_BG_CMD, "sleep 300");
-        tmux::test_mock::set(pane_id, tmux::PANE_STATUS, "background");
+        store.insert(pane_id, tmux::PANE_BG_CMD, "sleep 300");
+        store.insert(pane_id, tmux::PANE_STATUS, "background");
 
         let mut sessions = test_session(vec![pane_with_bg(
             pane_id,
@@ -692,7 +756,7 @@ mod tests {
         )]);
         let snapshot = process_snapshot("100 1 zsh /bin/zsh\n200 1 zsh /bin/zsh -c 'sleep 300'\n");
 
-        clear_dead_bg_shells(&mut sessions, &snapshot);
+        clear_dead_bg_shells(&mut sessions, &snapshot, &store);
 
         let pane = &sessions[0].windows[0].panes[0];
         assert!(
@@ -704,10 +768,10 @@ mod tests {
 
     #[test]
     fn clear_dead_bg_shells_clears_when_shell_missing_and_downgrades_background() {
-        let _guard = tmux::test_mock::install();
+        let store = MemPaneStore::new();
         let pane_id = "%BG_DEAD";
-        tmux::test_mock::set(pane_id, tmux::PANE_BG_CMD, "sleep 300");
-        tmux::test_mock::set(pane_id, tmux::PANE_STATUS, "background");
+        store.insert(pane_id, tmux::PANE_BG_CMD, "sleep 300");
+        store.insert(pane_id, tmux::PANE_STATUS, "background");
 
         let mut sessions = test_session(vec![pane_with_bg(
             pane_id,
@@ -717,7 +781,7 @@ mod tests {
         // ps output contains nothing matching "sleep 300".
         let snapshot = process_snapshot("100 1 zsh /bin/zsh\n200 1 ssh /usr/bin/ssh host\n");
 
-        clear_dead_bg_shells(&mut sessions, &snapshot);
+        clear_dead_bg_shells(&mut sessions, &snapshot, &store);
 
         let pane = &sessions[0].windows[0].panes[0];
         assert!(
@@ -729,19 +793,16 @@ mod tests {
             PaneStatus::Idle,
             "background with a dead shell must downgrade to idle",
         );
-        assert!(!tmux::test_mock::contains(pane_id, tmux::PANE_BG_CMD));
-        assert_eq!(
-            tmux::test_mock::get(pane_id, tmux::PANE_STATUS).as_deref(),
-            Some("idle"),
-        );
+        assert!(!store.contains(pane_id, tmux::PANE_BG_CMD));
+        assert_eq!(store.get(pane_id, tmux::PANE_STATUS), "idle");
     }
 
     #[test]
     fn clear_dead_bg_shells_does_not_touch_non_background_status() {
-        let _guard = tmux::test_mock::install();
+        let store = MemPaneStore::new();
         let pane_id = "%BG_STALE_RUNNING";
-        tmux::test_mock::set(pane_id, tmux::PANE_STATUS, "running");
-        tmux::test_mock::set(pane_id, tmux::PANE_BG_CMD, "npm run dev");
+        store.insert(pane_id, tmux::PANE_STATUS, "running");
+        store.insert(pane_id, tmux::PANE_BG_CMD, "npm run dev");
 
         let mut sessions = test_session(vec![pane_with_bg(
             pane_id,
@@ -750,7 +811,7 @@ mod tests {
         )]);
         let snapshot = process_snapshot("100 1 zsh /bin/zsh\n");
 
-        clear_dead_bg_shells(&mut sessions, &snapshot);
+        clear_dead_bg_shells(&mut sessions, &snapshot, &store);
 
         let pane = &sessions[0].windows[0].panes[0];
         assert!(pane.bg_shell_cmd.is_none());
@@ -759,17 +820,14 @@ mod tests {
             PaneStatus::Running,
             "non-background status must be left alone",
         );
-        assert_eq!(
-            tmux::test_mock::get(pane_id, tmux::PANE_STATUS).as_deref(),
-            Some("running"),
-        );
+        assert_eq!(store.get(pane_id, tmux::PANE_STATUS), "running");
     }
 
     #[test]
     fn clear_dead_bg_shells_preserves_placeholder_cmd() {
-        let _guard = tmux::test_mock::install();
+        let store = MemPaneStore::new();
         let pane_id = "%BG_PLACEHOLDER";
-        tmux::test_mock::set(pane_id, tmux::PANE_BG_CMD, tmux::BG_CMD_PLACEHOLDER);
+        store.insert(pane_id, tmux::PANE_BG_CMD, tmux::BG_CMD_PLACEHOLDER);
 
         let mut sessions = test_session(vec![pane_with_bg(
             pane_id,
@@ -778,14 +836,14 @@ mod tests {
         )]);
         let snapshot = process_snapshot("");
 
-        clear_dead_bg_shells(&mut sessions, &snapshot);
+        clear_dead_bg_shells(&mut sessions, &snapshot, &store);
 
         assert_eq!(
             sessions[0].windows[0].panes[0].bg_shell_cmd.as_deref(),
             Some(tmux::BG_CMD_PLACEHOLDER),
             "placeholder must survive — we cannot prove the shell is dead",
         );
-        assert!(tmux::test_mock::contains(pane_id, tmux::PANE_BG_CMD));
+        assert!(store.contains(pane_id, tmux::PANE_BG_CMD));
     }
 
     #[test]
@@ -793,9 +851,9 @@ mod tests {
         // Regression: a naive `str::contains` match kept the marker
         // alive forever when a shorter stored cmd was a prefix of a
         // live longer cmd.
-        let _guard = tmux::test_mock::install();
+        let store = MemPaneStore::new();
         let pane_id = "%BG_PREFIX_COLLIDE";
-        tmux::test_mock::set(pane_id, tmux::PANE_BG_CMD, "sleep 3");
+        store.insert(pane_id, tmux::PANE_BG_CMD, "sleep 3");
         let mut sessions = test_session(vec![pane_with_bg(
             pane_id,
             "sleep 3",
@@ -803,7 +861,7 @@ mod tests {
         )]);
         let snapshot = process_snapshot("100 1 zsh /bin/zsh -c 'sleep 30' < /dev/null\n");
 
-        clear_dead_bg_shells(&mut sessions, &snapshot);
+        clear_dead_bg_shells(&mut sessions, &snapshot, &store);
 
         assert!(
             sessions[0].windows[0].panes[0].bg_shell_cmd.is_none(),
@@ -812,12 +870,34 @@ mod tests {
     }
 
     #[test]
+    fn clear_dead_bg_shells_issues_one_write_batch_per_dead_pane() {
+        // The sweep writes through the store, so one dead pane is one
+        // tmux command carrying both the unset and the status move.
+        let store = CountingStore::new();
+        let pane_id = "%BG_ONE_BATCH";
+        store.set(pane_id, tmux::PANE_STATUS, "background");
+        store.set(pane_id, tmux::PANE_BG_CMD, "sleep 300");
+        let mut sessions = test_session(vec![pane_with_bg(
+            pane_id,
+            "sleep 300",
+            PaneStatus::Background,
+        )]);
+        let snapshot = process_snapshot("100 1 zsh /bin/zsh\n");
+
+        clear_dead_bg_shells(&mut sessions, &snapshot, &store);
+
+        assert_eq!(store.applies(), 1, "one dead pane is one write batch");
+        assert!(!store.contains(pane_id, tmux::PANE_BG_CMD));
+        assert_eq!(store.get(pane_id, tmux::PANE_STATUS), "idle");
+    }
+
+    #[test]
     fn clear_dead_bg_shells_no_op_when_no_pane_has_bg_marker() {
-        let _guard = tmux::test_mock::install();
+        let store = MemPaneStore::new();
         let mut sessions = test_session(vec![test_pane("%1")]);
         let snapshot = process_snapshot("100 1 zsh /bin/zsh\n");
 
-        clear_dead_bg_shells(&mut sessions, &snapshot);
+        clear_dead_bg_shells(&mut sessions, &snapshot, &store);
 
         assert!(sessions[0].windows[0].panes[0].bg_shell_cmd.is_none());
     }
@@ -944,19 +1024,30 @@ mod tests {
     }
 
     #[test]
+    fn clear_dead_agent_metadata_issues_one_write_batch() {
+        let store = CountingStore::new();
+        let pane = "%DEAD_ONE_BATCH";
+        let env = crate::thinking_feed::FeedEnv::default();
+
+        AppState::clear_dead_agent_metadata(pane, AgentType::Pi, "", &env, &store);
+
+        assert_eq!(store.applies(), 1, "a wipe is one write batch");
+    }
+
+    #[test]
     fn clear_dead_agent_metadata_clears_the_subagent_identity() {
         // A killed pi subagent must not leave its identity options behind:
         // `@pane_agent` is wiped by the same sweep, and a next agent in
         // this pane would otherwise render as a pmux subagent with a
         // foreign task and lose its permission badge.
-        let _guard = tmux::test_mock::install();
+        let store = MemPaneStore::new();
         let pane = "%DEAD_SUBAGENT";
         for key in tmux::AGENT_SESSION_PANE_OPTIONS {
-            tmux::test_mock::set(pane, key, "x");
+            store.insert(pane, key, "x");
         }
 
         let env = crate::thinking_feed::FeedEnv::default();
-        AppState::clear_dead_agent_metadata(pane, AgentType::Pi, "", &env);
+        AppState::clear_dead_agent_metadata(pane, AgentType::Pi, "", &env, &store);
 
         for key in tmux::AGENT_SESSION_PANE_OPTIONS {
             let preserved = matches!(
@@ -964,7 +1055,7 @@ mod tests {
                 tmux::PANE_PENDING_SESSION_END | tmux::PANE_PENDING_WORKTREE_REMOVE
             );
             assert_eq!(
-                tmux::test_mock::contains(pane, key),
+                store.contains(pane, key),
                 preserved,
                 "expected {key} {}",
                 if preserved { "preserved" } else { "cleared" }

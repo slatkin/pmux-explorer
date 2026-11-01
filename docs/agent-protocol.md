@@ -42,8 +42,16 @@ producer does nothing. It does not warn and it does not retry.
 ## The payload
 
 Every payload is a JSON object. The fields below are the ones the sidebar
-reads. A field that a producer cannot fill is omitted or sent empty; the
-sidebar treats an empty string as "not reported".
+reads, and the sidebar stores each one as it arrives. Which of them an
+event reports is declared per agent: for pi the declaration is the field
+list the `pmux-explorer setup pi` contract prints, and Claude, Codex and
+OpenCode report `session_id`, `cwd` and `worktree` on every event of
+theirs that carries session context. A field the event does not report is
+left alone, so a value stored earlier survives; a `session_id`, `cwd` or
+`worktree` the event reports but sends empty clears the option it backs.
+A Claude `notification` therefore still reports `worktree`, and one that
+leaves it out clears the worktree options instead of keeping their
+values.
 
 ### `session-start`
 
@@ -139,7 +147,7 @@ assistant message.
 | `cwd` | The working directory. |
 | `session_id` | The session identifier. |
 | `permission_mode` | The agent's permission mode. |
-| `worktree` | The worktree object, if any. |
+| `worktree` | The worktree object, if any. pi does not report `worktree` on `stop`, so a pi producer that leaves a worktree says so on `session-start` or `user-prompt-submit`, the events that report it. |
 
 ### `stop-failure`
 

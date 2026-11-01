@@ -7,15 +7,16 @@ use crate::process::{ProcessSnapshot, command_basename};
 
 use super::commands::run_tmux;
 use super::options::{
-    AGENT_SESSION_PANE_OPTIONS, PANE_AGENT, PANE_ATTENTION, PANE_BG_CMD, PANE_CWD, PANE_NAME,
-    PANE_PERMISSION_MODE, PANE_PROMPT, PANE_PROMPT_SOURCE, PANE_ROLE, PANE_SESSION_ID,
-    PANE_STARTED_AT, PANE_STATUS, PANE_SUBAGENT_KIND, PANE_SUBAGENT_PARENT, PANE_SUBAGENT_TASK,
-    PANE_SUBAGENTS, PANE_WAIT_REASON, PANE_WORKTREE_BRANCH, PANE_WORKTREE_NAME, unset_pane_option,
+    PANE_AGENT, PANE_ATTENTION, PANE_BG_CMD, PANE_CWD, PANE_NAME, PANE_PERMISSION_MODE,
+    PANE_PROMPT, PANE_PROMPT_SOURCE, PANE_ROLE, PANE_SESSION_ID, PANE_STARTED_AT, PANE_STATUS,
+    PANE_SUBAGENT_KIND, PANE_SUBAGENT_PARENT, PANE_SUBAGENT_TASK, PANE_SUBAGENTS, PANE_WAIT_REASON,
+    PANE_WORKTREE_BRANCH, PANE_WORKTREE_NAME, agent_session_wipe,
 };
 use super::types::{
     AgentType, CODEX_AGENT, PaneInfo, PaneStatus, PermissionMode, SessionInfo, SubagentInfo,
     SubagentParent, WindowInfo, WorktreeMetadata,
 };
+use crate::pane_store::PaneStore;
 use crate::worktree::SPAWNED_OPTION;
 
 // Field indices in `tmux list-panes -F` output. Keep in lock-step with
@@ -111,7 +112,7 @@ fn pane_format() -> String {
     .join("|")
 }
 
-fn q(field: &str) -> String {
+pub(crate) fn q(field: &str) -> String {
     format!("#{{q:{field}}}")
 }
 
@@ -153,12 +154,16 @@ impl SubagentResolution {
 /// Query all sessions, windows, and panes in a single `tmux list-panes -a` call
 /// (plus one optional `ps` call for process-backed agent checks), instead of
 /// N+1 subprocess invocations.
-pub fn query_sessions(env: &crate::thinking_feed::FeedEnv) -> Vec<SessionInfo> {
-    query_sessions_with_process_snapshot(env).0
+pub fn query_sessions(
+    env: &crate::thinking_feed::FeedEnv,
+    store: &dyn PaneStore,
+) -> Vec<SessionInfo> {
+    query_sessions_with_process_snapshot(env, store).0
 }
 
 pub(crate) fn query_sessions_with_process_snapshot(
     env: &crate::thinking_feed::FeedEnv,
+    store: &dyn PaneStore,
 ) -> (Vec<SessionInfo>, Option<ProcessSnapshot>) {
     let pane_format = pane_format();
     let all_panes_output = match run_tmux(&["list-panes", "-a", "-F", &pane_format]) {
@@ -168,7 +173,7 @@ pub(crate) fn query_sessions_with_process_snapshot(
 
     let process_snapshot = process_snapshot_for_panes(&all_panes_output);
     let (mut sessions_map, codex_pids, subagent_resolution) =
-        build_session_hierarchy(&all_panes_output, process_snapshot.as_ref(), env);
+        build_session_hierarchy(&all_panes_output, process_snapshot.as_ref(), env, store);
     resolve_subagent_parents(&mut sessions_map, &subagent_resolution);
     if !codex_pids.is_empty()
         && let Some(snapshot) = &process_snapshot
@@ -185,6 +190,7 @@ fn build_session_hierarchy(
     all_panes_output: &str,
     process_snapshot: Option<&ProcessSnapshot>,
     env: &crate::thinking_feed::FeedEnv,
+    store: &dyn PaneStore,
 ) -> (SessionMap, Vec<CodexPidEntry>, SubagentResolution) {
     let mut sessions_map: SessionMap = indexmap::IndexMap::new();
     let mut codex_pids: Vec<CodexPidEntry> = Vec::new();
@@ -228,7 +234,9 @@ fn build_session_hierarchy(
                 panes: Vec::new(),
             });
 
-        if let Some(pane) = parse_pane_fields_with_processes(pane_fields, process_snapshot, env) {
+        if let Some(pane) =
+            parse_pane_fields_with_processes(pane_fields, process_snapshot, env, store)
+        {
             if pane.agent == AgentType::Codex
                 && let Some(pid) = pane.pane_pid
             {
@@ -309,21 +317,36 @@ fn finalize_sessions(sessions_map: SessionMap) -> Vec<SessionInfo> {
 
 /// Parse a single pane line from `tmux list-panes -F`.
 /// Returns None if the line has too few fields, is a sidebar, or has no agent.
-/// Thin wrapper used by the unit tests, which still construct a raw
-/// `|`-joined fixture line. Production callers go through
+/// Thin wrapper used by the unit tests that do not observe the store: the
+/// shell-fallback wipe, if one fires, writes into a throwaway in-memory
+/// store. Wipe tests use [`parse_pane_line_with`] to see what the sweep
+/// cleared. Production callers go through
 /// `parse_pane_fields_with_processes` directly to avoid re-joining and re-splitting
 /// fields that may themselves contain literal `|` characters (cwd,
 /// prompt, branch) — see `build_session_hierarchy`.
 #[cfg(test)]
 pub(crate) fn parse_pane_line(line: &str) -> Option<PaneInfo> {
+    parse_pane_line_with(line, &crate::pane_store::MemPaneStore::new())
+}
+
+/// The store-taking form of [`parse_pane_line`] for the wipe tests: the
+/// same parse, against a store the test seeded and can assert on.
+#[cfg(test)]
+pub(crate) fn parse_pane_line_with(line: &str, store: &dyn PaneStore) -> Option<PaneInfo> {
     let parts = split_tmux_fields(line, '|');
-    parse_pane_fields_with_processes(&parts, None, &crate::thinking_feed::FeedEnv::default())
+    parse_pane_fields_with_processes(
+        &parts,
+        None,
+        &crate::thinking_feed::FeedEnv::default(),
+        store,
+    )
 }
 
 fn parse_pane_fields_with_processes(
     parts: &[String],
     process_snapshot: Option<&ProcessSnapshot>,
     env: &crate::thinking_feed::FeedEnv,
+    store: &dyn PaneStore,
 ) -> Option<PaneInfo> {
     if parts.len() < pane_line_field::MIN_FIELDS {
         return None;
@@ -363,6 +386,7 @@ fn parse_pane_fields_with_processes(
                 agent,
                 &parts[pane_line_field::SESSION_ID],
                 env,
+                store,
             );
             return None;
         }
@@ -513,10 +537,11 @@ fn clear_agent_pane_state(
     agent: AgentType,
     session_id: &str,
     env: &crate::thinking_feed::FeedEnv,
+    store: &dyn PaneStore,
 ) {
-    for key in AGENT_SESSION_PANE_OPTIONS {
-        unset_pane_option(pane_id, key);
-    }
+    // One `Unset` batch over the shared lifecycle list — no skips: the
+    // shell-fallback sweep keeps nothing (design D9).
+    let _ = store.apply(pane_id, &agent_session_wipe(&[]));
     let log_path = crate::activity::log_file_path(pane_id);
     let _ = std::fs::remove_file(log_path);
     crate::thinking_feed::remove_pi_feed(agent, session_id, env);
@@ -665,7 +690,7 @@ fn parse_subagents(raw: &str) -> Vec<String> {
 }
 
 /// Split a tmux format line while honoring tmux `#{q:...}` backslash escapes.
-fn split_tmux_fields(line: &str, delimiter: char) -> Vec<String> {
+pub(crate) fn split_tmux_fields(line: &str, delimiter: char) -> Vec<String> {
     let mut fields = Vec::new();
     let mut current = String::new();
     let mut escaped = false;
@@ -701,8 +726,46 @@ fn split_tmux_fields(line: &str, delimiter: char) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::super::options::test_mock;
     use super::*;
+    use crate::event::AgentEvent;
+    use crate::pane_state::{SESSION_CONTEXT, transition};
+    use crate::pane_store::{MemPaneStore, PaneSnapshot, PaneWrites};
+    use crate::tmux::AGENT_SESSION_PANE_OPTIONS;
+
+    /// A `MemPaneStore` that counts `apply` calls so a test can pin that
+    /// the shell-fallback wipe issues one tmux command.
+    struct CountingStore {
+        inner: MemPaneStore,
+        applies: std::cell::Cell<usize>,
+    }
+
+    impl CountingStore {
+        fn new() -> Self {
+            CountingStore {
+                inner: MemPaneStore::new(),
+                applies: std::cell::Cell::new(0),
+            }
+        }
+
+        fn contains(&self, pane: &str, key: &str) -> bool {
+            self.inner.contains(pane, key)
+        }
+    }
+
+    impl PaneStore for CountingStore {
+        fn snapshot(&self, pane: &str) -> PaneSnapshot {
+            self.inner.snapshot(pane)
+        }
+
+        fn get(&self, pane: &str, key: &str) -> String {
+            self.inner.get(pane, key)
+        }
+
+        fn apply(&self, pane: &str, writes: &PaneWrites) -> Result<(), String> {
+            self.applies.set(self.applies.get() + 1);
+            self.inner.apply(pane, writes)
+        }
+    }
 
     #[test]
     fn detect_codex_permission_mode_variants() {
@@ -1174,10 +1237,10 @@ mod tests {
 
     #[test]
     fn clear_agent_pane_state_clears_every_agent_session_option() {
-        let _guard = test_mock::install();
+        let store = MemPaneStore::new();
         let pane = "%SWEEP_ALL";
         for key in AGENT_SESSION_PANE_OPTIONS {
-            test_mock::set(pane, key, "x");
+            store.insert(pane, key, "x");
         }
 
         clear_agent_pane_state(
@@ -1185,13 +1248,39 @@ mod tests {
             AgentType::Claude,
             "",
             &crate::thinking_feed::FeedEnv::default(),
+            &store,
         );
 
         for key in AGENT_SESSION_PANE_OPTIONS {
             assert!(
-                !test_mock::contains(pane, key),
+                !store.contains(pane, key),
                 "{key} must be cleared by the shell-fallback sweep"
             );
+        }
+    }
+
+    #[test]
+    fn clear_agent_pane_state_issues_one_write_batch() {
+        let store = CountingStore::new();
+        let pane = "%SWEEP_ONE_BATCH";
+
+        clear_agent_pane_state(
+            pane,
+            AgentType::Codex,
+            "",
+            &crate::thinking_feed::FeedEnv::default(),
+            &store,
+        );
+
+        assert_eq!(store.applies.get(), 1, "a wipe is one write batch");
+        // And the batch is the full lifecycle list, nothing skipped.
+        let mut writes = PaneWrites::new();
+        for key in AGENT_SESSION_PANE_OPTIONS {
+            writes.unset(key);
+        }
+        store.apply(pane, &writes).unwrap();
+        for key in AGENT_SESSION_PANE_OPTIONS {
+            assert!(!store.contains(pane, key));
         }
     }
 
@@ -1245,19 +1334,115 @@ mod tests {
         assert_eq!(fields, vec!["one", "two|still-two", "three"]);
     }
 
+    // ─── write-then-read round trip ─────────────────────────────────
+
+    /// Quote one field value the way tmux's `#{q:...}` prints it for the
+    /// `list-panes` read: a backslash and the `|` delimiter are escaped,
+    /// and [`split_tmux_fields`] un-escapes them on the way back.
+    fn quote_field(value: &str) -> String {
+        let mut quoted = String::with_capacity(value.len());
+        for ch in value.chars() {
+            if ch == '\\' || ch == '|' {
+                quoted.push('\\');
+            }
+            quoted.push(ch);
+        }
+        quoted
+    }
+
+    /// Render one pane's options as a `list-panes -F` line with the
+    /// query format's 27-field pane suffix: tmux-native fields get fixed
+    /// values, every `@pane_*` option is read from the store.
+    fn render_pane_line(store: &MemPaneStore, pane: &str) -> String {
+        let mut fields = field_strings(&full_fields());
+        for (index, key) in [
+            (pane_line_field::PANE_STATUS, PANE_STATUS),
+            (pane_line_field::PANE_ATTENTION, PANE_ATTENTION),
+            (pane_line_field::AGENT, PANE_AGENT),
+            (4, PANE_NAME), // @pane_name: parsed as no field, still printed
+            (pane_line_field::PANE_ROLE, PANE_ROLE),
+            (pane_line_field::PROMPT, PANE_PROMPT),
+            (pane_line_field::PROMPT_SOURCE, PANE_PROMPT_SOURCE),
+            (pane_line_field::STARTED_AT, PANE_STARTED_AT),
+            (pane_line_field::WAIT_REASON, PANE_WAIT_REASON),
+            (pane_line_field::SUBAGENTS, PANE_SUBAGENTS),
+            (pane_line_field::PANE_CWD, PANE_CWD),
+            (pane_line_field::PERMISSION_MODE, PANE_PERMISSION_MODE),
+            (pane_line_field::WORKTREE_NAME, PANE_WORKTREE_NAME),
+            (pane_line_field::WORKTREE_BRANCH, PANE_WORKTREE_BRANCH),
+            (pane_line_field::SESSION_ID, PANE_SESSION_ID),
+            (pane_line_field::SIDEBAR_SPAWNED, SPAWNED_OPTION),
+            (pane_line_field::BG_CMD, PANE_BG_CMD),
+            (pane_line_field::SUBAGENT_KIND, PANE_SUBAGENT_KIND),
+            (pane_line_field::SUBAGENT_PARENT, PANE_SUBAGENT_PARENT),
+            (pane_line_field::SUBAGENT_TASK, PANE_SUBAGENT_TASK),
+        ] {
+            fields[index] = store.get(pane, key);
+        }
+        fields[pane_line_field::PANE_ID] = pane.to_string();
+        fields
+            .iter()
+            .map(|value| quote_field(value))
+            .collect::<Vec<_>>()
+            .join("|")
+    }
+
+    #[test]
+    fn a_multiline_wait_reason_survives_the_write_then_read_round_trip() {
+        // The seam's end-to-end guarantee: a value a hook writes must read
+        // back as one field of the pane list the sidebar polls. A `|` or a
+        // newline left in the stored reason would split the pane line here
+        // and shift every downstream field.
+        let store = MemPaneStore::new();
+        let pane = "%ROUNDTRIP";
+        store.insert(pane, PANE_STARTED_AT, "1700");
+
+        let event = AgentEvent::Notification {
+            agent: "claude".into(),
+            cwd: "/repo".into(),
+            permission_mode: "default".into(),
+            wait_reason: "waiting for\nyour input|permission needed".into(),
+            meta_only: false,
+            worktree: None,
+            agent_id: None,
+            session_id: Some("ses-1".into()),
+        };
+
+        // The handler path: one snapshot, one transition, one batched apply.
+        let snapshot = store.snapshot(pane);
+        let writes = transition(&snapshot, &event, &SESSION_CONTEXT);
+        store.apply(pane, &writes).unwrap();
+
+        // Render the pane the way tmux prints it for the sidebar's
+        // `list-panes -F` format, then parse it with the query decoder.
+        let line = render_pane_line(&store, pane);
+        let parsed = parse_pane_line(&line).expect("the pane must survive the round trip");
+
+        assert_eq!(
+            parsed.wait_reason, "waiting for your input permission needed",
+            "the reason must read back on one line, no separator left"
+        );
+        assert!(!parsed.wait_reason.contains('\n'));
+        assert!(!parsed.wait_reason.contains('|'));
+        assert_eq!(parsed.status, PaneStatus::Waiting);
+        assert!(parsed.attention);
+        assert_eq!(parsed.agent, AgentType::Claude);
+        assert_eq!(parsed.session_id.as_deref(), Some("ses-1"));
+    }
+
     #[test]
     fn parse_pane_line_wipes_stale_state_for_pi_shell_pane() {
         // A pi process can be killed without a shutdown event reaching the
         // sidebar, so a pi pane that fell back to the shell is swept the
         // same way a Codex or an OpenCode pane is.
-        let _guard = test_mock::install();
+        let store = MemPaneStore::new();
         let pane = "%PI_STALE";
-        test_mock::set(pane, PANE_AGENT, "pi");
-        test_mock::set(pane, PANE_PROMPT, "previous pi prompt");
-        test_mock::set(pane, PANE_PROMPT_SOURCE, "user");
-        test_mock::set(pane, PANE_STATUS, "running");
-        test_mock::set(pane, PANE_CWD, "/repo");
-        test_mock::set(pane, PANE_SESSION_ID, "ses-pi");
+        store.insert(pane, PANE_AGENT, "pi");
+        store.insert(pane, PANE_PROMPT, "previous pi prompt");
+        store.insert(pane, PANE_PROMPT_SOURCE, "user");
+        store.insert(pane, PANE_STATUS, "running");
+        store.insert(pane, PANE_CWD, "/repo");
+        store.insert(pane, PANE_SESSION_ID, "ses-pi");
         let log = crate::activity::log_file_path(pane);
         let _ = std::fs::create_dir_all(log.parent().unwrap());
         std::fs::write(&log, "1234|Read|main.rs\n").unwrap();
@@ -1268,7 +1453,7 @@ mod tests {
         fields[pane_line_field::PANE_CURRENT_COMMAND] = "zsh";
         let line = make_pane_line(&fields);
 
-        assert!(parse_pane_line(&line).is_none());
+        assert!(parse_pane_line_with(&line, &store).is_none());
         for key in &[
             PANE_AGENT,
             PANE_PROMPT,
@@ -1277,7 +1462,7 @@ mod tests {
             PANE_CWD,
         ] {
             assert!(
-                !test_mock::contains(pane, key),
+                !store.contains(pane, key),
                 "{key} must be cleared when a pi pane falls back to shell"
             );
         }
@@ -1289,10 +1474,10 @@ mod tests {
 
     #[test]
     fn parse_pane_fields_keeps_pi_shell_pane_when_process_is_alive() {
-        let _guard = test_mock::install();
+        let store = MemPaneStore::new();
         let pane = "%PI_LIVE";
-        test_mock::set(pane, PANE_AGENT, "pi");
-        test_mock::set(pane, PANE_PROMPT, "keep me");
+        store.insert(pane, PANE_AGENT, "pi");
+        store.insert(pane, PANE_PROMPT, "keep me");
 
         let mut fields = full_fields();
         fields[pane_line_field::PANE_ID] = pane;
@@ -1306,14 +1491,15 @@ mod tests {
             &fields,
             Some(&snapshot),
             &crate::thinking_feed::FeedEnv::default(),
+            &store,
         )
         .expect("live pi child process should keep pane visible");
 
         assert_eq!(pane_info.agent, AgentType::Pi);
-        assert!(test_mock::contains(pane, PANE_AGENT));
+        assert!(store.contains(pane, PANE_AGENT));
         assert_eq!(
-            test_mock::get(pane, PANE_PROMPT).as_deref(),
-            Some("keep me"),
+            store.get(pane, PANE_PROMPT),
+            "keep me",
             "live pi panes must not be swept just because tmux reports a shell"
         );
     }
@@ -1403,33 +1589,33 @@ mod tests {
         // Claude owns its own SessionEnd hook, so Rust must NOT sweep its
         // pane state even when `current_command` is a shell — otherwise
         // we race with the hook and lose legitimate prompt/status.
-        let _guard = test_mock::install();
+        let store = MemPaneStore::new();
         let pane = "%CLAUDE_SHELL";
-        test_mock::set(pane, PANE_AGENT, "claude");
-        test_mock::set(pane, PANE_PROMPT, "keep me");
-        test_mock::set(pane, PANE_STATUS, "running");
+        store.insert(pane, PANE_AGENT, "claude");
+        store.insert(pane, PANE_PROMPT, "keep me");
+        store.insert(pane, PANE_STATUS, "running");
 
         let mut fields = full_fields();
         fields[pane_line_field::PANE_ID] = pane;
         fields[pane_line_field::AGENT] = "claude";
         fields[pane_line_field::PANE_CURRENT_COMMAND] = "bash";
-        let _ = parse_pane_line(&make_pane_line(&fields));
+        let _ = parse_pane_line_with(&make_pane_line(&fields), &store);
 
-        assert!(test_mock::contains(pane, PANE_AGENT));
-        assert!(test_mock::contains(pane, PANE_PROMPT));
+        assert!(store.contains(pane, PANE_AGENT));
+        assert!(store.contains(pane, PANE_PROMPT));
         assert_eq!(
-            test_mock::get(pane, PANE_PROMPT).as_deref(),
-            Some("keep me"),
+            store.get(pane, PANE_PROMPT),
+            "keep me",
             "claude prompt must survive — SessionEnd hook is the clear path",
         );
     }
 
     #[test]
     fn parse_pane_fields_keeps_opencode_shell_pane_when_process_is_alive() {
-        let _guard = test_mock::install();
+        let store = MemPaneStore::new();
         let pane = "%OPENCODE_LIVE";
-        test_mock::set(pane, PANE_AGENT, "opencode");
-        test_mock::set(pane, PANE_PROMPT, "keep me");
+        store.insert(pane, PANE_AGENT, "opencode");
+        store.insert(pane, PANE_PROMPT, "keep me");
 
         let mut fields = full_fields();
         fields[pane_line_field::PANE_ID] = pane;
@@ -1443,24 +1629,25 @@ mod tests {
             &fields,
             Some(&snapshot),
             &crate::thinking_feed::FeedEnv::default(),
+            &store,
         )
         .expect("live OpenCode child process should keep pane visible");
 
         assert_eq!(pane_info.agent, AgentType::OpenCode);
-        assert!(test_mock::contains(pane, PANE_AGENT));
+        assert!(store.contains(pane, PANE_AGENT));
         assert_eq!(
-            test_mock::get(pane, PANE_PROMPT).as_deref(),
-            Some("keep me"),
+            store.get(pane, PANE_PROMPT),
+            "keep me",
             "live OpenCode panes must not be swept just because tmux reports a shell"
         );
     }
 
     #[test]
     fn parse_pane_fields_keeps_codex_shell_pane_when_process_is_alive() {
-        let _guard = test_mock::install();
+        let store = MemPaneStore::new();
         let pane = "%CODEX_LIVE";
-        test_mock::set(pane, PANE_AGENT, "codex");
-        test_mock::set(pane, PANE_PROMPT, "keep me");
+        store.insert(pane, PANE_AGENT, "codex");
+        store.insert(pane, PANE_PROMPT, "keep me");
 
         let mut fields = full_fields();
         fields[pane_line_field::PANE_ID] = pane;
@@ -1476,14 +1663,15 @@ mod tests {
             &fields,
             Some(&snapshot),
             &crate::thinking_feed::FeedEnv::default(),
+            &store,
         )
         .expect("live Codex child process should keep pane visible");
 
         assert_eq!(pane_info.agent, AgentType::Codex);
-        assert!(test_mock::contains(pane, PANE_AGENT));
+        assert!(store.contains(pane, PANE_AGENT));
         assert_eq!(
-            test_mock::get(pane, PANE_PROMPT).as_deref(),
-            Some("keep me"),
+            store.get(pane, PANE_PROMPT),
+            "keep me",
             "live Codex panes must not be swept just because tmux reports a shell"
         );
     }
@@ -1494,15 +1682,15 @@ mod tests {
         // neither fires a reliable process-exit hook, so the Rust poller
         // must clear @pane_* keys and the activity log when the pane
         // reverts to a shell. Mirrors the OpenCode regression test below.
-        let _guard = test_mock::install();
+        let store = MemPaneStore::new();
         let pane = "%CODEX_STALE";
-        test_mock::set(pane, PANE_AGENT, "codex");
-        test_mock::set(pane, PANE_PROMPT, "previous codex prompt");
-        test_mock::set(pane, PANE_PROMPT_SOURCE, "user");
-        test_mock::set(pane, PANE_STATUS, "waiting");
-        test_mock::set(pane, PANE_STARTED_AT, "1700000000");
-        test_mock::set(pane, PANE_CWD, "/repo/codex");
-        test_mock::set(pane, PANE_WAIT_REASON, "permission");
+        store.insert(pane, PANE_AGENT, "codex");
+        store.insert(pane, PANE_PROMPT, "previous codex prompt");
+        store.insert(pane, PANE_PROMPT_SOURCE, "user");
+        store.insert(pane, PANE_STATUS, "waiting");
+        store.insert(pane, PANE_STARTED_AT, "1700000000");
+        store.insert(pane, PANE_CWD, "/repo/codex");
+        store.insert(pane, PANE_WAIT_REASON, "permission");
         let log = crate::activity::log_file_path(pane);
         let _ = std::fs::create_dir_all(log.parent().unwrap());
         std::fs::write(&log, "1234|Bash|pytest\n").unwrap();
@@ -1513,7 +1701,7 @@ mod tests {
         fields[pane_line_field::PANE_CURRENT_COMMAND] = "zsh";
         let line = make_pane_line(&fields);
 
-        assert!(parse_pane_line(&line).is_none());
+        assert!(parse_pane_line_with(&line, &store).is_none());
         for key in &[
             PANE_AGENT,
             PANE_PROMPT,
@@ -1524,7 +1712,7 @@ mod tests {
             PANE_WAIT_REASON,
         ] {
             assert!(
-                !test_mock::contains(pane, key),
+                !store.contains(pane, key),
                 "{key} must be cleared when a codex pane falls back to shell"
             );
         }
@@ -1541,15 +1729,15 @@ mod tests {
         // process-exit hook. The detector must unset every @pane_* key it
         // seeded and remove the activity log so the next launch starts
         // from a clean slate without flashing stale prompt/status.
-        let _guard = test_mock::install();
+        let store = MemPaneStore::new();
         let pane = "%OPENCODE_STALE";
-        test_mock::set(pane, PANE_AGENT, "opencode");
-        test_mock::set(pane, PANE_PROMPT, "previous run");
-        test_mock::set(pane, PANE_PROMPT_SOURCE, "user");
-        test_mock::set(pane, PANE_STATUS, "running");
-        test_mock::set(pane, PANE_STARTED_AT, "1700000000");
-        test_mock::set(pane, PANE_CWD, "/repo");
-        test_mock::set(pane, PANE_SESSION_ID, "ses-1");
+        store.insert(pane, PANE_AGENT, "opencode");
+        store.insert(pane, PANE_PROMPT, "previous run");
+        store.insert(pane, PANE_PROMPT_SOURCE, "user");
+        store.insert(pane, PANE_STATUS, "running");
+        store.insert(pane, PANE_STARTED_AT, "1700000000");
+        store.insert(pane, PANE_CWD, "/repo");
+        store.insert(pane, PANE_SESSION_ID, "ses-1");
         let log = crate::activity::log_file_path(pane);
         let _ = std::fs::create_dir_all(log.parent().unwrap());
         std::fs::write(&log, "1234|Bash|ls\n").unwrap();
@@ -1560,7 +1748,7 @@ mod tests {
         fields[pane_line_field::PANE_CURRENT_COMMAND] = "fish";
         let line = make_pane_line(&fields);
 
-        assert!(parse_pane_line(&line).is_none());
+        assert!(parse_pane_line_with(&line, &store).is_none());
         for key in &[
             PANE_AGENT,
             PANE_PROMPT,
@@ -1571,7 +1759,7 @@ mod tests {
             PANE_SESSION_ID,
         ] {
             assert!(
-                !test_mock::contains(pane, key),
+                !store.contains(pane, key),
                 "{key} must be cleared after shell fallback sweep"
             );
         }
@@ -1709,8 +1897,12 @@ mod tests {
         let line_d = make_full_pane_line("grouped", 0);
 
         let input = format!("{line_a}\n{line_b}\n{line_c}\n{line_d}");
-        let (sessions_map, _, _) =
-            build_session_hierarchy(&input, None, &crate::thinking_feed::FeedEnv::default());
+        let (sessions_map, _, _) = build_session_hierarchy(
+            &input,
+            None,
+            &crate::thinking_feed::FeedEnv::default(),
+            &MemPaneStore::new(),
+        );
         let sessions = finalize_sessions(sessions_map);
 
         // Should produce two sessions: "primary" and "grouped"
@@ -1780,8 +1972,12 @@ mod tests {
     /// Parse the lines, run the parent-resolution post-pass, and flatten
     /// the result into the parsed panes.
     fn resolve_in(input: &str) -> Vec<PaneInfo> {
-        let (sessions_map, _, resolution) =
-            build_session_hierarchy(input, None, &crate::thinking_feed::FeedEnv::default());
+        let (sessions_map, _, resolution) = build_session_hierarchy(
+            input,
+            None,
+            &crate::thinking_feed::FeedEnv::default(),
+            &MemPaneStore::new(),
+        );
         let mut sessions_map = sessions_map;
         resolve_subagent_parents(&mut sessions_map, &resolution);
         finalize_sessions(sessions_map)
