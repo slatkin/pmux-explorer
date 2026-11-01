@@ -1,5 +1,6 @@
 mod commands;
 mod options;
+pub mod pane_store;
 mod panes;
 mod query;
 mod types;

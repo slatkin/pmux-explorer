@@ -104,13 +104,14 @@ fn set_attention(pane: &str, state: &str) {
 }
 
 /// Canonicalize a string before storing it in a tmux pane option. Tmux's
-/// pane-option format uses `|` as a field separator and `\n` as a record
-/// terminator, so both must be replaced with spaces to keep the stored
-/// value a single safe field. Readers that compare against raw process
-/// data (e.g. the bg-shell ps sweep) must apply the same normalization
-/// so round-tripping through storage doesn't silently break equality.
+/// pane-option format uses `|` as a field separator and a newline as a
+/// record terminator, so all three — `|`, `\n` and `\r` — must become a
+/// space to keep the stored value a single safe field. Readers that compare
+/// against raw process data (e.g. the bg-shell ps sweep) must apply the same
+/// normalization so round-tripping through storage doesn't silently break
+/// equality.
 pub(crate) fn sanitize_tmux_value(s: &str) -> String {
-    s.replace(['\n', '|'], " ")
+    s.replace(['\n', '\r', '|'], " ")
 }
 
 /// Canonicalize a label before writing it to the activity log. The log is
@@ -353,6 +354,11 @@ mod tests {
     #[test]
     fn sanitize_replaces_both() {
         assert_eq!(sanitize_tmux_value("a|b\nc"), "a b c");
+    }
+
+    #[test]
+    fn sanitize_replaces_carriage_returns() {
+        assert_eq!(sanitize_tmux_value("a\rb\r\nc"), "a b  c");
     }
 
     #[test]

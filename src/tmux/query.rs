@@ -111,7 +111,7 @@ fn pane_format() -> String {
     .join("|")
 }
 
-fn q(field: &str) -> String {
+pub(crate) fn q(field: &str) -> String {
     format!("#{{q:{field}}}")
 }
 
@@ -665,7 +665,7 @@ fn parse_subagents(raw: &str) -> Vec<String> {
 }
 
 /// Split a tmux format line while honoring tmux `#{q:...}` backslash escapes.
-fn split_tmux_fields(line: &str, delimiter: char) -> Vec<String> {
+pub(crate) fn split_tmux_fields(line: &str, delimiter: char) -> Vec<String> {
     let mut fields = Vec::new();
     let mut current = String::new();
     let mut escaped = false;

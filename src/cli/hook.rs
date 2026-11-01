@@ -1,4 +1,6 @@
 use crate::event::{AgentEvent, resolve_adapter};
+use crate::pane_store::{PaneStore, PaneWrites};
+use crate::tmux;
 
 use super::{read_stdin_json, tmux_pane};
 
@@ -34,12 +36,15 @@ pub(crate) fn cmd_hook(args: &[String]) -> i32 {
         return 0;
     };
 
-    handle_event(&pane, agent_name, event)
+    // The pane store is created once per hook invocation and passed down;
+    // every option write and read the event causes goes through it.
+    let store = tmux::pane_store::TmuxPaneStore;
+    handle_event(&pane, agent_name, &store, event)
 }
 
 // ─── event handler ──────────────────────────────────────────────────────────
 
-fn handle_event(pane: &str, agent_name: &str, event: AgentEvent) -> i32 {
+fn handle_event(pane: &str, agent_name: &str, store: &dyn PaneStore, event: AgentEvent) -> i32 {
     match event {
         AgentEvent::SessionStart {
             agent,
@@ -169,7 +174,13 @@ fn handle_event(pane: &str, agent_name: &str, event: AgentEvent) -> i32 {
             task_id,
             task_subject,
         } => {
-            super::set_attention(pane, "notification");
+            // The attention flag is a dispatch-level write and goes through
+            // the store like every other pane option write; the payload is
+            // the same `set -t P -p` command `set_attention` issued before
+            // the seam.
+            let mut attention = PaneWrites::new();
+            attention.set(tmux::PANE_ATTENTION, "notification");
+            let _ = store.apply(pane, &attention);
             let notifications = notification_settings();
             handlers::on_task_completed(pane, agent_name, &task_id, &task_subject, &notifications)
         }
