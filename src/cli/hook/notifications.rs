@@ -9,6 +9,8 @@ use super::context::{
     repo_label_from_pane,
 };
 
+// labels.rs's pane reads go through the store too.
+
 /// How to resolve the repo/branch labels and agent name that appear in
 /// the desktop-notification title. The handlers split cleanly in two:
 /// SessionStart-ish events have a full [`AgentContext`] from the
@@ -54,8 +56,8 @@ pub(super) fn notify_lifecycle(
             ctx.agent,
         ),
         NotifyLabels::FromPane { agent } => (
-            repo_label_from_pane(pane),
-            branch_label_from_pane(pane),
+            repo_label_from_pane(pane, store),
+            branch_label_from_pane(pane, store),
             agent,
         ),
     };
@@ -70,6 +72,7 @@ pub(super) fn notify_lifecycle(
         &fingerprint,
         &desktop_notification::format_title(repo.as_deref(), branch.as_deref(), agent),
         payload.body,
+        store,
     )
 }
 
@@ -94,6 +97,7 @@ pub(super) fn notification_run_id(pane: &str, store: &dyn PaneStore) -> Option<u
         .ok()
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn notify_desktop(
     pane: &str,
     kind: DesktopNotificationKind,
@@ -102,8 +106,18 @@ pub(super) fn notify_desktop(
     fingerprint: &str,
     title: &str,
     body: &str,
+    store: &dyn PaneStore,
 ) -> bool {
-    desktop_notification::notify_if_allowed(settings, pane, kind, event, fingerprint, title, body)
+    desktop_notification::notify_if_allowed(
+        settings,
+        pane,
+        kind,
+        event,
+        fingerprint,
+        title,
+        body,
+        store,
+    )
 }
 
 pub(super) fn task_completed_fingerprint<'a>(task_id: &'a str, task_subject: &'a str) -> &'a str {

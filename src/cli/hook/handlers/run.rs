@@ -65,6 +65,7 @@ pub(in crate::cli::hook) fn on_stop(
             pane,
             DesktopNotificationKind::TaskCompleted,
             run_id,
+            store,
         );
         if !already_notified {
             let _ = notify_lifecycle(

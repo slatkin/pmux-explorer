@@ -1,5 +1,6 @@
 use super::meta::AgentContext;
 use crate::pane_state::resolve_cwd;
+use crate::pane_store::PaneStore;
 use crate::tmux;
 
 pub(in crate::cli::hook) fn repo_label_from_ctx(ctx: &AgentContext<'_>) -> Option<String> {
@@ -7,12 +8,15 @@ pub(in crate::cli::hook) fn repo_label_from_ctx(ctx: &AgentContext<'_>) -> Optio
     repo_label_from_path(cwd)
 }
 
-pub(in crate::cli::hook) fn repo_label_from_pane(pane: &str) -> Option<String> {
-    let cwd = tmux::get_pane_option_value(pane, tmux::PANE_CWD);
+pub(in crate::cli::hook) fn repo_label_from_pane(
+    pane: &str,
+    store: &dyn PaneStore,
+) -> Option<String> {
+    let cwd = store.get(pane, tmux::PANE_CWD);
     if !cwd.is_empty() {
         return repo_label_from_path(&cwd);
     }
-    let worktree = tmux::get_pane_option_value(pane, tmux::PANE_WORKTREE_NAME);
+    let worktree = store.get(pane, tmux::PANE_WORKTREE_NAME);
     if !worktree.is_empty() {
         return Some(worktree);
     }
@@ -29,12 +33,15 @@ pub(in crate::cli::hook) fn branch_label_from_ctx(ctx: &AgentContext<'_>) -> Opt
     current_branch(cwd)
 }
 
-pub(in crate::cli::hook) fn branch_label_from_pane(pane: &str) -> Option<String> {
-    let wt_branch = tmux::get_pane_option_value(pane, tmux::PANE_WORKTREE_BRANCH);
+pub(in crate::cli::hook) fn branch_label_from_pane(
+    pane: &str,
+    store: &dyn PaneStore,
+) -> Option<String> {
+    let wt_branch = store.get(pane, tmux::PANE_WORKTREE_BRANCH);
     if !wt_branch.is_empty() {
         return Some(wt_branch);
     }
-    let cwd = tmux::get_pane_option_value(pane, tmux::PANE_CWD);
+    let cwd = store.get(pane, tmux::PANE_CWD);
     if cwd.is_empty() {
         None
     } else {
@@ -65,6 +72,7 @@ pub(in crate::cli::hook) fn repo_label_from_path(path: &str) -> Option<String> {
 mod tests {
     use super::*;
     use crate::event::WorktreeInfo;
+    use crate::pane_store::MemPaneStore;
 
     #[test]
     fn repo_label_from_path_strips_trailing_slash() {
@@ -99,22 +107,22 @@ mod tests {
 
     #[test]
     fn repo_label_from_pane_prefers_pane_cwd_then_worktree_name() {
-        let _guard = tmux::test_mock::install();
+        let store = MemPaneStore::new();
         let pane = "%PANE_REPO";
-        tmux::test_mock::set(pane, tmux::PANE_CWD, "/home/user/app");
-        tmux::test_mock::set(pane, tmux::PANE_WORKTREE_NAME, "wt-name");
+        store.insert(pane, tmux::PANE_CWD, "/home/user/app");
+        store.insert(pane, tmux::PANE_WORKTREE_NAME, "wt-name");
 
-        assert_eq!(repo_label_from_pane(pane), Some("app".into()));
+        assert_eq!(repo_label_from_pane(pane, &store), Some("app".into()));
 
-        tmux::test_mock::set(pane, tmux::PANE_CWD, "");
-        assert_eq!(repo_label_from_pane(pane), Some("wt-name".into()));
+        store.insert(pane, tmux::PANE_CWD, "");
+        assert_eq!(repo_label_from_pane(pane, &store), Some("wt-name".into()));
     }
 
     #[test]
     fn repo_label_from_pane_returns_none_when_all_empty() {
-        let _guard = tmux::test_mock::install();
+        let store = MemPaneStore::new();
         let pane = "%EMPTY_REPO";
-        assert!(repo_label_from_pane(pane).is_none());
+        assert!(repo_label_from_pane(pane, &store).is_none());
     }
 
     #[test]
@@ -135,10 +143,13 @@ mod tests {
 
     #[test]
     fn branch_label_from_pane_prefers_worktree_branch_option() {
-        let _guard = tmux::test_mock::install();
+        let store = MemPaneStore::new();
         let pane = "%PANE_BRANCH";
-        tmux::test_mock::set(pane, tmux::PANE_WORKTREE_BRANCH, "feat/abc");
-        tmux::test_mock::set(pane, tmux::PANE_CWD, "/tmp/somewhere");
-        assert_eq!(branch_label_from_pane(pane), Some("feat/abc".into()));
+        store.insert(pane, tmux::PANE_WORKTREE_BRANCH, "feat/abc");
+        store.insert(pane, tmux::PANE_CWD, "/tmp/somewhere");
+        assert_eq!(
+            branch_label_from_pane(pane, &store),
+            Some("feat/abc".into())
+        );
     }
 }
