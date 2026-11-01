@@ -9,6 +9,7 @@ pub(crate) mod toggle;
 
 use std::io::Read;
 
+use crate::pane_store::PaneStore;
 use crate::task_reminders;
 use crate::tmux;
 
@@ -135,7 +136,11 @@ fn cmd_set_status(args: &[String]) -> i32 {
     if pane.is_empty() {
         return 0;
     }
-    set_status(&pane, status);
+    // The status↔attention coupling has one owner, `status_writes`; the
+    // command applies its write list through the tmux adapter like a hook
+    // event does, so `set-status` and the transition cannot drift apart.
+    let store = tmux::pane_store::TmuxPaneStore;
+    let _ = store.apply(&pane, &crate::pane_state::status_writes(status));
     0
 }
 

@@ -1,5 +1,6 @@
 use crate::event::{AgentEvent, Reported, resolve_adapter};
-use crate::pane_store::{PaneStore, PaneWrites};
+use crate::pane_state::transition;
+use crate::pane_store::PaneStore;
 use crate::tmux;
 
 use super::{read_stdin_json, tmux_pane};
@@ -9,7 +10,6 @@ mod context;
 mod handlers;
 mod notifications;
 
-use context::sync_pane_location;
 use notifications::notification_settings;
 
 // ─── hook subcommand ────────────────────────────────────────────────────────
@@ -118,13 +118,13 @@ fn handle_event(
             let ctx = context::make_ctx(agent, cwd, worktree);
             handlers::on_permission_denied(pane, &event, &reported, &ctx, &notifications, store)
         }
-        AgentEvent::CwdChanged {
-            cwd,
-            worktree,
-            session_id,
-            ..
-        } => {
-            sync_pane_location(pane, cwd, worktree, session_id);
+        AgentEvent::CwdChanged { .. } => {
+            // The transition owns the location writes: the session id, the
+            // cwd and the worktree pair, guarded while subagents are
+            // active and gated on the event's reported fields.
+            let snapshot = store.snapshot(pane);
+            let writes = transition(&snapshot, &event, &reported);
+            let _ = store.apply(pane, &writes);
             0
         }
         AgentEvent::TaskCreated { .. } => 0,
@@ -132,13 +132,11 @@ fn handle_event(
             task_id,
             task_subject,
         } => {
-            // The attention flag is a dispatch-level write and goes through
-            // the store like every other pane option write; the payload is
-            // the same `set -t P -p` command `set_attention` issued before
-            // the seam.
-            let mut attention = PaneWrites::new();
-            attention.set(tmux::PANE_ATTENTION, "notification");
-            let _ = store.apply(pane, &attention);
+            // The attention flag comes from the transition's TaskCompleted
+            // arm, like every other event's option writes.
+            let snapshot = store.snapshot(pane);
+            let writes = transition(&snapshot, &event, &reported);
+            let _ = store.apply(pane, &writes);
             let notifications = notification_settings();
             handlers::on_task_completed(
                 pane,
