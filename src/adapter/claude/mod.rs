@@ -1,8 +1,8 @@
-use crate::event::{AgentEvent, AgentEventKind, EventAdapter};
+use crate::event::{AgentEvent, AgentEventKind, EventAdapter, Reported};
 use crate::tmux::CLAUDE_AGENT;
 use serde_json::Value;
 
-use super::{HookRegistration, json_str, optional_str, parse_worktree};
+use super::{HookRegistration, json_str, optional_str, parse_worktree, session_context_reported};
 
 fn parse_json_field(input: &Value, field: &str) -> Value {
     input
@@ -106,6 +106,16 @@ impl ClaudeAdapter {
 }
 
 impl EventAdapter for ClaudeAdapter {
+    fn reported(&self, event_name: &str, input: &Value) -> Reported {
+        // Every event that carries session context reports the session
+        // identity fields, `cwd-changed` included.
+        match event_name {
+            "session-start" | "user-prompt-submit" | "notification" | "stop" | "stop-failure"
+            | "permission-denied" | "cwd-changed" => session_context_reported(input),
+            _ => Reported::NONE,
+        }
+    }
+
     fn parse(&self, event_name: &str, input: &Value) -> Option<AgentEvent> {
         match event_name {
             "session-start" => Some(AgentEvent::SessionStart {

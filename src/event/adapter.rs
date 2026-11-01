@@ -1,12 +1,17 @@
 use serde_json::Value;
 
-use super::AgentEvent;
+use super::{AgentEvent, Reported};
 use crate::adapter;
 use crate::tmux::{CLAUDE_AGENT, CODEX_AGENT, OPENCODE_AGENT, PI_AGENT};
 
 /// Adapter that converts external agent events into internal `AgentEvent`.
 pub trait EventAdapter {
     fn parse(&self, event_name: &str, input: &Value) -> Option<AgentEvent>;
+
+    /// The payload fields the event reports, declared per event. A payload
+    /// that is not valid JSON reports nothing: it arrives as `Null`, so it
+    /// clears nothing.
+    fn reported(&self, event_name: &str, input: &Value) -> Reported;
 }
 
 pub fn resolve_adapter(agent_name: &str) -> Option<Box<dyn EventAdapter>> {

@@ -1,4 +1,4 @@
-use crate::event::{AgentEvent, resolve_adapter};
+use crate::event::{AgentEvent, Reported, resolve_adapter};
 use crate::pane_store::{PaneStore, PaneWrites};
 use crate::tmux;
 
@@ -35,16 +35,26 @@ pub(crate) fn cmd_hook(args: &[String]) -> i32 {
     let Some(event) = adapter.parse(event_name, &input) else {
         return 0;
     };
+    let reported = adapter.reported(event_name, &input);
 
     // The pane store is created once per hook invocation and passed down;
     // every option write and read the event causes goes through it.
     let store = tmux::pane_store::TmuxPaneStore;
-    handle_event(&pane, agent_name, &store, event)
+    handle_event(&pane, agent_name, &store, event, reported)
 }
 
 // ─── event handler ──────────────────────────────────────────────────────────
 
-fn handle_event(pane: &str, agent_name: &str, store: &dyn PaneStore, event: AgentEvent) -> i32 {
+/// Apply one event to one pane. `reported` is the field set the adapter
+/// declared for the event; the transition function consumes it when the
+/// handlers move onto the store, so it is carried but not read yet.
+fn handle_event(
+    pane: &str,
+    agent_name: &str,
+    store: &dyn PaneStore,
+    event: AgentEvent,
+    _reported: Reported,
+) -> i32 {
     match event {
         AgentEvent::SessionStart {
             agent,

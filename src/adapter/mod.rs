@@ -3,10 +3,34 @@ pub mod codex;
 pub mod opencode;
 pub mod pi;
 
-use crate::event::AgentEventKind;
+use crate::event::{AgentEventKind, Reported};
 
 pub(crate) fn json_str<'a>(val: &'a serde_json::Value, key: &str) -> &'a str {
     val.get(key).and_then(|v| v.as_str()).unwrap_or("")
+}
+
+/// The fields the Claude-shaped adapters (claude, codex, opencode) report on
+/// every event that carries session context, as those agents do today.
+static SESSION_CONTEXT_FIELDS: &[&str] = &["session_id", "cwd", "worktree"];
+
+/// The reported set of the declared `fields`, or nothing when the payload is
+/// not valid JSON. An invalid payload arrives as `Null` and reports nothing,
+/// so it clears nothing.
+pub(crate) fn reported_fields(
+    fields: &'static [&'static str],
+    input: &serde_json::Value,
+) -> Reported {
+    if input.is_null() {
+        Reported::NONE
+    } else {
+        Reported::new(fields)
+    }
+}
+
+/// The reported set of an event that carries session context for one of the
+/// Claude-shaped adapters.
+pub(crate) fn session_context_reported(input: &serde_json::Value) -> Reported {
+    reported_fields(SESSION_CONTEXT_FIELDS, input)
 }
 
 /// Parse the optional worktree object of a payload.
