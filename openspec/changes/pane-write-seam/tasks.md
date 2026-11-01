@@ -10,9 +10,9 @@
 
 ## 2. Reported fields per event
 
-- [ ] 2.1 Add a `Reported` set to the event path. The pi adapter builds it from the matching `PI_EVENTS` entry. The Claude, Codex and OpenCode adapters report `session_id`, `cwd` and `worktree` on every event that carries session context (for Claude that includes `cwd-changed`). Verify: per-adapter tests pin the set for each event, and a pi test shows `stop` does not report `worktree`.
-- [ ] 2.2 Make an invalid payload report nothing. Verify: a test sends invalid JSON through the adapter and gets an empty `Reported`.
-- [ ] 2.3 Reword `docs/agent-protocol.md`: the fields listed for an event are reported and an empty value clears; every other field is left alone. Verify: the text no longer says an omitted field and an empty field are the same, and `setup pi` output is byte-for-byte unchanged (existing contract test passes).
+- [x] 2.1 Add a `Reported` set to the event path. The pi adapter builds it from the matching `PI_EVENTS` entry. The Claude, Codex and OpenCode adapters report `session_id`, `cwd` and `worktree` on every event that carries session context (for Claude that includes `cwd-changed`). Verify: per-adapter tests pin the set for each event, and a pi test shows `stop` does not report `worktree`.
+- [x] 2.2 Make an invalid payload report nothing. Verify: a test sends invalid JSON through the adapter and gets an empty `Reported`.
+- [x] 2.3 Reword `docs/agent-protocol.md`: the fields listed for an event are reported and an empty value clears; every other field is left alone. Verify: the text no longer says an omitted field and an empty field are the same, and `setup pi` output is byte-for-byte unchanged (existing contract test passes).
 
 ## 3. The transition function
 
