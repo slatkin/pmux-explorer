@@ -78,7 +78,8 @@ pub(super) fn git_poll_loop(tmux_pane: &str, git_tx: &SyncSender<GitData>, activ
             continue;
         }
 
-        // When the sidebar has focus, focused_pane_path returns None.
+        // When the sidebar has focus and no last pane exists, focused_pane_path
+        // returns None.
         // Reuse the last known path so git data keeps updating.
         if let Some(p) = tmux::focused_pane_path(tmux_pane) {
             last_path = Some(p);

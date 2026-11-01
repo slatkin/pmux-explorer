@@ -56,7 +56,9 @@ impl AppState {
         // Query tmux directly for the active pane, not through `repo_groups`
         // which only contains agent panes. This allows activity/git info to
         // be displayed even when the focused pane has no agent running.
-        // When the sidebar has focus, find_active_pane returns None — preserve
+        // When the sidebar has focus, pick_active_pane names the window's
+        // last active pane, so a window switched to with the sidebar active
+        // still marks its agent. With no such pane it returns None — preserve
         // the previously focused pane so bottom panel data stays stable —
         // unless that pane lives in another window, where it would mark
         // an agent the user is not looking at.
@@ -81,7 +83,8 @@ impl AppState {
     ///
     /// This only ever runs for a pane tmux reports as focused; while the
     /// sidebar holds the keyboard [`tmux::find_active_pane`] reports
-    /// nothing, so browsing with `j`/`k` keeps the cursor it moved.
+    /// the pane that held it before, which is no focus change, so browsing
+    /// with `j`/`k` keeps the cursor it moved.
     fn adopt_focused_pane(&mut self, pane_id: String) {
         if self.focus_state.focused_pane_id.as_deref() != Some(pane_id.as_str()) {
             self.global.cursor_pane_id = Some(pane_id.clone());
