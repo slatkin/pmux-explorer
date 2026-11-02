@@ -143,6 +143,20 @@ fn ultimate_root<'a>(
     parents: &std::collections::HashMap<&'a str, &'a str>,
     order: &std::collections::HashMap<&'a str, usize>,
 ) -> Option<&'a str> {
+    let end = chain_end(start, parents, order);
+    (end != start).then_some(end)
+}
+
+/// Walk one parent chain and return its end: the last pane before a
+/// parent that is absent from `order` or not given at all — or, on a
+/// cycle, the cycle pane tmux lists first. [`nest_roots`] (through
+/// [`ultimate_root`]) and [`board_owner`] share this one loop so
+/// their stop rules cannot drift.
+fn chain_end<'a>(
+    start: &'a str,
+    parents: &std::collections::HashMap<&'a str, &'a str>,
+    order: &std::collections::HashMap<&'a str, usize>,
+) -> &'a str {
     let mut chain: Vec<&'a str> = vec![start];
     let mut seen: std::collections::HashMap<&'a str, usize> = std::collections::HashMap::new();
     seen.insert(start, 0);
@@ -153,9 +167,10 @@ fn ultimate_root<'a>(
             .copied()
             .filter(|parent_id| order.contains_key(parent_id));
         let Some(next) = next else {
-            // No in-group parent left: an ancestor heads the reachable
-            // chain; `start` itself is top-level.
-            return (current != start).then_some(current);
+            // No parent left to follow: the chain's end is the last
+            // pane reached. `start` itself counts — a top-level pane
+            // is its own end.
+            return current;
         };
         let Some(&cycle_start) = seen.get(next) else {
             seen.insert(next, chain.len());
@@ -163,11 +178,14 @@ fn ultimate_root<'a>(
             current = next;
             continue;
         };
-        // A cycle: its root is the cycle pane tmux lists first.
+        // A cycle: its end is the cycle pane tmux lists first. The
+        // slice is never empty — `current` is always in it — so the
+        // fallback never fires.
         return chain[cycle_start..]
             .iter()
             .min_by_key(|pane_id| order.get(**pane_id).copied().unwrap_or(usize::MAX))
-            .copied();
+            .copied()
+            .unwrap_or(current);
     }
 }
 
@@ -178,8 +196,8 @@ fn ultimate_root<'a>(
 /// (unlike [`nest_roots`], which stays inside one group) and stops at
 /// the last live pane reached — a pane with no subagent identity, an
 /// orphaned parent, or a parent absent from the groups. A pane id not
-/// in the groups is its own owner. A loop returns the pane tmux lists
-/// first among the cycle, the same tie-break `nest_roots` uses.
+/// in the groups is its own owner. Loops and the cycle tie-break are
+/// [`chain_end`]'s, shared with `nest_roots`.
 pub fn board_owner(focused_id: &str, repo_groups: &[RepoGroup]) -> String {
     let mut order: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
     let mut parents: std::collections::HashMap<&str, &str> = std::collections::HashMap::new();
@@ -196,36 +214,10 @@ pub fn board_owner(focused_id: &str, repo_groups: &[RepoGroup]) -> String {
         }
     }
 
-    let mut chain: Vec<&str> = vec![focused_id];
-    let mut seen: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
-    seen.insert(focused_id, 0);
-    let mut current = focused_id;
-    loop {
-        let next = parents
-            .get(current)
-            .copied()
-            .filter(|parent_id| order.contains_key(parent_id));
-        let Some(next) = next else {
-            // No parent left to follow: a non-subagent, an orphaned
-            // subagent, a parent pane that is not live, or a pane id
-            // not in the groups at all — the last pane reached owns
-            // the board.
-            return current.to_string();
-        };
-        let Some(&cycle_start) = seen.get(next) else {
-            seen.insert(next, chain.len());
-            chain.push(next);
-            current = next;
-            continue;
-        };
-        // A loop: the owner is the cycle pane tmux lists first.
-        return chain[cycle_start..]
-            .iter()
-            .copied()
-            .min_by_key(|pane_id| order.get(*pane_id).copied().unwrap_or(usize::MAX))
-            .unwrap_or(current)
-            .to_string();
-    }
+    // One shared walk owns the stop rules and the cycle tie-break;
+    // only the maps' scope differs from `nest_roots`: every pane of
+    // every group, so a parent in another repo is still followed.
+    chain_end(focused_id, &parents, &order).to_string()
 }
 
 /// Whether `pane_id` is drawn indented, that is, whether it has a root and
@@ -971,24 +963,6 @@ mod tests {
     }
 
     #[test]
-    fn board_owner_breaks_a_loop_at_the_pane_tmux_lists_first() {
-        let groups = owner_groups(vec![vec![
-            subagent_pane("%0", pane_parent("%1")),
-            subagent_pane("%1", pane_parent("%0")),
-        ]]);
-        assert_eq!(board_owner("%0", &groups), "%0");
-        assert_eq!(board_owner("%1", &groups), "%0");
-
-        // The same cycle listed the other way round roots at `%1`.
-        let flipped = owner_groups(vec![vec![
-            subagent_pane("%1", pane_parent("%0")),
-            subagent_pane("%0", pane_parent("%1")),
-        ]]);
-        assert_eq!(board_owner("%0", &flipped), "%1");
-        assert_eq!(board_owner("%1", &flipped), "%1");
-    }
-
-    #[test]
     fn board_owner_treats_a_self_parent_as_its_own_owner() {
         let groups = owner_groups(vec![vec![subagent_pane("%0", pane_parent("%0"))]]);
 
@@ -997,6 +971,10 @@ mod tests {
 
     #[test]
     fn board_owner_and_nest_roots_agree_on_an_in_group_chain() {
+        // One walk now serves both callers, so this pins the remaining
+        // difference — scope, not the loop: `board_owner`'s maps are
+        // flattened from `repo_groups`, `nest_roots`' from one pane
+        // list, and they must agree wherever the chain is in-group.
         let panes = with_git(vec![
             test_pane("%0", env!("CARGO_MANIFEST_DIR")),
             subagent_pane("%1", pane_parent("%0")),
