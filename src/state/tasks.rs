@@ -3,19 +3,24 @@ use std::time::SystemTime;
 use super::ScrollState;
 use crate::task_store::TaskItem;
 
-/// The focused pane's task store, refreshed with the same mtime check
+/// The board owner's task store, refreshed with the same mtime check
 /// as the activity log. Tasks never render from a direct file read;
-/// `refresh_pane_tasks` fills `items` once per change.
+/// `refresh_pane_tasks` fills `items` once per change. The board
+/// owner is the focused pane itself, except for a pi pmux subagent
+/// with a live parent, which shows its ultimate parent's board.
 #[derive(Debug, Clone)]
 pub struct TasksState {
-    /// The focused pane's stored items in recorded order.
+    /// The board owner's stored items in recorded order.
     pub items: Vec<TaskItem>,
-    /// The focused pane's stored description, rendered pinned above
+    /// The board owner's stored description, rendered pinned above
     /// the item list.
     pub description: String,
-    /// `(focused_pane_id, mtime)` of the task store most recently read
-    /// into `items`. `refresh_pane_tasks` skips re-reading the store
-    /// when neither field has changed.
+    /// `(board owner pane id, mtime)` of the task store most recently
+    /// read into `items`. The board owner is the focused pane itself,
+    /// except for a pmux subagent with a live parent, which reads its
+    /// ultimate parent — so a focus move between a parent and its
+    /// subagent hits the cache. `refresh_pane_tasks` skips re-reading
+    /// the store when neither field has changed.
     pub store_cache: Option<(String, SystemTime)>,
     /// The Tasks tab's own scroll offset. Content is laid out fresh
     /// every frame; `total_lines`/`visible_height` are written by the

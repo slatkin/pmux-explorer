@@ -169,6 +169,7 @@ Per-pane file-based state:
 | `activity.entries` | Every 1s | Focused pane's activity entries (max 50) |
 | `activity.max_entries` | Once at startup | Max activity log entries to display |
 | `activity.log_cache` | Every 1s | `(focused_pane_id, mtime)` of the last-rendered activity log; skips re-reads when unchanged |
+| `tasks` | Every 1s (refresh cycle) | The Tasks tab's board (`TasksState`): the board owner's task items, description and `(owner id, mtime)` read cache. The board owner is the focused pane itself, except for a pmux subagent pane with a live parent, which reads its ultimate parent's store (`group::board_owner`) — read-side only, since `task-set`/`task-update`/`task-describe` still write `$TMUX_PANE`'s own store; the cache is keyed on the owner id, so a focus move between a parent and its subagent hits the cache |
 | `git` | Every 2s (bg thread) | Branch, diff stats, ahead/behind, PR number |
 | `theme` | Once at startup | Color theme from tmux `@sidebar_color_*` variables |
 | `popup` | On user input / render | `PopupState` enum: `None` / `Repo { selected, area }` / `Notices { area }`. Enforces "at most one popup open" via the type system |

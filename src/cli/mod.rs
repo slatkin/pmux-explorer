@@ -479,6 +479,35 @@ mod tests {
     }
 
     #[test]
+    fn a_task_set_writes_the_calling_pane_s_own_store() {
+        // The board-owner redirect is read-side only, and the write
+        // path never consults subagent identity: `$TMUX_PANE` alone
+        // names the store, so this pin holds for a pmux subagent pane
+        // too. A second pane's store stays untouched either way.
+        let parent = "%CLI_TASK_BOARD_PARENT";
+        let subagent = "%CLI_TASK_BOARD_CHILD";
+        for pane in [parent, subagent] {
+            let _ = std::fs::remove_file(crate::task_store::store_file_path(pane));
+        }
+
+        assert_eq!(task_set_for_pane(subagent, "subagent's own item"), 0);
+
+        assert_eq!(
+            crate::task_store::read_tasks(subagent).len(),
+            1,
+            "the write lands in the subagent's own store"
+        );
+        assert!(
+            crate::task_store::store_mtime(parent).is_none(),
+            "the parent's store must not be created or touched"
+        );
+
+        for pane in [parent, subagent] {
+            let _ = std::fs::remove_file(crate::task_store::store_file_path(pane));
+        }
+    }
+
+    #[test]
     fn task_help_carries_both_reminder_strings_verbatim() {
         // The task-command help is the first surface that references the
         // single-source reminder wording (src/task_reminders.rs); the

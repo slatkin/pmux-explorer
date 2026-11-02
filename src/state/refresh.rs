@@ -145,9 +145,11 @@ impl AppState {
     }
 
     /// One tick of the file-backed refresh pass: the task-store close
-    /// sweep, then the activity log, the focused pane's task list,
-    /// every pane's task progress, and — while the Thought tab is
-    /// displayed — the focused pane's thinking feed. Touches only local
+    /// sweep, then the activity log, the board owner's task list (the
+    /// focused pane itself, or its ultimate parent for a pmux subagent
+    /// with a live parent), every pane's task progress, and — while the
+    /// Thought tab is displayed — the focused pane's thinking feed.
+    /// Touches only local
     /// files (the `/tmp` stores plus the feed under `$XDG_RUNTIME_DIR`
     /// or `/tmp`) and `AppState` — no tmux I/O — so tests drive it
     /// directly.
@@ -449,9 +451,14 @@ impl AppState {
         self.timers.last_bg_shell_sweep = Some(std::time::Instant::now());
     }
 
-    /// Refresh the focused pane's task store with the same mtime check
-    /// as `refresh_activity_log`: skip the re-read when neither the
-    /// focused pane nor the store file's mtime has changed.
+    /// Refresh the Tasks tab from the focused pane's **board owner**
+    /// (`group::board_owner`): the pane itself, except for a pi pmux
+    /// subagent with a live parent, which reads its ultimate parent's
+    /// store. The read uses the same mtime check as
+    /// `refresh_activity_log` — skip the re-read when neither the
+    /// board owner nor the store file's mtime has changed — and the
+    /// cache is keyed on the owner id, so a focus move between a
+    /// parent and its subagent hits the cache.
     pub(crate) fn refresh_pane_tasks(&mut self) {
         let Some(ref pane_id) = self.focus_state.focused_pane_id else {
             self.tasks.items.clear();
@@ -459,14 +466,15 @@ impl AppState {
             self.tasks.store_cache = None;
             return;
         };
-        let current_mtime = task_store::store_mtime(pane_id);
-        if file_cache_fresh(self.tasks.store_cache.as_ref(), pane_id, current_mtime) {
+        let owner_id = crate::group::board_owner(pane_id, &self.repo_groups);
+        let current_mtime = task_store::store_mtime(&owner_id);
+        if file_cache_fresh(self.tasks.store_cache.as_ref(), &owner_id, current_mtime) {
             return;
         }
-        let list = task_store::read_task_list(pane_id);
+        let list = task_store::read_task_list(&owner_id);
         self.tasks.items = list.items;
         self.tasks.description = list.description;
-        self.tasks.store_cache = current_mtime.map(|m| (pane_id.clone(), m));
+        self.tasks.store_cache = current_mtime.map(|m| (owner_id, m));
     }
 
     pub(crate) fn refresh_activity_log(&mut self) {
@@ -1209,6 +1217,191 @@ mod tests {
 
         cleanup_task_store(pane_a);
         cleanup_task_store(pane_b);
+    }
+
+    // ─── refresh_pane_tasks: the board owner ───────────────────────
+
+    fn pi_subagent_pane(id: &str, parent: crate::tmux::SubagentParent) -> PaneInfo {
+        let mut pane = test_pane(id);
+        pane.agent = AgentType::Pi;
+        pane.subagent = Some(crate::tmux::SubagentInfo {
+            kind: crate::pmux_task::PmuxTaskKind::Spawned,
+            task: None,
+            parent,
+        });
+        pane
+    }
+
+    fn owner_group(name: &str, panes: Vec<PaneInfo>) -> crate::group::RepoGroup {
+        crate::group::RepoGroup {
+            name: name.into(),
+            has_focus: true,
+            panes: panes
+                .into_iter()
+                .map(|pane| (pane, crate::group::PaneGitInfo::default()))
+                .collect(),
+        }
+    }
+
+    fn owner_groups(groups: Vec<crate::group::RepoGroup>, focused: &str) -> AppState {
+        let mut state = AppState::new("%99".into());
+        state.repo_groups = groups;
+        state.focus_state.focused_pane_id = Some(focused.into());
+        state
+    }
+
+    #[test]
+    fn a_focused_subagent_shows_its_parent_s_items_and_description() {
+        let parent = "%TASK_PARENT";
+        let subagent = "%TASK_SUB_CHILD";
+        crate::task_store::record_task(parent, "parent item").unwrap();
+        crate::task_store::set_description(parent, "parent goal").unwrap();
+        crate::task_store::record_task(subagent, "subagent item").unwrap();
+        let mut state = owner_groups(
+            vec![owner_group(
+                "test",
+                vec![
+                    test_pane(parent),
+                    pi_subagent_pane(subagent, crate::tmux::SubagentParent::Pane(parent.into())),
+                ],
+            )],
+            subagent,
+        );
+
+        state.refresh_pane_tasks();
+
+        assert_eq!(state.tasks.items.len(), 1);
+        assert_eq!(state.tasks.items[0].subject, "parent item");
+        assert_eq!(state.tasks.description, "parent goal");
+        assert_eq!(
+            state.tasks.store_cache.as_ref().map(|(id, _)| id.as_str()),
+            Some(parent),
+            "the cache is keyed on the board owner"
+        );
+
+        cleanup_task_store(parent);
+        cleanup_task_store(subagent);
+    }
+
+    #[test]
+    fn a_focused_orphaned_subagent_shows_its_own_items() {
+        let subagent = "%TASK_ORPHAN";
+        crate::task_store::record_task(subagent, "orphan item").unwrap();
+        let mut state = owner_groups(
+            vec![owner_group(
+                "test",
+                vec![pi_subagent_pane(
+                    subagent,
+                    crate::tmux::SubagentParent::Orphaned,
+                )],
+            )],
+            subagent,
+        );
+
+        state.refresh_pane_tasks();
+
+        assert_eq!(state.tasks.items.len(), 1);
+        assert_eq!(state.tasks.items[0].subject, "orphan item");
+        assert_eq!(
+            state.tasks.store_cache.as_ref().map(|(id, _)| id.as_str()),
+            Some(subagent),
+            "an orphan owns its own board"
+        );
+
+        cleanup_task_store(subagent);
+    }
+
+    #[test]
+    fn a_live_subagent_s_own_store_is_not_read() {
+        let parent = "%TASK_LIVE_PARENT";
+        let subagent = "%TASK_LIVE_CHILD";
+        crate::task_store::record_task(parent, "parent item").unwrap();
+        crate::task_store::record_task(subagent, "subagent item").unwrap();
+        let mut state = owner_groups(
+            vec![owner_group(
+                "test",
+                vec![
+                    test_pane(parent),
+                    pi_subagent_pane(subagent, crate::tmux::SubagentParent::Pane(parent.into())),
+                ],
+            )],
+            subagent,
+        );
+
+        state.refresh_pane_tasks();
+
+        assert_eq!(state.tasks.items[0].subject, "parent item");
+        assert_eq!(
+            state.tasks.store_cache.as_ref().map(|(id, _)| id.as_str()),
+            Some(parent),
+            "the subagent's own store is never statted while its parent is live"
+        );
+
+        cleanup_task_store(parent);
+        cleanup_task_store(subagent);
+    }
+
+    #[test]
+    fn a_focus_move_from_parent_to_subagent_hits_the_cache() {
+        let parent = "%TASK_MOVE_PARENT";
+        let subagent = "%TASK_MOVE_CHILD";
+        crate::task_store::record_task(parent, "parent item").unwrap();
+        crate::task_store::record_task(subagent, "subagent item").unwrap();
+        let mut state = owner_groups(
+            vec![owner_group(
+                "test",
+                vec![
+                    test_pane(parent),
+                    pi_subagent_pane(subagent, crate::tmux::SubagentParent::Pane(parent.into())),
+                ],
+            )],
+            parent,
+        );
+        state.refresh_pane_tasks();
+        let cached = state.tasks.store_cache.clone().unwrap();
+
+        state.focus_state.focused_pane_id = Some(subagent.into());
+        state.refresh_pane_tasks();
+
+        assert_eq!(
+            state.tasks.store_cache.as_ref(),
+            Some(&cached),
+            "the owner id and mtime are unchanged, so the move re-read nothing"
+        );
+        assert_eq!(state.tasks.items[0].subject, "parent item");
+
+        cleanup_task_store(parent);
+        cleanup_task_store(subagent);
+    }
+
+    #[test]
+    fn a_parent_in_another_group_is_followed() {
+        let parent = "%TASK_CROSS_PARENT";
+        let subagent = "%TASK_CROSS_CHILD";
+        crate::task_store::record_task(parent, "parent item").unwrap();
+        let mut state = owner_groups(
+            vec![
+                owner_group(
+                    "subagent repo",
+                    vec![pi_subagent_pane(
+                        subagent,
+                        crate::tmux::SubagentParent::Pane(parent.into()),
+                    )],
+                ),
+                owner_group("parent repo", vec![test_pane(parent)]),
+            ],
+            subagent,
+        );
+
+        state.refresh_pane_tasks();
+
+        assert_eq!(state.tasks.items[0].subject, "parent item");
+        assert_eq!(
+            state.tasks.store_cache.as_ref().map(|(id, _)| id.as_str()),
+            Some(parent)
+        );
+
+        cleanup_task_store(parent);
     }
 
     // ─── refresh_thought_feed ───────────────────────────────────
