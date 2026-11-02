@@ -14,8 +14,8 @@
 ## 3. Documentation and gates
 
 - [x] 3.1 Add one note on the board owner to `docs/state-management.md` (the Tasks state) and one to `docs/agent-protocol.md` (the pmux subagent section: the sidebar shows the parent's board for a subagent pane, and a subagent's own writes stay in its own store). Verify by reading both files for the new text.
-- [ ] 3.2 Run `cargo fmt`, `cargo clippy`, `cargo test`, and `cargo build --release`. Verify all four succeed with no warnings.
-- [ ] 3.3 Run `openspec validate subagent-shows-parent-task-board --strict` and verify it passes.
+- [x] 3.2 Run `cargo fmt`, `cargo clippy`, `cargo test`, and `cargo build --release`. Verify all four succeed with no warnings.
+- [x] 3.3 Run `openspec validate subagent-shows-parent-task-board --strict` and verify it passes.
 
 ## Workflow follow-up
 
