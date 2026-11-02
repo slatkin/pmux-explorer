@@ -479,10 +479,11 @@ mod tests {
     }
 
     #[test]
-    fn a_subagents_task_set_writes_its_own_store_not_the_parents() {
-        // The board-owner redirect is read-side only: a pmux subagent
-        // pane's `task-set` lands in its own store, and the parent's
-        // store is left untouched.
+    fn a_task_set_writes_the_calling_pane_s_own_store() {
+        // The board-owner redirect is read-side only, and the write
+        // path never consults subagent identity: `$TMUX_PANE` alone
+        // names the store, so this pin holds for a pmux subagent pane
+        // too. A second pane's store stays untouched either way.
         let parent = "%CLI_TASK_BOARD_PARENT";
         let subagent = "%CLI_TASK_BOARD_CHILD";
         for pane in [parent, subagent] {

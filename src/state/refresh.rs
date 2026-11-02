@@ -145,9 +145,11 @@ impl AppState {
     }
 
     /// One tick of the file-backed refresh pass: the task-store close
-    /// sweep, then the activity log, the focused pane's task list,
-    /// every pane's task progress, and — while the Thought tab is
-    /// displayed — the focused pane's thinking feed. Touches only local
+    /// sweep, then the activity log, the board owner's task list (the
+    /// focused pane itself, or its ultimate parent for a pmux subagent
+    /// with a live parent), every pane's task progress, and — while the
+    /// Thought tab is displayed — the focused pane's thinking feed.
+    /// Touches only local
     /// files (the `/tmp` stores plus the feed under `$XDG_RUNTIME_DIR`
     /// or `/tmp`) and `AppState` — no tmux I/O — so tests drive it
     /// directly.
