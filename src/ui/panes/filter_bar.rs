@@ -6,7 +6,9 @@ use ratatui::{
     widgets::Paragraph,
 };
 
-use crate::state::{AppState, RepoFilter, StatusFilter, filter_bar_layout, filter_column_layout};
+use crate::state::{
+    AppState, FilterBarControl, RepoFilter, StatusFilter, filter_bar_layout, filter_column_layout,
+};
 use crate::tmux::PaneStatus;
 
 use crate::ui::text::{display_width, truncate_to_width};
@@ -53,9 +55,21 @@ fn chip_icon(state: &AppState, filter: StatusFilter) -> (String, ratatui::style:
     }
 }
 
-/// Render the status filter bar, returning the line and the column of
-/// the pop-out control at the right edge (for click hit-testing).
-pub(super) fn render_filter_bar<'a>(state: &AppState, width: u16) -> (Line<'a>, Option<u16>) {
+/// Glyphs of the width-lock control, one cell left of the pop-out
+/// glyph: the ballot box carries its check while the lock is on, and is
+/// empty while docked widths are free to drift. Plain single-width text
+/// glyphs — the padlock family's emoji render double-width, which the
+/// one-cell control region cannot hold (design D8).
+const LOCK_GLYPH: &str = "☑";
+const UNLOCK_GLYPH: &str = "☐";
+
+/// Render the status filter bar, returning the line and the columns of
+/// the right-edge controls (the lock, and the pop-out where the row is
+/// wide enough to hold it) for click hit-testing.
+pub(super) fn render_filter_bar<'a>(
+    state: &AppState,
+    width: u16,
+) -> (Line<'a>, Option<FilterBarControl>) {
     let theme = &state.theme;
     let counts = state.status_counts();
 
@@ -63,17 +77,17 @@ pub(super) fn render_filter_bar<'a>(state: &AppState, width: u16) -> (Line<'a>, 
     // each starts) comes from the same pure function the click hit test
     // runs, so a drawn chip and a clickable chip are always the same
     // chip, whatever the counts are.
-    let (chips, switch_col, popout_col) = filter_bar_layout(counts, width);
-    let Some(popout_col) = popout_col else {
+    let (chips, control) = filter_bar_layout(counts, width);
+    let Some(control) = control else {
         return (Line::from(Vec::new()), None);
     };
 
-    let first_col = switch_col.unwrap_or(popout_col);
+    let first_col = control.switch.unwrap_or(control.lock);
     let mut spans: Vec<Span<'a>> = Vec::new();
     // The leading gutter column, skipped when the leftmost control
-    // owns column 0 (a one-column row, or the four-column row where
-    // the side switch is leftmost). Gating on the pop-out column alone
-    // would draw a gutter on top of the switch's hitbox there.
+    // owns column 0 (a one-column row, or the narrow rows where the
+    // side switch or the lock is leftmost). Gating on the pop-out
+    // column alone would draw a gutter on top of a hitbox there.
     if first_col > 0 {
         spans.push(Span::raw(" "));
     }
@@ -115,19 +129,30 @@ pub(super) fn render_filter_bar<'a>(state: &AppState, width: u16) -> (Line<'a>, 
         spans.push(Span::styled(count_str, count_style));
     }
 
-    // The controls sit on the row's right edge — the side switch first
-    // (when the row is wide enough for both), then the pop-out one
-    // column in from the right border, with a trailing spacer where the
-    // border column would otherwise sit, so the row stays as wide as
-    // the area — the way the secondary header right-aligns its repo
-    // button. Every drawn column ends at or before the leftmost
-    // control: the last drawn chip, or the leading gutter when every
-    // chip was dropped.
+    // The controls pack against the right border — the side switch
+    // and its spacer first (on a row wide enough for all three), then
+    // the lock glyph (its latest state visible at a glance: checked
+    // and accent-coloured while locked, empty and muted while free),
+    // then the pop-out glyph and the trailing spacer — the way the
+    // secondary header right-aligns its repo button.
+    let lock_glyph = if state.global.width_lock {
+        LOCK_GLYPH
+    } else {
+        UNLOCK_GLYPH
+    };
+    let lock_style = if state.global.width_lock {
+        Style::default().fg(theme.accent)
+    } else {
+        Style::default().fg(theme.filter_inactive)
+    };
+    // Everything drawn ends at or before the leftmost control: the
+    // last drawn chip, or the leading gutter when every chip was
+    // dropped.
     let drawn_end = chips
         .last()
         .map_or(first_col.min(1), |chip| chip.start + chip.width);
     spans.push(Span::raw(" ".repeat((first_col - drawn_end) as usize)));
-    if let Some(switch_col) = switch_col {
+    if let Some(switch_col) = control.switch {
         // Dimmed while floating — the control does nothing there.
         let switch_style = if state.sidebar_pane.floating {
             Style::default().fg(theme.filter_inactive)
@@ -136,7 +161,7 @@ pub(super) fn render_filter_bar<'a>(state: &AppState, width: u16) -> (Line<'a>, 
         };
         spans.push(Span::styled(SIDE_SWITCH_GLYPH, switch_style));
         spans.push(Span::raw(
-            " ".repeat((popout_col - switch_col - 1) as usize),
+            " ".repeat((control.lock - switch_col - 1) as usize),
         ));
     }
     let control_glyph = if state.sidebar_pane.floating {
@@ -144,17 +169,22 @@ pub(super) fn render_filter_bar<'a>(state: &AppState, width: u16) -> (Line<'a>, 
     } else {
         POPOUT_GLYPH
     };
-    spans.push(Span::styled(
-        control_glyph,
-        Style::default().fg(theme.status_running),
-    ));
-    // The spacer after the pop-out glyph only fits on a row two columns
-    // wide or more; a one-column row draws the glyph alone.
-    if popout_col + 1 < width {
-        spans.push(Span::raw(" "));
+    // The lock glyph is on every non-empty row; the pop-out glyph only
+    // rides along where the row is three columns wide or more.
+    spans.push(Span::styled(lock_glyph, lock_style));
+    if let Some(popout) = control.popout {
+        spans.push(Span::styled(
+            control_glyph,
+            Style::default().fg(theme.status_running),
+        ));
+        // The spacer after the pop-out glyph only fits on a row two
+        // columns wide or more; a one-column row draws the glyph alone.
+        if popout + 1 < width {
+            spans.push(Span::raw(" "));
+        }
     }
 
-    (Line::from(spans), Some(popout_col))
+    (Line::from(spans), Some(control))
 }
 
 /// The strip's vertical filter bar: one chip per row — icon, space,
@@ -457,8 +487,9 @@ mod tests {
         state.global.status_filter = StatusFilter::Busy;
         let theme = &state.theme;
 
-        // Width 24 so every chip fits — at 20 the last one drops.
-        let (line, _) = render_filter_bar(&state, 24);
+        // Width 26 so every chip fits beside the three controls — the
+        // last one drops before that.
+        let (line, _) = render_filter_bar(&state, 26);
         let cells: Vec<_> = line
             .spans
             .iter()
@@ -466,8 +497,8 @@ mod tests {
             .collect();
 
         // Five chips of icon + count (the chip-internal spaces are not
-        // cells), then the two control glyphs.
-        assert_eq!(cells.len(), 12);
+        // cells), then the three control glyphs.
+        assert_eq!(cells.len(), 13);
 
         // A lit icon wears its status colour; a zero count greys it.
         // Selection never touches the icon — only the count, which
@@ -506,10 +537,11 @@ mod tests {
         assert_eq!(cells[9].style.fg, Some(theme.filter_inactive));
 
         // The side switch wears the running colour while docked; the
-        // pop-out follows it as before.
+        // lock and the pop-out follow it.
         assert_eq!(cells[10].content.as_ref(), "⇄");
         assert_eq!(cells[10].style.fg, Some(theme.status_running));
-        assert_eq!(cells[11].content.as_ref(), "⤢");
+        assert_eq!(cells[11].content.as_ref(), "☐");
+        assert_eq!(cells[12].content.as_ref(), "⤢");
     }
 
     #[test]
@@ -569,7 +601,7 @@ mod tests {
         state.global.status_filter = StatusFilter::Busy;
 
         let text = filter_bar_text(&state);
-        insta::assert_snapshot!(text, @" 󱓯 2  2 󰥔 0 󰒲 0⇄ ⤢");
+        insta::assert_snapshot!(text, @" 󱓯 2  2 󰥔 0   ⇄ ☐⤢");
     }
 
     // ─── the pop-out control ─────────────────────────────────
@@ -578,19 +610,28 @@ mod tests {
     fn snapshot_filter_bar_docked_shows_the_pop_out_glyph() {
         // The zero-count docked row at the 20 column minimum: the
         // snapshot pins the whole row, the renderer returns the control
-        // column and a full-width row at every width, and the control
-        // glyph wears the running colour. Direct equality checks sit
-        // alongside the snapshot because layout columns and colours are
-        // not visible characters.
+        // columns and a full-width row at every width, the pop-out
+        // glyph wears the running colour, and the unlocked lock glyph
+        // stays muted. Direct equality checks sit alongside the
+        // snapshot because layout columns and colours are not visible
+        // characters.
         let state = make_state_with_groups(vec![]);
         assert!(!state.sidebar_pane.floating);
         for width in [20u16, 30, 40] {
-            let (line, col) = render_filter_bar(&state, width);
+            let (line, control) = render_filter_bar(&state, width);
             let text = line_text(&line);
+            let Some(control) = control else {
+                panic!("the renderer must return the control columns at width {width}")
+            };
             assert_eq!(
-                col,
+                control.popout,
                 Some(width - 2),
-                "control column one space off the right edge at width {width}"
+                "pop-out column one space off the right edge at width {width}"
+            );
+            assert_eq!(
+                control.lock,
+                width - 3,
+                "lock column one cell left of the pop-out glyph at width {width}"
             );
             assert_eq!(
                 display_width(&text),
@@ -599,12 +640,30 @@ mod tests {
             );
         }
         let (line, _) = render_filter_bar(&state, 20);
-        insta::assert_snapshot!(line_text(&line), @" 󱓯 0  0 󰥔 0 󰒲 0⇄ ⤢");
-        // The trailing spacer spans the row's last column, so the glyph
-        // is the second-to-last span.
+        insta::assert_snapshot!(line_text(&line), @" 󱓯 0  0 󰥔 0   ⇄ ☐⤢");
+        // The trailing spacer spans the row's last column, so the
+        // pop-out glyph is the second-to-last span and the lock glyph
+        // the one before it.
         let glyph = &line.spans[line.spans.len() - 2];
         assert_eq!(glyph.content.as_ref(), "⤢");
         assert_eq!(glyph.style.fg, Some(state.theme.status_running));
+        let lock = &line.spans[line.spans.len() - 3];
+        assert_eq!(lock.content.as_ref(), "☐");
+        assert_eq!(lock.style.fg, Some(state.theme.filter_inactive));
+    }
+
+    #[test]
+    fn snapshot_filter_bar_locked_shows_the_checked_lock_glyph() {
+        // Locked: the glyph switches to the checked box and borrows the
+        // accent colour the active chip count wears, so the state reads
+        // at a glance against the muted unlocked glyph.
+        let mut state = make_state_with_groups(vec![]);
+        state.global.width_lock = true;
+        insta::assert_snapshot!(filter_bar_text(&state), @" 󱓯 0  0 󰥔 0   ⇄ ☑⤢");
+        let (line, _) = render_filter_bar(&state, 20);
+        let lock = &line.spans[line.spans.len() - 3];
+        assert_eq!(lock.content.as_ref(), "☑");
+        assert_eq!(lock.style.fg, Some(state.theme.accent));
     }
 
     #[test]
@@ -614,42 +673,35 @@ mod tests {
         let mut state = make_state_with_groups(vec![]);
         state.sidebar_pane.floating = true;
         let text = filter_bar_text(&state);
-        insta::assert_snapshot!(text, @" 󱓯 0  0 󰥔 0 󰒲 0⇄ ⤡");
+        insta::assert_snapshot!(text, @" 󱓯 0  0 󰥔 0   ⇄ ☐⤡");
 
         // The dimmed switch glyph says the control is disabled: same
         // column as docked, but in the inactive filter colour.
-        let (line, col) = render_filter_bar(&state, 20);
+        let (line, control) = render_filter_bar(&state, 20);
         let switch_span = line
             .spans
             .iter()
             .find(|s| s.content.as_ref() == SIDE_SWITCH_GLYPH)
             .expect("the floating row still draws the switch glyph");
         assert_eq!(switch_span.style.fg, Some(state.theme.filter_inactive));
-        assert_eq!(col, Some(18));
+        assert_eq!(control.unwrap().popout, Some(18));
     }
 
     #[test]
-    fn snapshot_filter_bar_narrow_rows_keep_the_pop_out_alone() {
-        // Below 4 columns both glyphs cannot sit side by side: the side
-        // switch disappears whole and the pop-out keeps the row's old
-        // two-column behaviour (glyph at width-2, no chip ever fits).
+    fn snapshot_filter_bar_narrow_rows_keep_the_lock_glyph_alone() {
+        // The narrow degradation of the control region: the side
+        // switch drops first, then where the row cannot hold the
+        // pop-out glyph and its spacer the pop-out is dropped too and
+        // the spec-mandated lock glyph takes the row's last column
+        // (column 1 in the two-column row); a one-column row keeps the
+        // lock glyph too.
         let state = make_state_with_groups(vec![]);
-        for width in [1u16, 2, 3] {
-            let (line, col) = render_filter_bar(&state, width);
-            let text = line_text(&line);
-            assert!(
-                !text.contains(SIDE_SWITCH_GLYPH),
-                "no switch glyph at width {width}"
-            );
-            assert_eq!(col, Some(width.saturating_sub(2)));
-            assert_eq!(display_width(&text), width as usize);
-        }
-        // At 4 columns the pair just fits: switch at 0, pop-out at 2 —
-        // no leading gutter, or it would draw on the switch's column
-        // and push both glyphs one column right of their hitboxes.
-        let (line, col) = render_filter_bar(&state, 4);
-        insta::assert_snapshot!(line_text(&line), @"⇄ ⤢");
-        assert_eq!(col, Some(2));
+        insta::assert_snapshot!(filter_bar_text_at(&state, 2), @" ☐");
+        insta::assert_snapshot!(filter_bar_text_at(&state, 1), @"☐");
+        // At 4 columns the lock/pop-out pair sits at 1 and 2 with no
+        // side switch; at 5 all three controls draw.
+        insta::assert_snapshot!(filter_bar_text_at(&state, 4), @" ☐⤢ ");
+        insta::assert_snapshot!(filter_bar_text_at(&state, 5), @"⇄ ☐⤢ ");
     }
 
     // ─── the row with multi-digit counts (the 20 column minimum) ───
@@ -690,7 +742,8 @@ mod tests {
         for width in [20u16, 24, 40] {
             let (line, _) = render_filter_bar(&state, width);
             let text = line_text(&line);
-            let (chips, switch_col, popout_col) = filter_bar_layout(counts, width);
+            let (chips, control) = filter_bar_layout(counts, width);
+            let control = control.expect("a test width returns the control columns");
             let chars: Vec<char> = text.chars().collect();
             for chip in &chips {
                 assert_eq!(
@@ -702,14 +755,18 @@ mod tests {
             // A dropped chip must leave no drawn trace either.
             if chips.len() < 5 {
                 assert_eq!(
-                    chars[switch_col.expect("a test width holds both controls") as usize],
+                    chars[control.switch.expect("a test width draws the side switch") as usize],
                     '⇄',
-                    "the side switch sits left of the pop-out at width {width}"
+                    "the side switch sits left of the lock at width {width}"
                 );
                 assert_eq!(
-                    chars[popout_col.expect("pop-out present at test widths") as usize],
+                    chars[control.popout.expect("pop-out present at test widths") as usize],
                     '⤢',
-                    "the control stays at the right edge at width {width}"
+                    "the pop-out control stays one space off the right edge at width {width}"
+                );
+                assert_eq!(
+                    chars[control.lock as usize], '☐',
+                    "the lock glyph sits one cell left of the pop-out glyph at width {width}"
                 );
             }
         }

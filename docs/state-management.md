@@ -19,12 +19,17 @@ read from tmux on every refresh tick.
 | `bottom_percent` | `@sidebar_bottom_height` | User input (rule drag release); tmux write retried when rejected | Bottom panel height as a percent of the sidebar height (0 hides the panel; unset, empty, or an out-of-range value gives 30); shared server-wide, each instance adopts a peer's value on its next refresh tick (the percent's `SaveLatch` instance follows the same pattern) |
 | `tab_percent` | `@sidebar_tab_width` | User input (strip divider drag release); tmux write retried when rejected | Strip tab-panel width, divider included, as a percent of the strip width (0 hides the divider and the tab panel; unset, empty, or an out-of-range value gives 40); shared server-wide, each instance adopts a peer's value on its next refresh tick (the tab percent's `SaveLatch` instance follows the same pattern); every instance parses and adopts it — a column and a strip on the same server share the one option — and only a strip drag writes it |
 
+| `width_lock` | `@sidebar_width_lock` | User input (`w` key / lock-glyph click) or a peer's toggle adopted on refresh; tmux write retried when rejected | Shared on/off switch for the width lock, server-wide; while `on` every docked sidebar converges on `shared_docked_width` within one refresh tick |
+| `shared_docked_width` | `@sidebar_docked_width` | Seeded by the enabling instance, then published on an observed docked-width change while locked; tmux write retried when rejected | Shared docked width in columns (`None` until seeded); adopting peers clamp it to half the window and never below the `@sidebar_min_width` floor |
+| `min_width` | `@sidebar_min_width` | Adopted verbatim every refresh tick — the sidebar never writes it | Parsed width floor (`None` when unset or non-numeric); readers fall back to the default floor |
+
 Each synced field is guarded so a failed write never loses the user's
-choice: the status filter, the bottom tab, the bottom percent and the
-strip tab percent each hold one `SaveLatch<T>` instance
-(`filter_latch`, `tab_latch`, `percent_latch`, `tab_percent_latch` in
+choice: the status filter, the bottom tab, the bottom percent, the strip
+tab percent, the width lock and the shared docked width each hold
+one `SaveLatch<T>` instance (`filter_latch`, `tab_latch`,
+`percent_latch`, `tab_percent_latch`, `lock_latch`, `width_latch` in
 `GlobalState` — one retry mechanism, written once and shared by all
-four). The cursor and repo filter keep plain
+six). The cursor and repo filter keep plain
 `last_saved_cursor` / `last_saved_repo_filter` values instead.
 
 A `SaveLatch` remembers the last value tmux successfully accepted
@@ -54,6 +59,12 @@ only `@sidebar_bottom_height` adoption, a strip drag only
 `@sidebar_tab_width`, and the other axis's value adopts as usual — so
 the tick cannot move the rule or the divider out from under the mouse;
 the ticks after the release adopt the server value again.
+
+(`min_width` is read-only, so it needs no guard.) The width latch
+additionally gates the width guard's adopt side
+(`src/app/width_guard.rs`): while its `save_pending` flag is set the
+pane must not be resized back toward the stale shared width tmux
+still holds.
 
 ### Per-pane State (keyed by pane ID)
 
@@ -189,6 +200,7 @@ Per-pane file-based state:
 | `layout_kind` | Once at startup | Whether this sidebar is a full-height column or a full-width strip (`LayoutKind`), read once from the `PMUX_SIDEBAR_LAYOUT` process environment — never from a pane option; a missing or unknown value gives `Column`. Every layout-specific path branches on it |
 | `docked_size` | On pop-out / pop-in (user input) | The pane size captured when the sidebar was popped out, restored by the pop-in (`resize-pane -x` for a column, `-y` for a strip): the width of a column, the height of a strip (`src/state/popout.rs`). `None` while docked and when the pane was already floating when the sidebar started |
 | `docked_edge` | On pop-out / pop-in (user input) | The edge a popped-out strip was docked at, captured with the docked size on the way out — a floating pane is no longer at an edge, so the pop-in cannot read it off the pane. `None` for a column and when the pane was already floating; the strip pop-in then falls back to the bare join |
+| `width_guard` | Every 1s (refresh cycle) | Cross-tick state of the width-lock step (`src/app/width_guard.rs`): `last_observed_width` records the last docked pane width (`None` until the first docked reading primes it, so a startup width cannot publish itself) and `pending_adopt_observation` is the one-shot echo suppressor armed whenever this instance issues a `resize-pane` — an adoption, or the pop-in restore (`src/state/popout.rs`) — so its own landing is not published back as the shared width |
 | `version_notice` | Once at startup (bg fetch) | GitHub release update notice, `None` when up-to-date |
 
 ---
@@ -252,10 +264,9 @@ TUI main loop (app::run in app.rs; submodules app/{setup,workers,input,render,pa
     → initializes Claude notices state once
                         ↓
   → refresh() every 1s
-    → retry_pending_saves
-                                     ← a write tmux rejected is retried before the shared read
+    → retry_pending_saves            ← a write tmux rejected is retried before the shared read
     → get_sidebar_pane_reading()     ← reads pane state + @sidebar_* in one display-message
-    → global.apply_all()             ← applies the shared options (filter, cursor, bottom tab, repo filter, bottom percent) under the last_saved_* guards
+    → global.apply_all()             ← applies the shared options (filter, cursor, bottom tab, repo filter, bottom percent, tab percent, width lock, shared docked width, min width) under the SaveLatch/last_saved_* guards
     → query_sessions() (tmux.rs)     ← reads @pane_* via `tmux list-panes -a`
     → pane_name resolved in the same query (the pane title when it is
       a real name — em dash suffixes trimmed; no extra tmux call)

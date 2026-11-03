@@ -104,7 +104,7 @@ fn focus_fill_panes_top_active_bottom_base() {
     assert_eq!(buf[(0, 20 - BOT_H - 1)].bg, TOP_FILL);
 
     insta::assert_snapshot!(render_to_styled_string(&mut state, 30, 20), @"
-     [bg:#414868]󱓯[fg:#7aa2f7,bg:#414868] [bg:#414868]1[fg:#7aa2f7,bg:#414868,bold] [bg:#414868][fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868]󰥔[fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868]󰒲[fg:#7dcfff,bg:#414868] [bg:#414868]1[fg:#c0caf5,bg:#414868] [bg:#414868][fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]⇄[fg:#9ece6a,bg:#414868] [bg:#414868]⤢[fg:#9ece6a,bg:#414868] [bg:#414868]
+     [bg:#414868]󱓯[fg:#7aa2f7,bg:#414868] [bg:#414868]1[fg:#7aa2f7,bg:#414868,bold] [bg:#414868][fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868]󰥔[fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868]󰒲[fg:#7dcfff,bg:#414868] [bg:#414868]1[fg:#c0caf5,bg:#414868] [bg:#414868][fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]⇄[fg:#9ece6a,bg:#414868] [bg:#414868]☐[fg:#9aa5ce,bg:#414868]⤢[fg:#9ece6a,bg:#414868] [bg:#414868]
     ⓘ[fg:#e0af68,bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]—[fg:#a9b1d6,bg:#1e2336] [bg:#1e2336]▾[fg:#a9b1d6,bg:#1e2336]
     p[fg:#7aa2f7,bg:#1e2336]r[fg:#7aa2f7,bg:#1e2336]o[fg:#7aa2f7,bg:#1e2336]j[fg:#7aa2f7,bg:#1e2336]e[fg:#7aa2f7,bg:#1e2336]c[fg:#7aa2f7,bg:#1e2336]t[fg:#7aa2f7,bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
     ┃[fg:#7aa2f7,bg:#414868] [bg:#414868]󰒲[fg:#7dcfff,bg:#414868] [fg:#ff9e64,bg:#414868][fg:#ff9e64,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]
@@ -152,7 +152,7 @@ fn focus_fill_activity_log_bottom_active_top_base() {
     );
 
     insta::assert_snapshot!(render_to_styled_string(&mut state, 30, 20), @"
-     [bg:#414868]󱓯[fg:#7aa2f7,bg:#414868] [bg:#414868]1[fg:#7aa2f7,bg:#414868,bold] [bg:#414868][fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868]󰥔[fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868]󰒲[fg:#7dcfff,bg:#414868] [bg:#414868]1[fg:#c0caf5,bg:#414868] [bg:#414868][fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]⇄[fg:#9ece6a,bg:#414868] [bg:#414868]⤢[fg:#9ece6a,bg:#414868] [bg:#414868]
+     [bg:#414868]󱓯[fg:#7aa2f7,bg:#414868] [bg:#414868]1[fg:#7aa2f7,bg:#414868,bold] [bg:#414868][fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868]󰥔[fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868]󰒲[fg:#7dcfff,bg:#414868] [bg:#414868]1[fg:#c0caf5,bg:#414868] [bg:#414868][fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]⇄[fg:#9ece6a,bg:#414868] [bg:#414868]☐[fg:#9aa5ce,bg:#414868]⤢[fg:#9ece6a,bg:#414868] [bg:#414868]
     ⓘ[fg:#e0af68,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]—[fg:#a9b1d6,bg:#1a1b26] [bg:#1a1b26]▾[fg:#a9b1d6,bg:#1a1b26]
     p[fg:#7aa2f7,bg:#1a1b26]r[fg:#7aa2f7,bg:#1a1b26]o[fg:#7aa2f7,bg:#1a1b26]j[fg:#7aa2f7,bg:#1a1b26]e[fg:#7aa2f7,bg:#1a1b26]c[fg:#7aa2f7,bg:#1a1b26]t[fg:#7aa2f7,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
     ┃[fg:#7aa2f7,bg:#414868] [bg:#414868]󰒲[fg:#7dcfff,bg:#414868] [fg:#ff9e64,bg:#414868][fg:#ff9e64,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]
@@ -288,7 +288,7 @@ fn focus_fill_unfocused_paints_the_same() {
     assert_eq!(buf[(0, 20 - BOT_H)].bg, FILTER_BAR_BG);
 
     insta::assert_snapshot!(render_to_string(&mut state, 30, 20), @"
-     󱓯 1  0 󰥔 0 󰒲 1  0      ⇄ ⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0     ⇄ ☐⤢
     ⓘ                          — ▾
     project
     ┃ 󰒲 
@@ -318,7 +318,7 @@ fn focus_fill_bottom_hidden_top_gets_active_fill() {
     );
 
     insta::assert_snapshot!(render_to_string(&mut state, 30, 20), @"
-     󱓯 1  0 󰥔 0 󰒲 1  0      ⇄ ⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0     ⇄ ☐⤢
     ⓘ                          — ▾
     project
     ┃ 󰒲 
@@ -416,7 +416,7 @@ fn focus_fill_pet_band_carries_top_fill() {
     assert!(blank_filled > 0, "the pet band must have blank cells");
 
     insta::assert_snapshot!(render_to_string(&mut state, 30, 20), @"
-     󱓯 1  0 󰥔 0 󰒲 1  0      ⇄ ⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0     ⇄ ☐⤢
     ⓘ                          — ▾
     project
     ┃ 󰒲 

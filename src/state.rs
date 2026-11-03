@@ -22,6 +22,7 @@ mod tab;
 mod tasks;
 mod thought;
 mod timers;
+mod width;
 
 pub use activity::ActivityState;
 pub use filter::{RepoFilter, StatusCounts, StatusFilter};
@@ -31,8 +32,8 @@ pub use layout::{
     BottomTabTarget, FrameLayout, HyperlinkOverlay, LayoutKind, RepoSpawnTarget, RowTarget,
     SpawnRemoveTarget, SplitDrag, StripLayout,
 };
+pub(crate) use layout::{FilterBarControl, filter_bar_layout, split_rows};
 pub use layout::{cols_for_percent, filter_column_layout, strip_layout, strip_layout_for_tab_cols};
-pub(crate) use layout::{filter_bar_layout, split_rows};
 pub(crate) use notices::debug_forced_display;
 pub use notices::{ClaudePluginNotice, NoticesCopyTarget, NoticesMissingHookGroup, NoticesState};
 pub use pane_runtime::{PaneRuntimeMap, PaneRuntimeState};
@@ -44,6 +45,7 @@ pub use scroll::{ScrollState, ScrollStates};
 pub use tasks::TasksState;
 pub use thought::ThoughtState;
 pub use timers::RefreshTimers;
+pub(crate) use width::{width_adopt_target, width_floor};
 
 /// Bottom-panel tabs. The selected tab is shared state: it lives in
 /// [`GlobalState`], is written with `set -g @sidebar_bottom_tab`, and
@@ -232,6 +234,12 @@ pub struct AppState {
     /// sidebar from before the strip layout existed keeps its behavior.
     /// The layout is fixed for the life of the pane.
     pub layout_kind: LayoutKind,
+    /// Cross-tick state of the width-lock step (design D4): the last
+    /// observed docked width and the echo suppressor for this instance's
+    /// own resizes. The step itself lives in `app/width_guard.rs`;
+    /// `apply_pop_in` (`state/popout.rs`) arms the suppressor so a pop-in
+    /// restore does not echo back as a publish.
+    pub width_guard: crate::app::width_guard::WidthGuardState,
     /// Whether the pet animation is drawn and ticked. Loaded once at startup
     /// from the `@sidebar_pet` tmux option. Defaults to `false`.
     pub pet_enabled: bool,
@@ -285,6 +293,7 @@ impl AppState {
             version_notice: None,
             global: GlobalState::new(),
             layout_kind: LayoutKind::Column,
+            width_guard: crate::app::width_guard::WidthGuardState::default(),
             pet_enabled: false,
         };
         crate::state::pet::reseed_pet_idle_motion(&mut state);
@@ -2635,6 +2644,60 @@ mod tests {
         state.handle_filter_click(5); // busy chip
         assert_eq!(state.global.status_filter, StatusFilter::Busy);
         assert!(state.flash.is_none(), "a chip click must not pop out");
+    }
+
+    #[test]
+    fn filter_click_on_the_lock_control_toggles_the_width_lock() {
+        // The lock glyph sits one cell left of the pop-out glyph; its
+        // column runs the same toggle the `w` key does. In tests tmux
+        // rejects the shared write, so the flip arms the retry latch.
+        let mut state = AppState::new("%99".into());
+        state.layout.filter_bar_width = 20;
+        state.global.status_filter = StatusFilter::All;
+
+        reset_filter_debounce(&mut state);
+        state.handle_filter_click(17); // the lock glyph column
+        assert!(state.global.width_lock, "the lock toggles on click");
+        assert!(
+            state.global.lock_latch.save_pending,
+            "the rejected shared write arms the retry latch"
+        );
+        assert!(state.flash.is_none(), "the lock click must not pop out");
+
+        reset_filter_debounce(&mut state);
+        state.handle_filter_click(17);
+        assert!(!state.global.width_lock, "a second click unlocks again");
+
+        // The neighbouring pop-out column is untouched by the lock hit
+        // test: clicking it still reaches the pop-out action.
+        reset_filter_debounce(&mut state);
+        state.handle_filter_click(18);
+        assert!(
+            state
+                .flash
+                .as_ref()
+                .is_some_and(|(msg, _)| msg.starts_with("Pop-out unavailable:")),
+            "the pop-out column still pops out"
+        );
+
+        // The narrow degradation keeps the same mapping: on a two-column
+        // row the pop-out control is dropped and the lock takes the row's
+        // last column, so a click there still toggles the lock, while the
+        // column before it owns neither control and changes nothing.
+        state.global.width_lock = false;
+        state.layout.filter_bar_width = 2;
+        reset_filter_debounce(&mut state);
+        state.handle_filter_click(1);
+        assert!(
+            state.global.width_lock,
+            "the lock still toggles on a two-column row"
+        );
+        reset_filter_debounce(&mut state);
+        state.handle_filter_click(0);
+        assert!(
+            state.global.width_lock,
+            "a left-column click on a two-column row changes nothing"
+        );
     }
 
     #[test]

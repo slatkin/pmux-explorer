@@ -8,6 +8,9 @@
 //! in. The one thing that IS remembered is the docked width, captured on
 //! the way out and restored with `resize-pane -x` on the way in, so a
 //! sidebar the user resized by hand keeps its width across the round trip.
+//! While the width lock is on with a shared width, the pop-in restores
+//! the shared width instead, clamped exactly like the width-lock step's
+//! adoption (`app/width_guard.rs`, design D6).
 //!
 //! The tmux calls themselves live in `tmux::float_pane` and
 //! `tmux::dock_pane`; this module decides when to run them, with which
@@ -18,6 +21,7 @@
 
 use super::{AppState, LayoutKind};
 use crate::cli::toggle::SidebarPosition;
+use crate::state::{width_adopt_target, width_floor};
 use crate::tmux::{self, SidebarPaneInfo};
 
 /// Width of the floating panel, in columns. Wide enough that the agent
@@ -234,16 +238,17 @@ impl AppState {
         // Precondition: `toggle_popout` only routes a floating pane here.
         debug_assert!(info.floating, "pop_in_with requires a floating pane");
         match self.layout_kind {
-            LayoutKind::Strip => self.pop_in_strip(),
-            LayoutKind::Column => self.pop_in_column(),
+            LayoutKind::Strip => self.pop_in_strip(info),
+            LayoutKind::Column => self.pop_in_column(info),
         }
     }
 
     /// Dock a floating column back into the tiled layout: the bare join
     /// puts the pane back where its layout had it, and `resize-pane -x`
-    /// restores the captured docked width.
-    fn pop_in_column(&mut self) {
-        if let Some(width) = self.apply_pop_in(tmux::dock_pane(&self.tmux_pane)) {
+    /// restores the resolved docked width — the shared width while the
+    /// lock holds one, the captured docked width otherwise.
+    fn pop_in_column(&mut self, info: SidebarPaneInfo) {
+        if let Some(width) = self.apply_pop_in(info, tmux::dock_pane(&self.tmux_pane)) {
             let _ = tmux::run_tmux(&[
                 "resize-pane",
                 "-t",
@@ -262,7 +267,7 @@ impl AppState {
     /// no edge target (the window has no other pane, or no edge was
     /// captured because the pane floated before the sidebar started)
     /// the bare join is the fallback.
-    fn pop_in_strip(&mut self) {
+    fn pop_in_strip(&mut self, info: SidebarPaneInfo) {
         let edge_target = self
             .docked_edge
             .and_then(|edge| tmux::strip_dock_target(&self.tmux_pane, edge));
@@ -272,7 +277,7 @@ impl AppState {
             }
             StripDockPlan::Bare => tmux::dock_pane(&self.tmux_pane),
         };
-        if let Some(height) = self.apply_pop_in(result) {
+        if let Some(height) = self.apply_pop_in(info, result) {
             let _ = tmux::run_tmux(&[
                 "resize-pane",
                 "-t",
@@ -306,17 +311,32 @@ impl AppState {
     }
 
     /// Apply the outcome of the dock call (bare join for a column, edge
-    /// join or bare fallback for a strip). Returns the docked size to
-    /// restore with `resize-pane -x` (a column) or `resize-pane -y` (a
-    /// strip), or `None` when the dock was refused (flashed) or no size
-    /// was captured because the pane was already floating when the
-    /// sidebar started. On success the mirrored mode is cleared at once,
-    /// so the control glyph and the bottom-panel clamp do not wait for
-    /// the next refresh tick.
-    pub(crate) fn apply_pop_in(&mut self, result: Result<(), String>) -> Option<u16> {
+    /// join or bare fallback for a strip). `info` is the pane probe the
+    /// dock was decided from; its window width feeds the locked column
+    /// restore's cap (a docking pane rejoins the window it floated
+    /// from, so the probe's window size is current). Returns the docked
+    /// size to restore with `resize-pane -x` (a column) or
+    /// `resize-pane -y` (a strip), or `None` when the dock was refused
+    /// (flashed) or no size was captured because the pane was already
+    /// floating when the sidebar started. On success the mirrored mode
+    /// is cleared at once, so the control glyph and the bottom-panel
+    /// clamp do not wait for the next refresh tick.
+    pub(crate) fn apply_pop_in(
+        &mut self,
+        info: SidebarPaneInfo,
+        result: Result<(), String>,
+    ) -> Option<u16> {
         match result {
             Ok(()) => {
-                let size = self.docked_size.take();
+                let size = self.pop_in_restore_size(info);
+                if size.is_some() {
+                    // Every issued restore — the locked shared-width one
+                    // and the captured one alike — is this instance's own
+                    // `resize-pane`, so the width change the next tick
+                    // observes is its landing and must not echo back as a
+                    // publish (design D6).
+                    self.width_guard.pending_adopt_observation = true;
+                }
                 self.docked_edge = None;
                 self.sidebar_pane.floating = false;
                 size
@@ -326,6 +346,35 @@ impl AppState {
                 None
             }
         }
+    }
+
+    /// The docked size the pop-in should restore, or `None` to leave
+    /// the layout's size alone.
+    ///
+    /// While the width lock is on with a shared docked width, a
+    /// column's restore is the shared width clamped like an adoption —
+    /// `min(max(S, floor), cap)`, design D6 — so a narrow window does
+    /// not dock oversized for the tick before the width-lock step
+    /// would clamp it. The captured `docked_size` is left held in
+    /// that case: it is the right answer again whenever a later pop-in
+    /// runs unlocked, and it is never written to while locked. A strip
+    /// restores its captured height regardless — the shared width
+    /// sizes columns only. Otherwise the capture is spent, as it has
+    /// always been.
+    ///
+    /// The clamp runs through the shared `width_floor`/`width_adopt_target`
+    /// helpers in `crate/state/width.rs` — the same helpers the width-lock
+    /// step's adopt side and the enabling seed use (design D6).
+    fn pop_in_restore_size(&mut self, info: SidebarPaneInfo) -> Option<u16> {
+        if self.layout_kind == LayoutKind::Column
+            && self.global.width_lock
+            && let Some(shared) = self.global.shared_docked_width
+        {
+            let floor = width_floor(self.global.min_width);
+            let cap = floor.max(info.window_width / 2);
+            return Some(width_adopt_target(shared, self.global.min_width, cap));
+        }
+        self.docked_size.take()
     }
 }
 
@@ -465,16 +514,36 @@ mod tests {
 
     // ─── apply_pop_in ────────────────────────────────────────────────
 
+    /// A floating pane probe of the given window width, as
+    /// `toggle_popout` hands to `pop_in_with`: the floating panel's
+    /// reading whose window size is current for the dock's cap.
+    fn floating_info(window_width: u16) -> SidebarPaneInfo {
+        SidebarPaneInfo {
+            pane_active: true,
+            window_active: true,
+            width: PANEL_WIDTH,
+            window_width,
+            window_height: 30,
+            floating: true,
+            height: 30,
+            at_top: false,
+        }
+    }
+
     #[test]
     fn apply_pop_in_returns_the_captured_size_for_the_restore() {
         let mut state = AppState::new("%99".into());
         state.docked_size = Some(25);
         state.sidebar_pane.floating = true;
-        assert_eq!(state.apply_pop_in(Ok(())), Some(25));
+        assert_eq!(state.apply_pop_in(floating_info(300), Ok(())), Some(25));
         assert_eq!(state.docked_size, None, "the capture is spent");
         // The mirrored mode is cleared at once so the control glyph and
         // the bottom-panel clamp go back to docked on the next frame.
         assert!(!state.sidebar_pane.floating);
+        assert!(
+            state.width_guard.pending_adopt_observation,
+            "the restore is this instance's own resize, never a publish"
+        );
     }
 
     #[test]
@@ -483,17 +552,22 @@ mod tests {
         state.docked_size = Some(12);
         state.docked_edge = Some(SidebarPosition::Top);
         state.sidebar_pane.floating = true;
-        assert_eq!(state.apply_pop_in(Ok(())), Some(12));
+        assert_eq!(state.apply_pop_in(floating_info(300), Ok(())), Some(12));
         assert_eq!(state.docked_edge, None, "the edge is spent with the size");
     }
 
     #[test]
     fn apply_pop_in_without_a_capture_restores_nothing() {
         // The pane was already floating when the sidebar started, so no
-        // docked size was ever captured: the layout's size is left alone.
+        // docked size was ever captured and the lock supplies nothing:
+        // the layout's size is left alone.
         let mut state = AppState::new("%99".into());
-        assert_eq!(state.apply_pop_in(Ok(())), None);
+        assert_eq!(state.apply_pop_in(floating_info(300), Ok(())), None);
         assert!(state.flash.is_none());
+        assert!(
+            !state.width_guard.pending_adopt_observation,
+            "no restore command ran, so nothing is suppressed"
+        );
     }
 
     #[test]
@@ -501,7 +575,10 @@ mod tests {
         let mut state = AppState::new("%99".into());
         state.docked_size = Some(25);
         state.sidebar_pane.floating = true;
-        assert_eq!(state.apply_pop_in(Err("pane not found".into())), None);
+        assert_eq!(
+            state.apply_pop_in(floating_info(300), Err("pane not found".into())),
+            None
+        );
         assert!(
             state
                 .flash
@@ -513,6 +590,87 @@ mod tests {
         // stayed floating, so the mirrored mode must not change either.
         assert_eq!(state.docked_size, Some(25));
         assert!(state.sidebar_pane.floating);
+        assert!(
+            !state.width_guard.pending_adopt_observation,
+            "a refused dock issues no resize to suppress"
+        );
+    }
+
+    #[test]
+    fn apply_pop_in_locked_restores_the_shared_width() {
+        // Spec: popping back in under the lock docks at the shared
+        // width. The capture taken before the lock moved on is left
+        // held — it is the answer again if a later pop-in runs
+        // unlocked, and it is only overwritten at the next pop-out.
+        let mut state = AppState::new("%99".into());
+        state.global.width_lock = true;
+        state.global.shared_docked_width = Some(45);
+        state.docked_size = Some(25);
+
+        assert_eq!(state.apply_pop_in(floating_info(300), Ok(())), Some(45));
+        assert_eq!(
+            state.docked_size,
+            Some(25),
+            "the locked restore must not spend the capture"
+        );
+        assert!(!state.sidebar_pane.floating);
+        assert!(state.flash.is_none());
+        assert!(
+            state.width_guard.pending_adopt_observation,
+            "the restore's landing must not echo back as a publish"
+        );
+    }
+
+    #[test]
+    fn apply_pop_in_locked_clamps_to_half_of_a_narrow_window() {
+        // The restore is clamped like an adoption: a 100-column window
+        // cannot dock the shared 80 without overflowing, so the pop-in
+        // takes the cap of 50 and the width-lock step refines from
+        // there.
+        let mut state = AppState::new("%99".into());
+        state.global.width_lock = true;
+        state.global.shared_docked_width = Some(80);
+
+        assert_eq!(state.apply_pop_in(floating_info(100), Ok(())), Some(50));
+    }
+
+    #[test]
+    fn apply_pop_in_locked_clamps_to_the_floor_when_nothing_wider_fits() {
+        // The floor wins over the cap: a 30-column window with a
+        // `@sidebar_min_width` floor of 20 caps the restore at 20, not
+        // at the shared 45.
+        let mut state = AppState::new("%99".into());
+        state.global.width_lock = true;
+        state.global.shared_docked_width = Some(45);
+        state.global.min_width = Some(20);
+
+        assert_eq!(state.apply_pop_in(floating_info(30), Ok(())), Some(20));
+    }
+
+    #[test]
+    fn apply_pop_in_locked_lifts_a_shared_width_below_the_floor() {
+        // The floor binds both ways, same as on the adopt side: a
+        // shared 10 with `@sidebar_min_width = 24` restores at 24.
+        let mut state = AppState::new("%99".into());
+        state.global.width_lock = true;
+        state.global.shared_docked_width = Some(10);
+        state.global.min_width = Some(24);
+
+        assert_eq!(state.apply_pop_in(floating_info(300), Ok(())), Some(24));
+    }
+
+    #[test]
+    fn apply_pop_in_locked_without_a_shared_width_restores_the_capture() {
+        // The lock was enabled from the command line with no width, so
+        // no shared value exists yet: the captured width wins until one
+        // is published.
+        let mut state = AppState::new("%99".into());
+        state.global.width_lock = true;
+        state.docked_size = Some(25);
+
+        assert_eq!(state.apply_pop_in(floating_info(300), Ok(())), Some(25));
+        assert_eq!(state.docked_size, None, "the capture is spent");
+        assert!(state.width_guard.pending_adopt_observation);
     }
 
     // ─── strip_dock_plan ─────────────────────────────────────────────

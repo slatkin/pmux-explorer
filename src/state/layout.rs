@@ -161,6 +161,27 @@ pub struct FilterChip {
     pub width: u16,
 }
 
+/// Columns of the right-edge controls on the filter bar row. The
+/// cluster packs against the right border as `[switch] [lock] [popout]`
+/// — the lock glyph sits one cell left of the pop-out glyph, which
+/// keeps its one-column spacer against the border (design D8), and the
+/// side-switch glyph keeps its own one-column spacer left of the lock.
+/// Narrow rows drop the controls left to right: the side switch goes
+/// first, then the pop-out pair, and the lock carries the row's last
+/// column alone — the spec's lock control has no width condition, and
+/// only a zero-width row leaves the control absent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct FilterBarControl {
+    /// Column of the side-switch glyph, `None` when the row is too
+    /// narrow for all three controls.
+    pub switch: Option<u16>,
+    /// Column of the width-lock glyph; present on every non-empty row.
+    pub lock: u16,
+    /// Column of the pop-out glyph, `None` on the rows narrower than
+    /// the three columns the lock/pop-out pair occupies.
+    pub popout: Option<u16>,
+}
+
 /// Number of decimal digits `n` renders as; `0` renders as one digit.
 fn count_digits(n: usize) -> u16 {
     n.checked_ilog10().map_or(1, |d| d + 1) as u16
@@ -169,30 +190,44 @@ fn count_digits(n: usize) -> u16 {
 /// Compute the layout of the status filter row for a row `width` columns
 /// wide with the per-filter status counts (see [`StatusCounts`]).
 ///
-/// The pop-out control owns the row's two rightmost columns and the
-/// side-switch control the two left of it — each the glyph, then the
-/// one-column spacer that keeps it a space from its neighbour — and
-/// the chips fill from the left with a single-space separator after one
-/// gutter column. A chip that would no longer fit before the leftmost
-/// control is dropped whole — never partially drawn — together with
-/// every chip after it. Returns the chips that fit and both control
-/// columns; the side switch is `None` on a row narrower than 4 columns,
-/// where both glyphs cannot fit side by side.
+/// The right-edge control cluster owns the row's rightmost columns —
+/// the side-switch glyph and its spacer, then the lock glyph, then the
+/// pop-out glyph and the one-column spacer that keeps it a space away
+/// from the right border — and the chips fill from the left with a
+/// single-space separator after one gutter column. A chip that would
+/// no longer fit before the control region is dropped whole — never
+/// partially drawn — together with every chip after it. The narrow
+/// degradation drops the side switch first, then the pop-out pair, and
+/// keeps the lock on the row's last column whenever even one column
+/// exists; only a zero-width row returns `None`, where nothing is
+/// drawn.
 ///
 /// Both the renderer and the click hit test run through this function,
 /// so a click can only ever select a chip that is actually drawn.
 pub(crate) fn filter_bar_layout(
     counts: StatusCounts,
     width: u16,
-) -> (Vec<FilterChip>, Option<u16>, Option<u16>) {
+) -> (Vec<FilterChip>, Option<FilterBarControl>) {
     if width == 0 {
-        return (Vec::new(), None, None);
+        return (Vec::new(), None);
     }
-    let popout_col = width.saturating_sub(2);
-    let switch_col = width.checked_sub(4);
-    // The chips must end before the leftmost control: the side switch
-    // when it is drawn, the pop-out alone on a narrow row.
-    let control_limit = switch_col.unwrap_or(popout_col);
+    // The lock/pop-out pair needs three columns (lock glyph, pop-out
+    // glyph, trailing spacer); below that the pop-out is dropped and
+    // the lock alone takes the row's last column. The side switch needs
+    // two more columns left of the lock (its glyph and spacer), so it
+    // shows only on a row of five or more. `then`/`checked_sub` keep
+    // the subtractions off the narrow rows where they would wrap
+    // (design D8's one-cell cluster).
+    let popout = (width >= 3).then(|| width - 2);
+    let lock = popout.map_or(width - 1, |popout| popout - 1);
+    let switch = lock.checked_sub(2);
+    let control = FilterBarControl {
+        switch,
+        lock,
+        popout,
+    };
+    // A chip may end on the column before the leftmost control glyph.
+    let control_limit = switch.unwrap_or(lock);
     let mut chips = Vec::new();
     let mut start: u16 = 1; // leading gutter column
     for filter in StatusFilter::VARIANTS {
@@ -209,7 +244,7 @@ pub(crate) fn filter_bar_layout(
         });
         start += chip_width + 1; // single-space separator
     }
-    (chips, switch_col, Some(popout_col))
+    (chips, Some(control))
 }
 
 /// Columns the strip's vertical filter bar occupies at the left edge:
@@ -893,24 +928,28 @@ impl AppState {
         // The chip walk of the column's filter row: the row's chip
         // layout comes from the same pure function the
         // renderer used for the current frame, keyed on the width that
-        // frame rendered with. Both controls are hit-tested before the
-        // chip walk, so a click on either never changes the status
-        // filter.
-        let (chips, switch_col, popout_col) =
+        // frame rendered with. The right-edge controls are hit-tested
+        // before the chip walk, so a click on them never changes the
+        // status filter. The lock column is always present and its cell
+        // maps to the lock toggle alone; the side-switch and pop-out
+        // columns — where they exist at all — map to their own actions.
+        let (chips, control) =
             filter_bar_layout(self.status_counts(), self.layout.filter_bar_width);
-        if let Some(popout_col) = popout_col
-            && col == popout_col
-        {
-            self.toggle_popout();
-            return;
-        }
-        if let Some(switch_col) = switch_col
-            && col == switch_col
-        {
-            // A no-op while the sidebar floats; the dimmed glyph says
-            // so before the click.
-            self.switch_sidebar_side();
-            return;
+        if let Some(control) = control {
+            if control.switch.is_some_and(|switch_col| col == switch_col) {
+                // A no-op while the sidebar floats; the dimmed glyph
+                // says so before the click.
+                self.switch_sidebar_side();
+                return;
+            }
+            if col == control.lock {
+                self.toggle_width_lock();
+                return;
+            }
+            if control.popout.is_some_and(|popout| col == popout) {
+                self.toggle_popout();
+                return;
+            }
         }
         for chip in &chips {
             if col >= chip.start && col < chip.start + chip.width {
@@ -1465,5 +1504,66 @@ mod tests {
             vec!["%1", "%2", "%3"],
             "the children stay clustered in the hidden root's slot"
         );
+    }
+
+    #[test]
+    fn narrow_rows_keep_the_lock_control_dropping_the_pop_out_first() {
+        // The spec's lock control has no width condition: on a one- or
+        // two-column row the pop-out glyph and its spacer are dropped
+        // first and the lock takes the row's last column; only a
+        // zero-width row makes nothing clickable. Width 3 is the first
+        // width the lock/pop-out pair fits on again, width 5 the first
+        // the side switch joins.
+        let zero_counts = crate::state::AppState::new("%99".into()).status_counts();
+        for (width, expected) in [
+            (0u16, None),
+            (
+                1,
+                Some(FilterBarControl {
+                    switch: None,
+                    lock: 0,
+                    popout: None,
+                }),
+            ),
+            (
+                2,
+                Some(FilterBarControl {
+                    switch: None,
+                    lock: 1,
+                    popout: None,
+                }),
+            ),
+            (
+                3,
+                Some(FilterBarControl {
+                    switch: None,
+                    lock: 0,
+                    popout: Some(1),
+                }),
+            ),
+            (
+                4,
+                Some(FilterBarControl {
+                    switch: None,
+                    lock: 1,
+                    popout: Some(2),
+                }),
+            ),
+            (
+                5,
+                Some(FilterBarControl {
+                    switch: Some(0),
+                    lock: 2,
+                    popout: Some(3),
+                }),
+            ),
+        ] {
+            let (chips, control) = filter_bar_layout(zero_counts, width);
+            assert!(
+                chips.is_empty(),
+                "no chip fits before the control at width {width}"
+            );
+            assert_eq!(control, expected, "control columns at width {width}");
+        }
     }
 }

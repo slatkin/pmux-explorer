@@ -16,7 +16,11 @@ mod input;
 mod panel_guard;
 mod render;
 mod setup;
-mod size_guard;
+// Exposed to crate-internal state: the width lock's seed floor
+// (`DEFAULT_MIN_WIDTH`) is shared with `state/width.rs`, and the width
+// guard's echo suppressor is armed from `state/popout.rs` on a pop-in.
+pub(crate) mod size_guard;
+pub(crate) mod width_guard;
 mod workers;
 
 /// Run the TUI event loop. Returns when `shutdown` is set or on fatal I/O
@@ -102,7 +106,13 @@ pub fn run(
                 // behaviour pushed it past `@sidebar_max_width`. A strip
                 // is as wide as the window and is never touched here.
                 let pane_width = terminal.size().map(|s| s.width).unwrap_or(0);
-                size_guard::enforce(&state.tmux_pane, pane_width, state.layout_kind);
+                size_guard::enforce(
+                    &state.tmux_pane,
+                    pane_width,
+                    state.layout_kind,
+                    state.global.min_width,
+                    state.global.max_width,
+                );
                 // Keep a floating panel at its size rule and its edge
                 // anchor after the window resized: a column 40 wide at
                 // the right edge, a strip as wide as the window at the
@@ -121,6 +131,15 @@ pub fn run(
                     },
                 );
             }
+            // Converge the docked width on the shared value for every docked
+            // pane, every tick, locked or not: hidden windows must be right
+            // before the user switches to them. Runs after the active-window
+            // block so an adopt resize lands after `size_guard`'s grow — the
+            // adopt target never goes below the floor, so the floor wins
+            // when both fire. Floating panes and unknown window sizes are
+            // no-ops inside the guard, so floating panes still reach
+            // `panel_guard` here exactly as before.
+            width_guard::enforce(&mut state);
             git_tab_active.store(
                 state.displayed_bottom_tab().is_git_status(),
                 Ordering::Relaxed,

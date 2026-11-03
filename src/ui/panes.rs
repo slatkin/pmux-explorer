@@ -433,11 +433,11 @@ pub(super) fn render_repo_popup(frame: &mut Frame, state: &mut AppState, area: R
 }
 
 fn render_filter_bar_into(frame: &mut Frame, state: &mut AppState, area: Rect) {
-    let (line, control_col) = filter_bar::render_filter_bar(state, area.width);
+    let (line, control) = filter_bar::render_filter_bar(state, area.width);
     state.layout.filter_bar_width = area.width;
     debug_assert!(
-        control_col.is_some_and(|col| col < area.width),
-        "the control column must sit inside the rendered row"
+        control.is_some_and(|control| control.popout.is_none_or(|popout| popout < area.width)),
+        "the pop-out column must sit inside the rendered row"
     );
     // The filter bar wears its own background at all times — focused or
     // not. It renders after the focus fill, so it wins over it; spans

@@ -14,6 +14,8 @@ Most options must be set **before** loading the plugin in your `tmux.conf`. Colo
 | `@sidebar_width`                 | `15%`   | Width in columns or as a percentage                                                     |
 | `@sidebar_min_width`             | `35`    | Minimum sidebar width in columns; the sidebar grows itself back when squeezed below it  |
 | `@sidebar_max_width`             | `0`     | Maximum sidebar width in columns; the sidebar shrinks itself back when tmux's resize behaviour pushes it past it. `0` disables it, and a ceiling at or below the effective minimum is ignored — the floor wins |
+| `@sidebar_width_lock`            | `off`   | Shared width lock — `on` makes every docked column sidebar on the server use one docked width; usually toggled with the `w` key or the lock control. A strip has no docked width and is outside the lock |
+| `@sidebar_docked_width`          | unset   | The shared docked width in columns while the lock is on; seeded by the enabling instance and rewritten as sidebars resize — not meant to be set by hand |
 | `@sidebar_position`              | `left`  | Sidebar placement (`left`, `right`, `top` or `bottom`). `left`/`right` make a full-height column, `top`/`bottom` a full-width strip; the layout is fixed when the sidebar is made, so changing the value takes effect the next time the sidebar is toggled on. The side switch (`prefix + Ctrl+O` or the side-switch control) moves the sidebar to the opposite edge on its own axis and flips this option globally for the running server, so sidebars created later follow the switched side; the value in your tmux config is never written and applies again after a tmux server restart                  |
 | `@sidebar_height`                | `30%`   | Strip height (the `top`/`bottom` positions only) in rows or as a percentage of the window height. `@sidebar_width` does not size a strip, and `@sidebar_height` does not size a column |
 | `@sidebar_bottom_height`         | `30`    | Bottom panel height as a percent of the sidebar height (set `0` to hide); resize by dragging the rule above the panel. A configuration with a line count gets that number as a percent |
@@ -29,6 +31,8 @@ Setting `@sidebar_min_width` to `0` disables the width floor entirely;
 larger manual size sticks — set a ceiling only when tmux's resize
 behaviour hands the sidebar more columns than it asked for, which shows
 up when it docks on the right.
+
+While `@sidebar_width_lock` is `on`, the docked width becomes a shared setting: a sidebar whose pane width changes publishes the new width to `@sidebar_docked_width`, and every other docked sidebar adopts it within one refresh tick — clamped to at most half the window and never below `@sidebar_min_width`. Unlocking leaves every sidebar at the width it already has; the floating panel is excluded and keeps its fixed 40 columns. A sidebar created while the lock is on opens directly at the shared width.
 
 ## Worktree spawn defaults
 

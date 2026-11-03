@@ -108,7 +108,7 @@ fn test_running_icon_blink_off() {
     state.spinner_frame = 0;
 
     insta::assert_snapshot!(render_to_string(&mut state, 28, 25), @"
-     󱓯 1  1 󰥔 0 󰒲 0  0    ⇄ ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
     ┃  
@@ -136,7 +136,7 @@ fn test_running_spinner_frame_advances() {
     state.spinner_frame = 3;
 
     insta::assert_snapshot!(render_to_string(&mut state, 28, 25), @"
-     󱓯 1  1 󰥔 0 󰒲 0  0    ⇄ ⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
     ┃  
@@ -163,7 +163,7 @@ fn test_waiting_icon() {
     state.focus_state.sidebar_focused = false;
 
     insta::assert_snapshot!(render_to_string(&mut state, 28, 25), @"
-     󱓯 1  0 󰥔 1 󰒲 0  0    ⇄ ⤢
+     󱓯 1  0 󰥔 1 󰒲 0  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
     ┃ 󰥔 
@@ -190,7 +190,7 @@ fn test_error_icon() {
     state.focus_state.sidebar_focused = false;
 
     insta::assert_snapshot!(render_to_string(&mut state, 28, 25), @"
-     󱓯 1  0 󰥔 0 󰒲 0  1    ⇄ ⤢
+     󱓯 1  0 󰥔 0 󰒲 0  1   ⇄ ☐⤢
     ⓘ                        — ▾
     project
     ┃  
@@ -286,7 +286,7 @@ fn test_agents_auto_scroll_up_shows_group_header() {
     // The snapshot locks in that the `project` repo header is visible after
     // scrolling back up to the first agent.
     insta::assert_snapshot!(render_to_string(&mut state, 28, 25), @"
-     󱓯 8  0 󰥔 0 󰒲 8  0    ⇄ ⤢
+     󱓯 8  0 󰥔 0 󰒲 8  0   ⇄ ☐⤢
     ⓘ                        — ▾
     project
       󰒲 
@@ -336,7 +336,7 @@ fn repo_popup_renders_repo_names_when_open() {
     // The snapshot locks in that the popup lists the `All` entry plus both
     // repo names when opened.
     insta::assert_snapshot!(render_to_string(&mut state, 40, 30), @"
-     󱓯 2  0 󰥔 0 󰒲 2  0                ⇄ ⤢
+     󱓯 2  0 󰥔 0 󰒲 2  0               ⇄ ☐⤢
     ⓘ                                    — ▾
     frontend                    ┌──────────┐
     ┃ 󰒲                        │ All      │
@@ -383,7 +383,7 @@ fn repo_popup_highlights_selected_entry_with_background() {
     // Styled snapshot locks in that the `backend` row carries the selection
     // background (bg:239) on each cell of the entry.
     insta::assert_snapshot!(render_to_styled_string(&mut state, 40, 30), @"
-     [bg:#414868]󱓯[fg:#7aa2f7,bg:#414868] [bg:#414868]2[fg:#7aa2f7,bg:#414868,bold] [bg:#414868][fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868]󰥔[fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868]󰒲[fg:#7dcfff,bg:#414868] [bg:#414868]2[fg:#c0caf5,bg:#414868] [bg:#414868][fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]⇄[fg:#9ece6a,bg:#414868] [bg:#414868]⤢[fg:#9ece6a,bg:#414868] [bg:#414868]
+     [bg:#414868]󱓯[fg:#7aa2f7,bg:#414868] [bg:#414868]2[fg:#7aa2f7,bg:#414868,bold] [bg:#414868][fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868]󰥔[fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868]󰒲[fg:#7dcfff,bg:#414868] [bg:#414868]2[fg:#c0caf5,bg:#414868] [bg:#414868][fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]⇄[fg:#9ece6a,bg:#414868] [bg:#414868]☐[fg:#9aa5ce,bg:#414868]⤢[fg:#9ece6a,bg:#414868] [bg:#414868]
     ⓘ[fg:#e0af68,bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]—[fg:#c0caf5,bg:#1e2336] [bg:#1e2336]▾[fg:#c0caf5,bg:#1e2336]
     f[fg:#7aa2f7,bg:#1e2336]r[fg:#7aa2f7,bg:#1e2336]o[fg:#7aa2f7,bg:#1e2336]n[fg:#7aa2f7,bg:#1e2336]t[fg:#7aa2f7,bg:#1e2336]e[fg:#7aa2f7,bg:#1e2336]n[fg:#7aa2f7,bg:#1e2336]d[fg:#7aa2f7,bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]┌[fg:#7aa2f7]─[fg:#7aa2f7]─[fg:#7aa2f7]─[fg:#7aa2f7]─[fg:#7aa2f7]─[fg:#7aa2f7]─[fg:#7aa2f7]─[fg:#7aa2f7]─[fg:#7aa2f7]─[fg:#7aa2f7]─[fg:#7aa2f7]┐[fg:#7aa2f7]
     ┃[fg:#7aa2f7,bg:#414868] [bg:#414868]󰒲[fg:#7dcfff,bg:#414868] [fg:#ff9e64,bg:#414868][fg:#ff9e64,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]│[fg:#7aa2f7] [fg:#c0caf5]A[fg:#c0caf5]l[fg:#c0caf5]l[fg:#c0caf5] [fg:#c0caf5] [fg:#c0caf5] [fg:#c0caf5] [fg:#c0caf5] [fg:#c0caf5] [fg:#c0caf5]│[fg:#7aa2f7]

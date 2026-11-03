@@ -7,13 +7,15 @@ The sidebar is a docked column by default, sharing the window's width with the w
 
 ## The pop-out control
 
-The sidebar's top row carries the control at its right edge. It shows `⤢` while the sidebar is docked and `⤡` while the sidebar is floating. Clicking it and pressing the tmux prefix followed by `Ctrl+P` while the sidebar has focus do the same thing: pop out when docked, pop in when floating. Bare `p` does nothing, so an accidental keypress does not float the sidebar.
+The sidebar's top row carries three controls at its right edge: the side switch, the width lock, and the pop-out. The pop-out control shows `⤢` while the sidebar is docked and `⤡` while the sidebar is floating. Clicking it and pressing the tmux prefix followed by `Ctrl+P` while the sidebar has focus do the same thing: pop out when docked, pop in when floating. Bare `p` does nothing, so an accidental keypress does not float the sidebar.
+
+The lock control sits between the side switch and the pop-out control and shows `☐` while the width lock is off and `☑` while it is on. Clicking it and pressing `w` while the sidebar has focus do the same thing: toggle the lock that gives every docked column sidebar on the tmux server one shared docked width. The key works while floating too — a lock enabled from a floating sidebar seeds the docked width the sidebar had before it popped out (the panel's own 40 columns when it was floated from the tmux command line and never docked). A strip has no docked width, so the lock does not apply to it.
 
 The control reads the state of the sidebar pane itself, so a sidebar that was floated from the tmux command line shows the `⤡` glyph and can be popped back in from the sidebar.
 
 ## The side-switch control
 
-Left of the pop-out control the top row carries the side-switch control (`⇄`). Clicking it, and pressing the tmux prefix followed by `Ctrl+O` while the sidebar has focus, moves the docked sidebar to the opposite edge of the window — in every window at once, without restarting any sidebar. A window that cannot be rearranged (a zoomed window, or one whose sidebar is floating) is skipped and keeps its side, and the sidebar reports how many windows moved and how many were skipped.
+Leftmost of the three the top row carries the side-switch control (`⇄`). Clicking it, and pressing the tmux prefix followed by `Ctrl+O` while the sidebar has focus, moves the docked sidebar to the opposite edge of the window — in every window at once, without restarting any sidebar. A window that cannot be rearranged (a zoomed window, or one whose sidebar is floating) is skipped and keeps its side, and the sidebar reports how many windows moved and how many were skipped.
 
 The switch also points the global `@sidebar_position` tmux option at the new side, so sidebars created later follow it. Your tmux config is never written; after a tmux server restart the config's value applies again. Outside the sidebar, `prefix + Ctrl+O` keeps tmux's default `rotate-window` action.
 
@@ -23,6 +25,7 @@ Popping the sidebar out turns it into a floating pane in the same window:
 
 - **40 columns wide**, as tall as the window, anchored to the right edge.
 - The workspace panes take the full width of the window again — a floating pane takes no space from the layout.
+- The floating panel stays outside the width lock: it keeps its fixed 40 columns while the docked sidebars share theirs.
 
 While the sidebar floats, the bottom panel is clamped to at most a third of the panel height, so the agent list keeps the rest. The side switch (`⇄`) is disabled while floating: the floating panel keeps its right-edge anchor and the control draws dimmed.
 
@@ -30,7 +33,7 @@ While the sidebar floats, the bottom panel is clamped to at most a third of the 
 
 The same sidebar process keeps running across the switch, so the status filter, the selection, the scroll position and the bottom tab are all still there when the sidebar floats back in.
 
-Popping the sidebar back in restores the docked width the sidebar had before the pop-out, so a sidebar you resized by hand keeps that width.
+Popping the sidebar back in restores the docked width the sidebar had before the pop-out — or the shared docked width while the width lock is on — so a sidebar you resized by hand keeps that width.
 
 ## tmux version
 
