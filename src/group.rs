@@ -143,6 +143,20 @@ fn ultimate_root<'a>(
     parents: &std::collections::HashMap<&'a str, &'a str>,
     order: &std::collections::HashMap<&'a str, usize>,
 ) -> Option<&'a str> {
+    let end = chain_end(start, parents, order);
+    (end != start).then_some(end)
+}
+
+/// Walk one parent chain and return its end: the last pane before a
+/// parent that is absent from `order` or not given at all — or, on a
+/// cycle, the cycle pane tmux lists first. [`nest_roots`] (through
+/// [`ultimate_root`]) and [`board_owner`] share this one loop so
+/// their stop rules cannot drift.
+fn chain_end<'a>(
+    start: &'a str,
+    parents: &std::collections::HashMap<&'a str, &'a str>,
+    order: &std::collections::HashMap<&'a str, usize>,
+) -> &'a str {
     let mut chain: Vec<&'a str> = vec![start];
     let mut seen: std::collections::HashMap<&'a str, usize> = std::collections::HashMap::new();
     seen.insert(start, 0);
@@ -153,9 +167,10 @@ fn ultimate_root<'a>(
             .copied()
             .filter(|parent_id| order.contains_key(parent_id));
         let Some(next) = next else {
-            // No in-group parent left: an ancestor heads the reachable
-            // chain; `start` itself is top-level.
-            return (current != start).then_some(current);
+            // No parent left to follow: the chain's end is the last
+            // pane reached. `start` itself counts — a top-level pane
+            // is its own end.
+            return current;
         };
         let Some(&cycle_start) = seen.get(next) else {
             seen.insert(next, chain.len());
@@ -163,12 +178,46 @@ fn ultimate_root<'a>(
             current = next;
             continue;
         };
-        // A cycle: its root is the cycle pane tmux lists first.
+        // A cycle: its end is the cycle pane tmux lists first. The
+        // slice is never empty — `current` is always in it — so the
+        // fallback never fires.
         return chain[cycle_start..]
             .iter()
             .min_by_key(|pane_id| order.get(**pane_id).copied().unwrap_or(usize::MAX))
-            .copied();
+            .copied()
+            .unwrap_or(current);
     }
+}
+
+/// The pane whose task store the Tasks tab reads for `focused_id` —
+/// its **board owner**. A pane without a subagent identity owns its
+/// own board. A pi pmux subagent reads its ultimate parent's: the
+/// walk follows [`SubagentParent::Pane`] links across **all** groups
+/// (unlike [`nest_roots`], which stays inside one group) and stops at
+/// the last live pane reached — a pane with no subagent identity, an
+/// orphaned parent, or a parent absent from the groups. A pane id not
+/// in the groups is its own owner. Loops and the cycle tie-break are
+/// [`chain_end`]'s, shared with `nest_roots`.
+pub fn board_owner(focused_id: &str, repo_groups: &[RepoGroup]) -> String {
+    let mut order: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
+    let mut parents: std::collections::HashMap<&str, &str> = std::collections::HashMap::new();
+    let mut index = 0;
+    for group in repo_groups {
+        for (pane, _) in &group.panes {
+            order.insert(pane.pane_id.as_str(), index);
+            if let Some(SubagentParent::Pane(parent_id)) =
+                pane.subagent.as_ref().map(|info| &info.parent)
+            {
+                parents.insert(pane.pane_id.as_str(), parent_id.as_str());
+            }
+            index += 1;
+        }
+    }
+
+    // One shared walk owns the stop rules and the cycle tie-break;
+    // only the maps' scope differs from `nest_roots`: every pane of
+    // every group, so a parent in another repo is still followed.
+    chain_end(focused_id, &parents, &order).to_string()
 }
 
 /// Whether `pane_id` is drawn indented, that is, whether it has a root and
@@ -819,5 +868,133 @@ mod tests {
         ]);
 
         assert_eq!(groups, vec![vec!["%0", "%1"]]);
+    }
+
+    // ─── board_owner tests ──────────────────────────────────────
+
+    fn owner_groups(groups: Vec<Vec<PaneInfo>>) -> Vec<RepoGroup> {
+        groups
+            .into_iter()
+            .enumerate()
+            .map(|(index, panes)| RepoGroup {
+                name: format!("group {index}"),
+                has_focus: false,
+                panes: panes
+                    .into_iter()
+                    .map(|pane| (pane, PaneGitInfo::default()))
+                    .collect(),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn board_owner_returns_a_plain_pane_itself() {
+        let groups = owner_groups(vec![vec![test_pane("%0", env!("CARGO_MANIFEST_DIR"))]]);
+
+        assert_eq!(board_owner("%0", &groups), "%0");
+        assert_eq!(
+            board_owner("%ABSENT", &groups),
+            "%ABSENT",
+            "a pane id not in the groups is its own owner"
+        );
+    }
+
+    #[test]
+    fn board_owner_follows_a_direct_child_to_its_parent() {
+        let groups = owner_groups(vec![vec![
+            test_pane("%0", env!("CARGO_MANIFEST_DIR")),
+            subagent_pane("%1", pane_parent("%0")),
+        ]]);
+
+        assert_eq!(board_owner("%1", &groups), "%0");
+        assert_eq!(board_owner("%0", &groups), "%0");
+    }
+
+    #[test]
+    fn board_owner_follows_a_two_level_chain_to_the_top() {
+        let groups = owner_groups(vec![vec![
+            test_pane("%0", env!("CARGO_MANIFEST_DIR")),
+            subagent_pane("%1", pane_parent("%0")),
+            subagent_pane("%2", pane_parent("%1")),
+        ]]);
+
+        assert_eq!(board_owner("%2", &groups), "%0");
+        assert_eq!(board_owner("%1", &groups), "%0");
+    }
+
+    #[test]
+    fn board_owner_follows_a_parent_in_another_group() {
+        let groups = owner_groups(vec![
+            vec![subagent_pane("%1", pane_parent("%0"))],
+            vec![test_pane("%0", "/tmp/pmux-board-other")],
+        ]);
+
+        assert_eq!(
+            board_owner("%1", &groups),
+            "%0",
+            "the walk crosses group boundaries"
+        );
+    }
+
+    #[test]
+    fn board_owner_stops_at_an_orphaned_subagent() {
+        let groups = owner_groups(vec![vec![
+            subagent_pane("%1", crate::tmux::SubagentParent::Orphaned),
+            subagent_pane("%2", pane_parent("%1")),
+        ]]);
+
+        assert_eq!(
+            board_owner("%2", &groups),
+            "%1",
+            "an orphaned middle subagent owns the chain's board"
+        );
+        assert_eq!(board_owner("%1", &groups), "%1");
+    }
+
+    #[test]
+    fn board_owner_returns_the_child_when_the_parent_pane_is_missing() {
+        let groups = owner_groups(vec![vec![subagent_pane("%1", pane_parent("%9"))]]);
+
+        assert_eq!(
+            board_owner("%1", &groups),
+            "%1",
+            "a parent pane that is not live is not followed"
+        );
+    }
+
+    #[test]
+    fn board_owner_treats_a_self_parent_as_its_own_owner() {
+        let groups = owner_groups(vec![vec![subagent_pane("%0", pane_parent("%0"))]]);
+
+        assert_eq!(board_owner("%0", &groups), "%0");
+    }
+
+    #[test]
+    fn board_owner_and_nest_roots_agree_on_an_in_group_chain() {
+        // One walk now serves both callers, so this pins the remaining
+        // difference — scope, not the loop: `board_owner`'s maps are
+        // flattened from `repo_groups`, `nest_roots`' from one pane
+        // list, and they must agree wherever the chain is in-group.
+        let panes = with_git(vec![
+            test_pane("%0", env!("CARGO_MANIFEST_DIR")),
+            subagent_pane("%1", pane_parent("%0")),
+            subagent_pane("%2", pane_parent("%1")),
+            test_pane("%3", env!("CARGO_MANIFEST_DIR")),
+        ]);
+        let groups = owner_groups(vec![panes.iter().map(|(p, _)| p.clone()).collect()]);
+        let roots = nest_roots(&panes);
+
+        for (pane, _) in &panes {
+            let expected = roots
+                .get(&pane.pane_id)
+                .map(String::as_str)
+                .unwrap_or(&pane.pane_id);
+            assert_eq!(
+                board_owner(&pane.pane_id, &groups),
+                expected,
+                "pane {}",
+                pane.pane_id
+            );
+        }
     }
 }

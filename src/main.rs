@@ -81,15 +81,26 @@ fn main() -> io::Result<()> {
         sa.sa_flags = libc::SA_RESTART;
         libc::sigaction(libc::SIGUSR1, &sa, std::ptr::null_mut());
 
-        // SIGTERM (`kill`, `pkill`) and SIGHUP (pane closing) end the loop
-        // instead of the process, so the guards below clear the pane option
-        // and restore the terminal. SA_RESETHAND puts the default action
-        // back after the first signal: a loop that never returns can still
-        // be killed by a second one.
+        // SIGTERM (`kill`, `pkill`) ends the loop instead of the process,
+        // so the guards below clear the pane option and restore the
+        // terminal. SA_RESETHAND puts the default action back after the
+        // first signal: a loop that never returns can still be killed by a
+        // second one.
         let mut sa: libc::sigaction = std::mem::zeroed();
         sa.sa_sigaction = shutdown_handler as *const () as libc::sighandler_t;
         sa.sa_flags = libc::SA_RESTART | libc::SA_RESETHAND;
         libc::sigaction(libc::SIGTERM, &sa, std::ptr::null_mut());
+
+        // SIGHUP (pane closing, tmux server dying) must exit from the
+        // handler itself: a closed pty makes crossterm's event source spin
+        // on EIO inside `poll` without ever returning, so a flag the loop
+        // checks on its next iteration is never seen (observed: orphaned
+        // sidebars pinning a core after `kill-server`). The terminal is
+        // already dead, so there is nothing for the guards to restore and
+        // `_exit` — the only async-signal-safe way out — is correct.
+        let mut sa: libc::sigaction = std::mem::zeroed();
+        sa.sa_sigaction = hangup_handler as *const () as libc::sighandler_t;
+        sa.sa_flags = libc::SA_RESETHAND;
         libc::sigaction(libc::SIGHUP, &sa, std::ptr::null_mut());
     }
 
@@ -122,4 +133,9 @@ extern "C" fn sigusr1_handler(_: libc::c_int) {
 
 extern "C" fn shutdown_handler(_: libc::c_int) {
     SHUTDOWN.store(true, Ordering::Relaxed);
+}
+
+extern "C" fn hangup_handler(_: libc::c_int) {
+    // SAFETY: `_exit` is async-signal-safe and never returns.
+    unsafe { libc::_exit(0) }
 }

@@ -116,6 +116,12 @@ pmux writes the fallback stems `subagent` (a spawned subagent) and `resume`
 all. A later recognised prompt replaces them. The identity stays
 until the session ends or the pane's pi state is cleared.
 
+The Tasks tab shows the parent's board for a subagent pane: while the
+parent is live, the tab reads the ultimate parent's task store instead
+of the subagent's own, and an orphaned subagent reads its own. The
+redirect is read-side only — a subagent's `task-set`, `task-update`
+and `task-describe` still write the subagent's own store.
+
 A prompt that starts with a `<file name="...">` tag of any other shape, or a
 prompt from another agent, is stored and shown as before.
 
