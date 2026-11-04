@@ -31,11 +31,29 @@ pub(crate) fn cmd_toggle(args: &[String]) -> i32 {
     // window width, a strip from `@sidebar_height` against the window
     // height (the same row-count-or-percent parse).
     let sidebar_size = if is_strip {
-        let setting = tmux::display_message(window_id, &format!("#{{{}}}", tmux::SIDEBAR_HEIGHT));
-        let window_height: u32 = tmux::display_message(window_id, "#{window_height}")
-            .parse()
-            .unwrap_or(0);
-        resolve_height_arg(&setting, window_height)
+        // The shared docked height wins while the lock is on (design
+        // D6): a strip created under the lock starts at the server's
+        // shared rows instead of the configured default, so it never
+        // opens at the wrong height just to jump on the first adopt
+        // tick. Like every read here, the two options are read once
+        // at creation, never per tick — and while locked nothing else
+        // is read. Percentage support otherwise stays exactly as it
+        // was, absolute rows only for the shared height (design D1).
+        let lock = tmux::display_message(window_id, &format!("#{{{}}}", tmux::SIDEBAR_WIDTH_LOCK));
+        let docked =
+            tmux::display_message(window_id, &format!("#{{{}}}", tmux::SIDEBAR_DOCKED_HEIGHT));
+        match shared_creation_height(&lock, &docked) {
+            Some(shared) => shared,
+            None => {
+                // The unlocked fallback path, unchanged by the lock.
+                let setting =
+                    tmux::display_message(window_id, &format!("#{{{}}}", tmux::SIDEBAR_HEIGHT));
+                let window_height: u32 = tmux::display_message(window_id, "#{window_height}")
+                    .parse()
+                    .unwrap_or(0);
+                resolve_height_arg(&setting, window_height)
+            }
+        }
     } else {
         // The shared docked width wins while the width lock is on
         // (design D7): a sidebar created under the lock starts at the
@@ -511,6 +529,22 @@ fn shared_creation_width(lock: &str, docked: &str) -> Option<String> {
     None
 }
 
+/// The shared docked height as the `split-window -l` creation height,
+/// or `None` to fall through to the configured `@sidebar_height` — the
+/// height-axis twin of [`shared_creation_width`] (design D6). The same
+/// rules carry over: only the exact `on` the writers send counts as
+/// locked, the rows must parse as a usable count (a percentage is not
+/// a splittable row count, and 0 rows is unusable), and every other
+/// value falls back to the setting path.
+fn shared_creation_height(lock: &str, docked: &str) -> Option<String> {
+    if lock.trim() == "on"
+        && let Some(height) = docked.trim().parse::<u16>().ok().filter(|h| *h > 0)
+    {
+        return Some(height.to_string());
+    }
+    None
+}
+
 /// The historical `@sidebar_width` resolution, extracted as a pure
 /// function so the unlocked fallback is unit-testable without a running
 /// tmux server (the same shape as `should_kill_window`).
@@ -946,6 +980,74 @@ mod tests {
         // No split-window can honor 0 columns; treat a hand-edited 0
         // like any other unusable shared value.
         assert_eq!(shared_creation_width("on", "0"), None);
+    }
+
+    // ─── shared_creation_height ───────────────────────────────
+
+    #[test]
+    fn shared_creation_height_uses_the_shared_height_while_locked() {
+        // Design D6: a strip opened under the lock starts at the
+        // shared docked height, not at the configured default.
+        assert_eq!(shared_creation_height("on", "12"), Some("12".to_string()));
+    }
+
+    #[test]
+    fn shared_creation_height_falls_through_when_unlocked() {
+        // While the lock is off the whole `@sidebar_height` path must
+        // run, whatever a stale shared value from an earlier lock says.
+        assert_eq!(shared_creation_height("off", "12"), None);
+        assert_eq!(shared_creation_height("", "12"), None);
+        assert_eq!(
+            shared_creation_height("on ", "12"),
+            Some("12".to_string()),
+            "display-message output is trimmed before the match"
+        );
+        assert_eq!(
+            shared_creation_height("ON", "12"),
+            None,
+            "only the exact value the writers send counts as on"
+        );
+    }
+
+    #[test]
+    fn shared_creation_height_falls_through_when_the_height_is_unset_or_useless() {
+        // A locked lock without a usable height (unset, unseeded, a
+        // percentage, or any non-row value) cannot size a split-window:
+        // the configured setting decides instead.
+        assert_eq!(shared_creation_height("on", ""), None);
+        assert_eq!(shared_creation_height("on", "30%"), None);
+        assert_eq!(shared_creation_height("on", "tall"), None);
+    }
+
+    #[test]
+    fn shared_creation_height_falls_through_on_a_zero_height() {
+        // No split-window can honor 0 rows; treat a hand-edited 0 like
+        // any other unusable shared value.
+        assert_eq!(shared_creation_height("on", "0"), None);
+    }
+
+    #[test]
+    fn the_strip_creation_argv_carries_the_shared_height() {
+        // The shared rows reach tmux as the `split-window -l` size of
+        // the strip path (design D6), the way the shared columns reach
+        // the column path.
+        let Some(shared) = shared_creation_height("on", "12") else {
+            panic!("a locked lock with a usable height must resolve");
+        };
+        let args = split_window_args(
+            split_window_flags(SidebarPosition::Bottom),
+            &shared,
+            "%9",
+            "~",
+            sidebar_layout_setting(SidebarPosition::Bottom),
+            "/bin/pmux-explorer",
+        );
+        let l = args
+            .iter()
+            .position(|arg| arg == "-l")
+            .unwrap_or_else(|| panic!("the strip creation splits with -l"));
+        assert_eq!(args[l + 1], "12");
+        assert_eq!(args[1], "-vf", "a bottom strip splits with the strip flags");
     }
 
     // ─── configured_creation_width ──────────────────────────

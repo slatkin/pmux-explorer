@@ -5,12 +5,13 @@
 //! reports it, refreshed on every tick into [`AppState::sidebar_pane`].
 //! Nothing about the mode is remembered separately, so a panel floated
 //! from the tmux command line reads as floating and can be popped back
-//! in. The one thing that IS remembered is the docked width, captured on
-//! the way out and restored with `resize-pane -x` on the way in, so a
-//! sidebar the user resized by hand keeps its width across the round trip.
-//! While the width lock is on with a shared width, the pop-in restores
-//! the shared width instead, clamped exactly like the width-lock step's
-//! adoption (`app/width_guard.rs`, design D6).
+//! in. The one thing that IS remembered is the docked size, captured on
+//! the way out and restored with `resize-pane` on the way in, so a
+//! sidebar the user resized by hand keeps its size across the round
+//! trip (the width of a column, the height of a strip). While the lock
+//! is on with a shared docked size on the layout's axis, the pop-in
+//! restores that shared size instead, clamped exactly like the lock
+//! step's adoption (`app/width_guard.rs`, design D6).
 //!
 //! The tmux calls themselves live in `tmux::float_pane` and
 //! `tmux::dock_pane`; this module decides when to run them, with which
@@ -21,7 +22,7 @@
 
 use super::{AppState, LayoutKind};
 use crate::cli::toggle::SidebarPosition;
-use crate::state::{adopt_target, width_floor};
+use crate::state::{adopt_target, strip_height_floor, width_floor};
 use crate::tmux::{self, SidebarPaneInfo};
 
 /// Width of the floating panel, in columns. Wide enough that the agent
@@ -249,13 +250,9 @@ impl AppState {
     /// lock holds one, the captured docked width otherwise.
     fn pop_in_column(&mut self, info: SidebarPaneInfo) {
         if let Some(width) = self.apply_pop_in(info, tmux::dock_pane(&self.tmux_pane)) {
-            let _ = tmux::run_tmux(&[
-                "resize-pane",
-                "-t",
-                &self.tmux_pane,
-                "-x",
-                &width.to_string(),
-            ]);
+            let args = Self::restore_resize_args(&self.tmux_pane, LayoutKind::Column, width);
+            let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
+            let _ = tmux::run_tmux(&arg_refs);
         }
     }
 
@@ -278,14 +275,29 @@ impl AppState {
             StripDockPlan::Bare => tmux::dock_pane(&self.tmux_pane),
         };
         if let Some(height) = self.apply_pop_in(info, result) {
-            let _ = tmux::run_tmux(&[
-                "resize-pane",
-                "-t",
-                &self.tmux_pane,
-                "-y",
-                &height.to_string(),
-            ]);
+            let args = Self::restore_resize_args(&self.tmux_pane, LayoutKind::Strip, height);
+            let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
+            let _ = tmux::run_tmux(&arg_refs);
         }
+    }
+
+    /// The `resize-pane` argument list that restores a docked size on
+    /// the axis: `-x` for a column, `-y` for a strip. Pure, like
+    /// `split_window_args` in `cli/toggle.rs` and `resize_pane_args` in
+    /// `app/width_guard.rs`, so a unit test can assert the exact
+    /// arguments the pop-in restore issues per axis.
+    fn restore_resize_args(pane: &str, axis: LayoutKind, size: u16) -> Vec<String> {
+        let flag = match axis {
+            LayoutKind::Column => "-x",
+            LayoutKind::Strip => "-y",
+        };
+        vec![
+            "resize-pane".to_string(),
+            "-t".to_string(),
+            pane.to_string(),
+            flag.to_string(),
+            size.to_string(),
+        ]
     }
 
     /// Apply the outcome of the `float_pane` call: on success record the
@@ -351,28 +363,39 @@ impl AppState {
     /// The docked size the pop-in should restore, or `None` to leave
     /// the layout's size alone.
     ///
-    /// While the width lock is on with a shared docked width, a
-    /// column's restore is the shared width clamped like an adoption —
-    /// `min(max(S, floor), cap)`, design D6 — so a narrow window does
-    /// not dock oversized for the tick before the width-lock step
-    /// would clamp it. The captured `docked_size` is left held in
-    /// that case: it is the right answer again whenever a later pop-in
-    /// runs unlocked, and it is never written to while locked. A strip
-    /// restores its captured height regardless — the shared width
-    /// sizes columns only. Otherwise the capture is spent, as it has
-    /// always been.
+    /// While the lock is on with a shared docked size on the layout's
+    /// axis, the restore is that shared size clamped like an adoption —
+    /// `min(max(S, floor), cap)`, design D6 — so an undersized window
+    /// does not dock oversized for the tick before the lock step would
+    /// clamp it. The floor is the width option's floor for a column and
+    /// the strip-height constant for a strip; the cap is half the
+    /// probe's matching window dimension, floored so the floor wins
+    /// where the two cannot both hold. The captured `docked_size` is
+    /// left held in that case: it is the right answer again whenever a
+    /// later pop-in runs unlocked, and it is never written to while
+    /// locked. Otherwise the capture is spent, as it has always been.
     ///
     /// The clamp runs through the shared `width_floor`/`adopt_target`
     /// helpers in `crate/state/width.rs` — the same helpers the lock
     /// step's adopt side and the enabling seeds use (design D6).
     fn pop_in_restore_size(&mut self, info: SidebarPaneInfo) -> Option<u16> {
-        if self.layout_kind == LayoutKind::Column
-            && self.global.width_lock
-            && let Some(shared) = self.global.shared_docked_width
-        {
-            let floor = width_floor(self.global.min_width);
-            let cap = floor.max(info.window_width / 2);
-            return Some(adopt_target(shared, floor, cap));
+        if self.global.width_lock {
+            match self.layout_kind {
+                LayoutKind::Column => {
+                    if let Some(shared) = self.global.shared_docked_width {
+                        let floor = width_floor(self.global.min_width);
+                        let cap = floor.max(info.window_width / 2);
+                        return Some(adopt_target(shared, floor, cap));
+                    }
+                }
+                LayoutKind::Strip => {
+                    if let Some(shared) = self.global.shared_docked_height {
+                        let floor = strip_height_floor();
+                        let cap = floor.max(info.window_height / 2);
+                        return Some(adopt_target(shared, floor, cap));
+                    }
+                }
+            }
         }
         self.docked_size.take()
     }
@@ -671,6 +694,153 @@ mod tests {
         assert_eq!(state.apply_pop_in(floating_info(300), Ok(())), Some(25));
         assert_eq!(state.docked_size, None, "the capture is spent");
         assert!(state.width_guard.pending_adopt_observation);
+    }
+
+    /// A floating strip probe: the same shape [`floating_info`] makes
+    /// for a column, with the window's rows carrying the locked
+    /// restore's cap instead of its columns.
+    fn floating_strip_info(window_height: u16) -> SidebarPaneInfo {
+        SidebarPaneInfo {
+            floating: true,
+            window_width: 300,
+            window_height,
+            ..floating_info(300)
+        }
+    }
+
+    /// A strip state with the given floating probe, as `toggle_popout`
+    /// hands it to the pop-in.
+    fn strip_state(info: SidebarPaneInfo) -> AppState {
+        let mut state = AppState::new("%99".into());
+        state.layout_kind = LayoutKind::Strip;
+        state.sidebar_pane = info;
+        state
+    }
+
+    #[test]
+    fn apply_pop_in_locked_strip_restores_the_shared_height() {
+        // Spec: popping a strip back in under the lock docks at the
+        // shared docked height. The capture taken before the lock moved
+        // on is left held — it is the answer again if a later pop-in
+        // runs unlocked, and it is only overwritten at the next
+        // pop-out.
+        let mut state = strip_state(floating_strip_info(30));
+        state.global.width_lock = true;
+        state.global.shared_docked_height = Some(12);
+        state.docked_size = Some(10);
+
+        assert_eq!(
+            state.apply_pop_in(floating_strip_info(30), Ok(())),
+            Some(12)
+        );
+        assert_eq!(
+            state.docked_size,
+            Some(10),
+            "the locked restore must not spend the capture"
+        );
+        assert!(!state.sidebar_pane.floating);
+        assert!(state.flash.is_none());
+        assert!(
+            state.width_guard.pending_adopt_observation,
+            "the restore's landing must not echo back as a publish"
+        );
+    }
+
+    #[test]
+    fn apply_pop_in_locked_strip_clamps_to_half_of_a_short_window() {
+        // The restore is clamped like an adoption: a 30-row window
+        // cannot dock the shared 24 without overflowing, so the pop-in
+        // takes the cap of 15 and the lock step refines from there.
+        let mut state = strip_state(floating_strip_info(30));
+        state.global.width_lock = true;
+        state.global.shared_docked_height = Some(24);
+
+        assert_eq!(
+            state.apply_pop_in(floating_strip_info(30), Ok(())),
+            Some(15)
+        );
+    }
+
+    #[test]
+    fn apply_pop_in_locked_strip_clamps_to_the_floor_when_nothing_taller_fits() {
+        // The floor wins over the cap: a 6-row window caps the restore
+        // at the 4-row strip floor, not at the shared 12.
+        let mut state = strip_state(floating_strip_info(6));
+        state.global.width_lock = true;
+        state.global.shared_docked_height = Some(12);
+
+        assert_eq!(state.apply_pop_in(floating_strip_info(6), Ok(())), Some(4));
+    }
+
+    #[test]
+    fn apply_pop_in_locked_strip_lifts_a_shared_height_below_the_floor() {
+        // The floor binds both ways, same as on the adopt side: a
+        // shared 2 restores at the 4-row strip floor.
+        let mut state = strip_state(floating_strip_info(30));
+        state.global.width_lock = true;
+        state.global.shared_docked_height = Some(2);
+
+        assert_eq!(state.apply_pop_in(floating_strip_info(30), Ok(())), Some(4));
+    }
+
+    #[test]
+    fn apply_pop_in_locked_strip_without_a_shared_height_restores_the_capture() {
+        // The lock was enabled unseeded (a failed probe, a floating
+        // strip with no capture), so no shared value exists yet: the
+        // captured height wins until one is published.
+        let mut state = strip_state(floating_strip_info(30));
+        state.global.width_lock = true;
+        state.docked_size = Some(10);
+
+        assert_eq!(
+            state.apply_pop_in(floating_strip_info(30), Ok(())),
+            Some(10)
+        );
+        assert_eq!(state.docked_size, None, "the capture is spent");
+        assert!(state.width_guard.pending_adopt_observation);
+    }
+
+    #[test]
+    fn apply_pop_in_unlocked_strip_restores_the_captured_height() {
+        // The unlocked strip restore is unchanged by the lock: the
+        // height captured on the way out comes back, and the capture is
+        // spent like it always was.
+        let mut state = strip_state(floating_strip_info(30));
+        state.global.shared_docked_height = Some(12);
+        state.docked_size = Some(10);
+
+        assert_eq!(
+            state.apply_pop_in(floating_strip_info(30), Ok(())),
+            Some(10)
+        );
+        assert_eq!(state.docked_size, None, "the capture is spent");
+        assert!(state.width_guard.pending_adopt_observation);
+    }
+
+    #[test]
+    fn restore_resize_args_resizes_on_the_axis() {
+        // Pure argv assertion for the pop-in restore's resize call:
+        // `-y` rows for a strip, `-x` columns for a column.
+        assert_eq!(
+            AppState::restore_resize_args("%9", LayoutKind::Strip, 12),
+            vec![
+                "resize-pane".to_string(),
+                "-t".to_string(),
+                "%9".to_string(),
+                "-y".to_string(),
+                "12".to_string(),
+            ]
+        );
+        assert_eq!(
+            AppState::restore_resize_args("%9", LayoutKind::Column, 45),
+            vec![
+                "resize-pane".to_string(),
+                "-t".to_string(),
+                "%9".to_string(),
+                "-x".to_string(),
+                "45".to_string(),
+            ]
+        );
     }
 
     // ─── strip_dock_plan ─────────────────────────────────────────────
