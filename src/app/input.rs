@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEventKind};
 use ratatui::{Terminal, backend::CrosstermBackend};
 
-use crate::state::{AppState, BottomTab, Focus, LayoutKind, StatusFilter};
+use crate::state::{AppState, BottomTab, Focus, LayoutKind, SplitPane, StatusFilter};
 use crate::worktree::RemoveMode;
 
 /// Dispatch a single crossterm [`Event`] into the [`AppState`], returning
@@ -53,10 +53,7 @@ pub(super) fn handle_event(
                     // keyboard `BackTab` path does the same update. Without this,
                     // clicking into Git Status leaves polling disabled until the
                     // next refresh tick and the tab renders stale data.
-                    git_tab_active.store(
-                        state.displayed_bottom_tab().is_git_status(),
-                        Ordering::Relaxed,
-                    );
+                    git_tab_active.store(state.git_poll_active(), Ordering::Relaxed);
                 }
                 MouseEventKind::ScrollDown => {
                     state.handle_mouse_scroll(mouse.row, mouse.column, term_height, bottom_h, 3);
@@ -250,6 +247,11 @@ fn handle_filter_keys(state: &mut AppState, code: KeyCode) -> bool {
 /// `x`, Enter and the pop-out and side-switch prefixes keep their
 /// column meaning.
 fn handle_strip_main_key(key: KeyEvent, state: &mut AppState, git_tab_active: &AtomicBool) {
+    // A one-pane strip never keeps the focus on pane B: the drawn
+    // layout is the truth at key time, so the demotion shared with
+    // `draw_strip` moves the focus to pane A before the key acts, and
+    // the key then reads pane A's map.
+    state.demote_tab_pane_b();
     let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
     // The keys the two layouts share come first: the pop-out and
     // side-switch prefixes (tmux forwards them with both modifiers),
@@ -340,22 +342,63 @@ fn handle_strip_main_key(key: KeyEvent, state: &mut AppState, git_tab_active: &A
             KeyCode::Char('h') | KeyCode::Left => {
                 state.focus_state.focus = Focus::Panes;
             }
-            // The tab panel is the right end: Right/`l` keep the focus.
-            KeyCode::Char('l') | KeyCode::Right => {}
+            // In a split strip pane B sits right of pane A and Right
+            // steps to it; a one-pane strip keeps the tab panel as the
+            // right end.
+            KeyCode::Char('l') | KeyCode::Right => {
+                if state.split_strip_drawn() {
+                    state.focus_state.focus = Focus::TabPaneB;
+                }
+            }
+            // Up/Down scroll the focused tab pane: pane A's displayed
+            // tab in a split strip, the shared tab in a one-pane strip.
             KeyCode::Up | KeyCode::Char('k') => {
-                state.scroll_bottom(-1);
+                strip_scroll_tab(state, SplitPane::A, -1);
             }
             KeyCode::Down | KeyCode::Char('j') => {
-                state.scroll_bottom(1);
+                strip_scroll_tab(state, SplitPane::A, 1);
             }
             KeyCode::Char('n') if ctrl => {
-                state.scroll_bottom(1);
+                strip_scroll_tab(state, SplitPane::A, 1);
             }
             KeyCode::Char('p') if ctrl => {
-                state.scroll_bottom(-1);
+                strip_scroll_tab(state, SplitPane::A, -1);
             }
             _ => {}
         },
+        // Pane B of a split strip: Left/`h` return to pane A, Right/`l`
+        // keep the focus (pane B is the right end), and Up/Down scroll
+        // pane B's displayed tab. The demotion above keeps the arm off
+        // a one-pane strip, so the split scroll reaches it directly.
+        Focus::TabPaneB => match key.code {
+            KeyCode::Char('h') | KeyCode::Left => {
+                state.focus_state.focus = Focus::ActivityLog;
+            }
+            KeyCode::Char('l') | KeyCode::Right => {}
+            KeyCode::Up | KeyCode::Char('k') => {
+                state.scroll_split_tab(SplitPane::B, -1);
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                state.scroll_split_tab(SplitPane::B, 1);
+            }
+            KeyCode::Char('n') if ctrl => {
+                state.scroll_split_tab(SplitPane::B, 1);
+            }
+            KeyCode::Char('p') if ctrl => {
+                state.scroll_split_tab(SplitPane::B, -1);
+            }
+            _ => {}
+        },
+    }
+}
+
+/// Scroll one split pane's tab in a split strip, or the shared tab in
+/// a one-pane strip — the strip's Up/Down arms share the dispatch.
+fn strip_scroll_tab(state: &mut AppState, pane: SplitPane, delta: isize) {
+    if state.split_strip_drawn() {
+        state.scroll_split_tab(pane, delta);
+    } else {
+        state.scroll_bottom(delta);
     }
 }
 
@@ -367,22 +410,32 @@ fn apply_status_filter(state: &mut AppState, filter: StatusFilter) {
     state.rebuild_row_targets();
 }
 
-/// Esc from the bottom panel (activity log or filter bar) returns focus
-/// to the agent list.
+/// Esc from the bottom panel (activity log, filter bar, or pane B of
+/// a split strip) returns focus to the agent list.
 fn esc_returns_focus_to_panes(state: &mut AppState) {
-    if state.focus_state.focus == Focus::ActivityLog || state.focus_state.focus == Focus::Filter {
+    if matches!(
+        state.focus_state.focus,
+        Focus::ActivityLog | Focus::TabPaneB | Focus::Filter
+    ) {
         state.focus_state.focus = Focus::Panes;
     }
 }
 
 /// BackTab advances the bottom panel's tab cycle and keeps the git
-/// poller flag in step with the Git tab.
+/// poller flag in step with the Git tab. In a split strip the cycle
+/// steps the focused tab pane's group — pane A's when no tab pane has
+/// focus — while a one-pane strip or a column keeps the shared cycle.
 fn handle_back_tab(state: &mut AppState, git_tab_active: &AtomicBool) {
-    state.next_bottom_tab();
-    git_tab_active.store(
-        state.displayed_bottom_tab().is_git_status(),
-        Ordering::Relaxed,
-    );
+    if state.split_strip_drawn() {
+        let pane = match state.focus_state.focus {
+            Focus::TabPaneB => SplitPane::B,
+            _ => SplitPane::A,
+        };
+        state.next_split_tab(pane);
+    } else {
+        state.next_bottom_tab();
+    }
+    git_tab_active.store(state.git_poll_active(), Ordering::Relaxed);
 }
 
 fn pane_nav_down(state: &mut AppState) {
@@ -398,6 +451,9 @@ fn pane_nav_down(state: &mut AppState) {
             }
         }
         Focus::ActivityLog => state.scroll_bottom(1),
+        // The column never draws a split strip, so the focus value
+        // cannot reach the arms; they stay a no-op for exhaustiveness.
+        Focus::TabPaneB => {}
     }
 }
 
@@ -424,6 +480,9 @@ fn pane_nav_up(state: &mut AppState) {
                 state.scroll_bottom(-1);
             }
         }
+        // The column never draws a split strip, so the focus value
+        // cannot reach the arm; it stays a no-op for exhaustiveness.
+        Focus::TabPaneB => {}
     }
 }
 
@@ -446,7 +505,7 @@ fn repo_popup_nav_up(state: &mut AppState) {
 mod tests {
     use super::*;
     use crate::group::RepoGroup;
-    use crate::state::RowTarget;
+    use crate::state::{RowTarget, split_strip_layout, strip_layout};
 
     fn key(code: KeyCode) -> KeyEvent {
         KeyEvent::new(code, KeyModifiers::NONE)
@@ -984,5 +1043,304 @@ mod tests {
         state.focus_state.focus = Focus::Filter;
         handle_key_event(key(KeyCode::Up), &mut state, &flag);
         assert_eq!(state.focus_state.focus, Focus::Filter);
+    }
+
+    // ─── Split strip key map ─────────────────────────────────────────
+
+    /// A strip-layout state whose drawn layout is a split strip:
+    /// [`split_strip_layout`] at 100 columns with 33-column agent and
+    /// pane-B sections, so pane B's panel has columns the key map can
+    /// read. Only the geometry is set — the key tests need no drawn
+    /// frame content.
+    fn split_strip_state() -> AppState {
+        let mut state = strip_state_with_three_panes();
+        state.layout.strip = Some(split_strip_layout(100, 8, 33, 33));
+        state
+    }
+
+    /// A strip-layout state whose drawn layout is a one-pane strip:
+    /// the shared tab panel with none of pane B's fields set.
+    fn one_pane_strip_state() -> AppState {
+        let mut state = strip_state_with_three_panes();
+        state.layout.strip = Some(strip_layout(100, 8, 33));
+        state
+    }
+
+    /// Point the focused pane at a running pi pane, so pane B's shown
+    /// tab group gains Thought.
+    fn focus_a_pi_pane(state: &mut AppState) {
+        let pane = crate::tmux::PaneInfo {
+            pane_id: "%1".into(),
+            pane_active: false,
+            status: crate::tmux::PaneStatus::Idle,
+            attention: false,
+            agent: crate::tmux::AgentType::Pi,
+            path: "/tmp".into(),
+            current_command: String::new(),
+            prompt: String::new(),
+            prompt_is_response: false,
+            started_at: None,
+            wait_reason: String::new(),
+            permission_mode: crate::tmux::PermissionMode::Default,
+            subagents: Vec::new(),
+            pane_pid: None,
+            worktree: crate::tmux::WorktreeMetadata::default(),
+            session_id: None,
+            sidebar_spawned: false,
+            pane_name: None,
+            bg_shell_cmd: None,
+            subagent: None,
+        };
+        state.repo_groups = vec![RepoGroup {
+            name: "project".into(),
+            has_focus: false,
+            panes: vec![(pane, crate::group::PaneGitInfo::default())],
+        }];
+        state.focus_state.focused_pane_id = Some("%1".into());
+    }
+
+    #[test]
+    fn strip_right_from_pane_a_steps_to_pane_b() {
+        let mut state = split_strip_state();
+        state.focus_state.focus = Focus::ActivityLog;
+        let flag = AtomicBool::new(false);
+
+        handle_key_event(key(KeyCode::Right), &mut state, &flag);
+        assert_eq!(state.focus_state.focus, Focus::TabPaneB);
+
+        // `l` spells the same step.
+        state.focus_state.focus = Focus::ActivityLog;
+        handle_key_event(key(KeyCode::Char('l')), &mut state, &flag);
+        assert_eq!(state.focus_state.focus, Focus::TabPaneB);
+    }
+
+    #[test]
+    fn strip_right_at_pane_b_keeps_the_focus() {
+        // Pane B is the right end of the walk.
+        let mut state = split_strip_state();
+        state.focus_state.focus = Focus::TabPaneB;
+        let flag = AtomicBool::new(false);
+
+        handle_key_event(key(KeyCode::Right), &mut state, &flag);
+        assert_eq!(state.focus_state.focus, Focus::TabPaneB);
+
+        handle_key_event(key(KeyCode::Char('l')), &mut state, &flag);
+        assert_eq!(state.focus_state.focus, Focus::TabPaneB);
+    }
+
+    #[test]
+    fn strip_left_from_pane_b_returns_to_pane_a_first() {
+        let mut state = split_strip_state();
+        state.focus_state.focus = Focus::TabPaneB;
+        let flag = AtomicBool::new(false);
+
+        handle_key_event(key(KeyCode::Left), &mut state, &flag);
+        assert_eq!(state.focus_state.focus, Focus::ActivityLog);
+
+        // The walk is one part per press: the next Left leaves pane A
+        // for the agent panel.
+        handle_key_event(key(KeyCode::Left), &mut state, &flag);
+        assert_eq!(state.focus_state.focus, Focus::Panes);
+    }
+
+    #[test]
+    fn strip_up_and_down_scroll_pane_b_while_it_has_focus() {
+        let mut state = split_strip_state();
+        state.focus_state.focus = Focus::TabPaneB;
+        state.tasks.scroll = crate::state::ScrollState {
+            offset: 0,
+            total_lines: 10,
+            visible_height: 3,
+        };
+        state.activity.scroll = crate::state::ScrollState {
+            offset: 5,
+            total_lines: 10,
+            visible_height: 3,
+        };
+        let flag = AtomicBool::new(false);
+
+        handle_key_event(key(KeyCode::Down), &mut state, &flag);
+        assert_eq!(state.tasks.scroll.offset, 1);
+        assert_eq!(
+            state.activity.scroll.offset, 5,
+            "pane B's Down must not touch pane A's tab"
+        );
+
+        handle_key_event(key(KeyCode::Up), &mut state, &flag);
+        assert_eq!(state.tasks.scroll.offset, 0);
+        // Pane B does not hand the focus back at its top, like pane A.
+        handle_key_event(key(KeyCode::Up), &mut state, &flag);
+        assert_eq!(state.tasks.scroll.offset, 0);
+        assert_eq!(state.focus_state.focus, Focus::TabPaneB);
+    }
+
+    #[test]
+    fn strip_up_and_down_scroll_pane_a_in_a_split_strip() {
+        let mut state = split_strip_state();
+        state.focus_state.focus = Focus::ActivityLog;
+        // The shared tab points at Tasks while pane A displays
+        // Activity: the split scroll must follow pane A's own tab.
+        state.global.bottom_tab = BottomTab::Tasks;
+        state.global.split_tab_a = BottomTab::Activity;
+        state.activity.scroll = crate::state::ScrollState {
+            offset: 0,
+            total_lines: 10,
+            visible_height: 3,
+        };
+        state.tasks.scroll = crate::state::ScrollState {
+            offset: 5,
+            total_lines: 10,
+            visible_height: 3,
+        };
+        let flag = AtomicBool::new(false);
+
+        handle_key_event(key(KeyCode::Down), &mut state, &flag);
+        assert_eq!(state.activity.scroll.offset, 1);
+        assert_eq!(
+            state.tasks.scroll.offset, 5,
+            "pane A's Down must not touch pane B's tab"
+        );
+
+        handle_key_event(key(KeyCode::Up), &mut state, &flag);
+        assert_eq!(state.activity.scroll.offset, 0);
+        assert_eq!(state.focus_state.focus, Focus::ActivityLog);
+    }
+
+    #[test]
+    fn strip_demotes_pane_b_focus_when_no_pane_b_draws() {
+        // The strip narrowed below the split threshold, so the frame
+        // drew one tab panel: the first key demotes the focus to pane
+        // A and then reads pane A's map — Right keeps it there, and
+        // the next Left walks on to the agent panel.
+        let mut state = one_pane_strip_state();
+        state.focus_state.focus = Focus::TabPaneB;
+        let flag = AtomicBool::new(false);
+
+        handle_key_event(key(KeyCode::Right), &mut state, &flag);
+        assert_eq!(state.focus_state.focus, Focus::ActivityLog);
+
+        handle_key_event(key(KeyCode::Left), &mut state, &flag);
+        assert_eq!(state.focus_state.focus, Focus::Panes);
+    }
+
+    #[test]
+    fn strip_right_in_a_one_pane_strip_still_stops_at_the_tab_panel() {
+        // The one-pane walk keeps its right end: Right at the tab
+        // panel never reaches the pane B focus.
+        let mut state = one_pane_strip_state();
+        state.focus_state.focus = Focus::ActivityLog;
+        let flag = AtomicBool::new(false);
+
+        handle_key_event(key(KeyCode::Right), &mut state, &flag);
+        assert_eq!(state.focus_state.focus, Focus::ActivityLog);
+    }
+
+    #[test]
+    fn strip_backtab_cycles_pane_bs_group_in_pane_b() {
+        // Spec: the focused pane runs pi, pane B has focus and shows
+        // Tasks — the cycle key shows Thought and leaves pane A and
+        // the shared tab alone.
+        let mut state = split_strip_state();
+        focus_a_pi_pane(&mut state);
+        state.focus_state.focus = Focus::TabPaneB;
+        state.global.split_tab_b = BottomTab::Tasks;
+        state.global.split_tab_a = BottomTab::Activity;
+        let before_a = state.global.split_tab_a;
+        let before_shared = state.global.bottom_tab;
+        let flag = AtomicBool::new(false);
+
+        handle_key_event(key(KeyCode::BackTab), &mut state, &flag);
+
+        assert_eq!(state.global.split_tab_b, BottomTab::Thought);
+        assert_eq!(
+            state.global.split_tab_a, before_a,
+            "pane B's cycle must not touch pane A"
+        );
+        assert_eq!(
+            state.global.bottom_tab, before_shared,
+            "pane B's cycle must not touch the shared tab"
+        );
+    }
+
+    #[test]
+    fn strip_backtab_cycles_pane_as_group_when_no_tab_pane_has_focus() {
+        let mut state = split_strip_state();
+        state.focus_state.focus = Focus::Panes;
+        state.global.split_tab_a = BottomTab::Activity;
+        let before_b = state.global.split_tab_b;
+        let flag = AtomicBool::new(false);
+
+        handle_key_event(key(KeyCode::BackTab), &mut state, &flag);
+        assert_eq!(state.global.split_tab_a, BottomTab::GitStatus);
+        assert_eq!(
+            state.global.split_tab_b, before_b,
+            "pane A's cycle must not touch pane B"
+        );
+
+        // Pane A's own focus cycles pane A's group too.
+        state.global.split_tab_a = BottomTab::Activity;
+        state.focus_state.focus = Focus::ActivityLog;
+        handle_key_event(key(KeyCode::BackTab), &mut state, &flag);
+        assert_eq!(state.global.split_tab_a, BottomTab::GitStatus);
+    }
+
+    #[test]
+    fn strip_backtab_keeps_the_shared_cycle_in_a_one_pane_strip() {
+        // A one-pane strip has no split groups: BackTab keeps cycling
+        // the shared tab even when the focus was left on pane B — the
+        // demotion runs first and the shared cycle steps.
+        let mut state = one_pane_strip_state();
+        state.focus_state.focus = Focus::TabPaneB;
+        state.global.split_tab_a = BottomTab::Activity;
+        let before_a = state.global.split_tab_a;
+        let flag = AtomicBool::new(false);
+
+        handle_key_event(key(KeyCode::BackTab), &mut state, &flag);
+
+        assert_eq!(state.focus_state.focus, Focus::ActivityLog);
+        assert_eq!(state.global.bottom_tab, BottomTab::Tasks);
+        assert_eq!(
+            state.global.split_tab_a, before_a,
+            "the shared cycle must not touch pane A's tab"
+        );
+    }
+
+    #[test]
+    fn the_column_backtab_keeps_the_shared_tab_cycle() {
+        // The split cycle dispatch keys on the drawn strip: a column
+        // has no strip, so BackTab keeps cycling the shared tab and
+        // never reaches the pane B focus, even with split selections
+        // stored.
+        let mut state = state_with_three_panes();
+        state.global.split_tab_a = BottomTab::GitStatus;
+        state.global.split_tab_b = BottomTab::Thought;
+        let before_a = state.global.split_tab_a;
+        let before_b = state.global.split_tab_b;
+        let flag = AtomicBool::new(false);
+
+        handle_key_event(key(KeyCode::BackTab), &mut state, &flag);
+
+        assert_eq!(state.global.bottom_tab, BottomTab::Tasks);
+        assert_eq!(state.global.split_tab_a, before_a);
+        assert_eq!(state.global.split_tab_b, before_b);
+        assert_eq!(state.focus_state.focus, Focus::Panes);
+
+        // Right in a column never reaches the pane B focus either.
+        state.focus_state.focus = Focus::ActivityLog;
+        handle_key_event(key(KeyCode::Right), &mut state, &flag);
+        assert_eq!(state.focus_state.focus, Focus::ActivityLog);
+    }
+
+    #[test]
+    fn strip_esc_from_pane_b_returns_to_the_agent_panel() {
+        // Esc from pane B behaves like Esc from pane A: the agent list
+        // takes the focus back.
+        let mut state = split_strip_state();
+        state.focus_state.focus = Focus::TabPaneB;
+        let flag = AtomicBool::new(false);
+
+        handle_key_event(key(KeyCode::Esc), &mut state, &flag);
+
+        assert_eq!(state.focus_state.focus, Focus::Panes);
     }
 }

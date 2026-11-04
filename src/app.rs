@@ -140,10 +140,7 @@ pub fn run(
             // no-ops inside the guard, so floating panes still reach
             // `panel_guard` here exactly as before.
             width_guard::enforce(&mut state);
-            git_tab_active.store(
-                state.displayed_bottom_tab().is_git_status(),
-                Ordering::Relaxed,
-            );
+            git_tab_active.store(state.git_poll_active(), Ordering::Relaxed);
             last_refresh = std::time::Instant::now();
         }
 

@@ -1,6 +1,8 @@
 use ratatui::layout::Rect;
 
-use super::{AppState, BottomTab, RepoFilter, StatusCounts, StatusFilter, clamp_bottom_height};
+use super::{
+    AppState, BottomTab, RepoFilter, SplitPane, StatusCounts, StatusFilter, clamp_bottom_height,
+};
 
 /// Whether a sidebar instance is a full-height column or a full-width
 /// strip. The `@sidebar_position` value that made the sidebar picks it
@@ -267,6 +269,10 @@ const STRIP_MIN_PANEL_COLS: u16 = 20;
 /// pane's own coordinates (the TUI's frame is the whole sidebar pane,
 /// so `y` is 0 and the `x` columns are the frame's absolute columns
 /// the mouse handlers test against).
+///
+/// In a split strip the `divider`, `tabs` and `tab_bar` fields mean
+/// pane A, and the `divider_b`, `tabs_b` and `tab_bar_b` fields hold
+/// pane B's geometry — all three `None` in a one-pane strip.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct StripLayout {
     /// The 4-column vertical filter bar, `x 0..4`.
@@ -279,8 +285,18 @@ pub struct StripLayout {
     /// row is the tab bar, not content.
     pub tabs: Option<Rect>,
     /// The tab bar: the top row of the tab section, the divider
-    /// column included, while the tab panel shows.
+    /// column included, while the tab panel shows. In a split strip
+    /// this is pane A's tab bar.
     pub tab_bar: Option<Rect>,
+    /// The 1-column divider line between pane A and pane B, while the
+    /// split layout shows.
+    pub divider_b: Option<Rect>,
+    /// Pane B's tab panel, right of divider 2, while the split layout
+    /// shows. Its first row is pane B's tab bar, not content.
+    pub tabs_b: Option<Rect>,
+    /// Pane B's tab bar: the top row of pane B's tab section, the
+    /// divider 2 column included, while the split layout shows.
+    pub tab_bar_b: Option<Rect>,
 }
 
 /// The geometry of a strip `width` columns wide and `height` rows tall
@@ -300,9 +316,17 @@ pub fn strip_layout(width: u16, height: u16, tab_percent: u8) -> StripLayout {
     let wanted = if tab_percent == 0 {
         0
     } else {
-        ((u32::from(width) * u32::from(tab_percent) + 50) / 100) as u16
+        cols_of_percent(width, tab_percent)
     };
     strip_layout_for_tab_cols(width, height, wanted)
+}
+
+/// `percent` percent of `width` columns, rounded to the nearest
+/// column — the rounding every strip panel percent goes through. The
+/// split drag's draw reads it for the pane B columns it holds at the
+/// stored percent while divider 1 moves.
+pub fn cols_of_percent(width: u16, percent: u8) -> u16 {
+    ((u32::from(width) * u32::from(percent) + 50) / 100) as u16
 }
 
 /// [`strip_layout`] keyed on tab columns instead of a percent: a moved
@@ -342,7 +366,109 @@ pub fn strip_layout_for_tab_cols(width: u16, height: u16, tab_cols: u16) -> Stri
         divider,
         tabs,
         tab_bar,
+        divider_b: None,
+        tabs_b: None,
+        tab_bar_b: None,
     }
+}
+
+/// The geometry of a split strip `width` columns wide and `height`
+/// rows tall, per design D4/D5: the filter bar, the agent panel,
+/// divider 1, pane A with divider 1, divider 2, and pane B with
+/// divider 2. `agents_cols` is the agent panel's width and `b_cols`
+/// pane B's width with divider 2; pane A with divider 1 takes the
+/// columns that are left. The drawn panels and the clickable panels
+/// share this one geometry, as [`strip_layout`] does for a one-pane
+/// strip.
+///
+/// The columns are clamped in the design's order — the agent panel
+/// first, then pane B — so each of the three panels keeps at least
+/// [`STRIP_MIN_PANEL_COLS`] columns with its divider. A strip whose
+/// filter bar cannot leave room for the three minimums has no split
+/// geometry: the pane-B fields stay `None` and the agent panel takes
+/// the columns the filter bar leaves, as a one-pane strip with a zero
+/// tab width does.
+pub fn split_strip_layout(width: u16, height: u16, agents_cols: u16, b_cols: u16) -> StripLayout {
+    let filter_width = width.min(STRIP_FILTER_COLS);
+    let filter = Rect::new(0, 0, filter_width, height);
+    let agents_x = filter_width;
+    let mut agents = Rect::new(agents_x, 0, width.saturating_sub(filter_width), height);
+    let mut divider = None;
+    let mut tabs = None;
+    let mut tab_bar = None;
+    let mut divider_b = None;
+    let mut tabs_b = None;
+    let mut tab_bar_b = None;
+    let available = width.saturating_sub(STRIP_FILTER_COLS);
+    if available >= 3 * STRIP_MIN_PANEL_COLS {
+        let agents_cols =
+            agents_cols.clamp(STRIP_MIN_PANEL_COLS, available - 2 * STRIP_MIN_PANEL_COLS);
+        let b_cols = b_cols.clamp(
+            STRIP_MIN_PANEL_COLS,
+            available - agents_cols - STRIP_MIN_PANEL_COLS,
+        );
+        // Pane A's columns, divider 1 included: what the agent panel
+        // and pane B with divider 2 leave.
+        let a_cols = available - agents_cols - b_cols;
+        agents.width = agents_cols;
+        let divider_x = agents_x + agents_cols;
+        divider = Some(Rect::new(divider_x, 0, STRIP_DIVIDER_COLS, height));
+        tabs = Some(Rect::new(
+            divider_x + STRIP_DIVIDER_COLS,
+            0,
+            a_cols - STRIP_DIVIDER_COLS,
+            height,
+        ));
+        // Each tab bar is its tab section's first row, its divider
+        // column included — a zero-height strip has no row to hold one.
+        tab_bar = (height > 0).then(|| Rect::new(divider_x, 0, a_cols, 1));
+        let divider_b_x = divider_x + a_cols;
+        divider_b = Some(Rect::new(divider_b_x, 0, STRIP_DIVIDER_COLS, height));
+        tabs_b = Some(Rect::new(
+            divider_b_x + STRIP_DIVIDER_COLS,
+            0,
+            b_cols - STRIP_DIVIDER_COLS,
+            height,
+        ));
+        tab_bar_b = (height > 0).then(|| Rect::new(divider_b_x, 0, b_cols, 1));
+    }
+    StripLayout {
+        filter,
+        agents,
+        divider,
+        tabs,
+        tab_bar,
+        divider_b,
+        tabs_b,
+        tab_bar_b,
+    }
+}
+
+/// The strip geometry a frame draws, the split or the one-pane path:
+/// the split shows while `width` is at least `threshold` — a threshold
+/// of `0` turns the split off — and the filter bar leaves room for the
+/// three [`STRIP_MIN_PANEL_COLS`] minimums; otherwise the one-pane
+/// [`strip_layout`] path runs unchanged with `tab_percent`.
+///
+/// The split panel widths are the stored percents of the strip width
+/// rounded to the nearest column; [`split_strip_layout`] clamps them
+/// to the minimums, the agent panel first.
+pub fn split_or_strip_layout(
+    width: u16,
+    height: u16,
+    threshold: u16,
+    agents_percent: u8,
+    b_percent: u8,
+    tab_percent: u8,
+) -> StripLayout {
+    let available = width.saturating_sub(STRIP_FILTER_COLS);
+    let shows = threshold > 0 && width >= threshold && available >= 3 * STRIP_MIN_PANEL_COLS;
+    if !shows {
+        return strip_layout(width, height, tab_percent);
+    }
+    let agents_cols = cols_of_percent(width, agents_percent);
+    let b_cols = cols_of_percent(width, b_percent);
+    split_strip_layout(width, height, agents_cols, b_cols)
 }
 
 /// The inverse of [`strip_layout`] for a divider-drag release: tab
@@ -435,6 +561,13 @@ pub struct SplitDrag {
     /// (`@sidebar_bottom_height` for a column, `@sidebar_tab_width` for
     /// a strip).
     pub axis: LayoutKind,
+    /// Which panel a strip drag moves. A one-pane strip's drag moves
+    /// the tab divider (`Tab`: `size` is the tab columns, divider
+    /// included); a split strip's drag moves divider 1 (`Divider1`:
+    /// `size` is the agent panel's columns) or divider 2 (`Divider2`:
+    /// `size` is pane B's columns, divider 2 included). The column
+    /// axis ignores the field.
+    pub target: SplitDragTarget,
     /// Column of the press, kept for the unmoved release's tab click:
     /// both tab bars are horizontal (a column's rule, a strip's
     /// tab-bar row), so the release reads the press column against the
@@ -449,9 +582,34 @@ pub struct SplitDrag {
     pub moved: bool,
     /// The panel size the drag shows, already clamped to the split
     /// minimums — the bottom-panel rows (rule included) for a column,
-    /// the tab columns (divider included) for a strip — the renderer
+    /// the tab columns (divider included) for a one-pane strip, the
+    /// agent columns for a split strip's divider 1, pane B's columns
+    /// for its divider 2 — the renderer
     /// draws exactly this much for as long as the drag moves.
     pub size: u16,
+}
+
+/// The panel a strip drag moves (the `target` of [`SplitDrag`]; the
+/// column axis ignores it). A one-pane strip has one divider, so its
+/// drag is a `Tab` drag over the shared tab width; a split strip's
+/// divider 1 drag is a `Divider1` drag over the agent panel's width,
+/// whose release writes `@sidebar_split_agents_width` and never
+/// `@sidebar_tab_width` (design D3/D6).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SplitDragTarget {
+    /// A one-pane strip's tab drag: `size` is the tab columns, divider
+    /// included, and the release writes `@sidebar_tab_width`.
+    Tab,
+    /// A split strip's divider drag: `size` is the agent panel's columns,
+    /// and the release writes `@sidebar_split_agents_width`.
+    Divider1,
+    /// A split strip's divider 2 drag: `size` is pane B's columns with
+    /// divider 2, and the release writes
+    /// `@sidebar_split_tab_b_width`. Neither a divider 2 press nor its
+    /// drag touches the agent panel's option or the shared
+    /// `@sidebar_tab_width` (design D3/D4 — a split strip reads and
+    /// writes only its own options).
+    Divider2,
 }
 
 /// Clamp a split drag's row count to the limits decision 4 takes over
@@ -483,15 +641,37 @@ fn clamp_drag_cols(cols: u16, available: u16) -> u16 {
     cols.clamp(STRIP_MIN_PANEL_COLS, available - STRIP_MIN_PANEL_COLS)
 }
 
-/// The full width the drawn [`StripLayout`] spans: the four rects tile
-/// the frame without gaps or overlap, so their widths sum to the
-/// strip's width. Both the drag move and the drag release convert a
-/// mouse column against it.
+/// Clamp a split strip drag's live column count to the bound design
+/// D4 gives the drag's target: the dragged panel keeps
+/// [`STRIP_MIN_PANEL_COLS`] columns and the two panels the drag must
+/// not change keep theirs — `fixed_cols` is the total of pane B's
+/// columns plus one minimum for a divider 1 drag, and of the agent
+/// panel's columns plus one minimum for a divider 2 drag (the divider
+/// the mouse follows rides in the dragged panel's count). `available`
+/// is the width the filter bar leaves. The guard only keeps the clamp
+/// away from a `min > max` panic on a strip the split never shows on.
+fn clamp_drag_split_cols(cols: u16, available: u16, fixed_cols: u16) -> u16 {
+    if available < 3 * STRIP_MIN_PANEL_COLS {
+        return cols;
+    }
+    let max = available
+        .saturating_sub(fixed_cols)
+        .max(STRIP_MIN_PANEL_COLS);
+    cols.clamp(STRIP_MIN_PANEL_COLS, max)
+}
+
+/// The full width the drawn [`StripLayout`] spans: the panel rects
+/// tile the frame without gaps or overlap, so their widths sum to the
+/// strip's width — a split strip's divider 2 and pane B included.
+/// Both the drag move and the drag release convert a mouse column
+/// against it.
 fn drawn_strip_width(strip: &StripLayout) -> u16 {
     strip.filter.width
         + strip.agents.width
         + strip.divider.map_or(0, |divider| divider.width)
         + strip.tabs.map_or(0, |tabs| tabs.width)
+        + strip.divider_b.map_or(0, |divider| divider.width)
+        + strip.tabs_b.map_or(0, |tabs| tabs.width)
 }
 
 impl AppState {
@@ -609,6 +789,7 @@ impl AppState {
             // agree even when the panel floats.
             self.split_drag = Some(SplitDrag {
                 axis: LayoutKind::Column,
+                target: SplitDragTarget::Tab,
                 press_col: col,
                 press_row: row,
                 moved: false,
@@ -621,26 +802,53 @@ impl AppState {
     }
 
     /// The strip branch of [`Self::handle_terminal_click`]: route by
-    /// the drawn [`StripLayout`]. A press on the thin divider line or
-    /// on the tab bar starts a strip drag (its `size` is the
-    /// drawn tab columns, divider included) — the same rule the
-    /// column's rule row keeps, where the bar is both the drag handle
-    /// and the tab strip; the filter column and the agent panel go to
-    /// their handlers. `true` only where the press starts the drag.
+    /// the drawn [`StripLayout`]. A press on a thin divider line or on
+    /// a tab bar starts a strip drag — the same rule the column's
+    /// rule row keeps, where the bar is both the drag handle and the
+    /// tab strip; the filter column and the agent panel go to their
+    /// handlers. On a one-pane strip the drag moves the tab divider
+    /// and `size` is the drawn tab columns; on a split strip a press
+    /// on divider 1 or pane A's bar moves divider 1 with `size` the
+    /// agent panel's columns, and a press on divider 2 or pane B's bar
+    /// moves divider 2 with `size` pane B's columns (design D6).
+    /// `true` only where the press starts the drag.
     fn handle_strip_press(&mut self, row: u16, col: u16) -> bool {
         let Some(strip) = self.layout.strip else {
             return false;
         };
-        if strip.divider.is_some_and(|d| point_in_rect(row, col, d))
-            || strip.tab_bar.is_some_and(|b| point_in_rect(row, col, b))
+        if strip.divider_b.is_some_and(|d| point_in_rect(row, col, d))
+            || strip.tab_bar_b.is_some_and(|b| point_in_rect(row, col, b))
         {
+            let size =
+                strip.divider_b.map_or(0, |d| d.width) + strip.tabs_b.map_or(0, |tabs| tabs.width);
             self.split_drag = Some(SplitDrag {
                 axis: LayoutKind::Strip,
+                target: SplitDragTarget::Divider2,
                 press_col: col,
                 press_row: row,
                 moved: false,
-                size: strip.divider.map_or(0, |d| d.width)
-                    + strip.tabs.map_or(0, |tabs| tabs.width),
+                size,
+            });
+            return true;
+        }
+        if strip.divider.is_some_and(|d| point_in_rect(row, col, d))
+            || strip.tab_bar.is_some_and(|b| point_in_rect(row, col, b))
+        {
+            let (target, size) = if strip.tabs_b.is_some() {
+                (SplitDragTarget::Divider1, strip.agents.width)
+            } else {
+                (
+                    SplitDragTarget::Tab,
+                    strip.divider.map_or(0, |d| d.width) + strip.tabs.map_or(0, |tabs| tabs.width),
+                )
+            };
+            self.split_drag = Some(SplitDrag {
+                axis: LayoutKind::Strip,
+                target,
+                press_col: col,
+                press_row: row,
+                moved: false,
+                size,
             });
             return true;
         }
@@ -740,12 +948,14 @@ impl AppState {
     /// split minimums (and the floating limit while the sidebar
     /// floats); over the rule row itself the drag stays the unmoved
     /// press a release treats as a click. A strip drag follows the
-    /// mouse column the same way: a move off the drawn divider marks
-    /// the drag moved and resizes the drawn split to the tab columns
-    /// the mouse column leaves, clamped to the two panel minimums, and
-    /// the renderer draws exactly this much for as long as the drag
-    /// moves; over the drawn divider itself the drag stays the unmoved
-    /// press. No drag: nothing to move.
+    /// mouse column the same way, against its own divider: a move off
+    /// the drawn divider marks the drag moved and resizes the drawn
+    /// split to the columns the mouse column leaves, clamped to the
+    /// target's minimums (design D4 — a divider 1 drag keeps pane B at
+    /// its press columns, a divider 2 drag keeps the agent panel at
+    /// its press columns), and the renderer draws exactly this much
+    /// for as long as the drag moves; over the drawn divider itself
+    /// the drag stays the unmoved press. No drag: nothing to move.
     pub fn handle_split_drag_move(&mut self, row: u16, col: u16, term_height: u16) {
         let Some(drag) = &mut self.split_drag else {
             return;
@@ -767,24 +977,68 @@ impl AppState {
                 );
             }
             LayoutKind::Strip => {
-                // Against the divider the last frame drew: while unmoved
-                // that is the press's own divider, while moved the
-                // renderer lays the strip out from `size` — in both
-                // states the divider sits on the columns the mouse is
-                // still over.
+                // Against the divider the last frame drew — the drag
+                // target's own divider: while unmoved that is the
+                // press's own divider, while moved the renderer lays
+                // the strip out from `size` — in both states the
+                // divider sits on the columns the mouse is still over.
                 let Some(strip) = self.layout.strip else {
                     return;
                 };
-                if strip
-                    .divider
-                    .is_some_and(|divider| point_in_rect(row, col, divider))
-                {
+                let over_own_divider = match drag.target {
+                    SplitDragTarget::Tab | SplitDragTarget::Divider1 => strip
+                        .divider
+                        .is_some_and(|divider| point_in_rect(row, col, divider)),
+                    SplitDragTarget::Divider2 => strip
+                        .divider_b
+                        .is_some_and(|divider| point_in_rect(row, col, divider)),
+                };
+                if over_own_divider {
                     return;
                 }
                 drag.moved = true;
                 let available = drawn_strip_width(&strip) - strip.filter.width;
-                drag.size =
-                    clamp_drag_cols(drawn_strip_width(&strip).saturating_sub(col), available);
+                match drag.target {
+                    // A one-pane strip's tab drag: the mouse column is
+                    // the divider's, so the tab columns are what is
+                    // left of the strip's full width.
+                    SplitDragTarget::Tab => {
+                        drag.size = clamp_drag_cols(
+                            drawn_strip_width(&strip).saturating_sub(col),
+                            available,
+                        );
+                    }
+                    // A split strip's divider 1: the mouse column is
+                    // divider 1's, so the agent columns are what lies
+                    // left of it, past the filter bar — clamped so the
+                    // agent panel keeps its minimum and pane B the
+                    // columns it holds through the drag (the ones the
+                    // drawn strip carries; a divider 1 drag never
+                    // changes pane B).
+                    SplitDragTarget::Divider1 => {
+                        let b_cols = strip.divider_b.map_or(0, |d| d.width)
+                            + strip.tabs_b.map_or(0, |tabs| tabs.width);
+                        drag.size = clamp_drag_split_cols(
+                            col.saturating_sub(strip.filter.width),
+                            available,
+                            b_cols + STRIP_MIN_PANEL_COLS,
+                        );
+                    }
+                    // A split strip's divider 2: the mouse column is
+                    // divider 2's, so pane B's columns are what lies
+                    // right of it, to the strip's end — clamped so pane
+                    // B keeps its minimum and the agent panel the
+                    // columns it holds through the drag (the drawn
+                    // strip's; a divider 2 drag never changes the
+                    // agent panel).
+                    SplitDragTarget::Divider2 => {
+                        drag.size = clamp_drag_split_cols(
+                            drawn_strip_width(&strip).saturating_sub(col),
+                            available,
+                            strip.agents.width + STRIP_MIN_PANEL_COLS,
+                        );
+                    }
+                }
             }
         }
     }
@@ -806,17 +1060,31 @@ impl AppState {
             match drag.axis {
                 LayoutKind::Column => self.handle_bottom_tab_click(drag.press_col),
                 LayoutKind::Strip => {
+                    let Some(strip) = self.layout.strip else {
+                        return;
+                    };
                     // Only a tab-bar press resolves to a tab click: the
                     // glyphs live on the tab-bar row now, so a held
                     // press released on the thin divider line below
-                    // the bar changes nothing.
-                    if self
-                        .layout
-                        .strip
-                        .and_then(|strip| strip.tab_bar)
+                    // the bar changes nothing. On a split strip the
+                    // bars are pane A's and pane B's, side by side, and
+                    // each click selects that pane's tab — the pane's
+                    // own option, never the shared
+                    // `@sidebar_bottom_tab` the one-pane bar writes.
+                    if strip
+                        .tab_bar_b
                         .is_some_and(|bar| point_in_rect(drag.press_row, drag.press_col, bar))
                     {
-                        self.handle_bottom_tab_click(drag.press_col);
+                        self.handle_split_tab_click(SplitPane::B, drag.press_col);
+                    } else if strip
+                        .tab_bar
+                        .is_some_and(|bar| point_in_rect(drag.press_row, drag.press_col, bar))
+                    {
+                        if strip.tabs_b.is_some() {
+                            self.handle_split_tab_click(SplitPane::A, drag.press_col);
+                        } else {
+                            self.handle_bottom_tab_click(drag.press_col);
+                        }
                     }
                 }
             }
@@ -844,8 +1112,31 @@ impl AppState {
                     return;
                 };
                 let width = drawn_strip_width(&strip);
-                self.global.tab_percent = cols_for_percent(drag.size, width);
-                self.global.save_tab_percent();
+                match drag.target {
+                    // A one-pane strip's tab drag saves the shared tab
+                    // width, as before.
+                    SplitDragTarget::Tab => {
+                        self.global.tab_percent = cols_for_percent(drag.size, width);
+                        self.global.save_tab_percent();
+                    }
+                    // A split strip's divider 1 saves the agent panel's
+                    // width: the size is agent columns, and the shared
+                    // `@sidebar_tab_width` is never touched (design
+                    // D3/D4 — a split strip reads and writes only its
+                    // own options).
+                    SplitDragTarget::Divider1 => {
+                        self.global.split_agents_percent = cols_for_percent(drag.size, width);
+                        self.global.save_split_agents_percent();
+                    }
+                    // A split strip's divider 2 saves pane B's width:
+                    // the size is pane B's columns with divider 2, and
+                    // neither the agent panel's option nor the shared
+                    // `@sidebar_tab_width` is touched (design D3/D4).
+                    SplitDragTarget::Divider2 => {
+                        self.global.split_tab_b_percent = cols_for_percent(drag.size, width);
+                        self.global.save_split_tab_b_percent();
+                    }
+                }
             }
         }
     }
@@ -854,9 +1145,10 @@ impl AppState {
     /// or under the bottom panel's first drawn row the wheel scrolls
     /// the displayed tab, above it the agent list. A strip routes by
     /// column over the drawn [`StripLayout`]: the wheel over the agent
-    /// panel scrolls the agent list and over the tab panel the
-    /// displayed tab; the filter bar and the divider have nothing to
-    /// scroll.
+    /// panel scrolls the agent list and over a tab panel the tab that
+    /// pane displays — the shared tab on a one-pane strip, pane A's or
+    /// pane B's own on a split strip (design D7); the filter bar and
+    /// the dividers have nothing to scroll.
     pub fn handle_mouse_scroll(
         &mut self,
         row: u16,
@@ -870,10 +1162,20 @@ impl AppState {
                 let Some(strip) = self.layout.strip else {
                     return;
                 };
-                if strip.tabs.is_some_and(|tabs| point_in_rect(row, col, tabs)) {
-                    self.scroll_bottom(delta);
-                } else if point_in_rect(row, col, strip.agents) {
+                let split = strip.tabs_b.is_some();
+                if point_in_rect(row, col, strip.agents) {
                     self.scrolls.panes.scroll(delta);
+                } else if strip
+                    .tabs_b
+                    .is_some_and(|tabs| point_in_rect(row, col, tabs))
+                {
+                    self.scroll_split_tab(SplitPane::B, delta);
+                } else if strip.tabs.is_some_and(|tabs| point_in_rect(row, col, tabs)) {
+                    if split {
+                        self.scroll_split_tab(SplitPane::A, delta);
+                    } else {
+                        self.scroll_bottom(delta);
+                    }
                 }
             }
             LayoutKind::Column => {
@@ -1274,6 +1576,89 @@ mod tests {
         let relaid = strip_layout(120, 12, cols_for_percent(cols, 120));
         assert_eq!(relaid.divider.map(|rect| rect.x), Some(60));
         assert_eq!(relaid.agents, Rect::new(4, 0, 56, 12));
+    }
+
+    // ─── split_strip_layout ───────────────────────────────
+
+    #[test]
+    fn split_strip_layout_lays_the_three_panels_out_at_the_defaults() {
+        // The spec's parts scenario: a 400-column strip with the
+        // default 33 percents rounded to columns — columns 0-3 the
+        // filter bar, 4-135 the agent panel, 136 divider 1, 137-267
+        // pane A, 268 divider 2 and 269-399 pane B.
+        let layout = split_strip_layout(400, 12, 132, 132);
+        assert_eq!(layout.filter, Rect::new(0, 0, 4, 12));
+        assert_eq!(layout.agents, Rect::new(4, 0, 132, 12));
+        assert_eq!(layout.divider, Some(Rect::new(136, 0, 1, 12)));
+        assert_eq!(layout.tabs, Some(Rect::new(137, 0, 131, 12)));
+        assert_eq!(layout.tab_bar, Some(Rect::new(136, 0, 132, 1)));
+        assert_eq!(layout.divider_b, Some(Rect::new(268, 0, 1, 12)));
+        assert_eq!(layout.tabs_b, Some(Rect::new(269, 0, 131, 12)));
+        assert_eq!(layout.tab_bar_b, Some(Rect::new(268, 0, 132, 1)));
+    }
+
+    #[test]
+    fn split_strip_layout_clamps_the_agent_panel_first_then_pane_b() {
+        // The spec's large-agent-percent scenario: 95 percent of 400
+        // columns rounds to 380, clamped down to 356 so pane A and
+        // pane B each keep their 20-column minimum with their divider
+        // (356 agent columns, then 20 and 20).
+        let layout = split_strip_layout(400, 12, 380, 132);
+        assert_eq!(layout.agents, Rect::new(4, 0, 356, 12));
+        assert_eq!(layout.divider, Some(Rect::new(360, 0, 1, 12)));
+        assert_eq!(layout.tabs, Some(Rect::new(361, 0, 19, 12)));
+        assert_eq!(layout.divider_b, Some(Rect::new(380, 0, 1, 12)));
+        assert_eq!(layout.tabs_b, Some(Rect::new(381, 0, 19, 12)));
+        assert_eq!(layout.tab_bar_b, Some(Rect::new(380, 0, 20, 1)));
+    }
+
+    #[test]
+    fn split_strip_layout_draws_no_pane_b_below_the_minimums() {
+        // 60 columns leave 56 for the panels — under the three
+        // 20-column minimums: no split geometry, the pane-B fields
+        // stay `None` and the agent panel takes the columns the
+        // filter bar leaves.
+        let layout = split_strip_layout(60, 12, 20, 20);
+        assert_eq!(layout.agents, Rect::new(4, 0, 56, 12));
+        assert_eq!(layout.divider, None);
+        assert_eq!(layout.tabs, None);
+        assert_eq!(layout.divider_b, None);
+        assert_eq!(layout.tabs_b, None);
+        assert_eq!(layout.tab_bar_b, None);
+    }
+
+    // ─── split_or_strip_layout ───────────────────────────
+
+    #[test]
+    fn the_selector_shows_the_split_above_the_default_threshold() {
+        // The spec's ultra-wide scenario: `@sidebar_tab_split_width`
+        // not set (300) and a 381-column strip — the split shows, and
+        // pane B runs to the strip's right edge.
+        let split = split_or_strip_layout(381, 12, 300, 33, 33, 40);
+        assert_eq!(split.tabs_b.map(|rect| rect.x + rect.width), Some(381));
+        assert!(split.divider_b.is_some());
+    }
+
+    #[test]
+    fn the_selector_keeps_the_one_pane_strip_when_the_split_does_not_show() {
+        // The spec's below-the-threshold scenario: a 250-column strip
+        // at the default threshold — one tab panel, as before.
+        assert_eq!(
+            split_or_strip_layout(250, 12, 300, 33, 33, 40),
+            strip_layout(250, 12, 40)
+        );
+        // A threshold of 0 turns the split off at any width.
+        assert_eq!(
+            split_or_strip_layout(381, 12, 0, 33, 33, 40),
+            strip_layout(381, 12, 40)
+        );
+        // The spec's low-threshold scenario: a 60-column strip at
+        // threshold 50 is above the threshold but cannot hold the
+        // three 20-column minimums — one tab panel, as before.
+        assert_eq!(
+            split_or_strip_layout(60, 12, 50, 33, 33, 40),
+            strip_layout(60, 12, 40)
+        );
     }
 
     // ─── filter_column_layout ──────────────────────────────

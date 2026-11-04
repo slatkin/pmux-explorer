@@ -37,9 +37,7 @@ pub(super) fn spawn(state: &AppState) -> Workers {
     let (git_tx, git_rx) = mpsc::sync_channel::<GitData>(1);
     let (version_tx, version_rx) = mpsc::sync_channel::<UpdateNotice>(1);
     let tmux_pane_clone = state.tmux_pane.clone();
-    let git_tab_active = Arc::new(AtomicBool::new(
-        state.displayed_bottom_tab().is_git_status(),
-    ));
+    let git_tab_active = Arc::new(AtomicBool::new(state.git_poll_active()));
     let git_tab_flag = Arc::clone(&git_tab_active);
     // Detached on purpose: the loop ends when `git_tx.send` fails after the
     // event loop has dropped the receiver, so there is no join handle to keep.

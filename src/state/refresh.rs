@@ -496,13 +496,13 @@ impl AppState {
     }
 
     /// Read the focused pi pane's thinking feed into `thought.last`
-    /// (design D4) — only while the Thought tab is drawn: a hidden tab
+    /// (design D4) — only while a tab panel is drawn: a hidden tab
     /// panel draws no tab and reads no feed, and another displayed tab
-    /// leaves the last thought as the previous read left it. On a
-    /// column the panel is the bottom panel, so its drawn height says
-    /// whether a tab shows; on a strip the drawn
-    /// [`StripLayout`](super::StripLayout) decides — its tab panel is a
-    /// side panel, drawn while `strip.tabs` is `Some`. The feed
+    /// leaves the last thought as the previous read left it. Which tab
+    /// counts as drawn is [`AppState::drawn_feed_tab`], the answer the
+    /// renderer shares: on a split strip the feed follows pane B's
+    /// displayed tab (the Thought tab lives in pane B's group), on a
+    /// one-pane strip or a column the shared displayed tab. The feed
     /// environment was resolved once at startup into `ThoughtState`, so
     /// the path helper takes the env as an argument.
     pub(crate) fn refresh_thought_feed(&mut self) {
@@ -510,7 +510,7 @@ impl AppState {
             Some(strip) => strip.tabs.is_some(),
             None => self.layout.bottom_panel_height > 0,
         };
-        if !tab_drawn || self.displayed_bottom_tab() != BottomTab::Thought {
+        if !tab_drawn || self.drawn_feed_tab() != BottomTab::Thought {
             return;
         }
         let session_id = self
@@ -1406,7 +1406,7 @@ mod tests {
 
     // ─── refresh_thought_feed ───────────────────────────────────
 
-    use crate::state::strip_layout;
+    use crate::state::{split_strip_layout, strip_layout};
     use crate::thinking_feed::scratch_env;
 
     /// An AppState focused on a pi pane carrying `session_id`, whose
@@ -1519,6 +1519,70 @@ mod tests {
         assert!(
             state.thought.last.is_empty(),
             "a strip with no drawn tab panel must read no feed"
+        );
+    }
+
+    #[test]
+    fn a_split_strip_feeds_pane_bs_thought_tab() {
+        // The feed follows the drawn strip, not the shared tab: on a
+        // split strip the Thought tab lives in pane B's group, so with
+        // pane B on Thought and the shared tab still on Activity the
+        // refresher must read the feed.
+        let dir = tempfile::TempDir::new().unwrap();
+        let env = scratch_env(dir.path());
+        let feed = env.feed_path("sess").unwrap();
+        std::fs::create_dir_all(feed.parent().unwrap()).unwrap();
+        std::fs::write(
+            &feed,
+            format!(
+                "{}\n{}\n",
+                r#"{"kind":"start","ts":"t1","producer":"pmux"}"#,
+                r#"{"kind":"delta","ts":"t2","producer":"pmux","text":"pane b thought"}"#
+            ),
+        )
+        .unwrap();
+        let mut state = pi_feed_state(&dir, "sess");
+        state.layout.bottom_panel_height = 0;
+        state.layout.strip = Some(split_strip_layout(400, 12, 132, 132));
+        state.global.bottom_tab = BottomTab::Activity;
+        state.global.split_tab_b = BottomTab::Thought;
+
+        state.refresh_activity_data();
+
+        assert_eq!(
+            state.thought.last.text, "pane b thought",
+            "pane B's drawn Thought tab must read the feed on a split strip"
+        );
+    }
+
+    #[test]
+    fn a_one_pane_strip_on_the_shared_activity_tab_reads_no_feed() {
+        // A one-pane strip draws the shared tab: with Activity
+        // displayed the Thought content is not on screen, so the feed
+        // stays unread.
+        let dir = tempfile::TempDir::new().unwrap();
+        let env = scratch_env(dir.path());
+        let feed = env.feed_path("sess").unwrap();
+        std::fs::create_dir_all(feed.parent().unwrap()).unwrap();
+        std::fs::write(
+            &feed,
+            format!(
+                "{}\n{}\n",
+                r#"{"kind":"start","ts":"t1","producer":"pmux"}"#,
+                r#"{"kind":"delta","ts":"t2","producer":"pmux","text":"unseen"}"#
+            ),
+        )
+        .unwrap();
+        let mut state = pi_feed_state(&dir, "sess");
+        state.layout.bottom_panel_height = 0;
+        state.layout.strip = Some(strip_layout(120, 12, 40));
+        state.global.bottom_tab = BottomTab::Activity;
+
+        state.refresh_activity_data();
+
+        assert!(
+            state.thought.last.is_empty(),
+            "a one-pane strip on the shared Activity tab must read no feed"
         );
     }
 

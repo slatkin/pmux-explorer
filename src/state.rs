@@ -30,10 +30,13 @@ pub use focus::{Focus, FocusState};
 pub use global::GlobalState;
 pub use layout::{
     BottomTabTarget, FrameLayout, HyperlinkOverlay, LayoutKind, RepoSpawnTarget, RowTarget,
-    SpawnRemoveTarget, SplitDrag, StripLayout,
+    SpawnRemoveTarget, SplitDrag, SplitDragTarget, StripLayout,
 };
 pub(crate) use layout::{FilterBarControl, filter_bar_layout, split_rows};
-pub use layout::{cols_for_percent, filter_column_layout, strip_layout, strip_layout_for_tab_cols};
+pub use layout::{
+    cols_for_percent, cols_of_percent, filter_column_layout, split_or_strip_layout,
+    split_strip_layout, strip_layout, strip_layout_for_tab_cols,
+};
 pub(crate) use notices::debug_forced_display;
 pub use notices::{ClaudePluginNotice, NoticesCopyTarget, NoticesMissingHookGroup, NoticesState};
 pub use pane_runtime::{PaneRuntimeMap, PaneRuntimeState};
@@ -42,6 +45,7 @@ pub use popup::{PopupState, SpawnField};
 #[cfg(test)]
 pub(crate) use refresh::{TaskProgressDecision, classify_task_progress};
 pub use scroll::{ScrollState, ScrollStates};
+pub use tab::SplitPane;
 pub use tasks::TasksState;
 pub use thought::ThoughtState;
 pub use timers::RefreshTimers;
