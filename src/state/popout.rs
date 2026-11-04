@@ -21,7 +21,7 @@
 
 use super::{AppState, LayoutKind};
 use crate::cli::toggle::SidebarPosition;
-use crate::state::{width_adopt_target, width_floor};
+use crate::state::{adopt_target, width_floor};
 use crate::tmux::{self, SidebarPaneInfo};
 
 /// Width of the floating panel, in columns. Wide enough that the agent
@@ -362,9 +362,9 @@ impl AppState {
     /// sizes columns only. Otherwise the capture is spent, as it has
     /// always been.
     ///
-    /// The clamp runs through the shared `width_floor`/`width_adopt_target`
-    /// helpers in `crate/state/width.rs` — the same helpers the width-lock
-    /// step's adopt side and the enabling seed use (design D6).
+    /// The clamp runs through the shared `width_floor`/`adopt_target`
+    /// helpers in `crate/state/width.rs` — the same helpers the lock
+    /// step's adopt side and the enabling seeds use (design D6).
     fn pop_in_restore_size(&mut self, info: SidebarPaneInfo) -> Option<u16> {
         if self.layout_kind == LayoutKind::Column
             && self.global.width_lock
@@ -372,7 +372,7 @@ impl AppState {
         {
             let floor = width_floor(self.global.min_width);
             let cap = floor.max(info.window_width / 2);
-            return Some(width_adopt_target(shared, self.global.min_width, cap));
+            return Some(adopt_target(shared, floor, cap));
         }
         self.docked_size.take()
     }

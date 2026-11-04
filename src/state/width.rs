@@ -122,15 +122,17 @@ pub fn strip_height_floor() -> u16 {
     DEFAULT_MIN_STRIP_HEIGHT
 }
 
-/// The width an adopting sidebar resizes to with `resize-pane -x`: the
-/// shared docked width clamped to at least [`width_floor`] — the floor
-/// binds both ways — and at most `cap`, normally half the adopting
-/// window. The cap binds adopted widths only; a publishing sidebar may
-/// stay wider than half its window. The two users: the width-lock
-/// step's adopt side (`app/width_guard::step`) and the pop-in restore
-/// (`state/popout::pop_in_restore_width`, design D6).
-pub(crate) fn width_adopt_target(shared: u16, min_width: Option<u32>, cap: u16) -> u16 {
-    shared.max(width_floor(min_width)).min(cap)
+/// The size an adopting sidebar resizes to with `resize-pane`: the
+/// shared docked size clamped to at least `floor` — the floor binds
+/// both ways — and at most `cap`, normally half the adopting window's
+/// matching dimension. The cap binds adopted sizes only; a publishing
+/// sidebar may stay past half its window. The floor comes resolved:
+/// the width option's floor on the column axis, the strip-height
+/// constant on the strip axis. The two users per axis: the lock
+/// step's adopt side (`app/width_guard::step`, design D5) and the
+/// pop-in restore (`state/popout::pop_in_restore_size`, design D6).
+pub(crate) fn adopt_target(shared: u16, floor: u16, cap: u16) -> u16 {
+    shared.max(floor).min(cap)
 }
 
 #[cfg(test)]
@@ -145,18 +147,10 @@ mod helper_tests {
     }
 
     #[test]
-    fn width_adopt_target_floors_and_caps() {
-        assert_eq!(width_adopt_target(80, Some(20), 100), 80);
-        assert_eq!(
-            width_adopt_target(8, Some(20), 100),
-            20,
-            "the floor binds both ways"
-        );
-        assert_eq!(
-            width_adopt_target(80, Some(20), 50),
-            50,
-            "the cap clamps adopted widths"
-        );
+    fn adopt_target_floors_and_caps() {
+        assert_eq!(adopt_target(80, 20, 100), 80);
+        assert_eq!(adopt_target(8, 20, 100), 20, "the floor binds both ways");
+        assert_eq!(adopt_target(80, 20, 50), 50, "the cap clamps adopted sizes");
     }
 
     #[test]

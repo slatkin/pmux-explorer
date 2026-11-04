@@ -49,7 +49,7 @@ pub use tab::SplitPane;
 pub use tasks::TasksState;
 pub use thought::ThoughtState;
 pub use timers::RefreshTimers;
-pub(crate) use width::{width_adopt_target, width_floor};
+pub(crate) use width::{adopt_target, strip_height_floor, width_floor};
 
 /// Bottom-panel tabs. The selected tab is shared state: it lives in
 /// [`GlobalState`], is written with `set -g @sidebar_bottom_tab`, and
@@ -238,11 +238,11 @@ pub struct AppState {
     /// sidebar from before the strip layout existed keeps its behavior.
     /// The layout is fixed for the life of the pane.
     pub layout_kind: LayoutKind,
-    /// Cross-tick state of the width-lock step (design D4): the last
-    /// observed docked width and the echo suppressor for this instance's
-    /// own resizes. The step itself lives in `app/width_guard.rs`;
-    /// `apply_pop_in` (`state/popout.rs`) arms the suppressor so a pop-in
-    /// restore does not echo back as a publish.
+    /// Cross-tick state of the size-lock step (design D4, D5): the last
+    /// observed docked size on this instance's axis and the echo
+    /// suppressor for this instance's own resizes. The step itself lives
+    /// in `app/width_guard.rs`; `apply_pop_in` (`state/popout.rs`) arms
+    /// the suppressor so a pop-in restore does not echo back as a publish.
     pub width_guard: crate::app::width_guard::WidthGuardState,
     /// Whether the pet animation is drawn and ticked. Loaded once at startup
     /// from the `@sidebar_pet` tmux option. Defaults to `false`.
