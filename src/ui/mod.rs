@@ -278,6 +278,12 @@ fn draw_strip(frame: &mut Frame, state: &mut AppState, area: Rect) {
                 drag.size,
                 cols_of_percent(area.width, state.global.split_tab_b_percent),
             ),
+            SplitDragTarget::Divider2 => split_strip_layout(
+                area.width,
+                area.height,
+                cols_of_percent(area.width, state.global.split_agents_percent),
+                drag.size,
+            ),
         },
         _ => split_or_strip_layout(
             area.width,

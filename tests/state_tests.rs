@@ -5,7 +5,7 @@ use pmux_explorer::activity::ActivityEntry;
 use pmux_explorer::group::{PaneGitInfo, RepoGroup};
 use pmux_explorer::state::{
     AppState, BottomTab, Focus, GlobalState, LayoutKind, PopupState, RepoFilter, RowTarget,
-    ScrollState, StatusFilter,
+    ScrollState, SplitDragTarget, StatusFilter,
 };
 use pmux_explorer::tmux::{
     self, AgentType, PaneInfo, PaneStatus, SessionInfo, WindowInfo, WorktreeMetadata,
@@ -1576,7 +1576,7 @@ fn floating_panel_clicks_hit_the_clamped_bottom_panel_geometry() {
 /// (columns 0-3), the agent panel (4-36), divider 1 (37), pane A
 /// (38-66, its bar on row 0 spanning 37-66), divider 2 (67) and pane
 /// B (68-99).
-fn split_strip_click_state() -> AppState {
+fn split_strip_click_state_at(width: u16) -> AppState {
     let pane = make_pane(AgentType::Claude, PaneStatus::Idle);
     let mut state = make_state(vec![SessionInfo {
         session_name: "main".into(),
@@ -1592,8 +1592,41 @@ fn split_strip_click_state() -> AppState {
     state.layout_kind = LayoutKind::Strip;
     state.global.tab_split_width = 60;
     state.rebuild_row_targets();
-    render_to_buffer(&mut state, 100, 8);
+    render_to_buffer(&mut state, width, 8);
     state
+}
+
+/// [`split_strip_click_state_at`] at the 100 columns its three
+/// original tests draw: the agent panel 4-36, divider 1 at 37, pane A
+/// 38-66, divider 2 at 67 and pane B 68-99.
+fn split_strip_click_state() -> AppState {
+    split_strip_click_state_at(100)
+}
+
+/// A split press routes to the divider its site owns (design D6): a
+/// divider or a bar press starts a drag over that pane's divider —
+/// divider 1 and pane A's bar over the agent panel's columns, divider
+/// 2 and pane B's bar over pane B's columns with divider 2.
+#[test]
+fn a_split_press_routes_to_its_divider_target() {
+    // At the 100-column defaults the agent panel and pane B with
+    // divider 2 each take 33 columns.
+    let cases = [
+        (3, 37, SplitDragTarget::Divider1, 33), // divider 1
+        (0, 50, SplitDragTarget::Divider1, 33), // pane A's bar
+        (3, 67, SplitDragTarget::Divider2, 33), // divider 2
+        (0, 80, SplitDragTarget::Divider2, 33), // pane B's bar
+    ];
+    for (row, col, target, size) in cases {
+        let mut state = split_strip_click_state();
+        assert!(
+            state.handle_terminal_click(row, col, 8),
+            "the press at ({row}, {col}) starts a drag"
+        );
+        let drag = state.split_drag.expect("the press starts a drag");
+        assert_eq!(drag.target, target, "the press at ({row}, {col})");
+        assert_eq!(drag.size, size, "the press at ({row}, {col})");
+    }
 }
 
 #[test]
@@ -1693,4 +1726,152 @@ fn a_split_divider_1_drag_moves_the_agent_panel_and_writes_its_own_option() {
         state.global.split_tab_b_percent, 33,
         "pane B's percent must not change"
     );
+}
+
+// ─── Split strip: divider 2 drag and the per-target bounds ──────────
+
+/// A 400-column strip at the default 33% widths (the spec scenarios'
+/// geometry): the filter bar (0-3), the agent panel (4-135), divider 1
+/// (136), pane A (137-267), divider 2 (268) and pane B (269-399).
+fn split_strip_scenario_state() -> AppState {
+    split_strip_click_state_at(400)
+}
+
+/// Dragging divider 1 from column 136 to 104: the agent panel follows
+/// the mouse column, several moves write nothing, and the release
+/// writes the agent percent only — 25 for 100 columns of 400 — never
+/// the shared `@sidebar_tab_width` or pane B's option.
+#[test]
+fn a_divider_1_drag_to_column_104_writes_25_on_release() {
+    let mut state = split_strip_scenario_state();
+    let tab_before = state.global.tab_percent;
+    let b_before = state.global.split_tab_b_percent;
+    assert!(state.handle_terminal_click(3, 136, 8));
+
+    // The divider follows the mouse column; the moves write nothing.
+    for col in [104, 90, 104] {
+        state.handle_split_drag_move(3, col, 8);
+        assert_eq!(
+            state.global.split_agents_percent, 33,
+            "the agent percent changes only on release"
+        );
+    }
+    render_to_buffer(&mut state, 400, 8);
+    let strip = state.layout.strip.expect("the strip is drawn");
+    assert_eq!(strip.agents.width, 100, "the agent panel follows the drag");
+    assert_eq!(strip.divider.map(|d| d.x), Some(104));
+    assert_eq!(
+        strip.tabs_b.map(|tabs| (tabs.x, tabs.width)),
+        Some((269, 131)),
+        "pane B does not change while divider 1 moves"
+    );
+
+    state.end_split_drag(8);
+    assert_eq!(
+        state.global.split_agents_percent, 25,
+        "the release writes the agent percent once"
+    );
+    assert_eq!(
+        state.global.tab_percent, tab_before,
+        "@sidebar_tab_width is untouched"
+    );
+    assert_eq!(
+        state.global.split_tab_b_percent, b_before,
+        "pane B's option is untouched"
+    );
+}
+
+/// Dragging divider 2 from column 268 to 300: pane B follows the mouse
+/// column, the agent panel holds still, and the release writes pane
+/// B's percent only — 25 for 100 columns of 400.
+#[test]
+fn a_divider_2_drag_to_column_300_writes_25_on_release() {
+    let mut state = split_strip_scenario_state();
+    let tab_before = state.global.tab_percent;
+    let agents_before = state.global.split_agents_percent;
+    assert!(state.handle_terminal_click(3, 268, 8));
+
+    // A move back onto divider 2 stays the unmoved press; a move away
+    // follows the mouse without writing.
+    state.handle_split_drag_move(3, 268, 8);
+    state.handle_split_drag_move(3, 300, 8);
+    assert_eq!(state.global.split_tab_b_percent, 33);
+    render_to_buffer(&mut state, 400, 8);
+    let strip = state.layout.strip.expect("the strip is drawn");
+    assert_eq!(strip.divider_b.map(|d| d.x), Some(300), "divider 2 follows");
+    assert_eq!(
+        strip.agents.width, 132,
+        "the agent panel does not change while divider 2 moves"
+    );
+
+    state.end_split_drag(8);
+    assert_eq!(
+        state.global.split_tab_b_percent, 25,
+        "the release writes pane B's percent once"
+    );
+    assert_eq!(
+        state.global.split_agents_percent, agents_before,
+        "the agent panel's option is untouched"
+    );
+    assert_eq!(
+        state.global.tab_percent, tab_before,
+        "@sidebar_tab_width is untouched"
+    );
+}
+
+/// Dragging divider 2 to column 140 stops where pane A with divider 1
+/// keeps its 20-column minimum: divider 2 parks at column 156.
+#[test]
+fn a_divider_2_drag_stops_at_pane_as_minimum() {
+    let mut state = split_strip_scenario_state();
+    assert!(state.handle_terminal_click(3, 268, 8));
+    state.handle_split_drag_move(3, 140, 8);
+
+    render_to_buffer(&mut state, 400, 8);
+    let strip = state.layout.strip.expect("the strip is drawn");
+    assert_eq!(
+        strip.divider_b.map(|d| d.x),
+        Some(156),
+        "pane A with divider 1 keeps 20 columns"
+    );
+    assert_eq!(strip.agents.width, 132, "the agent panel does not change");
+
+    state.end_split_drag(8);
+    assert_eq!(
+        state.global.split_tab_b_percent, 61,
+        "the release saves the stopped columns, not the mouse column"
+    );
+}
+
+/// Dragging divider 1 to column 350 stops at column 248, where pane A
+/// with divider 1 keeps its 20-column minimum against the pane B the
+/// drag must not change (design D4's tighter divider 1 bound).
+#[test]
+fn a_divider_1_drag_stops_at_column_248_with_pane_b_unchanged() {
+    let mut state = split_strip_scenario_state();
+    let tab_before = state.global.tab_percent;
+    let b_before = state.global.split_tab_b_percent;
+    assert!(state.handle_terminal_click(3, 136, 8));
+    state.handle_split_drag_move(3, 350, 8);
+
+    render_to_buffer(&mut state, 400, 8);
+    let strip = state.layout.strip.expect("the strip is drawn");
+    assert_eq!(
+        strip.divider.map(|d| d.x),
+        Some(248),
+        "divider 1 stops so pane A with divider 1 keeps 20 columns"
+    );
+    assert_eq!(
+        strip.tabs_b.map(|tabs| (tabs.x, tabs.width)),
+        Some((269, 131)),
+        "pane B does not change"
+    );
+
+    state.end_split_drag(8);
+    assert_eq!(state.global.split_agents_percent, 61);
+    assert_eq!(
+        state.global.split_tab_b_percent, b_before,
+        "pane B's option is untouched"
+    );
+    assert_eq!(state.global.tab_percent, tab_before);
 }
