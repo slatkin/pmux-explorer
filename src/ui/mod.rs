@@ -16,8 +16,8 @@ use ratatui::{
 };
 
 use crate::state::{
-    AppState, BottomTab, Focus, LayoutKind, clamp_bottom_height, split_or_strip_layout, split_rows,
-    strip_layout_for_tab_cols,
+    AppState, BottomTab, Focus, LayoutKind, SplitDragTarget, clamp_bottom_height, cols_of_percent,
+    split_or_strip_layout, split_rows, split_strip_layout, strip_layout_for_tab_cols,
 };
 use crate::tmux;
 use ratatui::layout::Rect;
@@ -257,17 +257,28 @@ fn draw_column(frame: &mut Frame, state: &mut AppState, area: Rect) {
 /// geometry goes into `FrameLayout::strip` so the mouse handlers
 /// hit-test the panels the frame actually drew.
 fn draw_strip(frame: &mut Frame, state: &mut AppState, area: Rect) {
-    // While a strip drag has moved, the frame draws the drag's tab
+    // While a strip drag has moved, the frame draws the drag's live
     // columns — the divider follows the mouse column and no percent
     // value is adopted during the drag; the release path, not a tick,
-    // writes the percent. Before any move the shared settings'
-    // geometry stands: the split or the one-pane path, by the strip
-    // width against `@sidebar_tab_split_width` (design D9 — the
-    // threshold rides the per-tick option read, no latch).
+    // writes the percent. The drag's target picks the geometry: a
+    // one-pane strip's tab drag lays the tab columns out as before, a
+    // split strip's divider 1 drag lays the split geometry out with
+    // the live agent columns (pane B held at its stored percent — a
+    // divider 1 drag never changes pane B, design D4). Before any
+    // move the shared settings' geometry stands: the split or the
+    // one-pane path, by the strip width against
+    // `@sidebar_tab_split_width` (design D9 — the threshold rides the
+    // per-tick option read, no latch).
     let strip = match &state.split_drag {
-        Some(drag) if drag.axis == LayoutKind::Strip && drag.moved => {
-            strip_layout_for_tab_cols(area.width, area.height, drag.size)
-        }
+        Some(drag) if drag.axis == LayoutKind::Strip && drag.moved => match drag.target {
+            SplitDragTarget::Tab => strip_layout_for_tab_cols(area.width, area.height, drag.size),
+            SplitDragTarget::Divider1 => split_strip_layout(
+                area.width,
+                area.height,
+                drag.size,
+                cols_of_percent(area.width, state.global.split_tab_b_percent),
+            ),
+        },
         _ => split_or_strip_layout(
             area.width,
             area.height,

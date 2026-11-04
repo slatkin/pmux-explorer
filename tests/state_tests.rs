@@ -4,8 +4,8 @@ mod test_helpers;
 use pmux_explorer::activity::ActivityEntry;
 use pmux_explorer::group::{PaneGitInfo, RepoGroup};
 use pmux_explorer::state::{
-    AppState, BottomTab, Focus, GlobalState, PopupState, RepoFilter, RowTarget, ScrollState,
-    StatusFilter,
+    AppState, BottomTab, Focus, GlobalState, LayoutKind, PopupState, RepoFilter, RowTarget,
+    ScrollState, StatusFilter,
 };
 use pmux_explorer::tmux::{
     self, AgentType, PaneInfo, PaneStatus, SessionInfo, WindowInfo, WorktreeMetadata,
@@ -1566,5 +1566,131 @@ fn floating_panel_clicks_hit_the_clamped_bottom_panel_geometry() {
     assert_eq!(
         state.scrolls.panes.offset, 3,
         "the panel wheel must not touch the agents list"
+    );
+}
+
+// ─── Split strip: pane A's bar click and divider 1 drag ─────────────
+
+/// A Claude sidebar whose 100-column strip shows the split layout
+/// (threshold dropped to 60, default 33% widths): the filter bar
+/// (columns 0-3), the agent panel (4-36), divider 1 (37), pane A
+/// (38-66, its bar on row 0 spanning 37-66), divider 2 (67) and pane
+/// B (68-99).
+fn split_strip_click_state() -> AppState {
+    let pane = make_pane(AgentType::Claude, PaneStatus::Idle);
+    let mut state = make_state(vec![SessionInfo {
+        session_name: "main".into(),
+        windows: vec![WindowInfo {
+            window_id: "@1".into(),
+            window_name: "project".into(),
+            window_active: true,
+            auto_rename: false,
+            panes: vec![pane.clone()],
+        }],
+    }]);
+    state.repo_groups = vec![make_repo_group("project", vec![pane])];
+    state.layout_kind = LayoutKind::Strip;
+    state.global.tab_split_width = 60;
+    state.rebuild_row_targets();
+    render_to_buffer(&mut state, 100, 8);
+    state
+}
+
+#[test]
+fn a_split_pane_a_bar_click_selects_pane_as_tab_only() {
+    let mut state = split_strip_click_state();
+    state.global.split_tab_a = BottomTab::Activity;
+    // The Git glyph's drawn column, read off the targets the frame
+    // published.
+    let col = state
+        .layout
+        .bottom_tab_targets
+        .iter()
+        .find(|target| target.tab == BottomTab::GitStatus)
+        .map(|target| target.start)
+        .expect("pane A's Git glyph is drawn");
+
+    assert!(
+        state.handle_terminal_click(0, col, 8),
+        "a press on pane A's bar starts a drag"
+    );
+    state.end_split_drag(8);
+
+    assert_eq!(
+        state.global.split_tab_a,
+        BottomTab::GitStatus,
+        "the unmoved release selects pane A's tab"
+    );
+    assert_eq!(
+        state.global.bottom_tab,
+        BottomTab::Activity,
+        "the shared @sidebar_bottom_tab must not change"
+    );
+    assert_eq!(
+        state.global.split_tab_b,
+        BottomTab::Tasks,
+        "pane B must not change"
+    );
+}
+
+#[test]
+fn a_split_pane_a_bar_click_off_a_glyph_changes_nothing() {
+    let mut state = split_strip_click_state();
+    // The bar's first drawn column past the lead label carries no
+    // glyph (the run is right-aligned; the lead ends well before the
+    // first glyph).
+    let col = state
+        .layout
+        .bottom_tab_targets
+        .iter()
+        .find(|target| target.tab == BottomTab::GitStatus)
+        .map(|target| target.start)
+        .expect("pane A's Git glyph is drawn")
+        - 2;
+
+    assert!(state.handle_terminal_click(0, col, 8));
+    state.end_split_drag(8);
+
+    assert_eq!(state.global.split_tab_a, BottomTab::Activity);
+    assert_eq!(state.global.bottom_tab, BottomTab::Activity);
+}
+
+#[test]
+fn a_split_divider_1_drag_moves_the_agent_panel_and_writes_its_own_option() {
+    let mut state = split_strip_click_state();
+    // Press divider 1 (column 37), drag it to column 24: the agent
+    // panel takes the 20 columns past the filter bar.
+    assert!(state.handle_terminal_click(3, 37, 8));
+    state.handle_split_drag_move(3, 24, 8);
+
+    // The frame draws the split geometry with the live agent columns,
+    // pane B held at its stored percent.
+    render_to_buffer(&mut state, 100, 8);
+    let strip = state.layout.strip.expect("the strip is drawn");
+    assert_eq!(strip.agents.width, 20, "the agent panel follows the drag");
+    assert_eq!(strip.divider.map(|d| d.x), Some(24));
+    assert!(
+        strip.tabs_b.is_some(),
+        "a divider 1 drag must not collapse the split layout"
+    );
+    assert_eq!(
+        strip.tabs_b.map(|tabs| tabs.x),
+        Some(68),
+        "pane B keeps its columns while divider 1 moves"
+    );
+
+    // The release writes the agent percent only.
+    state.end_split_drag(8);
+    assert_eq!(
+        state.global.split_agents_percent, 20,
+        "the release saves the agent panel's percent"
+    );
+    assert_eq!(
+        state.global.tab_percent, 40,
+        "@sidebar_tab_width must not change"
+    );
+    assert_eq!(
+        state.global.split_tab_b_percent, 33,
+        "pane B's percent must not change"
     );
 }
