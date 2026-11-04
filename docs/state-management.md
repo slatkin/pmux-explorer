@@ -18,6 +18,10 @@ read from tmux on every refresh tick.
 | `bottom_tab` | `@sidebar_bottom_tab` | On user tab switch (cycle key / tab-title click); tmux write retried when rejected | Selected bottom tab, shared server-wide; each instance adopts a peer's selection on its next refresh tick. The drawn tab run shows one Nerd Font glyph per tab — centered on the column's rule, right-aligned on the strip's tab bar — wrench for Activity, thought-bubble for Thought, list for Tasks, git-branch for Git — separated by ` │ ` delimiters; the stored values are `activity`, `thought`, `tasks` and `git`, and the Activity tab keeps that variant name while the Tools glyph draws for it. `thought` is drawn only while the focused pane runs pi — a stored Thought falls back to Activity for any other agent, without a write, so the panel returns to Thought when the focus comes back to a pi pane |
 | `bottom_percent` | `@sidebar_bottom_height` | User input (rule drag release); tmux write retried when rejected | Bottom panel height as a percent of the sidebar height (0 hides the panel; unset, empty, or an out-of-range value gives 30); shared server-wide, each instance adopts a peer's value on its next refresh tick (the percent's `SaveLatch` instance follows the same pattern) |
 | `tab_percent` | `@sidebar_tab_width` | User input (strip divider drag release); tmux write retried when rejected | Strip tab-panel width, divider included, as a percent of the strip width (0 hides the divider and the tab panel; unset, empty, or an out-of-range value gives 40); shared server-wide, each instance adopts a peer's value on its next refresh tick (the tab percent's `SaveLatch` instance follows the same pattern); every instance parses and adopts it — a column and a strip on the same server share the one option — and only a strip drag writes it |
+| `split_tab_a` | `@sidebar_split_tab_a` | On user tab switch in pane A of a split strip (cycle key / tab-title click); tmux write retried when rejected | Pane A's tab in a split strip, shared server-wide among split strips like `bottom_tab`; only `activity` and `git` are selectable. A split selection never writes `@sidebar_bottom_tab`, so a column and a split strip keep their own tabs |
+| `split_tab_b` | `@sidebar_split_tab_b` | On user tab switch in pane B of a split strip (cycle key / tab-title click); tmux write retried when rejected | Pane B's tab in a split strip, shared server-wide among split strips; only `tasks` and `thought` are selectable. As with `bottom_tab`, a stored `thought` draws as Tasks while the focused pane is not pi, without a write |
+| `split_agents_percent` | `@sidebar_split_agents_width` | User input (split divider 1 drag release); tmux write retried when rejected | Agent-panel width in a split strip as a percent of the strip width (unset, empty, or an out-of-range value gives 33); shared server-wide, each split strip adopts a peer's value on its next refresh tick, held back while a strip drag stands |
+| `split_tab_b_percent` | `@sidebar_split_tab_b_width` | User input (split divider 2 drag release); tmux write retried when rejected | Pane B's width with divider 2 as a percent of the strip width (unset, empty, or an out-of-range value gives 33); shared server-wide with the same drag block, and pane A takes the rest of the strip |
 
 | `width_lock` | `@sidebar_width_lock` | User input (`w` key / lock-glyph click) or a peer's toggle adopted on refresh; tmux write retried when rejected | Shared on/off switch for the width lock, server-wide; while `on` every docked sidebar converges on `shared_docked_width` within one refresh tick |
 | `shared_docked_width` | `@sidebar_docked_width` | Seeded by the enabling instance, then published on an observed docked-width change while locked; tmux write retried when rejected | Shared docked width in columns (`None` until seeded); adopting peers clamp it to half the window and never below the `@sidebar_min_width` floor |
@@ -25,11 +29,14 @@ read from tmux on every refresh tick.
 
 Each synced field is guarded so a failed write never loses the user's
 choice: the status filter, the bottom tab, the bottom percent, the strip
-tab percent, the width lock and the shared docked width each hold
+tab percent, the two split tabs, the two split widths, the width lock and
+the shared docked width each hold
 one `SaveLatch<T>` instance (`filter_latch`, `tab_latch`,
-`percent_latch`, `tab_percent_latch`, `lock_latch`, `width_latch` in
+`percent_latch`, `tab_percent_latch`, `split_tab_a_latch`,
+`split_tab_b_latch`, `split_agents_percent_latch`,
+`split_tab_b_percent_latch`, `lock_latch`, `width_latch` in
 `GlobalState` — one retry mechanism, written once and shared by all
-six). The cursor and repo filter keep plain
+ten). The cursor and repo filter keep plain
 `last_saved_cursor` / `last_saved_repo_filter` values instead.
 
 A `SaveLatch` remembers the last value tmux successfully accepted
@@ -51,12 +58,14 @@ The instances differ only at their edges. `filter_latch` and
 absent. `percent_latch` and `tab_percent_latch` parse the whole option
 map instead: an unset, empty or invalid value resolves to the default
 (`DEFAULT_BOTTOM_PERCENT = 30` and `DEFAULT_TAB_PERCENT = 40`) and is
-adopted. The two percent latches also carry an extra adoption gate —
+adopted; the two split-width latches parse the same way with
+`DEFAULT_SPLIT_PERCENT = 33`. The two percent latches also carry an extra adoption gate —
 `apply_all` receives `split_drag_axis` (the `LayoutKind` of the
 in-progress `AppState::split_drag`, if any) and holds that axis's
 shared value unadopted while the drag stands — a column drag blocks
 only `@sidebar_bottom_height` adoption, a strip drag only
-`@sidebar_tab_width`, and the other axis's value adopts as usual — so
+`@sidebar_tab_width` — and, on the same gate, the two split widths —
+and the other axis's value adopts as usual — so
 the tick cannot move the rule or the divider out from under the mouse;
 the ticks after the release adopt the server value again.
 
@@ -266,7 +275,7 @@ TUI main loop (app::run in app.rs; submodules app/{setup,workers,input,render,pa
   → refresh() every 1s
     → retry_pending_saves            ← a write tmux rejected is retried before the shared read
     → get_sidebar_pane_reading()     ← reads pane state + @sidebar_* in one display-message
-    → global.apply_all()             ← applies the shared options (filter, cursor, bottom tab, repo filter, bottom percent, tab percent, width lock, shared docked width, min width) under the SaveLatch/last_saved_* guards
+    → global.apply_all()             ← applies the shared options (filter, cursor, bottom tab, repo filter, bottom percent, tab percent, split tabs, split widths, width lock, shared docked width, min width) under the SaveLatch/last_saved_* guards
     → query_sessions() (tmux.rs)     ← reads @pane_* via `tmux list-panes -a`
     → pane_name resolved in the same query (the pane title when it is
       a real name — em dash suffixes trimmed; no extra tmux call)
