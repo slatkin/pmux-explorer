@@ -89,6 +89,8 @@ pub struct PaneSnapshot {
     pub subagents: Option<String>,
     /// `@pane_started_at` — the current run's start timestamp.
     pub started_at: Option<String>,
+    /// `@pane_session_id` — the session id the pane records.
+    pub session_id: Option<String>,
 }
 
 /// The store seam every agent pane option access goes through: one read of
@@ -158,6 +160,7 @@ impl PaneStore for MemPaneStore {
             bg_cmd: self.field(pane, crate::tmux::PANE_BG_CMD),
             subagents: self.field(pane, crate::tmux::PANE_SUBAGENTS),
             started_at: self.field(pane, crate::tmux::PANE_STARTED_AT),
+            session_id: self.field(pane, crate::tmux::PANE_SESSION_ID),
         }
     }
 
@@ -192,7 +195,8 @@ impl PaneStore for MemPaneStore {
 mod tests {
     use super::*;
     use crate::tmux::{
-        PANE_ATTENTION, PANE_BG_CMD, PANE_STARTED_AT, PANE_STATUS, PANE_SUBAGENTS, PANE_WAIT_REASON,
+        PANE_ATTENTION, PANE_BG_CMD, PANE_SESSION_ID, PANE_STARTED_AT, PANE_STATUS,
+        PANE_SUBAGENTS, PANE_WAIT_REASON,
     };
 
     const PANE: &str = "%SEAM";
@@ -289,12 +293,13 @@ mod tests {
     }
 
     #[test]
-    fn mem_store_snapshot_reads_the_four_rule_options() {
+    fn mem_store_snapshot_reads_the_five_rule_options() {
         let store = MemPaneStore::new();
         store.insert(PANE, PANE_STATUS, "waiting");
         store.insert(PANE, PANE_BG_CMD, "npm run dev");
         store.insert(PANE, PANE_SUBAGENTS, "Explore:sub-1");
         store.insert(PANE, PANE_STARTED_AT, "1700");
+        store.insert(PANE, PANE_SESSION_ID, "sess-1");
         store.insert(PANE, PANE_ATTENTION, "notification");
 
         assert_eq!(
@@ -304,6 +309,7 @@ mod tests {
                 bg_cmd: Some("npm run dev".into()),
                 subagents: Some("Explore:sub-1".into()),
                 started_at: Some("1700".into()),
+                session_id: Some("sess-1".into()),
             }
         );
     }

@@ -4,7 +4,7 @@
 //! `display-message`, so a pane never reads mid-batch.
 
 use super::commands::run_tmux;
-use super::options::{PANE_BG_CMD, PANE_STARTED_AT, PANE_STATUS, PANE_SUBAGENTS};
+use super::options::{PANE_BG_CMD, PANE_SESSION_ID, PANE_STARTED_AT, PANE_STATUS, PANE_SUBAGENTS};
 use super::query::{q, split_tmux_fields};
 use crate::cli::sanitize_tmux_value;
 use crate::pane_store::{PaneSnapshot, PaneStore, PaneWrite, PaneWrites};
@@ -49,13 +49,19 @@ fn apply_args(pane: &str, writes: &PaneWrites) -> Vec<String> {
     args
 }
 
-/// The `display-message -p` format that reads the four snapshot options from
+/// The `display-message -p` format that reads the five snapshot options from
 /// one pane in one call, quoted with the same `#{q:...}` convention the
 /// `list-panes` read uses so an embedded delimiter stays in its field.
 fn snapshot_format() -> String {
-    [PANE_STATUS, PANE_BG_CMD, PANE_SUBAGENTS, PANE_STARTED_AT]
-        .map(q)
-        .join("|")
+    [
+        PANE_STATUS,
+        PANE_BG_CMD,
+        PANE_SUBAGENTS,
+        PANE_STARTED_AT,
+        PANE_SESSION_ID,
+    ]
+    .map(q)
+    .join("|")
 }
 
 /// Decode one snapshot line into the snapshot: an empty field is an unset
@@ -75,6 +81,7 @@ fn snapshot_from(output: &str) -> PaneSnapshot {
         bg_cmd: field(1),
         subagents: field(2),
         started_at: field(3),
+        session_id: field(4),
     }
 }
 
@@ -175,29 +182,30 @@ mod tests {
     }
 
     #[test]
-    fn snapshot_format_names_the_four_rule_options_quoted() {
+    fn snapshot_format_names_the_five_rule_options_quoted() {
         assert_eq!(
             snapshot_format(),
-            "#{q:@pane_status}|#{q:@pane_bg_cmd}|#{q:@pane_subagents}|#{q:@pane_started_at}"
+            "#{q:@pane_status}|#{q:@pane_bg_cmd}|#{q:@pane_subagents}|#{q:@pane_started_at}|#{q:@pane_session_id}"
         );
     }
 
     #[test]
     fn snapshot_from_decodes_the_four_fields() {
         assert_eq!(
-            snapshot_from("waiting|npm run dev|Explore:sub-1|1700\n"),
+            snapshot_from("waiting|npm run dev|Explore:sub-1|1700|sess-1\n"),
             PaneSnapshot {
                 status: Some("waiting".into()),
                 bg_cmd: Some("npm run dev".into()),
                 subagents: Some("Explore:sub-1".into()),
                 started_at: Some("1700".into()),
+                session_id: Some("sess-1".into()),
             }
         );
     }
 
     #[test]
     fn snapshot_from_treats_empty_fields_and_missing_lines_as_unset() {
-        assert_eq!(snapshot_from("|||\n"), PaneSnapshot::default());
+        assert_eq!(snapshot_from("||||\n"), PaneSnapshot::default());
         assert_eq!(snapshot_from(""), PaneSnapshot::default());
     }
 

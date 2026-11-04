@@ -78,6 +78,19 @@ pub fn transition(snapshot: &PaneSnapshot, event: &AgentEvent, reported: &Report
                 session_id,
                 reported,
             );
+            // A session-start naming the session the pane already records is
+            // either pi's resume/compact re-emission or a late-landing
+            // duplicate: the producer spawns one hook process per event and
+            // the applies land in any order, so a start can arrive after its
+            // session's later events. On a live pane its reset-to-idle would
+            // move the pane backwards within the same session — demote the
+            // status and clobber the wait reason, prompt and start stamp
+            // those events set. The identity refresh above is all such a
+            // start contributes; the session's own events own the run state.
+            // A different (or first) session id keeps the full reset below.
+            if suppresses_the_session_reset(snapshot, session_id) {
+                return writes;
+            }
             writes.unset(PANE_ATTENTION);
             writes.unset(PANE_STARTED_AT);
             writes.unset(PANE_WAIT_REASON);
@@ -331,6 +344,23 @@ pub fn transition(snapshot: &PaneSnapshot, event: &AgentEvent, reported: &Report
     writes
 }
 
+/// Whether a `session-start` naming `incoming` must skip its reset-to-idle:
+/// the pane already records that session id and its status sits above
+/// `idle`. Such a start cannot open a new session — it is a re-emission or
+/// a late-landing duplicate — so its reset would only move the pane
+/// backwards within the same session. An `idle` or absent status keeps the
+/// full reset, so a resume on a finished pane still lands as it does today.
+fn suppresses_the_session_reset(snapshot: &PaneSnapshot, incoming: &Option<String>) -> bool {
+    let recorded = snapshot.session_id.as_deref();
+    matches!(
+        (recorded, incoming.as_deref()),
+        (Some(recorded), Some(incoming)) if !recorded.is_empty() && recorded == incoming
+    ) && snapshot
+        .status
+        .as_deref()
+        .is_some_and(|status| status != "idle")
+}
+
 /// The option writes one status change causes, including the attention
 /// handling `cmd_set_status` carries: a status of `clear` unsets the
 /// status option and the attention flag, `running` and `idle` unset the
@@ -554,6 +584,15 @@ mod tests {
             bg_cmd: (!bg_cmd.is_empty()).then(|| bg_cmd.into()),
             subagents: (!subagents.is_empty()).then(|| subagents.into()),
             started_at: Some("1700".into()),
+            ..PaneSnapshot::default()
+        }
+    }
+
+    fn snapshot_with_session(status: &str, session_id: &str) -> PaneSnapshot {
+        PaneSnapshot {
+            status: Some(status.into()),
+            session_id: Some(session_id.into()),
+            ..PaneSnapshot::default()
         }
     }
 
@@ -591,6 +630,10 @@ mod tests {
     }
 
     fn session_start(source: &str) -> AgentEvent {
+        session_start_for(source, Some(SES))
+    }
+
+    fn session_start_for(source: &str, session_id: Option<&str>) -> AgentEvent {
         AgentEvent::SessionStart {
             agent: AGENT.into(),
             cwd: CWD.into(),
@@ -598,7 +641,7 @@ mod tests {
             source: source.into(),
             worktree: None,
             agent_id: None,
-            session_id: Some(SES.into()),
+            session_id: session_id.map(str::to_string),
         }
     }
 
@@ -748,6 +791,108 @@ mod tests {
             );
             assert!(list.contains(&(PANE_STATUS, Some("idle".into()))));
         }
+    }
+
+    // ─── 3.1b a session-start for the session the pane already records ──
+
+    #[test]
+    fn a_session_start_for_the_recorded_session_does_not_demote_a_live_pane() {
+        // The producer spawns one hook process per event and the applies
+        // land in any order, so a session-start can land after its
+        // session's user-prompt-submit or notification. On a live pane the
+        // reset-to-idle would demote the status and clobber what those
+        // events set, so a known session's start contributes the identity
+        // refresh only — whatever the source, including pi's resume and
+        // compact re-emissions.
+        for status in ["running", "waiting", "error", "background"] {
+            for source in ["", "resume", "compact"] {
+                let snapshot = snapshot_with_session(status, SES);
+                let writes = transition(&snapshot, &session_start(source), &SESSION_CONTEXT);
+                assert_eq!(
+                    entries(&writes),
+                    expected(&[
+                        (PANE_AGENT, Some(AGENT)),
+                        (PANE_PERMISSION_MODE, Some(PM)),
+                        (PANE_SESSION_ID, Some(SES)),
+                        (PANE_CWD, Some(CWD)),
+                        (PANE_WORKTREE_NAME, None),
+                        (PANE_WORKTREE_BRANCH, None),
+                    ]),
+                    "previous status {status}, source {source:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_session_start_for_the_recorded_session_on_an_idle_pane_still_resets() {
+        // A resume on a finished pane is the normal flow: nothing live is
+        // lost, so the full reset — including the resume wait reason and
+        // the stale prompt clear — still applies.
+        let snapshot = snapshot_with_session("idle", SES);
+        let writes = transition(&snapshot, &session_start("resume"), &SESSION_CONTEXT);
+        let list = entries(&writes);
+        assert!(list.contains(&(PANE_STATUS, Some("idle".into()))));
+        assert!(list.contains(&(PANE_WAIT_REASON, Some("session_resumed".into()))));
+        assert!(list.contains(&(PANE_PROMPT, None)));
+        assert!(list.contains(&(PANE_PROMPT_SOURCE, None)));
+        assert!(list.contains(&(PANE_STARTED_AT, None)));
+    }
+
+    #[test]
+    fn a_session_start_for_a_new_session_still_resets_fully() {
+        // A different session id means a new session in a reused pane: the
+        // reset-to-idle is exactly what it should do, at any status.
+        for status in PREVIOUS_STATUSES {
+            let snapshot = snapshot_with_session(status, "sess-0");
+            let writes = transition(&snapshot, &session_start(""), &SESSION_CONTEXT);
+            let list = entries(&writes);
+            assert!(list.contains(&(PANE_STATUS, Some("idle".into()))));
+            assert!(list.contains(&(PANE_PROMPT, None)));
+            assert!(list.contains(&(PANE_PROMPT_SOURCE, None)));
+            assert!(list.contains(&(PANE_STARTED_AT, None)));
+            assert!(list.contains(&(PANE_WAIT_REASON, None)));
+        }
+    }
+
+    #[test]
+    fn a_session_start_without_a_session_id_still_resets_fully() {
+        // An event that names no session cannot be pinned to the recorded
+        // one, so the reset stays.
+        let snapshot = snapshot_with_session("running", SES);
+        let writes = transition(&snapshot, &session_start_for("", None), &SESSION_CONTEXT);
+        assert!(entries(&writes).contains(&(PANE_STATUS, Some("idle".into()))));
+    }
+
+    #[test]
+    fn the_session_reset_guard_edges() {
+        assert!(suppresses_the_session_reset(
+            &snapshot_with_session("running", SES),
+            &Some(SES.into())
+        ));
+        // An idle pane is not live: the reset applies.
+        assert!(!suppresses_the_session_reset(
+            &snapshot_with_session("idle", SES),
+            &Some(SES.into())
+        ));
+        // A different, empty or absent recorded or incoming id never
+        // suppresses.
+        assert!(!suppresses_the_session_reset(
+            &snapshot_with_session("running", "other"),
+            &Some(SES.into())
+        ));
+        assert!(!suppresses_the_session_reset(
+            &snapshot_with("running", "", ""),
+            &Some(SES.into())
+        ));
+        assert!(!suppresses_the_session_reset(
+            &snapshot_with_session("running", SES),
+            &None
+        ));
+        assert!(!suppresses_the_session_reset(
+            &snapshot_with_session("running", ""),
+            &Some(SES.into())
+        ));
     }
 
     #[test]
