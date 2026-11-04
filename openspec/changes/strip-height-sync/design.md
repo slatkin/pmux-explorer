@@ -11,7 +11,13 @@ deliberately excludes strips (`toggle_width_lock` and `width_guard::enforce`
 early-return on `LayoutKind::Strip`; `size_guard::guard_target` returns `None`),
 pinned by tests citing the `add-strip-layout` design decisions. `SidebarPaneInfo`
 already carries `height` and `window_height`, so the strip axis needs no new
-probe data.
+probe data. A strip has no lock glyph today: its control row draws the side
+switch at column 0 and the pop-out at column 2
+(`ui/panes/filter_bar.rs::draw_strip_filter_bar`,
+`state/layout.rs::handle_filter_column_click`). A missing
+`@sidebar_docked_width` key adopts nothing on the tick read
+(`GlobalState`'s shared-options adopt), so unsetting the option alone would
+leave each peer's cached value in place.
 
 ## Goals / Non-Goals
 
@@ -21,7 +27,7 @@ probe data.
 
 **Non-Goals:**
 - No strip band guard (`@sidebar_min_height`/`@sidebar_max_height` options). A squeezed strip with no shared height stays squeezed, same as today.
-- No change to column behavior; the width path's spec and code stay as they are.
+- No change to column behavior, except that a strip enabling the lock clears the shared width (D10); the width path's publish/adopt code stays as it is.
 - No per-window or per-pane height overrides; one server-wide shared height.
 - No change to the split-strip internal layout or the tab-divider drag.
 
@@ -79,16 +85,39 @@ lock is on and arms `pending_adopt_observation` for the landing, the same
 handshake the column pop-in got (the D6 analog). Pop-out capture is unchanged:
 the live docked height is still recorded for the unlocked restore.
 
-**D8 — Seed order stays seed-first, flag-second.**
-A peer adopting the lock mid-tick must find a shared height already in place,
-the same D5 ordering the width seed follows.
+**D8 — Seed order stays seed-first, flag-last.**
+The enable writes the seed of its own axis, then the clear of the other axis
+(D10), then the flag. A peer adopting the lock mid-tick must find its axis
+already seeded or cleared, the same D5 ordering the width seed follows.
+
+**D9 — A strip carries the lock control at column 3 of its control row.**
+The strip's 4-column control row has column 3 free after the side switch
+(column 0) and the pop-out (column 2). The lock glyph goes there with the
+column's glyphs and styles (`☑` accent while locked, `☐` while unlocked),
+and a click on it calls `toggle_width_lock`, the same single writer as `w`.
+Drawing and hit-testing both take the control row from
+`filter_column_layout`, so the drawn glyph and the clickable cell cannot
+drift. Without it, `w` in a strip would resize every strip on the server with
+no visible lock state.
+
+**D10 — Enabling clears the other axis's shared value.**
+An enable seeds only its own axis; the other axis's option may still hold a
+value from an earlier lock session, and its peers would jump to it. So the
+enable also clears the other axis: the field becomes `None` and its latch
+writes `set -gu` (today the `None` branch of `save_shared_docked_width`
+writes nothing, so it changes for both axes). The tick read adopts an
+absent key as `None` on both axes; a non-numeric value still adopts nothing.
+An axis with no shared value idles — no adopt — and its instances keep their
+sizes until one of them is resized and publishes. Rejected: keeping the
+stale value (peers jump to an old size); seeding the other axis from the
+enabling instance (it has no size on that axis).
 
 ## Risks / Trade-offs
 
 - [Vertical space is scarce; a tall shared height adopted into a short window eats the agent pane] → the half-window cap, and the floor wins over the cap only below 4 rows.
 - [Users of percent `@sidebar_height` see the percent stop applying while the lock is on] → documented; the width lock set the precedent, and unlocking restores percent behavior.
-- [Mixed fleets around a position change: enabling the lock from one axis leaves the other axis's shared value stale or empty] → harmless; instances sync only their own axis, and an empty shared height makes the adopt side idle until a strip publishes or seeds.
-- [`w` from a strip previously did nothing; it now resizes strips everywhere] → that is the feature; the lock glyph already shows the server-wide state.
+- [After an enable from the other axis, instances on the cleared axis stay at their own sizes until one is resized] → accepted (D10); the alternative was a jump to a stale size.
+- [`w` from a strip previously did nothing; it now resizes strips everywhere] → that is the feature; the new strip lock glyph (D9) shows the server-wide state.
 - [`resize-pane -y` can be refused (zoomed window, crowded layout)] → the latch keeps the intent pending and retries on later ticks, the same as the width adopt.
 
 ## Migration Plan

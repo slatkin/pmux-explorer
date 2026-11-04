@@ -13,7 +13,7 @@ the shared docked height with the strip's live height, at least the
 minimum strip height floor.
 
 #### Scenario: the lock is one flag for both axes
-- **WHEN** the user presses `w` while a strip has focus
+- **WHEN** the user presses `w`, or clicks the strip's lock control, while a strip has focus
 - **THEN** the same server-wide lock toggles, and strips in every window begin converging on one shared height
 
 #### Scenario: enabling from a strip seeds the shared height
@@ -102,3 +102,50 @@ percent resolving against that window's height.
 #### Scenario: a strip opened unlocked keeps the option rule
 - **WHEN** the lock is off, `@sidebar_height` is `30%`, the window is 40 rows high, and the user opens the sidebar in that window
 - **THEN** the new strip pane is 12 rows high
+
+### Requirement: enabling the lock from a column clears the shared height
+
+Enabling the lock from a column SHALL clear `@sidebar_docked_height`.
+While no shared docked height exists, a docked strip SHALL keep its height
+and SHALL NOT resize; the first strip whose height then changes publishes
+a new shared height.
+
+#### Scenario: a stale shared height is not adopted
+- **WHEN** `@sidebar_docked_height` holds 14 rows from an earlier lock session, a docked strip is 10 rows high, and the user enables the lock from a column
+- **THEN** the shared docked height is cleared and the strip stays 10 rows high
+
+#### Scenario: a resize after the clear publishes
+- **WHEN** the lock was enabled from a column and the user then resizes the docked strip of window A to 12 rows
+- **THEN** the shared docked height becomes 12 rows and the other docked strips adopt it within one refresh tick
+
+## MODIFIED Requirements
+
+### Requirement: the strip filter bar is a vertical column
+
+In a strip, the status filter SHALL be a column 4 columns wide at the left
+edge. It SHALL show one chip on each row, in the order all, busy, waiting,
+idle, error, from the first row. Its last row SHALL hold the side-switch
+control, the pop-out control and the lock control. A chip that does not
+fit above the control row SHALL be dropped whole, together with each chip
+after it. A click on a chip SHALL select its category. A click on the lock
+control SHALL toggle the lock the same way as pressing `w`.
+
+#### Scenario: all chips fit
+- **WHEN** a strip is 12 rows high
+- **THEN** rows 0-4 show the all, busy, waiting, idle and error chips, and row 11 shows the side-switch, pop-out and lock controls
+
+#### Scenario: a short strip
+- **WHEN** a strip is 4 rows high
+- **THEN** rows 0-2 show the all, busy and waiting chips, row 3 shows the controls, and the idle and error chips are not drawn
+
+#### Scenario: a click on a chip
+- **WHEN** the user clicks the waiting chip in the strip filter bar
+- **THEN** the waiting category is selected and the agent panel shows only waiting agents
+
+#### Scenario: the lock control shows the lock state
+- **WHEN** a strip is rendered
+- **THEN** the control row shows the lock control after the pop-out control, with a different glyph for locked and unlocked
+
+#### Scenario: a click on the lock control
+- **WHEN** the user clicks the lock control in the strip filter bar
+- **THEN** the lock toggles on if it was off and off if it was on, for every sidebar instance on the server
