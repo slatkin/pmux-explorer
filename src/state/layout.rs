@@ -1060,24 +1060,27 @@ impl AppState {
             match drag.axis {
                 LayoutKind::Column => self.handle_bottom_tab_click(drag.press_col),
                 LayoutKind::Strip => {
+                    let Some(strip) = self.layout.strip else {
+                        return;
+                    };
                     // Only a tab-bar press resolves to a tab click: the
                     // glyphs live on the tab-bar row now, so a held
                     // press released on the thin divider line below
-                    // the bar changes nothing. On a split strip the bar
-                    // is pane A's, and the click selects pane A's tab —
-                    // the pane's own option, never the shared
+                    // the bar changes nothing. On a split strip the
+                    // bars are pane A's and pane B's, side by side, and
+                    // each click selects that pane's tab — the pane's
+                    // own option, never the shared
                     // `@sidebar_bottom_tab` the one-pane bar writes.
-                    if self
-                        .layout
-                        .strip
-                        .and_then(|strip| strip.tab_bar)
+                    if strip
+                        .tab_bar_b
                         .is_some_and(|bar| point_in_rect(drag.press_row, drag.press_col, bar))
                     {
-                        if self
-                            .layout
-                            .strip
-                            .is_some_and(|strip| strip.tabs_b.is_some())
-                        {
+                        self.handle_split_tab_click(SplitPane::B, drag.press_col);
+                    } else if strip
+                        .tab_bar
+                        .is_some_and(|bar| point_in_rect(drag.press_row, drag.press_col, bar))
+                    {
+                        if strip.tabs_b.is_some() {
                             self.handle_split_tab_click(SplitPane::A, drag.press_col);
                         } else {
                             self.handle_bottom_tab_click(drag.press_col);
@@ -1142,9 +1145,10 @@ impl AppState {
     /// or under the bottom panel's first drawn row the wheel scrolls
     /// the displayed tab, above it the agent list. A strip routes by
     /// column over the drawn [`StripLayout`]: the wheel over the agent
-    /// panel scrolls the agent list and over the tab panel the
-    /// displayed tab; the filter bar and the divider have nothing to
-    /// scroll.
+    /// panel scrolls the agent list and over a tab panel the tab that
+    /// pane displays — the shared tab on a one-pane strip, pane A's or
+    /// pane B's own on a split strip (design D7); the filter bar and
+    /// the dividers have nothing to scroll.
     pub fn handle_mouse_scroll(
         &mut self,
         row: u16,
@@ -1158,10 +1162,20 @@ impl AppState {
                 let Some(strip) = self.layout.strip else {
                     return;
                 };
-                if strip.tabs.is_some_and(|tabs| point_in_rect(row, col, tabs)) {
-                    self.scroll_bottom(delta);
-                } else if point_in_rect(row, col, strip.agents) {
+                let split = strip.tabs_b.is_some();
+                if point_in_rect(row, col, strip.agents) {
                     self.scrolls.panes.scroll(delta);
+                } else if strip
+                    .tabs_b
+                    .is_some_and(|tabs| point_in_rect(row, col, tabs))
+                {
+                    self.scroll_split_tab(SplitPane::B, delta);
+                } else if strip.tabs.is_some_and(|tabs| point_in_rect(row, col, tabs)) {
+                    if split {
+                        self.scroll_split_tab(SplitPane::A, delta);
+                    } else {
+                        self.scroll_bottom(delta);
+                    }
                 }
             }
             LayoutKind::Column => {

@@ -170,7 +170,21 @@ impl AppState {
     }
 
     pub fn scroll_bottom(&mut self, delta: isize) {
-        match self.displayed_bottom_tab() {
+        self.scroll_tab(self.displayed_bottom_tab(), delta);
+    }
+
+    /// Scroll the given split pane's displayed tab. The groups are
+    /// disjoint, so each tab's scroll state belongs to one pane alone:
+    /// pane A's scroll never touches pane B's tab and the other way
+    /// round.
+    pub fn scroll_split_tab(&mut self, pane: SplitPane, delta: isize) {
+        self.scroll_tab(self.displayed_split_tab(pane), delta);
+    }
+
+    /// The per-tab scroll arm both scroll routers share: one scroll
+    /// state per tab, with the Thought follow-the-end rule.
+    fn scroll_tab(&mut self, tab: BottomTab, delta: isize) {
+        match tab {
             BottomTab::Activity => self.activity.scroll.scroll(delta),
             BottomTab::Tasks => self.tasks.scroll.scroll(delta),
             BottomTab::GitStatus => self.scrolls.git.scroll(delta),
@@ -186,6 +200,24 @@ impl AppState {
                     self.thought.follow = true;
                 }
             }
+        }
+    }
+
+    /// Whether the background git poller should run. In a split strip
+    /// the flag follows the tab pane A displays (design D8) — pane B's
+    /// selection never moves it; in a one-pane strip or a column it is
+    /// the displayed shared tab, as before. A split strip is a drawn
+    /// one, so the flag reads the geometry the last frame published —
+    /// the same rects the click and scroll routers hit-test.
+    pub fn git_poll_active(&self) -> bool {
+        if self
+            .layout
+            .strip
+            .is_some_and(|strip| strip.tabs_b.is_some())
+        {
+            self.displayed_split_tab(SplitPane::A).is_git_status()
+        } else {
+            self.displayed_bottom_tab().is_git_status()
         }
     }
 }

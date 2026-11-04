@@ -1577,7 +1577,13 @@ fn floating_panel_clicks_hit_the_clamped_bottom_panel_geometry() {
 /// (38-66, its bar on row 0 spanning 37-66), divider 2 (67) and pane
 /// B (68-99).
 fn split_strip_click_state_at(width: u16) -> AppState {
-    let pane = make_pane(AgentType::Claude, PaneStatus::Idle);
+    split_strip_click_state_at_with(width, AgentType::Claude)
+}
+
+/// [`split_strip_click_state_at`] with the focused pane's agent given:
+/// a pi focus is what makes pane B's bar draw the Thought glyph.
+fn split_strip_click_state_at_with(width: u16, agent: AgentType) -> AppState {
+    let pane = make_pane(agent, PaneStatus::Idle);
     let mut state = make_state(vec![SessionInfo {
         session_name: "main".into(),
         windows: vec![WindowInfo {
@@ -1601,6 +1607,12 @@ fn split_strip_click_state_at(width: u16) -> AppState {
 /// 38-66, divider 2 at 67 and pane B 68-99.
 fn split_strip_click_state() -> AppState {
     split_strip_click_state_at(100)
+}
+
+/// [`split_strip_click_state`] with the focused pane running pi, so
+/// pane B's bar draws the Thought glyph next to Tasks.
+fn split_strip_pi_click_state() -> AppState {
+    split_strip_click_state_at_with(100, AgentType::Pi)
 }
 
 /// A split press routes to the divider its site owns (design D6): a
@@ -1686,6 +1698,184 @@ fn a_split_pane_a_bar_click_off_a_glyph_changes_nothing() {
 
     assert_eq!(state.global.split_tab_a, BottomTab::Activity);
     assert_eq!(state.global.bottom_tab, BottomTab::Activity);
+}
+
+/// An unmoved release on pane B's bar selects pane B's tab (spec "a
+/// click on pane B's Thought glyph"): the pi focus draws pane B's
+/// Thought glyph, and the click writes `@sidebar_split_tab_b` alone —
+/// pane A and the shared one-pane tab never move.
+#[test]
+fn a_split_pane_b_bar_click_selects_pane_bs_tab_only() {
+    let mut state = split_strip_pi_click_state();
+    state.global.split_tab_a = BottomTab::Activity;
+    state.global.split_tab_b = BottomTab::Tasks;
+    // The Thought glyph's drawn column, read off the targets the frame
+    // published.
+    let col = state
+        .layout
+        .bottom_tab_targets
+        .iter()
+        .find(|target| target.tab == BottomTab::Thought)
+        .map(|target| target.start)
+        .expect("pane B's Thought glyph is drawn for a pi focus");
+
+    assert!(state.handle_terminal_click(0, col, 8));
+    state.end_split_drag(8);
+
+    assert_eq!(
+        state.global.split_tab_b,
+        BottomTab::Thought,
+        "the unmoved release selects pane B's tab"
+    );
+    assert_eq!(
+        state.global.split_tab_a,
+        BottomTab::Activity,
+        "pane A must not change"
+    );
+    assert_eq!(
+        state.global.bottom_tab,
+        BottomTab::Activity,
+        "the shared @sidebar_bottom_tab must not change"
+    );
+}
+
+/// The git poller flag follows the tab pane A displays (design D8):
+/// in a split strip the stored one-pane tab must not drive it, and a
+/// click on pane A's Git glyph turns it on.
+#[test]
+fn the_git_poller_flag_follows_pane_as_tab_in_a_split_strip() {
+    let mut state = split_strip_click_state();
+    // Pane A displays Tools: the poller is off even while the shared
+    // one-pane tab holds Git — in a split strip the flag reads pane
+    // A's own selection, never `@sidebar_bottom_tab`.
+    state.global.bottom_tab = BottomTab::GitStatus;
+    assert!(!state.git_poll_active());
+
+    let col = state
+        .layout
+        .bottom_tab_targets
+        .iter()
+        .find(|target| target.tab == BottomTab::GitStatus)
+        .map(|target| target.start)
+        .expect("pane A's Git glyph is drawn");
+    assert!(state.handle_terminal_click(0, col, 8));
+    state.end_split_drag(8);
+
+    assert_eq!(state.global.split_tab_a, BottomTab::GitStatus);
+    assert!(
+        state.git_poll_active(),
+        "pane A displaying Git keeps the poller on"
+    );
+}
+
+/// Pane B's selection never moves the flag: while pane A displays Git
+/// the poller stays on through a pane B click (design D8 — the flag
+/// follows pane A).
+#[test]
+fn a_pane_b_click_leaves_the_git_poller_flag_on_pane_a() {
+    let mut state = split_strip_pi_click_state();
+    let col = state
+        .layout
+        .bottom_tab_targets
+        .iter()
+        .find(|target| target.tab == BottomTab::GitStatus)
+        .map(|target| target.start)
+        .expect("pane A's Git glyph is drawn");
+    assert!(state.handle_terminal_click(0, col, 8));
+    state.end_split_drag(8);
+    assert!(state.git_poll_active());
+
+    let thought_col = state
+        .layout
+        .bottom_tab_targets
+        .iter()
+        .find(|target| target.tab == BottomTab::Thought)
+        .map(|target| target.start)
+        .expect("pane B's Thought glyph is drawn for a pi focus");
+    assert!(state.handle_terminal_click(0, thought_col, 8));
+    state.end_split_drag(8);
+
+    assert_eq!(state.global.split_tab_b, BottomTab::Thought);
+    assert!(
+        state.git_poll_active(),
+        "a pane B click must not move the flag"
+    );
+}
+
+/// The wheel over pane A's drawn panel scrolls pane A's displayed
+/// tab's scroll state alone (design D7 — the routing picks the pane
+/// by the drawn rects).
+#[test]
+fn a_wheel_over_pane_a_scrolls_pane_as_tab_only() {
+    let mut state = split_strip_click_state();
+    state.activity.scroll = ScrollState {
+        offset: 0,
+        total_lines: 30,
+        visible_height: 10,
+    };
+    state.tasks.scroll = ScrollState {
+        offset: 0,
+        total_lines: 30,
+        visible_height: 10,
+    };
+    let tabs = state
+        .layout
+        .strip
+        .and_then(|strip| strip.tabs)
+        .expect("pane A's tab panel is drawn");
+
+    state.handle_mouse_scroll(
+        tabs.y + 1,
+        tabs.x + 1,
+        8,
+        state.layout.bottom_panel_height,
+        3,
+    );
+
+    assert_eq!(state.activity.scroll.offset, 3);
+    assert_eq!(
+        state.tasks.scroll.offset, 0,
+        "pane A's wheel must not touch pane B's tab"
+    );
+    assert_eq!(state.scrolls.panes.offset, 0);
+}
+
+/// The wheel over pane B's drawn panel scrolls pane B's displayed
+/// tab's scroll state alone: pane A's offsets and the agents list stay
+/// put.
+#[test]
+fn a_wheel_over_pane_b_scrolls_pane_bs_tab_only() {
+    let mut state = split_strip_click_state();
+    state.tasks.scroll = ScrollState {
+        offset: 0,
+        total_lines: 30,
+        visible_height: 10,
+    };
+    state.activity.scroll = ScrollState {
+        offset: 0,
+        total_lines: 30,
+        visible_height: 10,
+    };
+    let tabs_b = state
+        .layout
+        .strip
+        .and_then(|strip| strip.tabs_b)
+        .expect("pane B's tab panel is drawn");
+
+    state.handle_mouse_scroll(
+        tabs_b.y + 1,
+        tabs_b.x + 1,
+        8,
+        state.layout.bottom_panel_height,
+        3,
+    );
+
+    assert_eq!(state.tasks.scroll.offset, 3);
+    assert_eq!(
+        state.activity.scroll.offset, 0,
+        "pane B's wheel must not touch pane A's tab"
+    );
+    assert_eq!(state.scrolls.panes.offset, 0);
 }
 
 #[test]
