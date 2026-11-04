@@ -17,11 +17,11 @@
 
 ## 4. Creation starts at the shared height
 
-- [ ] 4.1 In the strip branch of `cmd_toggle` (`src/cli/toggle.rs`), read the lock flag and `@sidebar_docked_height` once at creation and start the pane at the shared rows when the lock is on with a shared value present; unlocked, `resolve_height_arg` keeps governing. Verify with the column creation test mirrored (`shared_creation_height` pure function: lock off → `None`, lock on without a value → `None`, lock on with a value → the rows), plus a `split-window`/`resize-pane` argv assertion for the strip path.
+- [x] 4.1 In the strip branch of `cmd_toggle` (`src/cli/toggle.rs`), read the lock flag and `@sidebar_docked_height` once at creation and start the pane at the shared rows when the lock is on with a shared value present; unlocked, `resolve_height_arg` keeps governing. Verify with the column creation test mirrored (`shared_creation_height` pure function: lock off → `None`, lock on without a value → `None`, lock on with a value → the rows), plus a `split-window`/`resize-pane` argv assertion for the strip path.
 
 ## 5. Pop-in adopts the shared height
 
-- [ ] 5.1 In the strip dock path of `state/popout.rs`, target `@sidebar_docked_height` while the lock is on and arm `pending_adopt_observation` for the landing, leaving the unlocked capture-restore unchanged. Verify with the strip pop-in tests: locked pop-in docks at the shared height and arms the suppressor, unlocked pop-in restores the captured height.
+- [x] 5.1 In the strip dock path of `state/popout.rs`, target `@sidebar_docked_height` while the lock is on and arm `pending_adopt_observation` for the landing, leaving the unlocked capture-restore unchanged. Verify with the strip pop-in tests: locked pop-in docks at the shared height and arms the suppressor, unlocked pop-in restores the captured height.
 
 ## 6. Documentation and integration gates
 
