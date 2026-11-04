@@ -9,9 +9,10 @@ pub enum Focus {
     /// The tab section on a one-pane strip (or a column's bottom
     /// panel); pane A's section in a split strip.
     ActivityLog,
-    /// Pane B's section in a split strip. The column and the one-pane
-    /// strip never reach it; the strip key map moves the focus here
-    /// in a later step of this change.
+    /// Pane B's section in a split strip. The strip key map steps to
+    /// it from pane A and demotes it back to `ActivityLog` when the
+    /// drawn strip has no pane B; the column and the one-pane strip
+    /// never reach it.
     TabPaneB,
 }
 

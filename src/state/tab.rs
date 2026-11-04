@@ -203,6 +203,15 @@ impl AppState {
         }
     }
 
+    /// Whether the drawn strip is a split one: pane B's panel has
+    /// columns the last frame published. A one-pane strip — or a
+    /// column, where no strip is drawn at all — reports false.
+    pub fn split_strip_drawn(&self) -> bool {
+        self.layout
+            .strip
+            .is_some_and(|strip| strip.tabs_b.is_some())
+    }
+
     /// Whether the background git poller should run. In a split strip
     /// the flag follows the tab pane A displays (design D8) — pane B's
     /// selection never moves it; in a one-pane strip or a column it is
@@ -210,11 +219,7 @@ impl AppState {
     /// one, so the flag reads the geometry the last frame published —
     /// the same rects the click and scroll routers hit-test.
     pub fn git_poll_active(&self) -> bool {
-        if self
-            .layout
-            .strip
-            .is_some_and(|strip| strip.tabs_b.is_some())
-        {
+        if self.split_strip_drawn() {
             self.displayed_split_tab(SplitPane::A).is_git_status()
         } else {
             self.displayed_bottom_tab().is_git_status()
