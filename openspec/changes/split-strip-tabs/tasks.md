@@ -10,8 +10,8 @@
 
 ## 2. Split geometry
 
-- [ ] 2.1 Extend `StripLayout` with `divider_b`, `tabs_b` and `tab_bar_b` (`None` in a one-pane strip) and add the pure `split_strip_layout(width, height, agents_cols, b_cols)` per design D4/D5; verify with unit tests for the spec scenarios: 400 columns at the defaults (columns 4-135, 136, 137-267, 268, 269-399), agents at 95 percent (356/20/20), and a 60-column strip with threshold 50 (no pane B).
-- [ ] 2.2 Add the selector that picks the split or one-pane geometry from the strip width, the threshold and the minimums; verify with unit tests for 381 and 250 columns at the default threshold, threshold 0 at 381 columns, and that the one-pane result equals `strip_layout` exactly.
+- [x] 2.1 Extend `StripLayout` with `divider_b`, `tabs_b` and `tab_bar_b` (`None` in a one-pane strip) and add the pure `split_strip_layout(width, height, agents_cols, b_cols)` per design D4/D5; verify with unit tests for the spec scenarios: 400 columns at the defaults (columns 4-135, 136, 137-267, 268, 269-399), agents at 95 percent (356/20/20), and a 60-column strip with threshold 50 (no pane B).
+- [x] 2.2 Add the selector that picks the split or one-pane geometry from the strip width, the threshold and the minimums; verify with unit tests for 381 and 250 columns at the default threshold, threshold 0 at 381 columns, and that the one-pane result equals `strip_layout` exactly.
 
 ## 3. Tab groups
 
