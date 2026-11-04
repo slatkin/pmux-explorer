@@ -138,7 +138,8 @@ In a split strip, the top row of pane A with divider 1 SHALL be pane A's
 tab bar, and the top row of pane B with divider 2 SHALL be pane B's tab
 bar. Each bar SHALL be the band the one-pane strip's tab bar draws, with
 the pane's shown tab glyphs right-aligned and its displayed tab in the
-accent colour. Only pane A's bar SHALL carry the focused pane's id and
+accent colour. Pane A's bar SHALL draw Tools then Git, and pane B's
+bar SHALL draw Tasks then Thought. Only pane A's bar SHALL carry the focused pane's id and
 name; pane B's bar SHALL draw no label.
 
 #### Scenario: the bars for a pi pane
@@ -169,6 +170,11 @@ minimum widths.
 - **WHEN** a split strip is 400 columns wide with the default widths
 - **AND** the user drags divider 2 to column 140
 - **THEN** divider 2 stops so that pane A with divider 1 keeps 20 columns
+
+#### Scenario: a divider 1 drag stops at pane A's minimum
+- **WHEN** a split strip is 400 columns wide with the default widths
+- **AND** the user drags divider 1 to column 350
+- **THEN** divider 1 stops at column 248, so the agent panel takes 244 columns, pane A with divider 1 keeps 20 columns, and pane B does not change
 
 ### Requirement: a divider drag saves its width on release
 

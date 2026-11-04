@@ -85,13 +85,21 @@ Geometry: `available = width - 4`; `agents = round(width * a%)` clamped to
 split shows only when `width >= threshold` (threshold > 0) and
 `available >= 60`; otherwise the one-pane path runs unchanged.
 
+This clamp order applies to stored percents. A divider 1 drag uses a
+tighter bound: the live agent columns are clamped to
+`[20, available - b - 20]` with `b` the pane B columns at the press, so
+divider 1 stops when pane A with divider 1 reaches 20 columns and never
+changes pane B. A divider 2 drag clamps pane B to
+`[20, available - agents - 20]`, so it never changes the agent panel.
+
 ### D5. Geometry: extend `StripLayout` with optional pane B fields
 
 `StripLayout` gains `divider_b`, `tabs_b` and `tab_bar_b` (all `None` in a
 one-pane strip). The existing `divider`, `tabs` and `tab_bar` mean pane A
 in a split strip. A new `split_strip_layout(width, height, agents_cols,
 b_cols)` builds the split variant; a drag calls it with the drag's live
-columns, as `strip_layout_for_tab_cols` does today.
+columns, as `strip_layout_for_tab_cols` does today, after the drag
+clamp of D4.
 
 ### D6. The drag names its divider
 
