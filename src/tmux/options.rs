@@ -202,6 +202,29 @@ pub const SIDEBAR_BOTTOM_HEIGHT: &str = "@sidebar_bottom_height";
 /// drag never writes [`SIDEBAR_BOTTOM_HEIGHT`], so a column and a
 /// strip on the same server keep their own split.
 pub const SIDEBAR_TAB_WIDTH: &str = "@sidebar_tab_width";
+/// Strip width in columns at or above which a strip shows the split
+/// layout (the `split-strip` capability), shared server-wide like the
+/// other configuration options. Unset, empty or not a whole number
+/// reads as [`crate::ui::DEFAULT_TAB_SPLIT_WIDTH`]; `0` turns the split
+/// layout off. A column never shows the split layout.
+pub const SIDEBAR_TAB_SPLIT_WIDTH: &str = "@sidebar_tab_split_width";
+/// Pane A's tab in a split strip (`activity` / `git`), shared
+/// server-wide. Unset, empty or a value from outside pane A's group
+/// selects `activity`.
+pub const SIDEBAR_SPLIT_TAB_A: &str = "@sidebar_split_tab_a";
+/// Pane B's tab in a split strip (`tasks` / `thought`), shared
+/// server-wide. Unset, empty or a value from outside pane B's group
+/// selects `tasks`.
+pub const SIDEBAR_SPLIT_TAB_B: &str = "@sidebar_split_tab_b";
+/// Agent panel width in a split strip, as a percent of the strip
+/// width, shared server-wide. Unset, empty or a value outside 1-100
+/// reads as [`crate::ui::DEFAULT_SPLIT_PERCENT`].
+pub const SIDEBAR_SPLIT_AGENTS_WIDTH: &str = "@sidebar_split_agents_width";
+/// Pane B's width with divider 2 in a split strip, as a percent of the
+/// strip width, shared server-wide. Same parse rules as
+/// [`SIDEBAR_SPLIT_AGENTS_WIDTH`]; pane A with divider 1 takes the
+/// columns that are left.
+pub const SIDEBAR_SPLIT_TAB_B_WIDTH: &str = "@sidebar_split_tab_b_width";
 pub const SIDEBAR_PET: &str = "@sidebar_pet";
 pub const SIDEBAR_NOTIFICATIONS: &str = "@sidebar_notifications";
 pub const SIDEBAR_NOTIFICATIONS_EVENTS: &str = "@sidebar_notifications_events";
