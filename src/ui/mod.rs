@@ -295,6 +295,10 @@ fn draw_strip(frame: &mut Frame, state: &mut AppState, area: Rect) {
         ),
     };
     state.layout.strip = Some(strip);
+    // A strip that narrowed below the split threshold drew no pane B,
+    // so a stranded pane B focus demotes to the one tab panel on the
+    // frame path (design D7) — before the fill below reads the focus.
+    state.demote_tab_pane_b();
     // The strip has no bottom panel and no horizontal filter row:
     // clear the column geometry a previous frame may have left, so a
     // column-shaped hit test can never fire on strip-drawn state.

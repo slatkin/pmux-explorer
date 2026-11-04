@@ -2732,3 +2732,27 @@ fn snapshot_split_strip_with_claude_focus_ui() {
     ⇅ ⤢                                  ▎                             ▎
     ");
 }
+
+#[test]
+fn snapshot_narrow_strip_demotes_a_pane_b_focus_on_the_frame() {
+    // Design D7: the strip narrowed below the split threshold and drew
+    // no pane B, so the frame demotes a stranded pane B focus to the
+    // one tab panel before the fill reads it — the demotion is not
+    // left to the first key press.
+    let mut state = make_split_strip_state(AgentType::Pi, PaneStatus::Idle);
+    state.focus_state.focus = Focus::TabPaneB;
+    let output = render_to_string(&mut state, 40, 8);
+    insta::assert_snapshot!(output, @"
+    󱓯 1 ⓘ                                — ▾
+     0 project
+    󰥔 0 ┃ 󰒲 
+    󰒲 1     Waiting for prompt…
+     0
+    ⇅ ⤢
+    ");
+    assert_eq!(
+        state.focus_state.focus,
+        Focus::ActivityLog,
+        "the frame must demote a pane B focus it cannot draw"
+    );
+}

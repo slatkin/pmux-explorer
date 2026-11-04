@@ -248,12 +248,10 @@ fn handle_filter_keys(state: &mut AppState, code: KeyCode) -> bool {
 /// column meaning.
 fn handle_strip_main_key(key: KeyEvent, state: &mut AppState, git_tab_active: &AtomicBool) {
     // A one-pane strip never keeps the focus on pane B: the drawn
-    // layout is the truth at key time, so a strip that narrowed below
-    // the split threshold demotes the focus to pane A before the key
-    // acts, and the key then reads pane A's map.
-    if state.focus_state.focus == Focus::TabPaneB && !state.split_strip_drawn() {
-        state.focus_state.focus = Focus::ActivityLog;
-    }
+    // layout is the truth at key time, so the demotion shared with
+    // `draw_strip` moves the focus to pane A before the key acts, and
+    // the key then reads pane A's map.
+    state.demote_tab_pane_b();
     let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
     // The keys the two layouts share come first: the pop-out and
     // side-switch prefixes (tmux forwards them with both modifiers),

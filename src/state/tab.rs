@@ -1,4 +1,4 @@
-use super::{AppState, BottomTab};
+use super::{AppState, BottomTab, Focus};
 use crate::tmux::AgentType;
 
 /// The two tab panes of a split strip. Pane A carries the Tools group
@@ -210,6 +210,19 @@ impl AppState {
         self.layout
             .strip
             .is_some_and(|strip| strip.tabs_b.is_some())
+    }
+
+    /// Demote a `TabPaneB` focus the drawn strip cannot serve: when
+    /// the frame drew no pane B (the strip narrowed below the split
+    /// threshold), the one tab panel takes the focus back (design D7).
+    /// `draw_strip` calls this right after it records the drawn strip,
+    /// before the fill reads the focus, and the strip key map's
+    /// key-time guard calls the same method, so both paths share one
+    /// decision.
+    pub fn demote_tab_pane_b(&mut self) {
+        if self.focus_state.focus == Focus::TabPaneB && !self.split_strip_drawn() {
+            self.focus_state.focus = Focus::ActivityLog;
+        }
     }
 
     /// Whether the background git poller should run. In a split strip
