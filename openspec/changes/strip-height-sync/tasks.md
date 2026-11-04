@@ -26,7 +26,7 @@
 ## 6. Documentation and integration gates
 
 - [x] 6.1 Update `docs/state-management.md`: the `@sidebar_docked_height` option row, the widened meaning of the lock flag, the clear of the other axis on enable and the absent-key-adopts-`None` rule, the strip lock control, and the strip-side guard in the per-feature table. Verify the documented option name and default match the code.
-- [ ] 6.2 Run `cargo fmt`, `cargo clippy`, and `cargo test`; then live-check with two strip windows: enable the lock in one with the strip lock glyph, resize it, and confirm the other window's strip converges within a refresh tick and survives a toggle off/on.
+- [x] 6.2 Run `cargo fmt`, `cargo clippy`, and `cargo test`; then live-check with two strip windows: enable the lock in one with the strip lock glyph, resize it, and confirm the other window's strip converges within a refresh tick and survives a toggle off/on.
 
 ## Workflow follow-up
 
