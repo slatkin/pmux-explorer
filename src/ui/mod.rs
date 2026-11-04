@@ -16,7 +16,7 @@ use ratatui::{
 };
 
 use crate::state::{
-    AppState, Focus, LayoutKind, clamp_bottom_height, split_rows, strip_layout,
+    AppState, BottomTab, Focus, LayoutKind, clamp_bottom_height, split_rows, strip_layout,
     strip_layout_for_tab_cols,
 };
 use crate::tmux;
@@ -62,6 +62,76 @@ pub fn tab_percent_from_options(opts: &HashMap<String, String>) -> u8 {
         .and_then(|s| s.parse::<u8>().ok())
         .filter(|p| *p <= 100)
         .unwrap_or(DEFAULT_TAB_PERCENT)
+}
+
+/// The strip width (in columns) at or above which a strip shows the
+/// split layout, used when `@sidebar_tab_split_width` is unset, empty,
+/// or not a whole number. `0` is a valid read: it turns the split
+/// layout off at the geometry selector.
+pub const DEFAULT_TAB_SPLIT_WIDTH: u16 = 300;
+
+/// The split-panel width percent used when `@sidebar_split_agents_width`
+/// or `@sidebar_split_tab_b_width` is unset, empty, or not a number
+/// from 1 to 100. Unlike the bottom height a `0` is not a valid
+/// "hide" value here — the split minimums need a percent from 1 to 100.
+pub const DEFAULT_SPLIT_PERCENT: u8 = 33;
+
+/// Read `@sidebar_tab_split_width` as the strip width (in columns) at
+/// or above which a strip shows the split layout, falling back to
+/// [`DEFAULT_TAB_SPLIT_WIDTH`]. A whole number is the threshold — an
+/// unset option, an empty value, or anything that is not a whole
+/// number gives the default; `0` reads as 0 and turns the split layout
+/// off.
+pub fn tab_split_width_from_options(opts: &HashMap<String, String>) -> u16 {
+    opts.get(tmux::SIDEBAR_TAB_SPLIT_WIDTH)
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .and_then(|s| s.parse::<u16>().ok())
+        .unwrap_or(DEFAULT_TAB_SPLIT_WIDTH)
+}
+
+/// Read `@sidebar_split_tab_a` as pane A's tab. Only `git` selects
+/// Git; an unset option, an empty value, or a value from outside pane
+/// A's group (`tasks`, `thought`) selects the `activity` default.
+pub fn split_tab_a_from_options(opts: &HashMap<String, String>) -> BottomTab {
+    match opts.get(tmux::SIDEBAR_SPLIT_TAB_A).map(String::as_str) {
+        Some("git") => BottomTab::GitStatus,
+        _ => BottomTab::Activity,
+    }
+}
+
+/// Read `@sidebar_split_tab_b` as pane B's tab. Only `thought` selects
+/// Thought; an unset option, an empty value, or a value from outside
+/// pane B's group (`activity`, `git`) selects the `tasks` default.
+pub fn split_tab_b_from_options(opts: &HashMap<String, String>) -> BottomTab {
+    match opts.get(tmux::SIDEBAR_SPLIT_TAB_B).map(String::as_str) {
+        Some("thought") => BottomTab::Thought,
+        _ => BottomTab::Tasks,
+    }
+}
+
+fn split_percent_from(raw: Option<&String>) -> u8 {
+    raw.map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .and_then(|s| s.parse::<u8>().ok())
+        .filter(|p| (1..=100).contains(p))
+        .unwrap_or(DEFAULT_SPLIT_PERCENT)
+}
+
+/// Read `@sidebar_split_agents_width` as the agent panel's width in a
+/// split strip, as a percent of the strip width, falling back to
+/// [`DEFAULT_SPLIT_PERCENT`]. A number from 1 to 100 is the percent —
+/// an unset option, an empty value, or anything outside that range
+/// gives the default.
+pub fn split_agents_percent_from_options(opts: &HashMap<String, String>) -> u8 {
+    split_percent_from(opts.get(tmux::SIDEBAR_SPLIT_AGENTS_WIDTH))
+}
+
+/// Read `@sidebar_split_tab_b_width` as pane B's width with divider 2
+/// in a split strip, as a percent of the strip width, under the same
+/// parse rules as [`split_agents_percent_from_options`].
+pub fn split_tab_b_percent_from_options(opts: &HashMap<String, String>) -> u8 {
+    split_percent_from(opts.get(tmux::SIDEBAR_SPLIT_TAB_B_WIDTH))
 }
 
 /// Read `@sidebar_pet` from tmux global options, defaulting to `false` (off).
@@ -399,6 +469,123 @@ mod tests {
     fn bottom_percent_falls_back_on_empty_value() {
         let opts = opts_with(tmux::SIDEBAR_BOTTOM_HEIGHT, "");
         assert_eq!(bottom_percent_from_options(&opts), DEFAULT_BOTTOM_PERCENT);
+    }
+
+    #[test]
+    fn tab_split_width_parses_valid_values_and_defaults_otherwise() {
+        for (value, expected) in [("381", 381), ("0", 0), ("100", 100)] {
+            let opts = opts_with(tmux::SIDEBAR_TAB_SPLIT_WIDTH, value);
+            assert_eq!(
+                tab_split_width_from_options(&opts),
+                expected,
+                "expected {value} to parse as {expected}"
+            );
+        }
+        // An unset, empty or not-a-whole-number value gives the
+        // default; 0 is the one non-default read because it turns the
+        // split layout off.
+        for value in [
+            None,
+            Some(""),
+            Some("abc"),
+            Some("12.5"),
+            Some("-1"),
+            Some("70000"),
+        ] {
+            let opts = value
+                .map(|v| opts_with(tmux::SIDEBAR_TAB_SPLIT_WIDTH, v))
+                .unwrap_or_default();
+            assert_eq!(
+                tab_split_width_from_options(&opts),
+                DEFAULT_TAB_SPLIT_WIDTH,
+                "expected {value:?} to fall back to the default"
+            );
+        }
+    }
+
+    #[test]
+    fn split_tab_a_parses_its_group_and_defaults_otherwise() {
+        for (value, expected) in [
+            ("activity", BottomTab::Activity),
+            ("git", BottomTab::GitStatus),
+        ] {
+            let opts = opts_with(tmux::SIDEBAR_SPLIT_TAB_A, value);
+            assert_eq!(
+                split_tab_a_from_options(&opts),
+                expected,
+                "expected {value} to select {expected:?}"
+            );
+        }
+        // A value from the other group, an empty value and an unset
+        // option select the activity default.
+        for value in [None, Some(""), Some("tasks"), Some("thought")] {
+            let opts = value
+                .map(|v| opts_with(tmux::SIDEBAR_SPLIT_TAB_A, v))
+                .unwrap_or_default();
+            assert_eq!(
+                split_tab_a_from_options(&opts),
+                BottomTab::Activity,
+                "expected {value:?} to fall back to activity"
+            );
+        }
+    }
+
+    #[test]
+    fn split_tab_b_parses_its_group_and_defaults_otherwise() {
+        for (value, expected) in [("tasks", BottomTab::Tasks), ("thought", BottomTab::Thought)] {
+            let opts = opts_with(tmux::SIDEBAR_SPLIT_TAB_B, value);
+            assert_eq!(
+                split_tab_b_from_options(&opts),
+                expected,
+                "expected {value} to select {expected:?}"
+            );
+        }
+        // A value from the other group, an empty value and an unset
+        // option select the tasks default.
+        for value in [None, Some(""), Some("activity"), Some("git")] {
+            let opts = value
+                .map(|v| opts_with(tmux::SIDEBAR_SPLIT_TAB_B, v))
+                .unwrap_or_default();
+            assert_eq!(
+                split_tab_b_from_options(&opts),
+                BottomTab::Tasks,
+                "expected {value:?} to fall back to tasks"
+            );
+        }
+    }
+
+    #[test]
+    fn split_percents_parse_valid_values_and_default_outside_1_to_100() {
+        type PercentRead = fn(&HashMap<String, String>) -> u8;
+        let reads: [(&str, PercentRead); 2] = [
+            (
+                tmux::SIDEBAR_SPLIT_AGENTS_WIDTH,
+                split_agents_percent_from_options,
+            ),
+            (
+                tmux::SIDEBAR_SPLIT_TAB_B_WIDTH,
+                split_tab_b_percent_from_options,
+            ),
+        ];
+        for (key, read) in reads {
+            for (value, expected) in [("1", 1), ("33", 33), ("100", 100)] {
+                assert_eq!(
+                    read(&opts_with(key, value)),
+                    expected,
+                    "expected {value} to parse as {expected}"
+                );
+            }
+            // 0 is not a valid "hide" value here — anything outside
+            // 1-100, empty or unset falls back to the default.
+            for value in [None, Some(""), Some("0"), Some("101"), Some("abc")] {
+                let opts = value.map(|v| opts_with(key, v)).unwrap_or_default();
+                assert_eq!(
+                    read(&opts),
+                    DEFAULT_SPLIT_PERCENT,
+                    "expected {value:?} to fall back to the default"
+                );
+            }
+        }
     }
 
     #[test]
