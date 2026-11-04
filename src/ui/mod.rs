@@ -375,6 +375,65 @@ mod tests {
     }
 
     #[test]
+    fn the_conf_seeds_the_same_tab_split_width_the_binary_falls_back_to() {
+        // One number, two homes: the conf seeds `@sidebar_tab_split_width`
+        // for tmux-side visibility and [`DEFAULT_TAB_SPLIT_WIDTH`] is the
+        // fallback when the option is unset or invalid. A test pins
+        // them together so a change that updates one copy and not the
+        // other fails here instead of drifting in a user's session.
+        let conf = include_str!("../../pmux-explorer.conf");
+        let seeded = conf
+            .lines()
+            .find_map(|line| line.split_once("set -g @sidebar_tab_split_width "))
+            .and_then(|(_, rest)| rest.trim().trim_matches('\'').parse::<u16>().ok());
+        assert_eq!(
+            seeded,
+            Some(DEFAULT_TAB_SPLIT_WIDTH),
+            "the conf's seeded tab split width must match DEFAULT_TAB_SPLIT_WIDTH"
+        );
+    }
+
+    #[test]
+    fn the_conf_seeds_the_same_split_agents_percent_the_binary_falls_back_to() {
+        // One number, two homes: the conf seeds
+        // `@sidebar_split_agents_width` for tmux-side visibility and
+        // [`DEFAULT_SPLIT_PERCENT`] is the fallback when the option is
+        // unset or invalid. A test pins them together so a change that
+        // updates one copy and not the other fails here instead of
+        // drifting in a user's session.
+        let conf = include_str!("../../pmux-explorer.conf");
+        let seeded = conf
+            .lines()
+            .find_map(|line| line.split_once("set -g @sidebar_split_agents_width "))
+            .and_then(|(_, rest)| rest.trim().trim_matches('\'').parse::<u8>().ok());
+        assert_eq!(
+            seeded,
+            Some(DEFAULT_SPLIT_PERCENT),
+            "the conf's seeded split agents width must match DEFAULT_SPLIT_PERCENT"
+        );
+    }
+
+    #[test]
+    fn the_conf_seeds_the_same_split_tab_b_percent_the_binary_falls_back_to() {
+        // One number, two homes: the conf seeds
+        // `@sidebar_split_tab_b_width` for tmux-side visibility and
+        // [`DEFAULT_SPLIT_PERCENT`] is the fallback when the option is
+        // unset or invalid. A test pins them together so a change that
+        // updates one copy and not the other fails here instead of
+        // drifting in a user's session.
+        let conf = include_str!("../../pmux-explorer.conf");
+        let seeded = conf
+            .lines()
+            .find_map(|line| line.split_once("set -g @sidebar_split_tab_b_width "))
+            .and_then(|(_, rest)| rest.trim().trim_matches('\'').parse::<u8>().ok());
+        assert_eq!(
+            seeded,
+            Some(DEFAULT_SPLIT_PERCENT),
+            "the conf's seeded split tab B width must match DEFAULT_SPLIT_PERCENT"
+        );
+    }
+
+    #[test]
     fn the_conf_seeds_the_same_pet_default_the_binary_falls_back_to() {
         // One switch, two homes: the conf seeds `@sidebar_pet` for
         // tmux-side visibility and the binary falls back to `off`
