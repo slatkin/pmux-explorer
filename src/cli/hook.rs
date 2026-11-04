@@ -1,7 +1,7 @@
 use crate::event::{AgentEvent, Reported, resolve_adapter};
 use crate::pane_state::transition;
 use crate::pane_store::PaneStore;
-use crate::tmux;
+use crate::tmux::{self, CLAUDE_AGENT};
 
 use super::{read_stdin_json, tmux_pane};
 
@@ -26,6 +26,13 @@ pub(crate) fn cmd_hook(args: &[String]) -> i32 {
         return 0;
     };
 
+    // Claude Code processes that pi started in its own pane (for example
+    // the claude-bridge provider) inherit pi's TMUX_PANE and would clobber
+    // the pi pane state that pi's own producer already reports.
+    if ignored_under_pi(agent_name, std::env::var("PI_CODING_AGENT").ok().as_deref()) {
+        return 0;
+    }
+
     let pane = tmux_pane();
     if pane.is_empty() {
         return 0;
@@ -41,6 +48,15 @@ pub(crate) fn cmd_hook(args: &[String]) -> i32 {
     // every option write and read the event causes goes through it.
     let store = tmux::pane_store::TmuxPaneStore;
     handle_event(&pane, agent_name, &store, event, reported)
+}
+
+// ─── pi's Claude Code children ─────────────────────────────────────────────
+
+/// True for a `claude` event whose environment carries a present, non-empty
+/// `PI_CODING_AGENT`: the event comes from a Claude Code process that pi
+/// started in its own pane, and pi's own producer already reports that pane.
+fn ignored_under_pi(agent_name: &str, pi_coding_agent: Option<&str>) -> bool {
+    agent_name == CLAUDE_AGENT && pi_coding_agent.is_some_and(|v| !v.is_empty())
 }
 
 // ─── event handler ──────────────────────────────────────────────────────────
@@ -156,5 +172,38 @@ fn handle_event(
         } => handlers::on_teammate_idle(pane, teammate_name, idle_reason, store),
         AgentEvent::WorktreeCreate => 0,
         AgentEvent::WorktreeRemove { .. } => handlers::on_worktree_remove(pane, store),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ignored_under_pi_claude_with_true() {
+        assert!(ignored_under_pi("claude", Some("true")));
+    }
+
+    #[test]
+    fn ignored_under_pi_claude_with_any_other_non_empty_value() {
+        assert!(ignored_under_pi("claude", Some("1")));
+        assert!(ignored_under_pi("claude", Some("yes")));
+    }
+
+    #[test]
+    fn ignored_under_pi_claude_with_empty_value_is_processed() {
+        assert!(!ignored_under_pi("claude", Some("")));
+    }
+
+    #[test]
+    fn ignored_under_pi_claude_with_absent_value_is_processed() {
+        assert!(!ignored_under_pi("claude", None));
+    }
+
+    #[test]
+    fn ignored_under_pi_other_agents_are_processed() {
+        assert!(!ignored_under_pi("pi", Some("true")));
+        assert!(!ignored_under_pi("codex", Some("true")));
+        assert!(!ignored_under_pi("opencode", Some("true")));
     }
 }
