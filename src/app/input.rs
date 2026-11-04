@@ -421,9 +421,19 @@ fn esc_returns_focus_to_panes(state: &mut AppState) {
 }
 
 /// BackTab advances the bottom panel's tab cycle and keeps the git
-/// poller flag in step with the Git tab.
+/// poller flag in step with the Git tab. In a split strip the cycle
+/// steps the focused tab pane's group — pane A's when no tab pane has
+/// focus — while a one-pane strip or a column keeps the shared cycle.
 fn handle_back_tab(state: &mut AppState, git_tab_active: &AtomicBool) {
-    state.next_bottom_tab();
+    if state.split_strip_drawn() {
+        let pane = match state.focus_state.focus {
+            Focus::TabPaneB => SplitPane::B,
+            _ => SplitPane::A,
+        };
+        state.next_split_tab(pane);
+    } else {
+        state.next_bottom_tab();
+    }
     git_tab_active.store(state.git_poll_active(), Ordering::Relaxed);
 }
 
@@ -1055,6 +1065,39 @@ mod tests {
         state
     }
 
+    /// Point the focused pane at a running pi pane, so pane B's shown
+    /// tab group gains Thought.
+    fn focus_a_pi_pane(state: &mut AppState) {
+        let pane = crate::tmux::PaneInfo {
+            pane_id: "%1".into(),
+            pane_active: false,
+            status: crate::tmux::PaneStatus::Idle,
+            attention: false,
+            agent: crate::tmux::AgentType::Pi,
+            path: "/tmp".into(),
+            current_command: String::new(),
+            prompt: String::new(),
+            prompt_is_response: false,
+            started_at: None,
+            wait_reason: String::new(),
+            permission_mode: crate::tmux::PermissionMode::Default,
+            subagents: Vec::new(),
+            pane_pid: None,
+            worktree: crate::tmux::WorktreeMetadata::default(),
+            session_id: None,
+            sidebar_spawned: false,
+            pane_name: None,
+            bg_shell_cmd: None,
+            subagent: None,
+        };
+        state.repo_groups = vec![RepoGroup {
+            name: "project".into(),
+            has_focus: false,
+            panes: vec![(pane, crate::group::PaneGitInfo::default())],
+        }];
+        state.focus_state.focused_pane_id = Some("%1".into());
+    }
+
     #[test]
     fn strip_right_from_pane_a_steps_to_pane_b() {
         let mut state = split_strip_state();
@@ -1189,6 +1232,76 @@ mod tests {
 
         handle_key_event(key(KeyCode::Right), &mut state, &flag);
         assert_eq!(state.focus_state.focus, Focus::ActivityLog);
+    }
+
+    #[test]
+    fn strip_backtab_cycles_pane_bs_group_in_pane_b() {
+        // Spec: the focused pane runs pi, pane B has focus and shows
+        // Tasks — the cycle key shows Thought and leaves pane A and
+        // the shared tab alone.
+        let mut state = split_strip_state();
+        focus_a_pi_pane(&mut state);
+        state.focus_state.focus = Focus::TabPaneB;
+        state.global.split_tab_b = BottomTab::Tasks;
+        state.global.split_tab_a = BottomTab::Activity;
+        let before_a = state.global.split_tab_a;
+        let before_shared = state.global.bottom_tab;
+        let flag = AtomicBool::new(false);
+
+        handle_key_event(key(KeyCode::BackTab), &mut state, &flag);
+
+        assert_eq!(state.global.split_tab_b, BottomTab::Thought);
+        assert_eq!(
+            state.global.split_tab_a, before_a,
+            "pane B's cycle must not touch pane A"
+        );
+        assert_eq!(
+            state.global.bottom_tab, before_shared,
+            "pane B's cycle must not touch the shared tab"
+        );
+    }
+
+    #[test]
+    fn strip_backtab_cycles_pane_as_group_when_no_tab_pane_has_focus() {
+        let mut state = split_strip_state();
+        state.focus_state.focus = Focus::Panes;
+        state.global.split_tab_a = BottomTab::Activity;
+        let before_b = state.global.split_tab_b;
+        let flag = AtomicBool::new(false);
+
+        handle_key_event(key(KeyCode::BackTab), &mut state, &flag);
+        assert_eq!(state.global.split_tab_a, BottomTab::GitStatus);
+        assert_eq!(
+            state.global.split_tab_b, before_b,
+            "pane A's cycle must not touch pane B"
+        );
+
+        // Pane A's own focus cycles pane A's group too.
+        state.global.split_tab_a = BottomTab::Activity;
+        state.focus_state.focus = Focus::ActivityLog;
+        handle_key_event(key(KeyCode::BackTab), &mut state, &flag);
+        assert_eq!(state.global.split_tab_a, BottomTab::GitStatus);
+    }
+
+    #[test]
+    fn strip_backtab_keeps_the_shared_cycle_in_a_one_pane_strip() {
+        // A one-pane strip has no split groups: BackTab keeps cycling
+        // the shared tab even when the focus was left on pane B — the
+        // demotion runs first and the shared cycle steps.
+        let mut state = one_pane_strip_state();
+        state.focus_state.focus = Focus::TabPaneB;
+        state.global.split_tab_a = BottomTab::Activity;
+        let before_a = state.global.split_tab_a;
+        let flag = AtomicBool::new(false);
+
+        handle_key_event(key(KeyCode::BackTab), &mut state, &flag);
+
+        assert_eq!(state.focus_state.focus, Focus::ActivityLog);
+        assert_eq!(state.global.bottom_tab, BottomTab::Tasks);
+        assert_eq!(
+            state.global.split_tab_a, before_a,
+            "the shared cycle must not touch pane A's tab"
+        );
     }
 
     #[test]
