@@ -369,26 +369,62 @@ mod tests {
 
     #[test]
     fn resolve_git_info_for_real_repo() {
-        // This test runs in the actual repo, so git commands work
-        let info = resolve_pane_git_info(env!("CARGO_MANIFEST_DIR"));
+        // This test runs in the actual repo, so git commands work. The repo
+        // root is the parent of the git common dir: the manifest dir in the
+        // primary checkout, the main checkout's root in a linked worktree.
+        let manifest_dir = env!("CARGO_MANIFEST_DIR");
+        let info = resolve_pane_git_info(manifest_dir);
         assert!(info.repo_root.is_some(), "should detect git repo");
         assert!(info.branch.is_some(), "should detect branch");
-        let root = info.repo_root.unwrap();
-        let root = std::fs::canonicalize(&root).unwrap();
-        let manifest_dir = std::fs::canonicalize(env!("CARGO_MANIFEST_DIR")).unwrap();
-        assert_eq!(root, manifest_dir, "repo root should be manifest dir");
+        let common = crate::git::run_git(manifest_dir, &["rev-parse", "--git-common-dir"])
+            .expect("git common dir");
+        let expected_root = resolve_git_path(manifest_dir, &common)
+            .parent()
+            .unwrap()
+            .to_string_lossy()
+            .to_string();
+        assert_eq!(
+            info.repo_root.unwrap(),
+            expected_root,
+            "repo root should be the parent of the git common dir"
+        );
     }
 
     #[test]
     fn worktree_and_main_share_same_repo_root() {
-        // Both main and worktree should resolve to the same repo_root
-        // We can only test the main worktree here, but verify the logic is consistent
-        let info = resolve_pane_git_info(env!("CARGO_MANIFEST_DIR"));
-        assert!(
-            !info.is_worktree,
-            "main checkout should not be detected as worktree"
-        );
+        // The group key is the main checkout's repo root, so a linked
+        // worktree groups with its main checkout. Tell the two cases apart
+        // by comparing the git dir with the git common dir.
+        let manifest_dir = env!("CARGO_MANIFEST_DIR");
+        let info = resolve_pane_git_info(manifest_dir);
         assert!(info.repo_root.is_some());
+        let git_dir =
+            crate::git::run_git(manifest_dir, &["rev-parse", "--git-dir"]).expect("git dir");
+        let common_dir = crate::git::run_git(manifest_dir, &["rev-parse", "--git-common-dir"])
+            .expect("git common dir");
+        if resolve_git_path(manifest_dir, &git_dir) != resolve_git_path(manifest_dir, &common_dir) {
+            // Linked worktree: the repo root points at the main checkout.
+            let main_root = resolve_git_path(manifest_dir, &common_dir)
+                .parent()
+                .unwrap()
+                .to_string_lossy()
+                .to_string();
+            assert_eq!(
+                info.repo_root.unwrap(),
+                main_root,
+                "worktree repo root should be the main checkout"
+            );
+            assert!(info.is_worktree, "worktree should be detected");
+        } else {
+            // Primary checkout: not a worktree, repo root is the checkout.
+            let root = std::fs::canonicalize(info.repo_root.unwrap()).unwrap();
+            let manifest = std::fs::canonicalize(manifest_dir).unwrap();
+            assert_eq!(root, manifest, "repo root should be the checkout");
+            assert!(
+                !info.is_worktree,
+                "main checkout should not be detected as worktree"
+            );
+        }
     }
 
     // ─── resolve_git_path tests ─────────────────────────────────────
@@ -492,7 +528,14 @@ mod tests {
         let groups = group_panes_by_repo(&sessions);
 
         assert_eq!(groups.len(), 1);
-        let expected_name = std::path::Path::new(manifest_dir)
+        // The display name is the basename of the repo root — the main
+        // checkout for a linked worktree — not of the pane's own path.
+        let common = crate::git::run_git(manifest_dir, &["rev-parse", "--git-common-dir"])
+            .expect("git common dir");
+        let repo_root = resolve_git_path(manifest_dir, &common);
+        let expected_name = repo_root
+            .parent()
+            .unwrap()
             .file_name()
             .unwrap()
             .to_string_lossy();
