@@ -16,7 +16,7 @@ use ratatui::{
 };
 
 use crate::state::{
-    AppState, BottomTab, Focus, LayoutKind, clamp_bottom_height, split_rows, strip_layout,
+    AppState, BottomTab, Focus, LayoutKind, clamp_bottom_height, split_or_strip_layout, split_rows,
     strip_layout_for_tab_cols,
 };
 use crate::tmux;
@@ -260,13 +260,22 @@ fn draw_strip(frame: &mut Frame, state: &mut AppState, area: Rect) {
     // While a strip drag has moved, the frame draws the drag's tab
     // columns — the divider follows the mouse column and no percent
     // value is adopted during the drag; the release path, not a tick,
-    // writes the percent. Before any move the shared percent's
-    // geometry stands.
+    // writes the percent. Before any move the shared settings'
+    // geometry stands: the split or the one-pane path, by the strip
+    // width against `@sidebar_tab_split_width` (design D9 — the
+    // threshold rides the per-tick option read, no latch).
     let strip = match &state.split_drag {
         Some(drag) if drag.axis == LayoutKind::Strip && drag.moved => {
             strip_layout_for_tab_cols(area.width, area.height, drag.size)
         }
-        _ => strip_layout(area.width, area.height, state.global.tab_percent),
+        _ => split_or_strip_layout(
+            area.width,
+            area.height,
+            state.global.tab_split_width,
+            state.global.split_agents_percent,
+            state.global.split_tab_b_percent,
+            state.global.tab_percent,
+        ),
     };
     state.layout.strip = Some(strip);
     // The strip has no bottom panel and no horizontal filter row:
@@ -278,17 +287,27 @@ fn draw_strip(frame: &mut Frame, state: &mut AppState, area: Rect) {
         state.layout.bottom_tab_targets.clear();
     }
 
-    // The two section fills at all times — the keyboard-owning section
-    // gets the active fill, the other the base one: Filter/Panes focus
-    // owns the agent section on the left, ActivityLog focus the tab
-    // section on the right. Ratatui styles patch: later spans keep
-    // their own `bg` (selection rows, popups), and cells nothing draws
-    // on keep the fill.
+    // The section fills at all times — the keyboard-owning section
+    // gets the active fill, the others the base one. A one-pane strip
+    // has two sections (the agent section on the left, the tab section
+    // on the right); a split strip has three (the agent section, pane
+    // A, pane B — `ActivityLog` means pane A there, design D7).
+    // Ratatui styles patch: later spans keep their own `bg`
+    // (selection rows, popups), and cells nothing draws on keep the
+    // fill.
     let theme = &state.theme;
-    let (agent_bg, tab_bg) = if state.focus_state.focus != Focus::ActivityLog {
-        (theme.focus_active_bg, theme.focus_bg)
+    let focus = state.focus_state.focus.clone();
+    let split = strip.tabs_b.is_some();
+    let (agent_bg, pane_a_bg, pane_b_bg) = if split {
+        match focus {
+            Focus::ActivityLog => (theme.focus_bg, theme.focus_active_bg, theme.focus_bg),
+            Focus::TabPaneB => (theme.focus_bg, theme.focus_bg, theme.focus_active_bg),
+            Focus::Filter | Focus::Panes => (theme.focus_active_bg, theme.focus_bg, theme.focus_bg),
+        }
+    } else if focus != Focus::ActivityLog {
+        (theme.focus_active_bg, theme.focus_bg, theme.focus_bg)
     } else {
-        (theme.focus_bg, theme.focus_active_bg)
+        (theme.focus_bg, theme.focus_active_bg, theme.focus_active_bg)
     };
     frame.render_widget(
         Block::default().style(Style::default().bg(agent_bg)),
@@ -299,24 +318,45 @@ fn draw_strip(frame: &mut Frame, state: &mut AppState, area: Rect) {
         strip.agents,
     );
     if let Some(divider) = strip.divider {
-        frame.render_widget(Block::default().style(Style::default().bg(tab_bg)), divider);
+        frame.render_widget(
+            Block::default().style(Style::default().bg(pane_a_bg)),
+            divider,
+        );
     }
     if let Some(tabs) = strip.tabs {
-        frame.render_widget(Block::default().style(Style::default().bg(tab_bg)), tabs);
+        frame.render_widget(Block::default().style(Style::default().bg(pane_a_bg)), tabs);
+    }
+    if let Some(divider_b) = strip.divider_b {
+        frame.render_widget(
+            Block::default().style(Style::default().bg(pane_b_bg)),
+            divider_b,
+        );
+    }
+    if let Some(tabs_b) = strip.tabs_b {
+        frame.render_widget(
+            Block::default().style(Style::default().bg(pane_b_bg)),
+            tabs_b,
+        );
     }
 
     panes::draw_strip_filter_bar(frame, state, strip.filter);
     panes::draw_agents(frame, state, strip.agents, false);
     if let (Some(divider), Some(tab_bar), Some(tabs)) = (strip.divider, strip.tab_bar, strip.tabs) {
-        bottom::draw_strip_divider(frame, state, divider, tab_bar);
-        // The tab bar's row belongs to the bar, not the content.
-        let content = Rect::new(
-            tabs.x,
-            tabs.y + 1,
-            tabs.width,
-            tabs.height.saturating_sub(1),
-        );
-        bottom::draw_bottom_content(frame, state, content, state.displayed_bottom_tab());
+        if strip.tabs_b.is_some() {
+            // The split path: pane A's labelled bar, pane B's
+            // glyph-only bar, each pane's content under its own bar.
+            bottom::draw_split_strip(frame, state, &strip);
+        } else {
+            bottom::draw_strip_divider(frame, state, divider, tab_bar);
+            // The tab bar's row belongs to the bar, not the content.
+            let content = Rect::new(
+                tabs.x,
+                tabs.y + 1,
+                tabs.width,
+                tabs.height.saturating_sub(1),
+            );
+            bottom::draw_bottom_content(frame, state, content, state.displayed_bottom_tab());
+        }
     }
 }
 

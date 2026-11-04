@@ -180,6 +180,13 @@ pub struct GlobalState {
     /// the band's ceiling, adopted unconditionally like `min_width`;
     /// `None` when the option is unset or not numeric.
     pub max_width: Option<u32>,
+    /// Parsed `@sidebar_tab_split_width` as carried on the per-tick
+    /// reading: the strip width at or above which a strip shows the
+    /// split layout, `0` turning the split layout off. Adopted
+    /// unconditionally like `min_width`/`max_width` — no sidebar
+    /// instance ever writes the option (it is configuration, not a
+    /// shared view setting, so it keeps no save latch — design D9).
+    pub tab_split_width: u16,
     /// The status filter's save latch (see `SaveLatch` for the whole
     /// latch rationale; the bottom-tab and bottom-percent latches
     /// below are further instances of the same mechanism).
@@ -252,6 +259,7 @@ impl GlobalState {
             shared_docked_width: None,
             min_width: None,
             max_width: None,
+            tab_split_width: ui::DEFAULT_TAB_SPLIT_WIDTH,
             filter_latch: SaveLatch::new(tmux::SIDEBAR_FILTER, StatusFilter::All),
             tab_latch: SaveLatch::new(tmux::SIDEBAR_BOTTOM_TAB, BottomTab::Activity),
             percent_latch: SaveLatch::new(tmux::SIDEBAR_BOTTOM_HEIGHT, ui::DEFAULT_BOTTOM_PERCENT),
@@ -676,6 +684,14 @@ impl GlobalState {
         // the option falls back to `DEFAULT_MIN_WIDTH` / no ceiling
         // at the readers exactly like the per-tick `get_option` this
         // parse replaced.
+        // The split threshold parses with a default like the percents:
+        // an unset, empty or not-a-whole-number
+        // `@sidebar_tab_split_width` resolves to
+        // `DEFAULT_TAB_SPLIT_WIDTH`, and `0` stays `0` — the split
+        // layout off. Adopted unconditionally: no sidebar instance
+        // ever writes the option (design D9), so there is no local
+        // value to protect.
+        self.tab_split_width = ui::tab_split_width_from_options(opts);
         self.min_width = opts
             .get(tmux::SIDEBAR_MIN_WIDTH)
             .and_then(|s| s.trim().parse::<u32>().ok());

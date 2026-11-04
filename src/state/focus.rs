@@ -6,7 +6,13 @@ pub enum Focus {
     Filter,
     #[default]
     Panes,
+    /// The tab section on a one-pane strip (or a column's bottom
+    /// panel); pane A's section in a split strip.
     ActivityLog,
+    /// Pane B's section in a split strip. The column and the one-pane
+    /// strip never reach it; the strip key map moves the focus here
+    /// in a later step of this change.
+    TabPaneB,
 }
 
 #[derive(Debug, Clone)]

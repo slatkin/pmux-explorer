@@ -428,3 +428,104 @@ fn focus_fill_pet_band_carries_top_fill() {
              No tools yet
     ");
 }
+
+// ─── Split strip: three sections ────────────────────────────────────
+//
+// A 100-column strip with the threshold dropped to 60 shows the split
+// layout at the default 33% widths: the filter bar (columns 0-3), the
+// agent panel (4-36), divider 1 on column 37, pane A (38-66, its bar
+// on row 0 spanning 37-66), divider 2 on column 67 and pane B (68-99,
+// its bar on row 0 spanning 67-99).
+
+/// [`focused_strip_state`] with the split layout on.
+fn focused_split_strip_state() -> AppState {
+    let mut state = focused_strip_state();
+    state.global.tab_split_width = 60;
+    state
+}
+
+#[test]
+fn focus_fill_split_panes_agent_section_active() {
+    let mut state = focused_split_strip_state();
+    // Default focus is Panes: the agent section owns the keyboard.
+    assert_eq!(state.focus_state.focus, Focus::Panes);
+
+    let buf = render_to_buffer(&mut state, 100, 8);
+
+    // The agent section carries the active fill, pane A and pane B
+    // the base one. Each divider column paints only the thin glyph —
+    // no band — so its cells carry the section behind it; the bars'
+    // bands still claim their rows.
+    assert_eq!(buf[(10, 6)].bg, TOP_FILL);
+    assert_eq!(buf[(50, 6)].bg, BASE_FILL);
+    assert_eq!(buf[(80, 6)].bg, BASE_FILL);
+    assert_eq!(buf[(67, 6)].bg, BASE_FILL);
+    assert_eq!(buf[(37, 0)].bg, FILTER_BAR_BG);
+    assert_eq!(buf[(67, 0)].bg, FILTER_BAR_BG);
+
+    insta::assert_snapshot!(render_to_string(&mut state, 100, 8), @"
+    󱓯 1 ⓘ                             — ▾ %1                      │ 󰊢                                
+     0 project                          ▎                             ▎
+    󰥔 0 ┃ 󰒲                             ▎                             ▎
+    󰒲 1     Waiting for prompt…          ▎                             ▎
+     0                                  ▎        No tools yet         ▎        No tasks recorded
+                                         ▎                             ▎
+                                         ▎                             ▎
+    ⇅ ⤢                                  ▎                             ▎
+    ");
+}
+
+#[test]
+fn focus_fill_split_activity_log_pane_a_active() {
+    let mut state = focused_split_strip_state();
+    // ActivityLog is pane A in a split strip (design D7).
+    state.focus_state.focus = Focus::ActivityLog;
+
+    let buf = render_to_buffer(&mut state, 100, 8);
+
+    // Pane A carries the active fill; the agent section and pane B
+    // drop to the base one.
+    assert_eq!(buf[(10, 6)].bg, BASE_FILL);
+    assert_eq!(buf[(50, 6)].bg, TOP_FILL);
+    assert_eq!(buf[(80, 6)].bg, BASE_FILL);
+    assert_eq!(buf[(37, 6)].bg, TOP_FILL);
+
+    insta::assert_snapshot!(render_to_string(&mut state, 100, 8), @"
+    󱓯 1 ⓘ                             — ▾ %1                      │ 󰊢                                
+     0 project                          ▎                             ▎
+    󰥔 0 ┃ 󰒲                             ▎                             ▎
+    󰒲 1     Waiting for prompt…          ▎                             ▎
+     0                                  ▎        No tools yet         ▎        No tasks recorded
+                                         ▎                             ▎
+                                         ▎                             ▎
+    ⇅ ⤢                                  ▎                             ▎
+    ");
+}
+
+#[test]
+fn focus_fill_split_tab_pane_b_active() {
+    let mut state = focused_split_strip_state();
+    state.focus_state.focus = Focus::TabPaneB;
+
+    let buf = render_to_buffer(&mut state, 100, 8);
+
+    // Pane B carries the active fill; the agent section and pane A
+    // drop to the base one — including divider 1, which belongs to
+    // pane A's section.
+    assert_eq!(buf[(10, 6)].bg, BASE_FILL);
+    assert_eq!(buf[(50, 6)].bg, BASE_FILL);
+    assert_eq!(buf[(80, 6)].bg, TOP_FILL);
+    assert_eq!(buf[(67, 6)].bg, TOP_FILL);
+    assert_eq!(buf[(37, 6)].bg, BASE_FILL);
+
+    insta::assert_snapshot!(render_to_string(&mut state, 100, 8), @"
+    󱓯 1 ⓘ                             — ▾ %1                      │ 󰊢                                
+     0 project                          ▎                             ▎
+    󰥔 0 ┃ 󰒲                             ▎                             ▎
+    󰒲 1     Waiting for prompt…          ▎                             ▎
+     0                                  ▎        No tools yet         ▎        No tasks recorded
+                                         ▎                             ▎
+                                         ▎                             ▎
+    ⇅ ⤢                                  ▎                             ▎
+    ");
+}

@@ -2684,3 +2684,51 @@ fn snapshot_strip_control_row_floating_dims_the_switch() {
     assert_eq!(buf[(2, 5)].symbol(), "⤡");
     assert_eq!(buf[(2, 5)].fg, state.theme.status_running);
 }
+
+// ─── Split strip: three panels, two tab bars ────────────────────────
+//
+// A 100-column strip with the threshold dropped to 60 shows the split
+// layout at the default 33% widths: the filter bar (columns 0-3), the
+// agent panel (4-36), divider 1 (37), pane A (38-66), divider 2 (67)
+// and pane B (68-99). Pane A's bar carries the focused pane's id and
+// its group's glyphs; pane B's bar draws glyphs only.
+
+/// [`make_strip_state`] with the split layout on: the threshold drops
+/// to 60 columns so a 100-column strip splits.
+fn make_split_strip_state(agent: AgentType, status: PaneStatus) -> AppState {
+    let mut state = make_strip_state(agent, status, 40);
+    state.global.tab_split_width = 60;
+    state
+}
+
+#[test]
+fn snapshot_split_strip_with_pi_focus_ui() {
+    let mut state = make_split_strip_state(AgentType::Pi, PaneStatus::Idle);
+    let output = render_to_string(&mut state, 100, 8);
+    insta::assert_snapshot!(output, @"
+    󱓯 1 ⓘ                             — ▾ %1                      │ 󰊢                             │ 󰟶
+     0 project                          ▎                             ▎
+    󰥔 0 ┃ 󰒲                             ▎                             ▎
+    󰒲 1     Waiting for prompt…          ▎                             ▎
+     0                                  ▎        No tools yet         ▎        No tasks recorded
+                                         ▎                             ▎
+                                         ▎                             ▎
+    ⇅ ⤢                                  ▎                             ▎
+    ");
+}
+
+#[test]
+fn snapshot_split_strip_with_claude_focus_ui() {
+    let mut state = make_split_strip_state(AgentType::Claude, PaneStatus::Idle);
+    let output = render_to_string(&mut state, 100, 8);
+    insta::assert_snapshot!(output, @"
+    󱓯 1 ⓘ                             — ▾ %1                      │ 󰊢                                
+     0 project                          ▎                             ▎
+    󰥔 0 ┃ 󰒲                             ▎                             ▎
+    󰒲 1     Waiting for prompt…          ▎                             ▎
+     0                                  ▎        No tools yet         ▎        No tasks recorded
+                                         ▎                             ▎
+                                         ▎                             ▎
+    ⇅ ⤢                                  ▎                             ▎
+    ");
+}

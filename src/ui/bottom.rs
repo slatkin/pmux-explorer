@@ -11,8 +11,9 @@ use ratatui::{
     widgets::{Block, Paragraph},
 };
 
-use crate::state::{AppState, BottomTab, BottomTabTarget};
+use crate::state::{AppState, BottomTab, BottomTabTarget, SplitPane, StripLayout};
 
+use super::colors::ColorTheme;
 use super::text::{display_width, truncate_to_width};
 
 fn render_centered(frame: &mut Frame, area: Rect, text: &str, color: Color) {
@@ -232,36 +233,113 @@ const THIN_DIVIDER: &str = "\u{258e}";
 /// `FrameLayout::bottom_tab_targets` so a click hit-tests the columns
 /// that were drawn.
 pub fn draw_strip_divider(frame: &mut Frame, state: &mut AppState, divider: Rect, tab_bar: Rect) {
-    // The divider column gets no band — just the glyph, foreground
-    // only, in the band's own colour, so it reads as a thin line over
-    // the sidebar's own fill.
+    draw_strip_divider_line(frame, state, divider);
+    let targets = draw_strip_tab_bar_row(frame, state, tab_bar, None);
+    state.layout.bottom_tab_targets = targets;
+}
+
+/// The thin divider glyph over whatever fill the caller painted on
+/// the divider column — the one-pane strip's divider and both split
+/// dividers draw the same line.
+fn draw_strip_divider_line(frame: &mut Frame, state: &AppState, divider: Rect) {
     let line_style = Style::default().fg(state.theme.filter_bar_bg);
     let thin_line = std::iter::repeat_n(THIN_DIVIDER, divider.height as usize)
         .collect::<Vec<_>>()
         .join("\n");
     frame.render_widget(Paragraph::new(thin_line).style(line_style), divider);
+}
+
+/// One strip tab bar: the band in the filter bar's colour, then the
+/// bar's line over it, whose drawn glyph columns come back for the
+/// caller to publish. `pane` names the split pane whose group the run
+/// draws — `None` is the one-pane strip's bar over the shared tab
+/// state.
+fn draw_strip_tab_bar_row(
+    frame: &mut Frame,
+    state: &AppState,
+    tab_bar: Rect,
+    pane: Option<SplitPane>,
+) -> Vec<BottomTabTarget> {
     let band = Block::default().style(Style::default().bg(state.theme.filter_bar_bg));
     frame.render_widget(band, tab_bar);
-    let (line, targets) = strip_tab_bar_line(state, tab_bar);
-    state.layout.bottom_tab_targets = targets;
+    let (line, targets) = strip_tab_bar_line(state, tab_bar, pane);
     frame.render_widget(Paragraph::new(line), tab_bar);
+    targets
+}
+
+/// The split strip's two tab panes: the divider 1 and divider 2 thin
+/// lines, pane A's bar with the pane label and pane B's bar with
+/// glyphs only, then each pane's content under its bar with the tab
+/// that pane displays. Both bars' drawn hitboxes go into
+/// `FrameLayout::bottom_tab_targets` — the two groups are disjoint,
+/// so a glyph's tab names its pane and the click handler's group
+/// filter routes a column to the pane that drew it. The caller has
+/// checked the split fields are all `Some`.
+pub fn draw_split_strip(frame: &mut Frame, state: &mut AppState, strip: &StripLayout) {
+    let (Some(divider_a), Some(tab_bar_a), Some(tabs_a)) =
+        (strip.divider, strip.tab_bar, strip.tabs)
+    else {
+        return;
+    };
+    let (Some(divider_b), Some(tab_bar_b), Some(tabs_b)) =
+        (strip.divider_b, strip.tab_bar_b, strip.tabs_b)
+    else {
+        return;
+    };
+    state.layout.bottom_tab_targets.clear();
+    draw_strip_divider_line(frame, state, divider_a);
+    draw_strip_divider_line(frame, state, divider_b);
+    let pane_a_targets = draw_strip_tab_bar_row(frame, state, tab_bar_a, Some(SplitPane::A));
+    let pane_b_targets = draw_strip_tab_bar_row(frame, state, tab_bar_b, Some(SplitPane::B));
+    state.layout.bottom_tab_targets = pane_a_targets;
+    state.layout.bottom_tab_targets.extend(pane_b_targets);
+    // Each bar's row belongs to its bar, not the content.
+    let content_a = Rect::new(
+        tabs_a.x,
+        tabs_a.y + 1,
+        tabs_a.width,
+        tabs_a.height.saturating_sub(1),
+    );
+    let tab_a = state.displayed_split_tab(SplitPane::A);
+    draw_bottom_content(frame, state, content_a, tab_a);
+    let content_b = Rect::new(
+        tabs_b.x,
+        tabs_b.y + 1,
+        tabs_b.width,
+        tabs_b.height.saturating_sub(1),
+    );
+    let tab_b = state.displayed_split_tab(SplitPane::B);
+    draw_bottom_content(frame, state, content_b, tab_b);
 }
 
 /// The tab bar's drawn line and its tab hitboxes: the lead label and
-/// the rule's own run right-aligned over `tab_bar`'s columns, with each
+/// the bar's own run right-aligned over `tab_bar`'s columns, with each
 /// hitbox shifted from run-relative to frame-absolute columns by
 /// `tab_bar.x`. Both the renderer and the `#[cfg(test)]` publisher run
 /// through this, so a click can only ever land on a glyph actually
-/// drawn.
-fn strip_tab_bar_line(state: &AppState, tab_bar: Rect) -> (Line<'static>, Vec<BottomTabTarget>) {
-    let lead = state.focused_pane_identity().map(|(id, name)| TabBarLead {
-        id,
-        name,
-        style: Style::default().fg(state.theme.text_active),
-    });
+/// drawn. `pane` picks the run's group and the lead: the one-pane bar
+/// (`None`) and pane A's bar carry the focused pane's label, pane B's
+/// bar draws glyphs only.
+fn strip_tab_bar_line(
+    state: &AppState,
+    tab_bar: Rect,
+    pane: Option<SplitPane>,
+) -> (Line<'static>, Vec<BottomTabTarget>) {
+    let lead = match pane {
+        Some(SplitPane::B) => None,
+        _ => state.focused_pane_identity().map(|(id, name)| TabBarLead {
+            id,
+            name,
+            style: Style::default().fg(state.theme.text_active),
+        }),
+    };
+    let titles = match pane {
+        Some(pane) => build_split_tab_title(state, pane),
+        None => build_tab_title(state),
+    };
     let (line, targets) = tab_bar_line(
         lead,
-        &build_tab_title(state),
+        &titles,
         Style::default(),
         tab_bar.width,
         Alignment::Right,
@@ -301,7 +379,33 @@ pub fn draw_bottom_content(frame: &mut Frame, state: &mut AppState, area: Rect, 
 /// carries its tab so `top_line_border` can hand the drawn glyph
 /// columns to the click hitboxes — the two describe one layout.
 pub(crate) fn build_tab_title(state: &AppState) -> Vec<TitleSpan> {
-    let theme = &state.theme;
+    build_tab_title_spans(
+        state.shown_bottom_tabs(),
+        state.displayed_bottom_tab(),
+        &state.theme,
+    )
+}
+
+/// A split pane's bar run: the pane's own group ([`AppState::shown_split_tabs`])
+/// styled against the tab the pane displays ([`AppState::displayed_split_tab`]),
+/// exactly as the one-pane rule styles its run.
+pub(crate) fn build_split_tab_title(state: &AppState, pane: SplitPane) -> Vec<TitleSpan> {
+    build_tab_title_spans(
+        state.shown_split_tabs(pane),
+        state.displayed_split_tab(pane),
+        &state.theme,
+    )
+}
+
+/// The styled glyph run over a group of shown tabs: one glyph span
+/// per shown tab, a space-delimiter-space separator span between
+/// glyphs, styled active/inactive against `displayed`. See
+/// [`build_tab_title`] for the colour rules.
+fn build_tab_title_spans(
+    shown: Vec<BottomTab>,
+    displayed: BottomTab,
+    theme: &ColorTheme,
+) -> Vec<TitleSpan> {
     // Both label styles sit on the filter bar's band, which is lighter
     // than the terminal background: the inactive labels wear the bright
     // text colour (text_muted washes out on the band), and the active
@@ -310,7 +414,6 @@ pub(crate) fn build_tab_title(state: &AppState) -> Vec<TitleSpan> {
         .fg(theme.accent)
         .add_modifier(Modifier::BOLD);
     let inactive = Style::default().fg(theme.text_active);
-    let displayed = state.displayed_bottom_tab();
     let is = |tab: &BottomTab| {
         if displayed == *tab { active } else { inactive }
     };
@@ -320,7 +423,7 @@ pub(crate) fn build_tab_title(state: &AppState) -> Vec<TitleSpan> {
     let sep_style = Style::default().fg(theme.tab_separator);
 
     let mut spans: Vec<TitleSpan> = Vec::new();
-    for (i, tab) in state.shown_bottom_tabs().into_iter().enumerate() {
+    for (i, tab) in shown.into_iter().enumerate() {
         if i > 0 {
             // " │ " — a free column on each side of the delimiter so a
             // two-cell glyph never bleeds onto it.
@@ -361,7 +464,7 @@ pub(crate) fn draw_tab_targets(state: &mut AppState, width: u16) {
 /// drawn columns, not a re-implemented walk.
 #[cfg(test)]
 pub(crate) fn draw_strip_tab_targets(state: &mut AppState, x: u16, width: u16) {
-    let (_, targets) = strip_tab_bar_line(state, Rect::new(x, 0, width, 1));
+    let (_, targets) = strip_tab_bar_line(state, Rect::new(x, 0, width, 1), None);
     state.layout.bottom_tab_targets = targets;
 }
 

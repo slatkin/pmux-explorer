@@ -356,6 +356,10 @@ fn handle_strip_main_key(key: KeyEvent, state: &mut AppState, git_tab_active: &A
             }
             _ => {}
         },
+        // Pane B of a split strip: its keys land in a later step of
+        // this change; nothing can reach the focus value yet, so the
+        // arm stays a no-op.
+        Focus::TabPaneB => {}
     }
 }
 
@@ -398,6 +402,7 @@ fn pane_nav_down(state: &mut AppState) {
             }
         }
         Focus::ActivityLog => state.scroll_bottom(1),
+        Focus::TabPaneB => {}
     }
 }
 
@@ -424,6 +429,7 @@ fn pane_nav_up(state: &mut AppState) {
                 state.scroll_bottom(-1);
             }
         }
+        Focus::TabPaneB => {}
     }
 }
 
