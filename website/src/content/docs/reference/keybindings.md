@@ -58,6 +58,23 @@ for how the switch interacts with `@sidebar_position`.
 
 The `w` key has a click twin: the lock control (`☐` unlocked, `☑` locked) one cell left of the pop-out control in the sidebar's top row toggles the same width lock.
 
+### Split strip (when the tab panel splits)
+
+When the strip is wide enough, the tab panel splits into two panes — pane A
+(left) and pane B (right). The keys then act on the focused tab pane; on a
+one-pane strip the shared tab keeps the behaviour of the table above, and
+pane B is never focused — a key pressed while the layout no longer draws
+pane B moves the focus to pane A first.
+
+| Key            | Action                                                              |
+| -------------- | ------------------------------------------------------------------- |
+| `l` / `Right`  | Agent panel: move to pane A · pane A: move to pane B · pane B: keep focus (right end) |
+| `h` / `Left`   | Pane B: move back to pane A (the rest of the left walk is unchanged) |
+| `k` / `Up`     | Scroll the focused tab pane up: pane A while pane A has focus, pane B while pane B has focus |
+| `j` / `Down`   | Scroll the focused tab pane down: pane A while pane A has focus, pane B while pane B has focus |
+| `Shift+Tab`    | Cycle the focused tab pane's tabs — pane B when it has focus, pane A otherwise |
+| `Esc`          | Return focus to the agent panel, the same from pane B as from pane A |
+
 ## Repo filter popup
 
 Opened with `r` or by clicking the repo filter button in the sidebar header.
