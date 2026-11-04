@@ -31,6 +31,13 @@ describes, which is the environment of the agent process itself. A producer
 that runs outside tmux, or that spawns the command with a cleaned
 environment, describes nothing.
 
+**A `claude` event under pi is ignored.** When the command's environment has a
+non-empty `PI_CODING_AGENT` variable, an event for the agent `claude` is
+ignored: it comes from a Claude Code process that pi started in its own pane
+(for example the claude-bridge provider), and pi's own producer already
+reports that pane. The command exits 0 and changes nothing. Events for the
+other agents are not affected.
+
 **A producer must not wait for the answer.** The command is cheap, but it
 starts a process, and the process may be missing. Producers spawn it, write
 the payload, close the pipe and move on. A producer that awaits the exit code
