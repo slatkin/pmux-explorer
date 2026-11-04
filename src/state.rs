@@ -45,6 +45,7 @@ pub use popup::{PopupState, SpawnField};
 #[cfg(test)]
 pub(crate) use refresh::{TaskProgressDecision, classify_task_progress};
 pub use scroll::{ScrollState, ScrollStates};
+pub use tab::SplitPane;
 pub use tasks::TasksState;
 pub use thought::ThoughtState;
 pub use timers::RefreshTimers;

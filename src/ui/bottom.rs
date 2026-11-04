@@ -206,7 +206,7 @@ pub fn draw_bottom(frame: &mut Frame, state: &mut AppState, area: Rect) {
     state.layout.bottom_tab_targets = targets;
     frame.render_widget(Paragraph::new(top_line), rule_rect);
 
-    draw_bottom_content(frame, state, content_rect);
+    draw_bottom_content(frame, state, content_rect, state.displayed_bottom_tab());
 }
 
 /// The thin line drawn in the strip's 1-column divider — the left
@@ -277,12 +277,14 @@ fn strip_tab_bar_line(state: &AppState, tab_bar: Rect) -> (Line<'static>, Vec<Bo
     (line, targets)
 }
 
-/// The tab content the displayed tab selects, drawn over the whole
-/// given `Rect` with no rule row of its own. Both layouts call it: the
+/// The tab content the given tab selects, drawn over the whole given
+/// `Rect` with no rule row of its own. Both layouts call it: the
 /// column with the rows under its rule, a strip with the right-hand
-/// tab panel.
-pub fn draw_bottom_content(frame: &mut Frame, state: &mut AppState, area: Rect) {
-    match state.displayed_bottom_tab() {
+/// tab panel. The caller picks the tab — the one-pane paths pass the
+/// shared `displayed_bottom_tab()`, a split strip passes the tab its
+/// pane displays.
+pub fn draw_bottom_content(frame: &mut Frame, state: &mut AppState, area: Rect, tab: BottomTab) {
+    match tab {
         BottomTab::Activity => activity::draw_activity_content(frame, state, area),
         BottomTab::Tasks => tasks::draw_tasks_content(frame, state, area),
         BottomTab::GitStatus => git::draw_git_content(frame, state, area),

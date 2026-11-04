@@ -1,6 +1,16 @@
 use super::{AppState, BottomTab};
 use crate::tmux::AgentType;
 
+/// The two tab panes of a split strip. Pane A carries the Tools group
+/// (Activity, Git), pane B the Tasks group (Tasks, Thought). A one-pane
+/// strip has no split panes: its tab helpers stay on the shared
+/// selection (`shown_bottom_tabs` / `displayed_bottom_tab`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SplitPane {
+    A,
+    B,
+}
+
 impl AppState {
     /// Whether the focused pane runs pi. The focused pane is looked up
     /// by id across the groups, the way the activity and task reads do;
@@ -62,6 +72,82 @@ impl AppState {
             .position(|tab| *tab == current)
             .map_or(shown[0], |idx| shown[(idx + 1) % shown.len()]);
         self.global.set_bottom_tab(next);
+    }
+
+    /// The tabs the split pane's bar shows: pane A's fixed Tools group
+    /// (Tools, then Git), pane B's fixed Tasks group (Tasks, then
+    /// Thought while the focused pane runs pi). The cycle steps this
+    /// list and the split bar's labels are built from it, so a hidden
+    /// tab has no cycle step and no drawn glyph to click.
+    pub fn shown_split_tabs(&self, pane: SplitPane) -> Vec<BottomTab> {
+        match pane {
+            SplitPane::A => vec![BottomTab::Activity, BottomTab::GitStatus],
+            SplitPane::B => {
+                let mut tabs = vec![BottomTab::Tasks];
+                if self.focused_pane_is_pi() {
+                    tabs.push(BottomTab::Thought);
+                }
+                tabs
+            }
+        }
+    }
+
+    /// The tab the split pane draws: pane A's stored selection, or
+    /// pane B's stored selection except that Thought displays as Tasks
+    /// when the focused pane does not run pi. Only an explicit
+    /// selection writes the stored value, so a focus change never
+    /// touches `@sidebar_split_tab_b` — a peer window that still
+    /// focuses a pi pane keeps its Thought tab.
+    pub fn displayed_split_tab(&self, pane: SplitPane) -> BottomTab {
+        match pane {
+            SplitPane::A => self.global.split_tab_a,
+            SplitPane::B => match self.global.split_tab_b {
+                BottomTab::Thought if !self.focused_pane_is_pi() => BottomTab::Tasks,
+                tab => tab,
+            },
+        }
+    }
+
+    /// Cycle the given split pane's tab through its own shown group
+    /// and write only that pane's option. The cycle steps through the
+    /// shown tabs from the displayed tab, the way the one-pane cycle
+    /// does — from a stored Thought hidden behind the Tasks fallback
+    /// the next selection is Tasks, which replaces the stored value.
+    pub fn next_split_tab(&mut self, pane: SplitPane) {
+        let shown = self.shown_split_tabs(pane);
+        let current = self.displayed_split_tab(pane);
+        let next = shown
+            .iter()
+            .position(|tab| *tab == current)
+            .map_or(shown[0], |idx| shown[(idx + 1) % shown.len()]);
+        match pane {
+            SplitPane::A => self.global.set_split_tab_a(next),
+            SplitPane::B => self.global.set_split_tab_b(next),
+        }
+    }
+
+    /// Handle a click on a split pane's tab bar. `col` is the terminal
+    /// column. The hitboxes are the label columns the last frame
+    /// actually drew (`FrameLayout::bottom_tab_targets`), filtered to
+    /// the clicked pane's own group: the groups are disjoint, so a
+    /// glyph's tab names its pane, and a column under the other pane's
+    /// glyph — or under no glyph at all — selects nothing.
+    pub fn handle_split_tab_click(&mut self, pane: SplitPane, col: u16) {
+        let group = self.shown_split_tabs(pane);
+        let Some(tab) = self
+            .layout
+            .bottom_tab_targets
+            .iter()
+            .filter(|target| group.contains(&target.tab))
+            .find(|target| col >= target.start && col < target.end)
+            .map(|target| target.tab)
+        else {
+            return;
+        };
+        match pane {
+            SplitPane::A => self.global.set_split_tab_a(tab),
+            SplitPane::B => self.global.set_split_tab_b(tab),
+        }
     }
 
     /// Handle a click on the bottom panel's rule (its first drawn row).
@@ -521,6 +607,155 @@ mod tests {
                 "col {col} is fill or a truncated-off glyph, not a hitbox"
             );
         }
+    }
+
+    // ─── the split panes' shown tabs and displayed tabs ───────────
+
+    #[test]
+    fn pane_b_shows_thought_only_for_a_pi_focus() {
+        // Spec "the tabs for a pi pane" / "the tabs for a Claude pane":
+        // pane A always offers its fixed Tools group; pane B's group
+        // gains Thought only while the focused pane runs pi.
+        let mut state = state_with_groups(vec![agent_group("%1")], Some("%1"));
+        assert_eq!(
+            state.shown_split_tabs(SplitPane::A),
+            vec![BottomTab::Activity, BottomTab::GitStatus]
+        );
+        assert_eq!(state.shown_split_tabs(SplitPane::B), vec![BottomTab::Tasks]);
+
+        state.repo_groups = vec![group_with(vec![test_pane_with_agent("%1", AgentType::Pi)])];
+        assert_eq!(
+            state.shown_split_tabs(SplitPane::B),
+            vec![BottomTab::Tasks, BottomTab::Thought]
+        );
+    }
+
+    #[test]
+    fn a_stored_thought_in_pane_b_displays_as_tasks_for_a_claude_focus() {
+        // Spec "the focus moves to a Claude pane": the tab pane B draws
+        // is the Tasks fallback, while the stored value keeps holding
+        // `thought` — the fallback displays without a write.
+        let mut state = state_with_groups(vec![agent_group("%1")], Some("%1"));
+        state.global.split_tab_b = BottomTab::Thought;
+
+        assert_eq!(state.displayed_split_tab(SplitPane::B), BottomTab::Tasks);
+        assert_eq!(
+            state.global.split_tab_b,
+            BottomTab::Thought,
+            "the fallback displays without moving the stored tab"
+        );
+    }
+
+    #[test]
+    fn a_focus_change_back_to_a_pi_pane_redisplays_pane_bs_thought() {
+        // Spec "the focus returns to a pi pane": the display is derived
+        // from the focus, so pane B shows the stored Thought again the
+        // moment a pi pane is focused — no selection needed.
+        let claude = test_pane("%1");
+        let pi = test_pane_with_agent("%2", AgentType::Pi);
+        let mut state = state_with_groups(vec![group_with(vec![claude, pi])], Some("%1"));
+        state.global.split_tab_b = BottomTab::Thought;
+        assert_eq!(state.displayed_split_tab(SplitPane::B), BottomTab::Tasks);
+
+        state.focus_state.focused_pane_id = Some("%2".into());
+        assert_eq!(state.displayed_split_tab(SplitPane::B), BottomTab::Thought);
+        assert_eq!(
+            state.global.split_tab_b,
+            BottomTab::Thought,
+            "the focus change must not write @sidebar_split_tab_b"
+        );
+    }
+
+    // ─── the per-pane cycle and click ─────────────────────────────
+
+    #[test]
+    fn pane_bs_cycle_leaves_pane_a_and_the_shared_tab() {
+        // Spec "the cycle key in pane B": pane B's cycle steps its own
+        // group and writes only its own option — pane A's stored tab
+        // and the one-pane `@sidebar_bottom_tab` never move.
+        let pi = test_pane_with_agent("%1", AgentType::Pi);
+        let mut state = state_with_groups(vec![group_with(vec![pi])], Some("%1"));
+        state.global.split_tab_a = BottomTab::GitStatus;
+        state.global.split_tab_b = BottomTab::Tasks;
+        state.global.bottom_tab = BottomTab::Activity;
+
+        state.next_split_tab(SplitPane::B);
+
+        assert_eq!(state.global.split_tab_b, BottomTab::Thought);
+        assert_eq!(state.global.split_tab_a, BottomTab::GitStatus);
+        assert_eq!(state.global.bottom_tab, BottomTab::Activity);
+    }
+
+    #[test]
+    fn a_pane_a_click_leaves_pane_b_unchanged() {
+        // Spec "a selection in pane A": a click on pane A's bar selects
+        // in pane A's option alone. The hitboxes are the drawn columns
+        // a split frame publishes, pane A's glyphs and pane B's side by
+        // side in the one `bottom_tab_targets` list; the group filter
+        // keeps a click on a pane B column from moving pane A too. The
+        // focused pane runs pi so pane B's group shows Thought.
+        let pi = test_pane_with_agent("%1", AgentType::Pi);
+        let mut state = state_with_groups(vec![group_with(vec![pi])], Some("%1"));
+        state.layout.bottom_tab_targets = vec![
+            crate::state::BottomTabTarget {
+                start: 10,
+                end: 14,
+                tab: BottomTab::Activity,
+            },
+            crate::state::BottomTabTarget {
+                start: 20,
+                end: 24,
+                tab: BottomTab::GitStatus,
+            },
+            crate::state::BottomTabTarget {
+                start: 40,
+                end: 44,
+                tab: BottomTab::Tasks,
+            },
+            crate::state::BottomTabTarget {
+                start: 50,
+                end: 54,
+                tab: BottomTab::Thought,
+            },
+        ];
+        state.global.split_tab_a = BottomTab::Activity;
+        state.global.split_tab_b = BottomTab::Tasks;
+
+        state.handle_split_tab_click(SplitPane::A, 20); // pane A's Git glyph
+        assert_eq!(state.global.split_tab_a, BottomTab::GitStatus);
+        assert_eq!(
+            state.global.split_tab_b,
+            BottomTab::Tasks,
+            "a pane A click must not move pane B's tab"
+        );
+
+        state.handle_split_tab_click(SplitPane::B, 50); // pane B's Thought glyph
+        assert_eq!(state.global.split_tab_b, BottomTab::Thought);
+        assert_eq!(
+            state.global.split_tab_a,
+            BottomTab::GitStatus,
+            "a pane B click must not move pane A's tab"
+        );
+    }
+
+    #[test]
+    fn a_click_on_the_other_panes_group_selects_nothing() {
+        // The groups are disjoint: a click routed to pane B that lands
+        // on a pane A glyph — a col-20 Git hitbox — writes neither
+        // option, and a click outside every glyph writes nothing either.
+        let mut state = AppState::new("%99".into());
+        state.layout.bottom_tab_targets = vec![crate::state::BottomTabTarget {
+            start: 20,
+            end: 24,
+            tab: BottomTab::GitStatus,
+        }];
+        state.global.split_tab_a = BottomTab::Activity;
+        state.global.split_tab_b = BottomTab::Tasks;
+
+        state.handle_split_tab_click(SplitPane::B, 20);
+        state.handle_split_tab_click(SplitPane::B, 30);
+        assert_eq!(state.global.split_tab_a, BottomTab::Activity);
+        assert_eq!(state.global.split_tab_b, BottomTab::Tasks);
     }
 
     #[test]

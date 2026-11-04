@@ -339,11 +339,29 @@ impl GlobalState {
             .save(self.split_tab_a, self.split_tab_a.as_str());
     }
 
+    /// Assign pane A's split tab and persist it to the shared tmux
+    /// option. The split pane A tab selection's writers (the per-pane
+    /// cycle, the per-pane click) funnel through here so the whole
+    /// server converges within one refresh tick.
+    pub fn set_split_tab_a(&mut self, tab: BottomTab) {
+        self.split_tab_a = tab;
+        self.save_split_tab_a();
+    }
+
     /// Save pane B's split tab to tmux global variable via its latch.
     /// A split pane B tab selection's only writer.
     pub fn save_split_tab_b(&mut self) {
         self.split_tab_b_latch
             .save(self.split_tab_b, self.split_tab_b.as_str());
+    }
+
+    /// Assign pane B's split tab and persist it to the shared tmux
+    /// option. The split pane B tab selection's writers (the per-pane
+    /// cycle, the per-pane click) funnel through here so the whole
+    /// server converges within one refresh tick.
+    pub fn set_split_tab_b(&mut self, tab: BottomTab) {
+        self.split_tab_b = tab;
+        self.save_split_tab_b();
     }
 
     /// Save the split agent percent to tmux global variable via its

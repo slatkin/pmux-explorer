@@ -316,7 +316,7 @@ fn draw_strip(frame: &mut Frame, state: &mut AppState, area: Rect) {
             tabs.width,
             tabs.height.saturating_sub(1),
         );
-        bottom::draw_bottom_content(frame, state, content);
+        bottom::draw_bottom_content(frame, state, content, state.displayed_bottom_tab());
     }
 }
 
