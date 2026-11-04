@@ -26,10 +26,10 @@
 
 ## 5. Split mouse input
 
-- [ ] 5.1 Give `SplitDrag` a divider target and route a split press: divider 1 or pane A's bar targets divider 1, divider 2 or pane B's bar targets divider 2; verify with state tests for a press on each divider and each bar.
-- [ ] 5.2 Make the drag move follow the mouse column per target within the minimums, and the moved release write only its option; verify with state tests for the spec scenarios (divider 1 to column 104 writes 25 to `@sidebar_split_agents_width`, divider 2 to column 300 writes 25 to `@sidebar_split_tab_b_width`, divider 2 to column 140 stops at the pane A minimum, divider 1 to column 350 stops at column 248 with pane B unchanged, one write on release, `@sidebar_tab_width` unchanged).
-- [ ] 5.3 Make an unmoved release on a bar select the tab in that pane, and keep the git poller flag on while pane A displays Git; verify with state tests for a click on pane B's Thought glyph and for the flag after a pane A Git click.
-- [ ] 5.4 Route `handle_mouse_scroll` to pane A or pane B by the drawn rects; verify with a state test for each pane.
+- [x] 5.1 Give `SplitDrag` a divider target and route a split press: divider 1 or pane A's bar targets divider 1, divider 2 or pane B's bar targets divider 2; verify with state tests for a press on each divider and each bar.
+- [x] 5.2 Make the drag move follow the mouse column per target within the minimums, and the moved release write only its option; verify with state tests for the spec scenarios (divider 1 to column 104 writes 25 to `@sidebar_split_agents_width`, divider 2 to column 300 writes 25 to `@sidebar_split_tab_b_width`, divider 2 to column 140 stops at the pane A minimum, divider 1 to column 350 stops at column 248 with pane B unchanged, one write on release, `@sidebar_tab_width` unchanged).
+- [x] 5.3 Make an unmoved release on a bar select the tab in that pane, and keep the git poller flag on while pane A displays Git; verify with state tests for a click on pane B's Thought glyph and for the flag after a pane A Git click.
+- [x] 5.4 Route `handle_mouse_scroll` to pane A or pane B by the drawn rects; verify with a state test for each pane.
 
 ## 6. Split keyboard input
 
