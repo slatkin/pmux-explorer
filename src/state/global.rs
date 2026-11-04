@@ -22,9 +22,9 @@ use super::filter::{RepoFilter, StatusFilter};
 ///
 /// The status filter, the bottom tab, the bottom percent, the strip
 /// tab percent, the two split tabs, the two split widths, the width
-/// lock and the shared docked width each hold one `SaveLatch`
+/// lock and the two shared docked sizes each hold one `SaveLatch`
 /// instance, so the save/retry/adopt mechanics below is written once
-/// and the ten shared fields share it. The type and its fields are
+/// and the eleven shared fields share it. The type and its fields are
 /// `pub(crate)` because the width latch's pending flag also gates the
 /// width guard's adopt side (`app::width_guard`, design D4) and
 /// sibling-module tests drive the latch contract.
@@ -55,6 +55,20 @@ impl<T: Copy + PartialEq> SaveLatch<T> {
     /// it.
     fn save(&mut self, value: T, arg: &str) {
         if tmux::run_tmux(&["set", "-g", self.option, arg]).is_some() {
+            self.last_saved = value;
+            self.save_pending = false;
+        } else {
+            self.save_pending = true;
+        }
+    }
+
+    /// Write an unset (`set -gu`) for a cleared field — the docked
+    /// sizes' cleared intent (design D10 of the strip-height-sync
+    /// change). Same accept/reject contract as [`Self::save`]: an
+    /// accepted unset advances `last_saved` to the cleared value, a
+    /// refused one sets the latch for the retry tick.
+    fn save_unset(&mut self, value: T) {
+        if tmux::run_tmux(&["set", "-gu", self.option]).is_some() {
             self.last_saved = value;
             self.save_pending = false;
         } else {
@@ -169,6 +183,12 @@ pub struct GlobalState {
     /// `@sidebar_docked_width` tmux option. `shared_` because
     /// `AppState.docked_width` already names the pop-out capture.
     pub shared_docked_width: Option<u16>,
+    /// The docked height in rows every docked strip converges on while
+    /// the lock is on (`None` until one exists); mirrored to and
+    /// adopted from the `@sidebar_docked_height` tmux option. The
+    /// height-axis twin of [`Self::shared_docked_width`], sharing the
+    /// same server-wide lock flag.
+    pub shared_docked_height: Option<u16>,
     /// Parsed `@sidebar_min_width` as carried on the per-tick reading,
     /// `None` when the option is unset or not numeric. Adopted as-is
     /// every tick with no guard or latch: no sidebar instance ever
@@ -222,6 +242,12 @@ pub struct GlobalState {
     /// (design D4), and adopting it back would resize the pane over
     /// the user's hand.
     pub(crate) width_latch: SaveLatch<Option<u16>>,
+    /// The height latch, written to and adopted from
+    /// `@sidebar_docked_height` — the width latch's twin on the strip
+    /// axis. While its write is pending the strip guard must also skip
+    /// its adopt side, for the same stale-read reason the width latch
+    /// carries (design D5).
+    pub(crate) height_latch: SaveLatch<Option<u16>>,
     /// The pane the cursor names — the identity behind
     /// `selected_pane_row`. The row is only a cache into the filtered
     /// list and moves when a filter hides a pane, when a repo group
@@ -257,6 +283,7 @@ impl GlobalState {
             split_tab_b_percent: ui::DEFAULT_SPLIT_PERCENT,
             width_lock: false,
             shared_docked_width: None,
+            shared_docked_height: None,
             min_width: None,
             max_width: None,
             tab_split_width: ui::DEFAULT_TAB_SPLIT_WIDTH,
@@ -276,6 +303,7 @@ impl GlobalState {
             ),
             lock_latch: SaveLatch::new(tmux::SIDEBAR_WIDTH_LOCK, false),
             width_latch: SaveLatch::new(tmux::SIDEBAR_DOCKED_WIDTH, None),
+            height_latch: SaveLatch::new(tmux::SIDEBAR_DOCKED_HEIGHT, None),
             cursor_pane_id: None,
             last_saved_cursor: None,
             last_saved_repo_filter: RepoFilter::All,
@@ -394,19 +422,28 @@ impl GlobalState {
     /// width latch's write; see `SaveLatch` for the accept/reject
     /// contract. Callers (the lock's enabling seed, the width guard's
     /// publish side) assign the desired width to `shared_docked_width`
-    /// first, then call this.
+    /// first, then call this. A cleared intent (`None`) unsets the
+    /// option through the latch instead of writing nothing (design
+    /// D10): a rejected unset latches and is retried like any other
+    /// write, so a peer's tick reads the key gone and adopts `None`.
     pub fn save_shared_docked_width(&mut self) {
-        let Some(width) = self.shared_docked_width else {
-            // Production always assigns Some first, so this branch is
-            // only reachable from tests: with nothing to publish there
-            // is nothing on the wire to reconcile, and a pending flag
-            // would block adoption forever. Off the latch path
-            // deliberately: clearing the flag alone must not advance
-            // `last_saved` to `None` when a width was saved before.
-            self.width_latch.save_pending = false;
-            return;
-        };
-        self.width_latch.save(Some(width), &width.to_string());
+        match self.shared_docked_width {
+            Some(width) => self.width_latch.save(Some(width), &width.to_string()),
+            None => self.width_latch.save_unset(None),
+        }
+    }
+
+    /// Save the shared docked height to tmux global variable — the
+    /// height latch's write, the exact twin of
+    /// [`Self::save_shared_docked_width`]: callers assign the desired
+    /// rows to `shared_docked_height` first, then call this, and a
+    /// cleared intent unsets the option through the latch (design
+    /// D10).
+    pub fn save_shared_docked_height(&mut self) {
+        match self.shared_docked_height {
+            Some(height) => self.height_latch.save(Some(height), &height.to_string()),
+            None => self.height_latch.save_unset(None),
+        }
     }
 
     /// Save the width lock to tmux global variable — the lock latch's
@@ -484,9 +521,9 @@ impl GlobalState {
 
     /// Retry every shared write tmux rejected (filter, bottom tab,
     /// bottom percent, strip tab percent, the two split tabs, the two
-    /// split widths, width lock, shared docked width), so an instance
-    /// cannot drift from the shared values (see `SaveLatch::retry` for
-    /// the latch rationale). Runs once per
+    /// split widths, width lock, both shared docked sizes), so an
+    /// instance cannot drift from the shared values (see
+    /// `SaveLatch::retry` for the latch rationale). Runs once per
     /// refresh tick, before the tick reads the shared options, so a
     /// successful retry is what that tick reads back. The writes must
     /// stay together: retrying only some would let the others drift
@@ -512,13 +549,17 @@ impl GlobalState {
             self.split_tab_b_percent,
             &self.split_tab_b_percent.to_string(),
         );
-        // The width latch retries through its save method so the
-        // `None` guard clears the flag instead of writing an empty
-        // option; on the tick a retried width lands, `apply_all`
-        // reads the same value back and advances the latch's
-        // `last_saved`.
+        // The width latch retries through its save method so a cleared
+        // intent retries as its `set -gu` unset; on the tick a retried
+        // write lands, `apply_all` reads the same value back and
+        // advances the latch's `last_saved`.
         if self.width_latch.save_pending {
             self.save_shared_docked_width();
+        }
+        // The height latch retries the same way, independently: one
+        // axis's stuck write must not block or consume the other's.
+        if self.height_latch.save_pending {
+            self.save_shared_docked_height();
         }
         self.lock_latch
             .retry(self.width_lock, if self.width_lock { "on" } else { "off" });
@@ -526,8 +567,8 @@ impl GlobalState {
 
     /// Apply the shared options read from tmux (filter, cursor, bottom
     /// tab, bottom percent, strip tab percent, repo filter, width lock,
-    /// shared docked width, width bounds). Runs once at startup and on
-    /// every refresh tick.
+    /// both shared docked sizes, width bounds). Runs once at startup
+    /// and on every refresh tick.
     ///
     /// `split_drag_axis` says whether the calling instance is mid split
     /// drag and on which axis (`AppState::split_drag`'s axis): the
@@ -667,14 +708,38 @@ impl GlobalState {
         }) {
             self.width_lock = lock;
         }
-        // The shared docked width parses like the label fields: a
-        // missing key — or junk like `15%` — adopts nothing.
+        // The two docked sizes parse with one difference from the
+        // label fields (design D10): an absent key adopts `None`, so a
+        // peer's `set -gu` clear drops out of every instance's cache
+        // instead of leaving a stale value behind; a present but
+        // non-numeric value still adopts nothing.
         if let Some(shared) = self.width_latch.adopt(opts, true, |o| {
-            o.get(tmux::SIDEBAR_DOCKED_WIDTH)
+            match o
+                .get(tmux::SIDEBAR_DOCKED_WIDTH)
                 .and_then(|s| s.parse::<u16>().ok())
-                .map(Some)
+            {
+                Some(width) => Some(Some(width)),
+                // Present but junk: adopt nothing.
+                None if o.contains_key(tmux::SIDEBAR_DOCKED_WIDTH) => None,
+                // Absent: adopt `None`.
+                None => Some(None),
+            }
         }) {
             self.shared_docked_width = shared;
+        }
+        if let Some(shared) = self.height_latch.adopt(opts, true, |o| {
+            match o
+                .get(tmux::SIDEBAR_DOCKED_HEIGHT)
+                .and_then(|s| s.parse::<u16>().ok())
+            {
+                Some(height) => Some(Some(height)),
+                // Present but junk: adopt nothing.
+                None if o.contains_key(tmux::SIDEBAR_DOCKED_HEIGHT) => None,
+                // Absent: adopt `None`.
+                None => Some(None),
+            }
+        }) {
+            self.shared_docked_height = shared;
         }
         // The parsed width bounds need no guard or latch: nothing in
         // the sidebar ever writes `@sidebar_min_width` or
@@ -1780,5 +1845,203 @@ mod tests {
         g.apply_all(&opts(&[(tmux::SIDEBAR_DOCKED_WIDTH, "15%")]), None);
 
         assert_eq!(g.shared_docked_width, None);
+    }
+
+    // ─── the shared docked height latch ────────────────────────
+    //
+    // The height latch is the width latch's twin on the strip axis:
+    // same save/retry/adopt contract, own option, own independence.
+
+    #[test]
+    fn a_rejected_height_write_keeps_the_latch() {
+        let mut g = GlobalState::new();
+        g.shared_docked_height = Some(12);
+
+        g.save_shared_docked_height();
+
+        assert!(
+            g.height_latch.save_pending,
+            "a rejected height write must set the height latch"
+        );
+        assert_eq!(
+            g.height_latch.last_saved, None,
+            "only an accepted write may advance the height latch's last_saved"
+        );
+        assert_eq!(
+            g.shared_docked_height,
+            Some(12),
+            "a rejected write must not drop the intent"
+        );
+    }
+
+    #[test]
+    fn a_retry_reaches_the_height_latch_independently_of_the_width_latch() {
+        // The unified retry touches only pending latches: a height
+        // retry must not flag or clear the width latch and vice versa,
+        // and with both pending both retries run.
+        let mut g = GlobalState::new();
+        g.shared_docked_width = Some(45);
+        g.width_latch.save_pending = true;
+
+        g.retry_pending_saves();
+
+        assert!(g.width_latch.save_pending);
+        assert!(
+            !g.height_latch.save_pending,
+            "the width retry must not flag the height latch"
+        );
+
+        let mut g = GlobalState::new();
+        g.shared_docked_height = Some(12);
+        g.height_latch.save_pending = true;
+
+        g.retry_pending_saves();
+
+        assert!(g.height_latch.save_pending);
+        assert!(
+            !g.width_latch.save_pending,
+            "the height retry must not flag the width latch"
+        );
+
+        let mut g = GlobalState::new();
+        g.shared_docked_width = Some(45);
+        g.shared_docked_height = Some(12);
+        g.width_latch.save_pending = true;
+        g.height_latch.save_pending = true;
+
+        g.retry_pending_saves();
+
+        assert!(
+            g.width_latch.save_pending,
+            "both retries ran; tmux rejected again"
+        );
+        assert!(
+            g.height_latch.save_pending,
+            "both retries ran; tmux rejected again"
+        );
+    }
+
+    #[test]
+    fn a_cleared_width_issues_the_unset_and_latches_on_rejection() {
+        // A cleared intent is a real write (design D10): the `set -gu`
+        // goes through the latch, so a rejected unset latches and is
+        // retried instead of silently dropping the clear. The guard
+        // stays at the last accepted value — here `None`, the fresh
+        // latch's construction.
+        let mut g = GlobalState::new();
+
+        g.shared_docked_width = None;
+        g.save_shared_docked_width();
+
+        assert!(
+            g.width_latch.save_pending,
+            "a cleared width must attempt the unset, not clear the flag without a write"
+        );
+        assert_eq!(g.width_latch.last_saved, None);
+    }
+
+    #[test]
+    fn a_cleared_height_issues_the_unset_and_latches_on_rejection() {
+        let mut g = GlobalState::new();
+
+        g.shared_docked_height = None;
+        g.save_shared_docked_height();
+
+        assert!(
+            g.height_latch.save_pending,
+            "a cleared height must attempt the unset, not clear the flag without a write"
+        );
+        assert_eq!(g.height_latch.last_saved, None);
+    }
+
+    // ─── the tick's docked-size parses (both axes) ──────────────
+
+    #[test]
+    fn an_absent_docked_key_after_an_earlier_value_adopts_none() {
+        // Design D10: a peer's `set -gu` clear must reach every peer's
+        // cache, so a missing key adopts `None` on both axes — today a
+        // missing key would adopt nothing and leave the cleared value
+        // cached.
+        let mut g = GlobalState::new();
+        g.apply_all(
+            &opts(&[
+                (tmux::SIDEBAR_DOCKED_WIDTH, "45"),
+                (tmux::SIDEBAR_DOCKED_HEIGHT, "12"),
+            ]),
+            None,
+        );
+        assert_eq!(
+            g.shared_docked_width,
+            Some(45),
+            "precondition: the earlier width"
+        );
+        assert_eq!(
+            g.shared_docked_height,
+            Some(12),
+            "precondition: the earlier height"
+        );
+
+        g.apply_all(&opts(&[]), None);
+
+        assert_eq!(
+            g.shared_docked_width, None,
+            "an absent width key must adopt None"
+        );
+        assert_eq!(
+            g.shared_docked_height, None,
+            "an absent height key must adopt None"
+        );
+        assert_eq!(g.width_latch.last_saved, None);
+        assert_eq!(g.height_latch.last_saved, None);
+    }
+
+    #[test]
+    fn a_non_numeric_docked_value_leaves_the_field_unchanged() {
+        // The absent-key rule (D10) must not swallow the junk case: a
+        // present but non-numeric value still adopts nothing, on both
+        // axes.
+        let mut g = GlobalState::new();
+        g.apply_all(
+            &opts(&[
+                (tmux::SIDEBAR_DOCKED_WIDTH, "45"),
+                (tmux::SIDEBAR_DOCKED_HEIGHT, "12"),
+            ]),
+            None,
+        );
+
+        g.apply_all(
+            &opts(&[
+                (tmux::SIDEBAR_DOCKED_WIDTH, "15%"),
+                (tmux::SIDEBAR_DOCKED_HEIGHT, "tall"),
+            ]),
+            None,
+        );
+
+        assert_eq!(
+            g.shared_docked_width,
+            Some(45),
+            "junk must not corrupt the width"
+        );
+        assert_eq!(
+            g.shared_docked_height,
+            Some(12),
+            "junk must not corrupt the height"
+        );
+        assert_eq!(g.width_latch.last_saved, Some(45));
+        assert_eq!(g.height_latch.last_saved, Some(12));
+    }
+
+    #[test]
+    fn a_peers_docked_height_is_adopted() {
+        // A peer's landed height write is taken in like any other
+        // shared value, advancing the height latch's guard — the
+        // columns case is pinned by
+        // `a_peers_width_and_lock_are_adopted_and_the_floor_parses`.
+        let mut g = GlobalState::new();
+
+        g.apply_all(&opts(&[(tmux::SIDEBAR_DOCKED_HEIGHT, "12")]), None);
+
+        assert_eq!(g.shared_docked_height, Some(12), "a number adopts its rows");
+        assert_eq!(g.height_latch.last_saved, Some(12));
     }
 }

@@ -70,6 +70,37 @@ pub(crate) fn width_floor(min_width: Option<u32>) -> u16 {
     min_width.unwrap_or(DEFAULT_MIN_WIDTH).min(u16::MAX as u32) as u16
 }
 
+/// The minimum docked strip height in rows. The strip floor is the
+/// fixed constant, not an option: the floor's job is stopping
+/// collapse, not readability, and a strip has no
+/// `@sidebar_min_height` option (design D3 of the strip-height-sync
+/// change). It binds the lock's seed, the guard's publishes and
+/// adoptions, and the pop-in restore, and wins over the adoption cap
+/// where the two cannot both hold — mirroring `width_floor`.
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "strip-height-sync rows 2-5 wire the floor; the expectation un-fulfills then"
+    )
+)]
+pub const DEFAULT_MIN_STRIP_HEIGHT: u16 = 4;
+
+/// The strip-height floor for the lock's math — the height-axis twin
+/// of [`width_floor`]. The strip floor is constant, so the u16 value
+/// needs no clamp; the helper keeps the axis rules uniform at the
+/// call sites the width option's floor and this constant feed.
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "strip-height-sync rows 2-5 wire the floor; the expectation un-fulfills then"
+    )
+)]
+pub fn strip_height_floor() -> u16 {
+    DEFAULT_MIN_STRIP_HEIGHT
+}
+
 /// The width an adopting sidebar resizes to with `resize-pane -x`: the
 /// shared docked width clamped to at least [`width_floor`] — the floor
 /// binds both ways — and at most `cap`, normally half the adopting
@@ -105,6 +136,12 @@ mod helper_tests {
             50,
             "the cap clamps adopted widths"
         );
+    }
+
+    #[test]
+    fn strip_height_floor_is_the_documented_constant() {
+        assert_eq!(strip_height_floor(), 4);
+        assert_eq!(strip_height_floor(), DEFAULT_MIN_STRIP_HEIGHT);
     }
 }
 
