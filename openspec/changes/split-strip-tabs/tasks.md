@@ -15,9 +15,9 @@
 
 ## 3. Tab groups
 
-- [ ] 3.1 Add `shown_split_tabs(pane)` and `displayed_split_tab(pane)` in `src/state/tab.rs` (pane B: Thought only for a pi focus, a hidden Thought displays as Tasks without a write); verify with state tests for a pi focus, a Claude focus, and a focus change from a Claude pane back to a pi pane with `thought` stored.
-- [ ] 3.2 Add the per-pane cycle (BackTab: the focused tab pane's group, pane A's group when no tab pane has focus) and the per-pane click handler that writes only its pane's option; verify with state tests that pane B's cycle leaves pane A and `@sidebar_bottom_tab` unchanged and that a pane A click leaves pane B unchanged.
-- [ ] 3.3 Make `draw_bottom_content` take the tab as an argument and make the one-pane callers pass `displayed_bottom_tab()`; verify that the whole snapshot suite passes with no accepted snapshot change.
+- [x] 3.1 Add `shown_split_tabs(pane)` and `displayed_split_tab(pane)` in `src/state/tab.rs` (pane B: Thought only for a pi focus, a hidden Thought displays as Tasks without a write); verify with state tests for a pi focus, a Claude focus, and a focus change from a Claude pane back to a pi pane with `thought` stored.
+- [x] 3.2 Add the per-pane cycle (BackTab: the focused tab pane's group, pane A's group when no tab pane has focus) and the per-pane click handler that writes only its pane's option; verify with state tests that pane B's cycle leaves pane A and `@sidebar_bottom_tab` unchanged and that a pane A click leaves pane B unchanged.
+- [x] 3.3 Make `draw_bottom_content` take the tab as an argument and make the one-pane callers pass `displayed_bottom_tab()`; verify that the whole snapshot suite passes with no accepted snapshot change.
 
 ## 4. Split drawing
 
