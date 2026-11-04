@@ -22,7 +22,7 @@
 
 use super::{AppState, LayoutKind};
 use crate::cli::toggle::SidebarPosition;
-use crate::state::{adopt_target, strip_height_floor, width_floor};
+use crate::state::{adopt_target, resize_pane_args, strip_height_floor, width_floor};
 use crate::tmux::{self, SidebarPaneInfo};
 
 /// Width of the floating panel, in columns. Wide enough that the agent
@@ -250,7 +250,7 @@ impl AppState {
     /// lock holds one, the captured docked width otherwise.
     fn pop_in_column(&mut self, info: SidebarPaneInfo) {
         if let Some(width) = self.apply_pop_in(info, tmux::dock_pane(&self.tmux_pane)) {
-            let args = Self::restore_resize_args(&self.tmux_pane, LayoutKind::Column, width);
+            let args = resize_pane_args(&self.tmux_pane, LayoutKind::Column, width);
             let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
             let _ = tmux::run_tmux(&arg_refs);
         }
@@ -275,29 +275,10 @@ impl AppState {
             StripDockPlan::Bare => tmux::dock_pane(&self.tmux_pane),
         };
         if let Some(height) = self.apply_pop_in(info, result) {
-            let args = Self::restore_resize_args(&self.tmux_pane, LayoutKind::Strip, height);
+            let args = resize_pane_args(&self.tmux_pane, LayoutKind::Strip, height);
             let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
             let _ = tmux::run_tmux(&arg_refs);
         }
-    }
-
-    /// The `resize-pane` argument list that restores a docked size on
-    /// the axis: `-x` for a column, `-y` for a strip. Pure, like
-    /// `split_window_args` in `cli/toggle.rs` and `resize_pane_args` in
-    /// `app/width_guard.rs`, so a unit test can assert the exact
-    /// arguments the pop-in restore issues per axis.
-    fn restore_resize_args(pane: &str, axis: LayoutKind, size: u16) -> Vec<String> {
-        let flag = match axis {
-            LayoutKind::Column => "-x",
-            LayoutKind::Strip => "-y",
-        };
-        vec![
-            "resize-pane".to_string(),
-            "-t".to_string(),
-            pane.to_string(),
-            flag.to_string(),
-            size.to_string(),
-        ]
     }
 
     /// Apply the outcome of the `float_pane` call: on success record the
@@ -815,32 +796,6 @@ mod tests {
         );
         assert_eq!(state.docked_size, None, "the capture is spent");
         assert!(state.width_guard.pending_adopt_observation);
-    }
-
-    #[test]
-    fn restore_resize_args_resizes_on_the_axis() {
-        // Pure argv assertion for the pop-in restore's resize call:
-        // `-y` rows for a strip, `-x` columns for a column.
-        assert_eq!(
-            AppState::restore_resize_args("%9", LayoutKind::Strip, 12),
-            vec![
-                "resize-pane".to_string(),
-                "-t".to_string(),
-                "%9".to_string(),
-                "-y".to_string(),
-                "12".to_string(),
-            ]
-        );
-        assert_eq!(
-            AppState::restore_resize_args("%9", LayoutKind::Column, 45),
-            vec![
-                "resize-pane".to_string(),
-                "-t".to_string(),
-                "%9".to_string(),
-                "-x".to_string(),
-                "45".to_string(),
-            ]
-        );
     }
 
     // ─── strip_dock_plan ─────────────────────────────────────────────

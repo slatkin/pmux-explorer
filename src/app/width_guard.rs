@@ -25,7 +25,8 @@
 //! lands last and its target — never below the floor — wins.
 
 use crate::state::{
-    AppState, GlobalState, LayoutKind, adopt_target, strip_height_floor, width_floor,
+    AppState, GlobalState, LayoutKind, adopt_target, resize_pane_args, strip_height_floor,
+    width_floor,
 };
 use crate::tmux::{self, SidebarPaneInfo};
 
@@ -196,24 +197,6 @@ pub(crate) fn enforce(state: &mut AppState) {
             let _ = tmux::run_tmux(&arg_refs);
         }
     }
-}
-
-/// The `resize-pane` argument list that applies an adopted size on the
-/// axis: `-x` for a column, `-y` for a strip. Pure, like
-/// `split_window_args` in `cli/toggle.rs`, so a unit test can assert
-/// the exact arguments the adopt side issues per axis.
-fn resize_pane_args(pane: &str, axis: LayoutKind, target: u16) -> Vec<String> {
-    let flag = match axis {
-        LayoutKind::Column => "-x",
-        LayoutKind::Strip => "-y",
-    };
-    vec![
-        "resize-pane".into(),
-        "-t".into(),
-        pane.into(),
-        flag.into(),
-        target.to_string(),
-    ]
 }
 
 #[cfg(test)]
@@ -658,8 +641,8 @@ mod tests {
     #[test]
     fn a_strip_adopt_resizes_through_enforce_end_to_end() {
         // Through `enforce`: the strip's adopt arms the echo suppressor
-        // for the landing, and `resize_pane_args` pins the `resize-pane
-        // -y` the action issues.
+        // for the landing, and the resize argv itself is pinned by the
+        // shared `resize_pane_args` test in `state/width.rs`.
         let mut state = AppState::new("%99".into());
         state.layout_kind = LayoutKind::Strip;
         state.global.width_lock = true;
@@ -670,15 +653,6 @@ mod tests {
         enforce(&mut state);
 
         assert!(state.width_guard.pending_adopt_observation);
-        assert_eq!(
-            resize_pane_args("%5", LayoutKind::Strip, 14),
-            vec!["resize-pane", "-t", "%5", "-y", "14"]
-        );
-        assert_eq!(
-            resize_pane_args("%5", LayoutKind::Column, 14),
-            vec!["resize-pane", "-t", "%5", "-x", "14"],
-            "the column axis keeps `resize-pane -x`"
-        );
     }
 
     #[test]

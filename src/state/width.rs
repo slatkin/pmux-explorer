@@ -11,6 +11,7 @@
 
 use super::AppState;
 use crate::app::size_guard::DEFAULT_MIN_WIDTH;
+use crate::state::LayoutKind;
 use crate::state::popout::PANEL_WIDTH;
 
 impl AppState {
@@ -135,6 +136,26 @@ pub(crate) fn adopt_target(shared: u16, floor: u16, cap: u16) -> u16 {
     shared.max(floor).min(cap)
 }
 
+/// The `resize-pane` argument list that applies a docked size on the
+/// axis: `-x` for a column, `-y` for a strip. Pure, like
+/// `split_window_args` in `cli/toggle.rs`, so a unit test can assert
+/// the exact arguments the two issuers — the lock step's adopt side
+/// (`app/width_guard::enforce`) and the pop-in restore
+/// (`state/popout`) — hand to tmux per axis.
+pub(crate) fn resize_pane_args(pane: &str, axis: LayoutKind, size: u16) -> Vec<String> {
+    let flag = match axis {
+        LayoutKind::Column => "-x",
+        LayoutKind::Strip => "-y",
+    };
+    vec![
+        "resize-pane".to_string(),
+        "-t".to_string(),
+        pane.to_string(),
+        flag.to_string(),
+        size.to_string(),
+    ]
+}
+
 #[cfg(test)]
 mod helper_tests {
     use super::*;
@@ -157,6 +178,32 @@ mod helper_tests {
     fn strip_height_floor_is_the_documented_constant() {
         assert_eq!(strip_height_floor(), 4);
         assert_eq!(strip_height_floor(), DEFAULT_MIN_STRIP_HEIGHT);
+    }
+
+    #[test]
+    fn resize_pane_args_resizes_on_the_axis() {
+        // Pure argv assertion for the shared resize call both issuers
+        // run: `-y` rows for a strip, `-x` columns for a column.
+        assert_eq!(
+            resize_pane_args("%9", LayoutKind::Strip, 12),
+            vec![
+                "resize-pane".to_string(),
+                "-t".to_string(),
+                "%9".to_string(),
+                "-y".to_string(),
+                "12".to_string(),
+            ]
+        );
+        assert_eq!(
+            resize_pane_args("%9", LayoutKind::Column, 45),
+            vec![
+                "resize-pane".to_string(),
+                "-t".to_string(),
+                "%9".to_string(),
+                "-x".to_string(),
+                "45".to_string(),
+            ]
+        );
     }
 }
 

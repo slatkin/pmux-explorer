@@ -3,9 +3,9 @@ use std::sync::LazyLock;
 
 use super::commands::{display_message, run_tmux};
 use super::options::{
-    SIDEBAR_BOTTOM_HEIGHT, SIDEBAR_BOTTOM_TAB, SIDEBAR_CURSOR, SIDEBAR_DOCKED_WIDTH,
-    SIDEBAR_FILTER, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH, SIDEBAR_REPO_FILTER,
-    SIDEBAR_SPLIT_AGENTS_WIDTH, SIDEBAR_SPLIT_TAB_A, SIDEBAR_SPLIT_TAB_B,
+    SIDEBAR_BOTTOM_HEIGHT, SIDEBAR_BOTTOM_TAB, SIDEBAR_CURSOR, SIDEBAR_DOCKED_HEIGHT,
+    SIDEBAR_DOCKED_WIDTH, SIDEBAR_FILTER, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH,
+    SIDEBAR_REPO_FILTER, SIDEBAR_SPLIT_AGENTS_WIDTH, SIDEBAR_SPLIT_TAB_A, SIDEBAR_SPLIT_TAB_B,
     SIDEBAR_SPLIT_TAB_B_WIDTH, SIDEBAR_TAB_SPLIT_WIDTH, SIDEBAR_TAB_WIDTH, SIDEBAR_WIDTH_LOCK,
 };
 
@@ -51,13 +51,14 @@ const SIDEBAR_CORE_FIELD_COUNT: usize = 8;
 /// a tab name) so the positional space-split parse stays safe; the repo
 /// filter stays last and is cut at the terminator instead because a repo
 /// name may contain spaces.
-const SHARED_OPTION_FIELDS: [&str; 15] = [
+const SHARED_OPTION_FIELDS: [&str; 16] = [
     SIDEBAR_FILTER,
     SIDEBAR_CURSOR,
     SIDEBAR_BOTTOM_TAB,
     SIDEBAR_BOTTOM_HEIGHT,
     SIDEBAR_TAB_WIDTH,
     SIDEBAR_DOCKED_WIDTH,
+    SIDEBAR_DOCKED_HEIGHT,
     SIDEBAR_WIDTH_LOCK,
     SIDEBAR_MIN_WIDTH,
     SIDEBAR_MAX_WIDTH,
@@ -165,6 +166,7 @@ pub(crate) fn parse_sidebar_pane_reading(out: &str) -> SidebarPaneReading {
     let bottom_height = fields.next().unwrap_or("");
     let tab_width = fields.next().unwrap_or("");
     let docked_width = fields.next().unwrap_or("");
+    let docked_height = fields.next().unwrap_or("");
     let width_lock = fields.next().unwrap_or("");
     let min_width = fields.next().unwrap_or("");
     let max_width = fields.next().unwrap_or("");
@@ -193,6 +195,7 @@ pub(crate) fn parse_sidebar_pane_reading(out: &str) -> SidebarPaneReading {
         bottom_height,
         tab_width,
         docked_width,
+        docked_height,
         width_lock,
         min_width,
         max_width,
@@ -481,7 +484,7 @@ mod tests {
     #[test]
     fn parse_sidebar_pane_reading_parses_all_set_options() {
         let reading = parse_sidebar_pane_reading(
-            "1 1 40 100 30 1 12 0 waiting 7 tasks 45 55 60 on 20 80      my-repo /eot/",
+            "1 1 40 100 30 1 12 0 waiting 7 tasks 45 55 60 70 on 20 80      my-repo /eot/",
         );
         assert_eq!(reading.options.get(SIDEBAR_FILTER), Some(&"waiting".into()));
         assert_eq!(reading.options.get(SIDEBAR_CURSOR), Some(&"7".into()));
@@ -498,6 +501,10 @@ mod tests {
             reading.options.get(SIDEBAR_DOCKED_WIDTH),
             Some(&"60".into())
         );
+        assert_eq!(
+            reading.options.get(SIDEBAR_DOCKED_HEIGHT),
+            Some(&"70".into())
+        );
         assert_eq!(reading.options.get(SIDEBAR_WIDTH_LOCK), Some(&"on".into()));
         assert_eq!(reading.options.get(SIDEBAR_MIN_WIDTH), Some(&"20".into()));
         assert_eq!(reading.options.get(SIDEBAR_MAX_WIDTH), Some(&"80".into()));
@@ -505,19 +512,24 @@ mod tests {
             reading.options.get(SIDEBAR_REPO_FILTER),
             Some(&"my-repo".into())
         );
-        assert_eq!(reading.options.len(), 10);
+        assert_eq!(reading.options.len(), 11);
     }
 
     #[test]
     fn parse_sidebar_pane_reading_round_trips_the_width_lock_fields() {
-        // The width-lock state rides the reading between the bottom tab
-        // and the repo filter: digits for the shared docked width and the
+        // The width-lock state and the shared docked size ride the
+        // reading between the bottom tab and the repo filter: digits
+        // for the shared docked width, the shared docked height and the
         // floor, `on`/`off` for the lock — every value one space-free
         // token, so a repo filter with spaces still lands whole.
         let locked = parse_sidebar_pane_reading(
-            "0 1 80 120 40 0 10 0 all 3 tasks 25 40 45 on 20 80      My Repo /eot/",
+            "0 1 80 120 40 0 10 0 all 3 tasks 25 40 45 14 on 20 80      My Repo /eot/",
         );
         assert_eq!(locked.options.get(SIDEBAR_DOCKED_WIDTH), Some(&"45".into()));
+        assert_eq!(
+            locked.options.get(SIDEBAR_DOCKED_HEIGHT),
+            Some(&"14".into())
+        );
         assert_eq!(locked.options.get(SIDEBAR_WIDTH_LOCK), Some(&"on".into()));
         assert_eq!(locked.options.get(SIDEBAR_MIN_WIDTH), Some(&"20".into()));
         assert_eq!(locked.options.get(SIDEBAR_MAX_WIDTH), Some(&"80".into()));
@@ -525,12 +537,13 @@ mod tests {
             locked.options.get(SIDEBAR_REPO_FILTER),
             Some(&"My Repo".into())
         );
-        assert_eq!(locked.options.len(), 10);
+        assert_eq!(locked.options.len(), 11);
 
-        // Unset, the four slots collapse to separators and stay out of
+        // Unset, the five slots collapse to separators and stay out of
         // the map while the cursor keeps its position.
-        let unset = parse_sidebar_pane_reading("0 1 80 120 40 0 10 0  12             /eot/");
+        let unset = parse_sidebar_pane_reading("0 1 80 120 40 0 10 0  12              /eot/");
         assert_eq!(unset.options.get(SIDEBAR_DOCKED_WIDTH), None);
+        assert_eq!(unset.options.get(SIDEBAR_DOCKED_HEIGHT), None);
         assert_eq!(unset.options.get(SIDEBAR_WIDTH_LOCK), None);
         assert_eq!(unset.options.get(SIDEBAR_MIN_WIDTH), None);
         assert_eq!(unset.options.get(SIDEBAR_MAX_WIDTH), None);
@@ -580,6 +593,7 @@ mod tests {
         assert!(!reading.options.contains_key(SIDEBAR_BOTTOM_HEIGHT));
         assert!(!reading.options.contains_key(SIDEBAR_TAB_WIDTH));
         assert!(!reading.options.contains_key(SIDEBAR_DOCKED_WIDTH));
+        assert!(!reading.options.contains_key(SIDEBAR_DOCKED_HEIGHT));
         assert!(!reading.options.contains_key(SIDEBAR_WIDTH_LOCK));
         assert!(!reading.options.contains_key(SIDEBAR_MIN_WIDTH));
         assert!(!reading.options.contains_key(SIDEBAR_MAX_WIDTH));
@@ -589,7 +603,7 @@ mod tests {
         // so a set filter with unset cursor and repo filter must still
         // land on the right key.
         let only_filter =
-            parse_sidebar_pane_reading("0 1 80 120 40 0 12 0 busy              /eot/");
+            parse_sidebar_pane_reading("0 1 80 120 40 0 12 0 busy               /eot/");
         assert_eq!(
             only_filter.options.get(SIDEBAR_FILTER),
             Some(&"busy".into())
@@ -603,7 +617,7 @@ mod tests {
     #[test]
     fn parse_sidebar_pane_reading_keeps_spaces_in_the_repo_filter() {
         let reading = parse_sidebar_pane_reading(
-            "0 1 80 120 40 0 12 0 all 2 git 33 40          My Repo Dir /eot/",
+            "0 1 80 120 40 0 12 0 all 2 git 33 40           My Repo Dir /eot/",
         );
         assert_eq!(
             reading.options.get(SIDEBAR_REPO_FILTER),
@@ -626,7 +640,7 @@ mod tests {
         // trailing space survives the read instead of being corrupted
         // tick after tick.
         let reading = parse_sidebar_pane_reading(
-            "1 1 40 100 30 1 12 0 busy 3 git 18 40          My Repo  /eot/",
+            "1 1 40 100 30 1 12 0 busy 3 git 18 40           My Repo  /eot/",
         );
         assert_eq!(
             reading.options.get(SIDEBAR_REPO_FILTER),
@@ -657,10 +671,11 @@ mod tests {
 
     #[test]
     fn parse_sidebar_pane_reading_keeps_unset_filter_position_before_repo() {
-        // Every shared option unset except the repo filter: all fourteen
+        // Every shared option unset except the repo filter: all fifteen
         // empty fields must keep their slots so the repo lands on its
         // own key, not on an earlier one's.
-        let reading = parse_sidebar_pane_reading("1 1 40 100 30 1 12 0               repo-x /eot/");
+        let reading =
+            parse_sidebar_pane_reading("1 1 40 100 30 1 12 0                repo-x /eot/");
         assert!(!reading.options.contains_key(SIDEBAR_FILTER));
         assert!(!reading.options.contains_key(SIDEBAR_CURSOR));
         assert!(!reading.options.contains_key(SIDEBAR_BOTTOM_TAB));
@@ -678,7 +693,11 @@ mod tests {
         // the repo filter; each must land on its own key without
         // shifting its neighbours.
         let reading = parse_sidebar_pane_reading(
-            "0 1 80 120 40 0 10 0 all 3 tasks 25 40 45 on 20 80 300 git thought 55 65 My Repo /eot/",
+            "0 1 80 120 40 0 10 0 all 3 tasks 25 40 45 30 on 20 80 300 git thought 55 65 My Repo /eot/",
+        );
+        assert_eq!(
+            reading.options.get(SIDEBAR_DOCKED_HEIGHT),
+            Some(&"30".into())
         );
         assert_eq!(
             reading.options.get(SIDEBAR_TAB_SPLIT_WIDTH),
@@ -704,7 +723,7 @@ mod tests {
             reading.options.get(SIDEBAR_REPO_FILTER),
             Some(&"My Repo".into())
         );
-        assert_eq!(reading.options.len(), 15);
+        assert_eq!(reading.options.len(), 16);
     }
 
     #[test]
@@ -725,7 +744,7 @@ mod tests {
             let mut values: Vec<&str> = split_values.to_vec();
             values[skip] = "";
             let line = format!(
-                "0 1 80 120 40 0 10 0 all 3 tasks 25 40 45 on 20 80 {} My Repo /eot/",
+                "0 1 80 120 40 0 10 0 all 3 tasks 25 40 45  on 20 80 {} My Repo /eot/",
                 values.join(" ")
             );
             let reading = parse_sidebar_pane_reading(&line);
@@ -755,7 +774,7 @@ mod tests {
     #[test]
     fn parse_sidebar_pane_reading_keeps_unset_split_options_out_of_the_map() {
         let reading = parse_sidebar_pane_reading(
-            "0 1 80 120 40 0 10 0 all 3 tasks 25 40 45 on 20 80      My Repo /eot/",
+            "0 1 80 120 40 0 10 0 all 3 tasks 25 40 45  on 20 80      My Repo /eot/",
         );
         for key in [
             SIDEBAR_TAB_SPLIT_WIDTH,
@@ -767,6 +786,7 @@ mod tests {
             assert!(!reading.options.contains_key(key));
         }
         // The neighbours on both sides keep their slots.
+        assert_eq!(reading.options.get(SIDEBAR_DOCKED_HEIGHT), None);
         assert_eq!(reading.options.get(SIDEBAR_MAX_WIDTH), Some(&"80".into()));
         assert_eq!(
             reading.options.get(SIDEBAR_REPO_FILTER),

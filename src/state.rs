@@ -49,7 +49,7 @@ pub use tab::SplitPane;
 pub use tasks::TasksState;
 pub use thought::ThoughtState;
 pub use timers::RefreshTimers;
-pub(crate) use width::{adopt_target, strip_height_floor, width_floor};
+pub(crate) use width::{adopt_target, resize_pane_args, strip_height_floor, width_floor};
 
 /// Bottom-panel tabs. The selected tab is shared state: it lives in
 /// [`GlobalState`], is written with `set -g @sidebar_bottom_tab`, and
