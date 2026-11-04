@@ -38,5 +38,5 @@
 
 ## 7. Integration
 
-- [ ] 7.1 Run `cargo fmt --check`, `cargo clippy` and `cargo test`; verify all pass.
-- [ ] 7.2 Run `cargo build --release` and check a split strip in a scratch tmux server (`tmux -L`) 381 columns wide with `@sidebar_position bottom`: capture the pane with `tmux capture-pane -p` and confirm three panels, then resize the window to 190 columns and confirm one tab panel. Record the output.
+- [x] 7.1 Run `cargo fmt --check`, `cargo clippy` and `cargo test`; verify all pass.
+- [x] 7.2 Run `cargo build --release` and check a split strip in a scratch tmux server (`tmux -L`) 381 columns wide with `@sidebar_position bottom`: capture the pane with `tmux capture-pane -p` and confirm three panels, then resize the window to 190 columns and confirm one tab panel. Record the output.
