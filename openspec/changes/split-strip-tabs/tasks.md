@@ -21,8 +21,8 @@
 
 ## 4. Split drawing
 
-- [ ] 4.1 Add the split branch to `draw_strip`: divider 1 and 2 lines, pane A and pane B contents, pane A's tab bar with the pane label, pane B's bar with glyphs only (pane A: Tools then Git; pane B: Tasks then Thought), hitboxes tagged by pane; verify with inline `insta` snapshots in `tests/ui_snapshot.rs` for a split strip with a pi focus and with a Claude focus.
-- [ ] 4.2 Paint the three-section focus fill in a split strip; verify with inline snapshots in `tests/focus_fill_tests.rs` for `Panes`, `ActivityLog` (pane A) and `TabPaneB` focus, and that the one-pane strip fill snapshots do not change.
+- [x] 4.1 Add the split branch to `draw_strip`: divider 1 and 2 lines, pane A and pane B contents, pane A's tab bar with the pane label, pane B's bar with glyphs only (pane A: Tools then Git; pane B: Tasks then Thought), hitboxes tagged by pane; verify with inline `insta` snapshots in `tests/ui_snapshot.rs` for a split strip with a pi focus and with a Claude focus.
+- [x] 4.2 Paint the three-section focus fill in a split strip; verify with inline snapshots in `tests/focus_fill_tests.rs` for `Panes`, `ActivityLog` (pane A) and `TabPaneB` focus, and that the one-pane strip fill snapshots do not change.
 
 ## 5. Split mouse input
 
