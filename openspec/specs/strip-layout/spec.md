@@ -65,8 +65,12 @@ option is not set or is empty, the height SHALL be `30%`.
 
 ### Requirement: a strip shows two panels side by side
 
-A strip SHALL show, from left to right: the vertical filter bar, the agent
-panel, the tab divider, and the tab panel. Each part except the tab
+A strip that does not show the split layout (`split-strip`) SHALL show,
+from left to right: the vertical filter bar, the agent panel, the tab
+divider, and the tab panel. The requirements of this capability for the
+tab panel, its tab bar, its divider and `@sidebar_tab_width` SHALL apply
+to such a one-pane strip only; a split strip follows `split-strip`. Each
+part except the tab
 bar SHALL use the full height of the strip. The agent panel SHALL show the
 repo header on its first row and the agent rows below it, and SHALL
 scroll vertically as the agent list does in a column. In a strip's
@@ -87,6 +91,10 @@ strip.
 #### Scenario: the pet is on
 - **WHEN** `@sidebar_pet` is `on` and the sidebar is a strip
 - **THEN** the strip shows no pet
+
+#### Scenario: a split strip does not read the one-pane tab width
+- **WHEN** `@sidebar_tab_width` is 50 and the strip shows the split layout
+- **THEN** the panel widths come from the `split-strip` options, and a divider drag does not write `@sidebar_tab_width`
 
 ### Requirement: the strip filter bar is a vertical column
 
@@ -244,15 +252,16 @@ NOT change the tab.
 
 In a strip, Left and `h` SHALL move the keyboard focus one part to the
 left, and Right and `l` one part to the right, in the order filter bar,
-agent panel, tab panel; the focus SHALL stay at an end. Up and Down SHALL
+agent panel, tab panel — or, in a split strip, filter bar, agent panel,
+pane A, pane B; the focus SHALL stay at an end. Up and Down SHALL
 act inside the focused part: in the filter bar they step the category, in
 the agent panel they move the selection and stop at the first and last
-agent, and in the tab panel they scroll. A column SHALL keep its key map.
+agent, and in a tab panel they scroll. A column SHALL keep its key map.
 
 #### Scenario: Right from the agent panel
 - **WHEN** the sidebar is a strip and the agent panel has focus
 - **AND** the user presses Right
-- **THEN** the tab panel has focus
+- **THEN** the tab panel has focus, or pane A in a split strip
 
 #### Scenario: Down on the last agent
 - **WHEN** the sidebar is a strip and the last agent is selected
