@@ -8,13 +8,19 @@ While the sidebar lock is on, every docked strip SHALL converge on one
 shared docked height, held in `@sidebar_docked_height` as absolute rows.
 The lock is the same server-wide lock the width lock uses: toggling it
 from any sidebar instance SHALL govern both axes, a column syncing its
-width and a strip its height. Enabling the lock from a strip SHALL seed
-the shared docked height with the strip's live height, at least the
-minimum strip height floor.
+width and a strip its height.
 
 #### Scenario: the lock is one flag for both axes
 - **WHEN** the user presses `w`, or clicks the strip's lock control, while a strip has focus
 - **THEN** the same server-wide lock toggles, and strips in every window begin converging on one shared height
+
+### Requirement: enabling the lock from a strip seeds the shared height
+
+Enabling the lock from a docked strip SHALL seed the shared docked height
+with the strip's live height, at least the minimum strip height floor. A
+floating strip SHALL seed the docked height it captured on the way out, at
+least the floor, or SHALL enable the lock without a seed when no docked
+height was captured.
 
 #### Scenario: enabling from a strip seeds the shared height
 - **WHEN** the user enables the lock while a docked strip is 12 rows high
@@ -23,6 +29,14 @@ minimum strip height floor.
 #### Scenario: enabling from a squeezed strip seeds the floor
 - **WHEN** the user enables the lock while a docked strip is 2 rows high
 - **THEN** `@sidebar_docked_height` becomes 4 rows, the minimum strip height floor
+
+#### Scenario: enabling from a floating strip seeds the captured height
+- **WHEN** the user pops out a docked strip of 10 rows and then enables the lock
+- **THEN** `@sidebar_docked_height` becomes 10 rows, not the floating panel's height
+
+#### Scenario: enabling from a floating strip with no capture seeds nothing
+- **WHEN** the strip was floated before the sidebar started, so no docked height was captured, and the user enables the lock
+- **THEN** the lock turns on and `@sidebar_docked_height` is not written
 
 ### Requirement: a docked strip publishes its height while locked
 

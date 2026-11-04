@@ -50,7 +50,7 @@ moment, clamped at the axis floor: a column seeds the shared docked width,
 a strip the shared docked height. An instance that is floating when it
 enables the lock SHALL seed the docked size it captured on the way out, or
 — a column only — the floating panel's width when no docked width was
-captured. The shared docked size of the other axis SHALL be cleared, and
+captured; a floating strip with no captured height SHALL seed nothing. The shared docked size of the other axis SHALL be cleared, and
 instances on that axis SHALL keep their sizes until one of them publishes.
 
 #### Scenario: the enabling instance's width becomes the shared width
