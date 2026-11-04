@@ -1649,6 +1649,40 @@ mod tests {
     }
 
     #[test]
+    fn a_strip_click_on_the_lock_control_toggles_the_lock() {
+        // The lock control sits on the control row's last column (3,
+        // after the side switch and the pop-out): a click on it runs
+        // the same toggle the `w` key and the column's lock glyph run
+        // (design D9). In tests tmux rejects the shared write, so the
+        // flip arms the retry latch.
+        let mut state = strip_state();
+        reset_filter_debounce(&mut state);
+
+        state.handle_terminal_click(11, 3, 12);
+
+        assert!(state.global.width_lock, "the click toggles the lock on");
+        assert!(
+            state.global.lock_latch.save_pending,
+            "the rejected shared write arms the retry latch"
+        );
+        assert!(state.split_drag.is_none(), "a control click starts no drag");
+
+        // A second click unlocks again.
+        reset_filter_debounce(&mut state);
+        state.handle_terminal_click(11, 3, 12);
+        assert!(!state.global.width_lock, "a second click unlocks again");
+
+        // The spacer column between the side switch and the pop-out
+        // owns no control.
+        reset_filter_debounce(&mut state);
+        state.handle_terminal_click(11, 1, 12);
+        assert!(
+            !state.global.width_lock,
+            "the spacer column owns no control"
+        );
+    }
+
+    #[test]
     fn a_strip_click_on_the_repo_header_row_changes_no_filter() {
         // The agent panel's first row is the repo header, not a filter
         // row: a click on it must not touch the status filter — it

@@ -229,7 +229,7 @@ fn focus_fill_strip_panes_left_active_right_base() {
      0                     ▎   No tools yet
                             ▎
                             ▎
-    ⇅ ⤢                     ▎
+    ⇅ ⤢☐                    ▎
     ");
 }
 
@@ -266,7 +266,7 @@ fn focus_fill_strip_activity_log_right_active_left_base() {
      0                     ▎   No tools yet
                             ▎
                             ▎
-    ⇅ ⤢                     ▎
+    ⇅ ⤢☐                    ▎
     ");
 }
 
@@ -471,7 +471,7 @@ fn focus_fill_split_panes_agent_section_active() {
      0                                  ▎        No tools yet         ▎        No tasks recorded
                                          ▎                             ▎
                                          ▎                             ▎
-    ⇅ ⤢                                  ▎                             ▎
+    ⇅ ⤢☐                                 ▎                             ▎
     ");
 }
 
@@ -498,7 +498,7 @@ fn focus_fill_split_activity_log_pane_a_active() {
      0                                  ▎        No tools yet         ▎        No tasks recorded
                                          ▎                             ▎
                                          ▎                             ▎
-    ⇅ ⤢                                  ▎                             ▎
+    ⇅ ⤢☐                                 ▎                             ▎
     ");
 }
 
@@ -526,6 +526,6 @@ fn focus_fill_split_tab_pane_b_active() {
      0                                  ▎        No tools yet         ▎        No tasks recorded
                                          ▎                             ▎
                                          ▎                             ▎
-    ⇅ ⤢                                  ▎                             ▎
+    ⇅ ⤢☐                                 ▎                             ▎
     ");
 }

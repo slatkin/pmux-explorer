@@ -55,13 +55,26 @@ fn chip_icon(state: &AppState, filter: StatusFilter) -> (String, ratatui::style:
     }
 }
 
-/// Glyphs of the width-lock control, one cell left of the pop-out
-/// glyph: the ballot box carries its check while the lock is on, and is
-/// empty while docked widths are free to drift. Plain single-width text
-/// glyphs — the padlock family's emoji render double-width, which the
-/// one-cell control region cannot hold (design D8).
+/// Glyphs of the width-lock control: the ballot box carries its check
+/// while the lock is on, and is empty while docked sizes are free to
+/// drift. Plain single-width text glyphs — the padlock family's emoji
+/// render double-width, which the one-cell control region cannot hold
+/// (design D8).
 const LOCK_GLYPH: &str = "☑";
 const UNLOCK_GLYPH: &str = "☐";
+
+/// The lock control's span for the current lock state: `☑` in the
+/// accent while locked, `☐` muted while free. Both layouts' lock
+/// controls draw the same span — the column's filter row and the
+/// strip's filter bar cannot drift.
+fn lock_span<'a>(state: &AppState) -> Span<'a> {
+    let theme = &state.theme;
+    if state.global.width_lock {
+        Span::styled(LOCK_GLYPH, Style::default().fg(theme.accent))
+    } else {
+        Span::styled(UNLOCK_GLYPH, Style::default().fg(theme.filter_inactive))
+    }
+}
 
 /// Render the status filter bar, returning the line and the columns of
 /// the right-edge controls (the lock, and the pop-out where the row is
@@ -135,16 +148,7 @@ pub(super) fn render_filter_bar<'a>(
     // and accent-coloured while locked, empty and muted while free),
     // then the pop-out glyph and the trailing spacer — the way the
     // secondary header right-aligns its repo button.
-    let lock_glyph = if state.global.width_lock {
-        LOCK_GLYPH
-    } else {
-        UNLOCK_GLYPH
-    };
-    let lock_style = if state.global.width_lock {
-        Style::default().fg(theme.accent)
-    } else {
-        Style::default().fg(theme.filter_inactive)
-    };
+    let lock_span = lock_span(state);
     // Everything drawn ends at or before the leftmost control: the
     // last drawn chip, or the leading gutter when every chip was
     // dropped.
@@ -171,7 +175,7 @@ pub(super) fn render_filter_bar<'a>(
     };
     // The lock glyph is on every non-empty row; the pop-out glyph only
     // rides along where the row is three columns wide or more.
-    spans.push(Span::styled(lock_glyph, lock_style));
+    spans.push(lock_span);
     if let Some(popout) = control.popout {
         spans.push(Span::styled(
             control_glyph,
@@ -190,16 +194,21 @@ pub(super) fn render_filter_bar<'a>(
 /// The strip's vertical filter bar: one chip per row — icon, space,
 /// count — in the [`StatusFilter::VARIANTS`] order from the first row,
 /// and the control row (the side switch at column 0, the pop-out at
-/// column 2) on the last row. The chip layout comes from the same pure
-/// function the strip click hit test runs ([`filter_column_layout`]),
-/// so a drawn chip and a clickable chip are always the same chip; that
-/// layout caps a count of 100 or more at 99, and the drawn digits
-/// carry the same cap so a chip never overflows its 4-column row.
+/// column 2, the lock at column 3) on the last row. The chip layout
+/// comes from the same pure function the strip click hit test runs
+/// ([`filter_column_layout`]), so a drawn chip and a clickable chip are
+/// always the same chip; that layout caps a count of 100 or more at
+/// 99, and the drawn digits carry the same cap so a chip never
+/// overflows its 4-column row.
 ///
 /// Unlike the column's horizontal filter row the bar paints no band of
 /// its own: it keeps the agent section's focus fill it is drawn over.
 /// The side switch shows the strip's `⇅` glyph — dimmed while
-/// floating, the way the column's `⇄` is.
+/// floating, the way the column's `⇄` is. The lock control carries the
+/// column's glyph and styles (`☑` accent while locked, `☐` muted while
+/// free — [`lock_span`]), the same server-wide lock the `w` key and
+/// the column's glyph toggle (design D9 of the strip-height-sync
+/// change).
 pub(crate) fn draw_strip_filter_bar(frame: &mut Frame, state: &AppState, area: Rect) {
     let counts = state.status_counts();
     let (chips, control_row) = filter_column_layout(counts, area.height);
@@ -256,6 +265,7 @@ pub(crate) fn draw_strip_filter_bar(frame: &mut Frame, state: &AppState, area: R
                     control_glyph,
                     Style::default().fg(state.theme.status_running),
                 ),
+                lock_span(state),
             ])),
             control_row_rect,
         );
