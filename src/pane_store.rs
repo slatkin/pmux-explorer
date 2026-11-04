@@ -195,8 +195,8 @@ impl PaneStore for MemPaneStore {
 mod tests {
     use super::*;
     use crate::tmux::{
-        PANE_ATTENTION, PANE_BG_CMD, PANE_SESSION_ID, PANE_STARTED_AT, PANE_STATUS,
-        PANE_SUBAGENTS, PANE_WAIT_REASON,
+        PANE_ATTENTION, PANE_BG_CMD, PANE_SESSION_ID, PANE_STARTED_AT, PANE_STATUS, PANE_SUBAGENTS,
+        PANE_WAIT_REASON,
     };
 
     const PANE: &str = "%SEAM";
