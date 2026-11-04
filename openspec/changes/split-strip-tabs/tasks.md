@@ -33,7 +33,7 @@
 
 ## 6. Split keyboard input
 
-- [ ] 6.1 Add `Focus::TabPaneB`, the strip key steps `ActivityLog -> TabPaneB` (Right stops at pane B), Up/Down scroll the focused pane, and the move from `TabPaneB` to `ActivityLog` when a frame draws no pane B; verify with key-event tests for each spec scenario and a test that the column key map is unchanged.
+- [x] 6.1 Add `Focus::TabPaneB`, the strip key steps `ActivityLog -> TabPaneB` (Right stops at pane B), Up/Down scroll the focused pane, and the move from `TabPaneB` to `ActivityLog` when a frame draws no pane B; verify with key-event tests for each spec scenario and a test that the column key map is unchanged.
 - [ ] 6.2 Add the split strip keys to `website/src/content/docs/reference/keybindings.md`; verify by reading the table back.
 
 ## 7. Integration
