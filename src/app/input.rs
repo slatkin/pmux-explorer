@@ -410,10 +410,13 @@ fn apply_status_filter(state: &mut AppState, filter: StatusFilter) {
     state.rebuild_row_targets();
 }
 
-/// Esc from the bottom panel (activity log or filter bar) returns focus
-/// to the agent list.
+/// Esc from the bottom panel (activity log, filter bar, or pane B of
+/// a split strip) returns focus to the agent list.
 fn esc_returns_focus_to_panes(state: &mut AppState) {
-    if state.focus_state.focus == Focus::ActivityLog || state.focus_state.focus == Focus::Filter {
+    if matches!(
+        state.focus_state.focus,
+        Focus::ActivityLog | Focus::TabPaneB | Focus::Filter
+    ) {
         state.focus_state.focus = Focus::Panes;
     }
 }
@@ -1326,5 +1329,18 @@ mod tests {
         state.focus_state.focus = Focus::ActivityLog;
         handle_key_event(key(KeyCode::Right), &mut state, &flag);
         assert_eq!(state.focus_state.focus, Focus::ActivityLog);
+    }
+
+    #[test]
+    fn strip_esc_from_pane_b_returns_to_the_agent_panel() {
+        // Esc from pane B behaves like Esc from pane A: the agent list
+        // takes the focus back.
+        let mut state = split_strip_state();
+        state.focus_state.focus = Focus::TabPaneB;
+        let flag = AtomicBool::new(false);
+
+        handle_key_event(key(KeyCode::Esc), &mut state, &flag);
+
+        assert_eq!(state.focus_state.focus, Focus::Panes);
     }
 }
