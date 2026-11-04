@@ -212,6 +212,20 @@ impl AppState {
             .is_some_and(|strip| strip.tabs_b.is_some())
     }
 
+    /// The tab the drawn feed panel shows: on a split strip the feed
+    /// follows pane B's displayed tab — the Thought tab lives in pane
+    /// B's group — and on a one-pane strip or a column the shared
+    /// displayed tab. The renderer's `draw_split_strip` passes each
+    /// pane its own tab, so this is the one answer the drawn frame and
+    /// the feed refresher share.
+    pub fn drawn_feed_tab(&self) -> BottomTab {
+        if self.split_strip_drawn() {
+            self.displayed_split_tab(SplitPane::B)
+        } else {
+            self.displayed_bottom_tab()
+        }
+    }
+
     /// Demote a `TabPaneB` focus the drawn strip cannot serve: when
     /// the frame drew no pane B (the strip narrowed below the split
     /// threshold), the one tab panel takes the focus back (design D7).
