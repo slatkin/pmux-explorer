@@ -7,9 +7,9 @@ The sidebar is a docked column by default, sharing the window's width with the w
 
 ## The pop-out control
 
-The sidebar's top row carries three controls at its right edge: the side switch, the width lock, and the pop-out. The pop-out control shows `⤢` while the sidebar is docked and `⤡` while the sidebar is floating. Clicking it and pressing the tmux prefix followed by `Ctrl+P` while the sidebar has focus do the same thing: pop out when docked, pop in when floating. Bare `p` does nothing, so an accidental keypress does not float the sidebar.
+The sidebar's top row carries three controls at its right edge: the side switch, the size lock, and the pop-out. The pop-out control shows `⤢` while the sidebar is docked and `⤡` while the sidebar is floating. Clicking it and pressing the tmux prefix followed by `Ctrl+P` while the sidebar has focus do the same thing: pop out when docked, pop in when floating. Bare `p` does nothing, so an accidental keypress does not float the sidebar.
 
-The lock control sits between the side switch and the pop-out control and shows `☐` while the width lock is off and `☑` while it is on. Clicking it and pressing `w` while the sidebar has focus do the same thing: toggle the lock that gives every docked column sidebar on the tmux server one shared docked width. The key works while floating too — a lock enabled from a floating sidebar seeds the docked width the sidebar had before it popped out (the panel's own 40 columns when it was floated from the tmux command line and never docked). A strip has no docked width, so the lock does not apply to it.
+The lock control sits between the side switch and the pop-out control and shows `☐` while the size lock is off and `☑` while it is on. Clicking it and pressing `w` while the sidebar has focus do the same thing: toggle the lock that gives every docked sidebar on the tmux server one shared size — a shared docked width for columns, a shared docked height for strips. The key works while floating too — a lock enabled from a floating sidebar seeds the enabling axis: the docked width the column had before it popped out (the panel's own 40 columns when it was floated from the tmux command line and never docked), or a floating strip's captured docked height, with the lock enabling without a seed when nothing was captured or the probe failed. A strip docked while the lock is on joins the lock on its own axis and converges on the shared docked height.
 
 The control reads the state of the sidebar pane itself, so a sidebar that was floated from the tmux command line shows the `⤡` glyph and can be popped back in from the sidebar.
 
@@ -25,7 +25,7 @@ Popping the sidebar out turns it into a floating pane in the same window:
 
 - **40 columns wide**, as tall as the window, anchored to the right edge.
 - The workspace panes take the full width of the window again — a floating pane takes no space from the layout.
-- The floating panel stays outside the width lock: it keeps its fixed 40 columns while the docked sidebars share theirs.
+- The floating panel stays outside the size lock: it keeps its own size — a floating column its fixed 40 columns, a floating strip its own height — while the docked sidebars share theirs.
 
 While the sidebar floats, the bottom panel is clamped to at most a third of the panel height, so the agent list keeps the rest. The side switch (`⇄`) is disabled while floating: the floating panel keeps its right-edge anchor and the control draws dimmed.
 
@@ -33,7 +33,7 @@ While the sidebar floats, the bottom panel is clamped to at most a third of the 
 
 The same sidebar process keeps running across the switch, so the status filter, the selection, the scroll position and the bottom tab are all still there when the sidebar floats back in.
 
-Popping the sidebar back in restores the docked width the sidebar had before the pop-out — or the shared docked width while the width lock is on — so a sidebar you resized by hand keeps that width.
+Popping the sidebar back in restores the size the sidebar had before the pop-out — or the shared docked size while the size lock is on — so a sidebar you resized by hand keeps that size.
 
 ## tmux version
 

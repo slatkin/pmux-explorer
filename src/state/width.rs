@@ -1,4 +1,4 @@
-//! The width lock's enable/disable action.
+//! The size lock's enable/disable action.
 //!
 //! One method — [`AppState::toggle_width_lock`] — is the single writer
 //! behind the `w` key and both lock glyphs' clicks (the column's
@@ -457,9 +457,8 @@ mod tests {
         // The unified retry touches only pending latches, so a retry
         // that leaves one latch pending cannot have cleared the other.
         let mut g = GlobalState::new();
-        // A width must sit behind the pending flag: the `None` guard in
-        // `save_shared_docked_width` clears the flag without a write,
-        // which is the behavior this test is not about.
+        // A width must sit behind the pending flag so the retry exercises
+        // the width latch's own write path.
         g.shared_docked_width = Some(45);
         g.width_latch.save_pending = true;
 

@@ -69,7 +69,8 @@ pub(crate) enum WidthAction {
     /// with `GlobalState::save_shared_docked_width` (a column) or
     /// `GlobalState::save_shared_docked_height` (a strip).
     Publish,
-    /// The pane is off the shared width: resize it to `target`.
+    /// The pane is off the shared size on the step's axis: resize it to
+    /// `target`.
     Adopt { target: u16 },
 }
 

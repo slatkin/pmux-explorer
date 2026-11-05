@@ -357,7 +357,7 @@ impl AppState {
     /// locked. Otherwise the capture is spent, as it has always been.
     ///
     /// The clamp runs through the shared `width_floor`/`adopt_target`
-    /// helpers in `crate/state/width.rs` — the same helpers the lock
+    /// helpers in `src/state/width.rs` — the same helpers the lock
     /// step's adopt side and the enabling seeds use (design D6).
     fn pop_in_restore_size(&mut self, info: SidebarPaneInfo) -> Option<u16> {
         if self.global.width_lock {
