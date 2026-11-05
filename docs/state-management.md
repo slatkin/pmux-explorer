@@ -23,20 +23,19 @@ read from tmux on every refresh tick.
 | `split_agents_percent` | `@sidebar_split_agents_width` | User input (split divider 1 drag release); tmux write retried when rejected | Agent-panel width in a split strip as a percent of the strip width (unset, empty, or an out-of-range value gives 33); shared server-wide, each split strip adopts a peer's value on its next refresh tick, held back while a strip drag stands |
 | `split_tab_b_percent` | `@sidebar_split_tab_b_width` | User input (split divider 2 drag release); tmux write retried when rejected | Pane B's width with divider 2 as a percent of the strip width (unset, empty, or an out-of-range value gives 33); shared server-wide with the same drag block, and pane A takes the rest of the strip |
 
-| `width_lock` | `@sidebar_width_lock` | User input (`w`, the lock glyph a column draws, or the strip's lock control at column 3 of its control row) or a peer's toggle adopted on refresh; tmux write retried when rejected | Shared on/off switch for the sidebar size lock, server-wide — one flag governing both axes; while `on` every docked sidebar converges on `shared_docked_width` (a column) or `shared_docked_height` (a strip) within one refresh tick. Enabling seeds only the enabling instance's own axis and clears the other axis's shared value, so peers on that axis keep their sizes until one of them publishes |
-| `shared_docked_width` | `@sidebar_docked_width` | Seeded by the enabling column, then published on an observed docked-width change while locked; tmux write retried when rejected | Shared docked width in columns (`None` until seeded); adopting columns clamp it to half the window and never below the `@sidebar_min_width` floor |
-| `shared_docked_height` | `@sidebar_docked_height` | Seeded by the enabling strip, then published on an observed docked-height change while locked; tmux write retried when rejected | Shared docked height in absolute rows (`None` until seeded); adopting strips clamp it to half the window and never below the 4-row strip floor (`DEFAULT_MIN_STRIP_HEIGHT` in `src/state/width.rs`). A strip enabling the lock seeds `max(live rows, floor)`; a floating strip seeds its captured docked height, and enables unseeded when nothing was captured or the probe failed |
+| `shared_docked_width` | `@sidebar_docked_width` | Published by the column whose docked width changed locally; tmux write retried when rejected | Shared docked width in columns (`None` until one sidebar publishes); adopting columns clamp it to half the window and never below the `@sidebar_min_width` floor |
+| `shared_docked_height` | `@sidebar_docked_height` | Published by the strip whose docked height changed locally; tmux write retried when rejected | Shared docked height in absolute rows (`None` until one strip publishes); adopting strips clamp it to half the window and never below the 4-row strip floor (`DEFAULT_MIN_STRIP_HEIGHT` in `src/state/width.rs`) |
 | `min_width` | `@sidebar_min_width` | Adopted verbatim every refresh tick — the sidebar never writes it | Parsed width floor (`None` when unset or non-numeric); readers fall back to the default floor |
 
 Each synced field is guarded so a failed write never loses the user's
 choice: the status filter, the bottom tab, the bottom percent, the strip
-tab percent, the two split tabs, the two split widths, the width lock and the two shared docked sizes each hold
+tab percent, the two split tabs, the two split widths and the two shared docked sizes each hold
 one `SaveLatch<T>` instance (`filter_latch`, `tab_latch`,
 `percent_latch`, `tab_percent_latch`, `split_tab_a_latch`,
 `split_tab_b_latch`, `split_agents_percent_latch`,
-`split_tab_b_percent_latch`, `lock_latch`, `width_latch`,
+`split_tab_b_percent_latch`, `width_latch`,
 `height_latch` in `GlobalState` — one retry mechanism, written once and
-shared by all eleven). The cursor and repo filter keep plain
+shared by all ten). The cursor and repo filter keep plain
 `last_saved_cursor` / `last_saved_repo_filter` values instead.
 
 A `SaveLatch` remembers the last value tmux successfully accepted
@@ -216,7 +215,7 @@ Per-pane file-based state:
 | `layout_kind` | Once at startup | Whether this sidebar is a full-height column or a full-width strip (`LayoutKind`), read once from the `PMUX_SIDEBAR_LAYOUT` process environment — never from a pane option; a missing or unknown value gives `Column`. Every layout-specific path branches on it |
 | `docked_size` | On pop-out / pop-in (user input) | The pane size captured when the sidebar was popped out, restored by the pop-in (`resize-pane -x` for a column, `-y` for a strip): the width of a column, the height of a strip (`src/state/popout.rs`). `None` while docked and when the pane was already floating when the sidebar started |
 | `docked_edge` | On pop-out / pop-in (user input) | The edge a popped-out strip was docked at, captured with the docked size on the way out — a floating pane is no longer at an edge, so the pop-in cannot read it off the pane. `None` for a column and when the pane was already floating; the strip pop-in then falls back to the bare join |
-| `width_guard` | Every 1s (refresh cycle) | Cross-tick state of the size-lock guard step (`src/app/width_guard.rs`), run on the axis the instance's fixed layout gave it — a column on width, a strip on height: `last_observed_size` records the last docked pane size on that axis (`None` until the first docked reading primes it, so a startup size cannot publish itself) and `pending_adopt_observation` is the one-shot echo suppressor armed whenever this instance issues a `resize-pane` (`-x` for a column, `-y` for a strip) — an adoption, or the pop-in restore (`src/state/popout.rs`) — so its own landing is not published back as the shared size |
+| `width_guard` | Every 1s (refresh cycle) | Cross-tick state of the size-sync guard step (`src/app/width_guard.rs`), run on the axis the instance's fixed layout gave it — a column on width, a strip on height: `last_observed_size` records the last docked pane size on that axis (`None` until the first docked reading primes it, so a startup size cannot publish itself), `last_observed_window_size` records the window's matching dimension so a window-resize tick (tmux resizes every pane proportionally) is never read as a user resize to publish, and `pending_adopt_observation` is the one-shot echo suppressor armed whenever this instance issues a `resize-pane` (`-x` for a column, `-y` for a strip) — an adoption, or the pop-in restore (`src/state/popout.rs`) — so its own landing is not published back as the shared size |
 | `version_notice` | Once at startup (bg fetch) | GitHub release update notice, `None` when up-to-date |
 
 ---
@@ -282,7 +281,7 @@ TUI main loop (app::run in app.rs; submodules app/{setup,workers,input,render,pa
   → refresh() every 1s
     → retry_pending_saves            ← a write tmux rejected is retried before the shared read
     → get_sidebar_pane_reading()     ← reads pane state + @sidebar_* in one display-message
-    → global.apply_all()             ← applies the shared options (filter, cursor, bottom tab, repo filter, bottom percent, tab percent, split tabs, split widths, width lock, shared docked width, shared docked height, min width) under the SaveLatch/last_saved_* guards
+    → global.apply_all()             ← applies the shared options (filter, cursor, bottom tab, repo filter, bottom percent, tab percent, split tabs, split widths, shared docked width, shared docked height, min width) under the SaveLatch/last_saved_* guards
     → query_sessions() (tmux.rs)     ← reads @pane_* via `tmux list-panes -a`
     → pane_name resolved in the same query (the pane title when it is
       a real name — em dash suffixes trimmed; no extra tmux call)
