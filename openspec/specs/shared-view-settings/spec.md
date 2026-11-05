@@ -10,10 +10,10 @@ share, and how fast an instance shows a change made in another instance.
 
 All sidebar instances on one tmux server SHALL share the status filter, the
 repo filter, the cursor's agent pane in the agent list, the selected bottom
-tab, the bottom panel height, the strip tab width, and — while the width
-lock is on — the sidebar's docked width and a docked strip's height. A
-change to one of these settings in one instance SHALL apply to every other
-instance on the same tmux server.
+tab, the bottom panel height, the strip tab width, the sidebar's docked
+width and a docked strip's height. A change to one of these settings in
+one instance SHALL apply to every other instance on the same tmux server.
+No key, control or tmux option turns this sharing off.
 
 #### Scenario: a filter change applies to another window
 - **WHEN** the user selects the waiting status filter in the sidebar of window A
@@ -34,7 +34,7 @@ instance on the same tmux server.
 - **THEN** the sidebar of window B shows the Tasks tab
 
 #### Scenario: a docked-width change applies to another window
-- **WHEN** the width lock is on and the user resizes the docked sidebar of window A
+- **WHEN** the user resizes the docked sidebar of window A
 - **THEN** the docked sidebar of window B shows the same width within one refresh tick
 
 #### Scenario: a strip tab width change applies to another window
@@ -43,7 +43,7 @@ instance on the same tmux server.
 - **THEN** the strip of window B shows a tab panel that is 50 percent wide
 
 #### Scenario: a docked strip height change applies to another window
-- **WHEN** the width lock is on and the user resizes the docked strip of window A
+- **WHEN** the user resizes the docked strip of window A
 - **THEN** the docked strip of window B shows the same height within one refresh tick
 
 ### Requirement: a shared change shows within one refresh tick
@@ -118,17 +118,12 @@ tmux still holds.
 ### Requirement: the rest of the view state stays local
 
 Each sidebar instance SHALL keep its own focus, scroll position, open
-popups and git data, and — while the width lock is off — its own docked
-width. A change to these in one instance SHALL NOT change them in another
-instance.
+popups and git data. A change to these in one instance SHALL NOT change
+them in another instance.
 
 #### Scenario: a scroll change stays local
 - **WHEN** the user scrolls the activity log down in the sidebar of window A
 - **THEN** the sidebar of window B keeps its own activity log scroll position
-
-#### Scenario: a width change stays local while unlocked
-- **WHEN** the width lock is off and the user resizes the docked sidebar of window A
-- **THEN** the sidebar of window B keeps its own width
 
 ### Requirement: focusing a different agent does not change the bottom tab
 
@@ -162,57 +157,6 @@ no bottom tab value — on a server where no instance has selected a tab yet.
 - **AND** a sidebar instance starts
 - **THEN** it shows the Activity tab
 
-### Requirement: the width lock is shared
-
-All sidebar instances on one tmux server SHALL share one width-lock state,
-on or off. Toggling the lock in one instance SHALL apply to every other
-instance on the same server within one refresh tick. A tmux server that
-holds no width-lock value SHALL behave as unlocked.
-
-#### Scenario: locking in one window locks all windows
-- **WHEN** the user enables the width lock in the sidebar of window A
-- **THEN** the sidebar of window B treats the lock as on within one refresh tick
-
-#### Scenario: a first instance on a fresh server
-- **WHEN** the tmux server holds no width-lock value
-- **AND** a sidebar instance starts
-- **THEN** it runs with the lock off
-
-### Requirement: enabling the lock seeds the shared width
-
-When the width lock goes from off to on, the shared docked size of the
-enabling instance's axis SHALL take that instance's docked size at that
-moment, clamped at the axis floor: a column seeds the shared docked width,
-a strip the shared docked height. An instance that is floating when it
-enables the lock SHALL seed the docked size it captured on the way out, or
-— a column only — the floating panel's width when no docked width was
-captured; a floating strip with no captured height SHALL seed nothing. The shared docked size of the other axis SHALL be cleared, and
-instances on that axis SHALL keep their sizes until one of them publishes.
-
-#### Scenario: the enabling instance's width becomes the shared width
-- **WHEN** the user enables the lock on a docked sidebar of 30 columns
-- **THEN** the shared docked width is 30 columns and every other docked
-  sidebar on the server adopts it within one refresh tick
-
-#### Scenario: enabling while floating seeds the captured width
-- **WHEN** the user pops a 25 column sidebar out and then enables the lock
-- **THEN** the shared docked width is 25 columns and every docked sidebar
-  on the server adopts it within one refresh tick
-
-#### Scenario: enabling from a strip clears the shared width
-- **WHEN** the shared docked width holds 45 columns from an earlier lock session, a docked column is 30 columns wide, and the user enables the lock from a strip
-- **THEN** the shared docked width is cleared and the column stays 30 columns wide
-
-### Requirement: unlocking keeps every sidebar at its current width
-
-When the width lock goes from on to off, each sidebar SHALL keep the width
-it has at that moment. A later width change in one instance SHALL NOT
-change another instance's width.
-
-#### Scenario: a resize stays local after unlocking
-- **WHEN** the lock is turned off and the user later resizes the docked sidebar of window A
-- **THEN** the sidebar of window B keeps the width it had
-
 ### Requirement: a failed width publish is not reverted
 
 When an instance cannot write its docked width to the shared option, the
@@ -220,7 +164,7 @@ next refresh tick SHALL NOT resize its pane back to the stale shared
 value, and the write SHALL be retried.
 
 #### Scenario: the tmux write fails
-- **WHEN** the lock is on, the user resizes the docked sidebar to 45 columns, and the write of the new shared width to tmux fails
+- **WHEN** the user resizes the docked sidebar to 45 columns and the write of the new shared width to tmux fails
 - **THEN** the sidebar stays at 45 columns after the next refresh tick and the write is retried until it lands
 
 ### Requirement: the split height is shared
