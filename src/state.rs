@@ -49,7 +49,7 @@ pub use tab::SplitPane;
 pub use tasks::TasksState;
 pub use thought::ThoughtState;
 pub use timers::RefreshTimers;
-pub(crate) use width::{width_adopt_target, width_floor};
+pub(crate) use width::{adopt_target, resize_pane_args, strip_height_floor, width_floor};
 
 /// Bottom-panel tabs. The selected tab is shared state: it lives in
 /// [`GlobalState`], is written with `set -g @sidebar_bottom_tab`, and
@@ -238,11 +238,11 @@ pub struct AppState {
     /// sidebar from before the strip layout existed keeps its behavior.
     /// The layout is fixed for the life of the pane.
     pub layout_kind: LayoutKind,
-    /// Cross-tick state of the width-lock step (design D4): the last
-    /// observed docked width and the echo suppressor for this instance's
-    /// own resizes. The step itself lives in `app/width_guard.rs`;
-    /// `apply_pop_in` (`state/popout.rs`) arms the suppressor so a pop-in
-    /// restore does not echo back as a publish.
+    /// Cross-tick state of the size-lock step (design D4, D5): the last
+    /// observed docked size on this instance's axis and the echo
+    /// suppressor for this instance's own resizes. The step itself lives
+    /// in `app/width_guard.rs`; `apply_pop_in` (`state/popout.rs`) arms
+    /// the suppressor so a pop-in restore does not echo back as a publish.
     pub width_guard: crate::app::width_guard::WidthGuardState,
     /// Whether the pet animation is drawn and ticked. Loaded once at startup
     /// from the `@sidebar_pet` tmux option. Defaults to `false`.
@@ -1646,6 +1646,40 @@ mod tests {
             "the click on row 2 selects the waiting chip"
         );
         assert!(state.split_drag.is_none(), "a chip click starts no drag");
+    }
+
+    #[test]
+    fn a_strip_click_on_the_lock_control_toggles_the_lock() {
+        // The lock control sits on the control row's last column (3,
+        // after the side switch and the pop-out): a click on it runs
+        // the same toggle the `w` key and the column's lock glyph run
+        // (design D9). In tests tmux rejects the shared write, so the
+        // flip arms the retry latch.
+        let mut state = strip_state();
+        reset_filter_debounce(&mut state);
+
+        state.handle_terminal_click(11, 3, 12);
+
+        assert!(state.global.width_lock, "the click toggles the lock on");
+        assert!(
+            state.global.lock_latch.save_pending,
+            "the rejected shared write arms the retry latch"
+        );
+        assert!(state.split_drag.is_none(), "a control click starts no drag");
+
+        // A second click unlocks again.
+        reset_filter_debounce(&mut state);
+        state.handle_terminal_click(11, 3, 12);
+        assert!(!state.global.width_lock, "a second click unlocks again");
+
+        // The spacer column between the side switch and the pop-out
+        // owns no control.
+        reset_filter_debounce(&mut state);
+        state.handle_terminal_click(11, 1, 12);
+        assert!(
+            !state.global.width_lock,
+            "the spacer column owns no control"
+        );
     }
 
     #[test]

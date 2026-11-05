@@ -2510,7 +2510,7 @@ fn snapshot_strip_120x12_with_the_tools_tab() {
                                                                             ▎
                                                                             ▎
                                                                             ▎
-    ⇅ ⤢                                                                     ▎
+    ⇅ ⤢☐                                                                    ▎
     ");
 }
 
@@ -2530,7 +2530,7 @@ fn snapshot_strip_pi_pane_shows_the_thought_glyph() {
                                                                             ▎
                                                                             ▎
                                                                             ▎
-    ⇅ ⤢                                                                     ▎
+    ⇅ ⤢☐                                                                    ▎
     ");
 }
 
@@ -2603,7 +2603,7 @@ fn snapshot_strip_nests_a_subagent_under_its_parent() {
                                                                             ▎
                                                                             ▎
                                                                             ▎
-    ⇅ ⤢                                                                     ▎
+    ⇅ ⤢☐                                                                    ▎
     ");
 }
 
@@ -2617,7 +2617,7 @@ fn snapshot_strip_tab_width_zero_hides_the_tab_panel() {
     󰥔 0 ┃ 󰒲 
     󰒲 1     Waiting for prompt…
      0
-    ⇅ ⤢
+    ⇅ ⤢☐
     ");
 }
 
@@ -2631,7 +2631,7 @@ fn snapshot_strip_40_columns_has_no_tab_panel() {
     󰥔 0 ┃ 󰒲 
     󰒲 1     Waiting for prompt…
      0
-    ⇅ ⤢
+    ⇅ ⤢☐
     ");
 }
 
@@ -2655,7 +2655,7 @@ fn snapshot_strip_control_row_docked_shows_the_vertical_switch() {
     󰥔 0 ┃ 󰒲 
     󰒲 1     Waiting for prompt…
      0
-    ⇅ ⤢
+    ⇅ ⤢☐
     ");
     let buf = render_to_buffer(&mut state, 40, 6);
     assert_eq!(buf[(0, 5)].symbol(), "⇅");
@@ -2675,7 +2675,7 @@ fn snapshot_strip_control_row_floating_dims_the_switch() {
     󰥔 0 ┃ 󰒲 
     󰒲 1     Waiting for prompt…
      0
-    ⇅ ⤡
+    ⇅ ⤡☐
     ");
     let buf = render_to_buffer(&mut state, 40, 6);
     assert_eq!(buf[(0, 5)].symbol(), "⇅");
@@ -2683,6 +2683,47 @@ fn snapshot_strip_control_row_floating_dims_the_switch() {
     assert_eq!(buf[(0, 5)].fg, state.theme.filter_inactive);
     assert_eq!(buf[(2, 5)].symbol(), "⤡");
     assert_eq!(buf[(2, 5)].fg, state.theme.status_running);
+}
+
+#[test]
+fn snapshot_strip_control_row_shows_the_unlocked_lock_glyph() {
+    // The lock control rides the control row's last column: `☐` muted
+    // while the lock is off — the column's unlocked lock styles (design
+    // D9). A 40-column strip isolates the bar.
+    let mut state = make_strip_state(AgentType::Claude, PaneStatus::Idle, 0);
+    assert!(!state.global.width_lock);
+    let output = render_to_string(&mut state, 40, 6);
+    insta::assert_snapshot!(output, @"
+    󱓯 1 ⓘ                                — ▾
+     0 project
+    󰥔 0 ┃ 󰒲 
+    󰒲 1     Waiting for prompt…
+     0
+    ⇅ ⤢☐
+    ");
+    let buf = render_to_buffer(&mut state, 40, 6);
+    assert_eq!(buf[(3, 5)].symbol(), "☐");
+    assert_eq!(buf[(3, 5)].fg, state.theme.filter_inactive);
+}
+
+#[test]
+fn snapshot_strip_control_row_shows_the_checked_lock_glyph_while_locked() {
+    // While locked the glyph carries its check in the accent — the
+    // same styles the column's lock glyph wears.
+    let mut state = make_strip_state(AgentType::Claude, PaneStatus::Idle, 0);
+    state.global.width_lock = true;
+    let output = render_to_string(&mut state, 40, 6);
+    insta::assert_snapshot!(output, @"
+    󱓯 1 ⓘ                                — ▾
+     0 project
+    󰥔 0 ┃ 󰒲 
+    󰒲 1     Waiting for prompt…
+     0
+    ⇅ ⤢☑
+    ");
+    let buf = render_to_buffer(&mut state, 40, 6);
+    assert_eq!(buf[(3, 5)].symbol(), "☑");
+    assert_eq!(buf[(3, 5)].fg, state.theme.accent);
 }
 
 // ─── Split strip: three panels, two tab bars ────────────────────────
@@ -2713,7 +2754,7 @@ fn snapshot_split_strip_with_pi_focus_ui() {
      0                                  ▎        No tools yet         ▎        No tasks recorded
                                          ▎                             ▎
                                          ▎                             ▎
-    ⇅ ⤢                                  ▎                             ▎
+    ⇅ ⤢☐                                 ▎                             ▎
     ");
 }
 
@@ -2729,7 +2770,7 @@ fn snapshot_split_strip_with_claude_focus_ui() {
      0                                  ▎        No tools yet         ▎        No tasks recorded
                                          ▎                             ▎
                                          ▎                             ▎
-    ⇅ ⤢                                  ▎                             ▎
+    ⇅ ⤢☐                                 ▎                             ▎
     ");
 }
 
@@ -2748,7 +2789,7 @@ fn snapshot_narrow_strip_demotes_a_pane_b_focus_on_the_frame() {
     󰥔 0 ┃ 󰒲 
     󰒲 1     Waiting for prompt…
      0
-    ⇅ ⤢
+    ⇅ ⤢☐
     ");
     assert_eq!(
         state.focus_state.focus,

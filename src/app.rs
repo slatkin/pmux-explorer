@@ -131,14 +131,16 @@ pub fn run(
                     },
                 );
             }
-            // Converge the docked width on the shared value for every docked
+            // Converge the docked size on the shared value for every docked
             // pane, every tick, locked or not: hidden windows must be right
-            // before the user switches to them. Runs after the active-window
-            // block so an adopt resize lands after `size_guard`'s grow — the
-            // adopt target never goes below the floor, so the floor wins
-            // when both fire. Floating panes and unknown window sizes are
-            // no-ops inside the guard, so floating panes still reach
-            // `panel_guard` here exactly as before.
+            // before the user switches to them. Each instance serves the
+            // axis its fixed layout gave it — a column the shared width, a
+            // strip the shared height (design D5). Runs after the
+            // active-window block so an adopt resize lands after
+            // `size_guard`'s grow — the adopt target never goes below the
+            // floor, so the floor wins when both fire. Floating panes and
+            // unknown window sizes are no-ops inside the guard, so floating
+            // panes still reach `panel_guard` here exactly as before.
             width_guard::enforce(&mut state);
             git_tab_active.store(state.git_poll_active(), Ordering::Relaxed);
             last_refresh = std::time::Instant::now();

@@ -488,8 +488,9 @@ pub fn cols_for_percent(cols: u16, width: u16) -> u8 {
 /// The layout of the strip's vertical filter bar: one chip per row,
 /// in the [`StatusFilter::VARIANTS`] order from the first row, and
 /// the control row (the side switch at column 0, the pop-out at
-/// column 2) on the last row. A chip that does not fit above the
-/// control row is dropped whole, together with every chip after it.
+/// column 2, the lock at column 3) on the last row. A chip that does
+/// not fit above the control row is dropped whole, together with every
+/// chip after it.
 ///
 /// The counts shape only the chip widths — a chip is its icon, one
 /// space, then the count digits, and a count of 100 or more is drawn
@@ -863,11 +864,12 @@ impl AppState {
     }
 
     /// Handle a press in the strip's vertical filter bar: the control
-    /// row acts (the side switch at column 0, the pop-out at column 2)
-    /// and a chip row selects its category. The chip layout comes from
-    /// the same pure function the renderer used for the current frame
-    /// ([`filter_column_layout`], keyed on the drawn bar's height), so
-    /// a click can only ever select a chip that is actually drawn.
+    /// row acts (the side switch at column 0, the pop-out at column 2,
+    /// the lock at column 3) and a chip row selects its category. The
+    /// chip layout comes from the same pure function the renderer used
+    /// for the current frame ([`filter_column_layout`], keyed on the
+    /// drawn bar's height), so a click can only ever select a chip
+    /// that is actually drawn.
     ///
     /// The same two gates the column's filter row applies stand here:
     /// a click that lands while this sidebar was not the active pane is
@@ -885,11 +887,15 @@ impl AppState {
         if control_row.is_some_and(|control_row| row == control_row) {
             // The drawn control row: the side switch first (a no-op
             // while the sidebar floats; the dimmed glyph says so before
-            // the click), then the pop-out one column in.
+            // the click), then the pop-out one column in, then the
+            // lock control — the same single writer the `w` key and
+            // the column's lock glyph run (design D9).
             if col == 0 {
                 self.switch_sidebar_side();
             } else if col == 2 {
                 self.toggle_popout();
+            } else if col == 3 {
+                self.toggle_width_lock();
             }
             return;
         }

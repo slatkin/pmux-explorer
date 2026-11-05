@@ -19,7 +19,7 @@ description: Every shortcut in the sidebar, the worktree spawn modal, and the cl
 | `Shift+Tab`    | Cycle bottom panel tab (Tools, Thought (pi panes only), Tasks, Git) |
 | `prefix + Ctrl+P` | Pop the sidebar out / back in while the sidebar has focus        |
 | `prefix + Ctrl+O` | Switch the sidebar's side (every window) while the sidebar has focus |
-| `w`            | Toggle the width lock — one shared docked width server-wide        |
+| `w`            | Toggle the size lock — one shared docked width (columns) / docked height (strips) server-wide |
 | `Esc`          | Return focus or close the popup                                     |
 
 ### Strip sidebar (top / bottom position)
@@ -56,7 +56,7 @@ without the prefix do nothing. Outside the sidebar, `prefix + Ctrl+O` keeps
 tmux's `rotate-window` action. See [tmux options](/pmux-explorer/reference/tmux-options/)
 for how the switch interacts with `@sidebar_position`.
 
-The `w` key has a click twin: the lock control (`☐` unlocked, `☑` locked) one cell left of the pop-out control in the sidebar's top row toggles the same width lock.
+The `w` key has a click twin: the lock control (`☐` unlocked, `☑` locked) one cell left of the pop-out control in the sidebar's top row toggles the same size lock.
 
 ### Split strip (when the tab panel splits)
 

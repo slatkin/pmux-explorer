@@ -1,57 +1,93 @@
-//! The width lock's enable/disable action.
+//! The size lock's enable/disable action.
 //!
 //! One method — [`AppState::toggle_width_lock`] — is the single writer
-//! behind the `w` key and the lock glyph's click (both wired in task 4).
-//! It flips [`GlobalState::width_lock`] and persists the intent to the
-//! shared tmux options: the width seed first, the lock flag second, so
-//! a peer adopting `lock=on` mid-tick always finds a width already in
-//! place (design D5).
+//! behind the `w` key and both lock glyphs' clicks (the column's
+//! filter-row control and the strip's filter-bar control). It flips
+//! [`GlobalState::width_lock`] and persists the intent to the shared
+//! tmux options: the enabling axis's seed first, the other axis's
+//! clear second, the lock flag last, so a peer adopting `lock=on`
+//! mid-tick always finds its axis already seeded or cleared (design
+//! D8, D10).
 
 use super::AppState;
 use crate::app::size_guard::DEFAULT_MIN_WIDTH;
+use crate::state::LayoutKind;
 use crate::state::popout::PANEL_WIDTH;
 
 impl AppState {
-    /// Flip the width lock and persist the intent to the shared tmux
-    /// options. Enabling seeds the shared docked width with the
-    /// floored docked width of this instance — `max(W, floor)` from
-    /// this pane's reading, the captured `docked_size` floored while
-    /// floating, or `PANEL_WIDTH` when no capture exists (a pane
-    /// floated from the tmux command line) — and never the live
-    /// 40-column pane width of the floating panel.
+    /// Flip the sidebar size lock and persist the intent to the shared
+    /// tmux options. The flag is one server-wide lock for both axes: a
+    /// column seeds the shared docked width, a strip the shared docked
+    /// height, each with the floored docked size of this instance on
+    /// its own axis — `max(size, floor)` from this pane's reading, the
+    /// captured `docked_size` floored while floating, or (a column
+    /// only) `PANEL_WIDTH` when no capture exists (a pane floated from
+    /// the tmux command line) — and never the live panel size. A
+    /// floating strip with no capture has no fixed size to fall back
+    /// to and enables unseeded (design D3).
     ///
-    /// The seed is written only on a valid probe: a `window_width` of 0
-    /// means the last reading was the FALLBACK (the query failed or the
-    /// pane is gone) and its 28 columns are not a real size, so the
-    /// lock is enabled unseeded rather than propagated. Disabling
-    /// writes the `off` flag alone; the stale `@sidebar_docked_width`
-    /// stays behind harmlessly and is reused when the lock returns.
+    /// The seed is written only on a valid probe: a `window_width` of
+    /// 0 (a column) or a `window_height` of 0 (a strip) means the last
+    /// reading was the FALLBACK (the query failed or the pane is gone)
+    /// and its size is not a real size, so the lock is enabled
+    /// unseeded rather than propagated.
     ///
-    /// Both writes run even if the first fails: a stubbornly failing
-    /// writer must not leave every instance locking onto (or seeding
-    /// over) a width nobody wrote.
+    /// Enabling also clears the other axis's shared value (design
+    /// D10): the field becomes `None` and its latch writes `set -gu`,
+    /// seeded or not — a stale value from an earlier lock session
+    /// would make the other axis's peers jump to it. Disabling writes
+    /// the `off` flag alone; the stale shared values stay behind
+    /// harmlessly and are reused when the lock returns.
+    ///
+    /// Every write runs even if the previous one fails: a stubbornly
+    /// failing writer must not leave every instance locking onto (or
+    /// seeding over, or clearing and keeping) a value nobody wrote.
     pub fn toggle_width_lock(&mut self) {
-        // Column-only feature: a strip has no docked width to converge
-        // — its pane width is the window's, and `docked_size` holds a
-        // height — so a strip neither seeds nor toggles the lock.
-        if self.layout_kind != crate::state::LayoutKind::Column {
-            return;
-        }
         if !self.global.width_lock {
-            // Seed only on a valid probe — see the doc comment.
-            if self.sidebar_pane.window_width > 0 {
-                // The u16-clamped floor that `@sidebar_min_width`
-                // resolves to — the shared `width_floor` helper, also
-                // used by the width guard and the pop-in restore.
-                let floor = width_floor(self.global.min_width);
-                let live_width = if self.sidebar_pane.floating {
-                    self.docked_size.unwrap_or(PANEL_WIDTH)
-                } else {
-                    self.sidebar_pane.width
-                };
-                let seed = live_width.max(floor);
-                self.global.shared_docked_width = Some(seed);
-                self.global.save_shared_docked_width();
+            // Design D8's order: the enabling axis's seed first, the
+            // other axis's clear (D10) second, the lock flag last — a
+            // peer adopting `lock=on` mid-tick must find the enabling
+            // axis already seeded and the other already cleared.
+            match self.layout_kind {
+                crate::state::LayoutKind::Column => {
+                    // Seed only on a valid probe — see the doc comment.
+                    if self.sidebar_pane.window_width > 0 {
+                        // The u16-clamped floor that `@sidebar_min_width`
+                        // resolves to — the shared `width_floor` helper,
+                        // also used by the width guard and the pop-in
+                        // restore.
+                        let floor = width_floor(self.global.min_width);
+                        let live_width = if self.sidebar_pane.floating {
+                            self.docked_size.unwrap_or(PANEL_WIDTH)
+                        } else {
+                            self.sidebar_pane.width
+                        };
+                        let seed = live_width.max(floor);
+                        self.global.shared_docked_width = Some(seed);
+                        self.global.save_shared_docked_width();
+                    }
+                    self.global.shared_docked_height = None;
+                    self.global.save_shared_docked_height();
+                }
+                crate::state::LayoutKind::Strip => {
+                    // Seed only on a valid probe — see the doc comment.
+                    // The floor is the strip-height constant, not an
+                    // option (design D3).
+                    if self.sidebar_pane.window_height > 0 {
+                        let live_height = if self.sidebar_pane.floating {
+                            self.docked_size
+                        } else {
+                            Some(self.sidebar_pane.height)
+                        };
+                        if let Some(live_height) = live_height {
+                            let seed = live_height.max(strip_height_floor());
+                            self.global.shared_docked_height = Some(seed);
+                            self.global.save_shared_docked_height();
+                        }
+                    }
+                    self.global.shared_docked_width = None;
+                    self.global.save_shared_docked_width();
+                }
             }
             self.global.width_lock = true;
         } else {
@@ -70,15 +106,54 @@ pub(crate) fn width_floor(min_width: Option<u32>) -> u16 {
     min_width.unwrap_or(DEFAULT_MIN_WIDTH).min(u16::MAX as u32) as u16
 }
 
-/// The width an adopting sidebar resizes to with `resize-pane -x`: the
-/// shared docked width clamped to at least [`width_floor`] — the floor
-/// binds both ways — and at most `cap`, normally half the adopting
-/// window. The cap binds adopted widths only; a publishing sidebar may
-/// stay wider than half its window. The two users: the width-lock
-/// step's adopt side (`app/width_guard::step`) and the pop-in restore
-/// (`state/popout::pop_in_restore_width`, design D6).
-pub(crate) fn width_adopt_target(shared: u16, min_width: Option<u32>, cap: u16) -> u16 {
-    shared.max(width_floor(min_width)).min(cap)
+/// The minimum docked strip height in rows. The strip floor is the
+/// fixed constant, not an option: the floor's job is stopping
+/// collapse, not readability, and a strip has no
+/// `@sidebar_min_height` option (design D3 of the strip-height-sync
+/// change). It binds the lock's seed, the guard's publishes and
+/// adoptions, and the pop-in restore, and wins over the adoption cap
+/// where the two cannot both hold — mirroring `width_floor`.
+pub const DEFAULT_MIN_STRIP_HEIGHT: u16 = 4;
+
+/// The strip-height floor for the lock's math — the height-axis twin
+/// of [`width_floor`]. The strip floor is constant, so the u16 value
+/// needs no clamp; the helper keeps the axis rules uniform at the
+/// call sites the width option's floor and this constant feed.
+pub fn strip_height_floor() -> u16 {
+    DEFAULT_MIN_STRIP_HEIGHT
+}
+
+/// The size an adopting sidebar resizes to with `resize-pane`: the
+/// shared docked size clamped to at least `floor` — the floor binds
+/// both ways — and at most `cap`, normally half the adopting window's
+/// matching dimension. The cap binds adopted sizes only; a publishing
+/// sidebar may stay past half its window. The floor comes resolved:
+/// the width option's floor on the column axis, the strip-height
+/// constant on the strip axis. The two users per axis: the lock
+/// step's adopt side (`app/width_guard::step`, design D5) and the
+/// pop-in restore (`state/popout::pop_in_restore_size`, design D6).
+pub(crate) fn adopt_target(shared: u16, floor: u16, cap: u16) -> u16 {
+    shared.max(floor).min(cap)
+}
+
+/// The `resize-pane` argument list that applies a docked size on the
+/// axis: `-x` for a column, `-y` for a strip. Pure, like
+/// `split_window_args` in `cli/toggle.rs`, so a unit test can assert
+/// the exact arguments the two issuers — the lock step's adopt side
+/// (`app/width_guard::enforce`) and the pop-in restore
+/// (`state/popout`) — hand to tmux per axis.
+pub(crate) fn resize_pane_args(pane: &str, axis: LayoutKind, size: u16) -> Vec<String> {
+    let flag = match axis {
+        LayoutKind::Column => "-x",
+        LayoutKind::Strip => "-y",
+    };
+    vec![
+        "resize-pane".to_string(),
+        "-t".to_string(),
+        pane.to_string(),
+        flag.to_string(),
+        size.to_string(),
+    ]
 }
 
 #[cfg(test)]
@@ -93,17 +168,41 @@ mod helper_tests {
     }
 
     #[test]
-    fn width_adopt_target_floors_and_caps() {
-        assert_eq!(width_adopt_target(80, Some(20), 100), 80);
+    fn adopt_target_floors_and_caps() {
+        assert_eq!(adopt_target(80, 20, 100), 80);
+        assert_eq!(adopt_target(8, 20, 100), 20, "the floor binds both ways");
+        assert_eq!(adopt_target(80, 20, 50), 50, "the cap clamps adopted sizes");
+    }
+
+    #[test]
+    fn strip_height_floor_is_the_documented_constant() {
+        assert_eq!(strip_height_floor(), 4);
+        assert_eq!(strip_height_floor(), DEFAULT_MIN_STRIP_HEIGHT);
+    }
+
+    #[test]
+    fn resize_pane_args_resizes_on_the_axis() {
+        // Pure argv assertion for the shared resize call both issuers
+        // run: `-y` rows for a strip, `-x` columns for a column.
         assert_eq!(
-            width_adopt_target(8, Some(20), 100),
-            20,
-            "the floor binds both ways"
+            resize_pane_args("%9", LayoutKind::Strip, 12),
+            vec![
+                "resize-pane".to_string(),
+                "-t".to_string(),
+                "%9".to_string(),
+                "-y".to_string(),
+                "12".to_string(),
+            ]
         );
         assert_eq!(
-            width_adopt_target(80, Some(20), 50),
-            50,
-            "the cap clamps adopted widths"
+            resize_pane_args("%9", LayoutKind::Column, 45),
+            vec![
+                "resize-pane".to_string(),
+                "-t".to_string(),
+                "%9".to_string(),
+                "-x".to_string(),
+                "45".to_string(),
+            ]
         );
     }
 }
@@ -358,9 +457,8 @@ mod tests {
         // The unified retry touches only pending latches, so a retry
         // that leaves one latch pending cannot have cleared the other.
         let mut g = GlobalState::new();
-        // A width must sit behind the pending flag: the `None` guard in
-        // `save_shared_docked_width` clears the flag without a write,
-        // which is the behavior this test is not about.
+        // A width must sit behind the pending flag so the retry exercises
+        // the width latch's own write path.
         g.shared_docked_width = Some(45);
         g.width_latch.save_pending = true;
 
@@ -417,6 +515,208 @@ mod tests {
             state.global.shared_docked_width,
             Some(DEFAULT_MIN_WIDTH as u16),
             "an unset @sidebar_min_width falls back to the default floor"
+        );
+    }
+
+    // ─── the strip axis (design D2, D3, D8, D10) ────────────
+
+    fn docked_strip(height: u16, window_height: u16) -> SidebarPaneInfo {
+        SidebarPaneInfo {
+            pane_active: true,
+            window_active: true,
+            width: 120,
+            window_width: 120,
+            window_height,
+            floating: false,
+            height,
+            at_top: false,
+        }
+    }
+
+    fn strip_state() -> AppState {
+        let mut state = AppState::new("%99".into());
+        state.layout_kind = crate::state::LayoutKind::Strip;
+        state
+    }
+
+    #[test]
+    fn enabling_from_a_docked_strip_seeds_the_live_height() {
+        let mut state = strip_state();
+        state.sidebar_pane = docked_strip(12, 40);
+
+        state.toggle_width_lock();
+
+        assert_eq!(state.global.shared_docked_height, Some(12));
+        assert!(state.global.width_lock);
+        // The rejections prove the enable attempt wrote the seed: the
+        // height latch carries the seed write and the lock latch the
+        // flag write (D8 order).
+        assert!(state.global.height_latch.save_pending);
+        assert!(state.global.lock_latch.save_pending);
+    }
+
+    #[test]
+    fn enabling_from_a_squeezed_strip_seeds_the_floor() {
+        // A squeezed strip never propagates its squeeze: the seed is
+        // `max(rows, floor)`, so the enabling instance itself gets grown
+        // back by the adopt path to the floor it just wrote.
+        let mut state = strip_state();
+        state.sidebar_pane = docked_strip(2, 40);
+
+        state.toggle_width_lock();
+
+        assert_eq!(
+            state.global.shared_docked_height,
+            Some(strip_height_floor()),
+            "the 4-row minimum strip height floor is the seed"
+        );
+    }
+
+    #[test]
+    fn enabling_from_a_floating_strip_seeds_the_captured_docked_height() {
+        // `w` is reachable while floating; the seed must be the docked
+        // height captured on the way out, never the live panel height.
+        let mut state = strip_state();
+        state.sidebar_pane = SidebarPaneInfo {
+            floating: true,
+            ..docked_strip(24, 40)
+        };
+        state.docked_size = Some(10);
+
+        state.toggle_width_lock();
+
+        assert_eq!(
+            state.global.shared_docked_height,
+            Some(10),
+            "the captured docked height seeds, not the panel's 24 rows"
+        );
+    }
+
+    #[test]
+    fn enabling_from_a_floating_strip_with_no_capture_enables_unseeded() {
+        // A strip has no fixed panel height to fall back to (design
+        // D3): a pane floated from the tmux command line has no
+        // capture and the enable seeds nothing.
+        let mut state = strip_state();
+        state.sidebar_pane = SidebarPaneInfo {
+            floating: true,
+            ..docked_strip(24, 40)
+        };
+
+        state.toggle_width_lock();
+
+        assert!(state.global.width_lock, "the lock itself is still enabled");
+        assert_eq!(state.global.shared_docked_height, None);
+        assert!(state.global.width_latch.save_pending, "the clear still ran");
+    }
+
+    #[test]
+    fn enabling_from_a_strip_on_a_failed_probe_enables_unseeded() {
+        // `window_height == 0` marks the FALLBACK reading (query
+        // failed or pane gone): its rows are not a real size and must
+        // not become the server's shared height.
+        let mut state = strip_state();
+        state.sidebar_pane = SidebarPaneInfo::FALLBACK;
+        assert_eq!(state.sidebar_pane.window_height, 0);
+        let before = state.global.shared_docked_height;
+
+        state.toggle_width_lock();
+
+        assert!(state.global.width_lock, "the lock itself is still enabled");
+        assert_eq!(
+            state.global.shared_docked_height, before,
+            "the height stays unseeded on a failed probe"
+        );
+        assert!(state.global.lock_latch.save_pending);
+        assert!(state.global.width_latch.save_pending, "the clear still ran");
+    }
+
+    #[test]
+    fn a_rejected_strip_seed_leaves_the_flag_write_running() {
+        // In tests tmux rejects every write. An enable must apply all
+        // three writes: a height write that fails alone must not stop
+        // the clear or the lock flag from going out.
+        let mut state = strip_state();
+        state.sidebar_pane = docked_strip(12, 40);
+
+        state.toggle_width_lock();
+
+        assert!(state.global.height_latch.save_pending);
+        assert!(state.global.width_latch.save_pending, "the clear ran");
+        assert!(state.global.lock_latch.save_pending);
+        assert_eq!(
+            state.global.height_latch.last_saved, None,
+            "a rejected seed write must not advance the guard"
+        );
+    }
+
+    #[test]
+    fn a_column_enable_clears_the_shared_docked_height() {
+        // A stale `@sidebar_docked_height` from an earlier lock session
+        // must not make every strip jump to it when the lock returns
+        // from a column (design D10).
+        let mut state = AppState::new("%99".into());
+        state.global.shared_docked_height = Some(14);
+        state.sidebar_pane = docked_pane(45, 120);
+
+        state.toggle_width_lock();
+
+        assert_eq!(
+            state.global.shared_docked_height, None,
+            "the column enable cleared the other axis"
+        );
+        assert!(state.global.height_latch.save_pending, "the unset went out");
+    }
+
+    #[test]
+    fn a_strip_enable_clears_the_shared_docked_width() {
+        let mut state = strip_state();
+        state.global.shared_docked_width = Some(45);
+        state.sidebar_pane = docked_strip(12, 40);
+
+        state.toggle_width_lock();
+
+        assert_eq!(
+            state.global.shared_docked_width, None,
+            "the strip enable cleared the other axis"
+        );
+        assert!(state.global.width_latch.save_pending, "the unset went out");
+    }
+
+    #[test]
+    fn an_unseeded_enable_still_clears_the_other_axis() {
+        // The clear is not part of the seed: a failed probe (or a
+        // floating strip with no capture) enables unseeded but still
+        // clears the other axis, per D10.
+        let mut state = strip_state();
+        state.sidebar_pane = SidebarPaneInfo::FALLBACK;
+        state.global.shared_docked_width = Some(45);
+
+        state.toggle_width_lock();
+
+        assert!(state.global.width_lock);
+        assert_eq!(state.global.shared_docked_width, None);
+        assert!(state.global.width_latch.save_pending);
+    }
+
+    #[test]
+    fn a_strip_disable_writes_the_flag_alone() {
+        let mut state = strip_state();
+        state.global.width_lock = true;
+        state.global.shared_docked_height = Some(12);
+        state.sidebar_pane = docked_strip(12, 40);
+
+        state.toggle_width_lock();
+
+        assert!(!state.global.width_lock);
+        assert_eq!(
+            state.global.shared_docked_height,
+            Some(12),
+            "unlocking leaves the stale shared height behind (reused on re-enable)"
+        );
+        assert!(
+            !state.global.height_latch.save_pending,
+            "no height write happens on disable"
         );
     }
 }

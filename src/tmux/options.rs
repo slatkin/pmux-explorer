@@ -189,6 +189,13 @@ pub const SIDEBAR_BOTTOM_TAB: &str = "@sidebar_bottom_tab";
 /// behind by a disabled lock stays stale but harmless and is reused when
 /// the lock returns.
 pub const SIDEBAR_DOCKED_WIDTH: &str = "@sidebar_docked_width";
+/// The docked height in absolute rows shared by every docked strip
+/// while the sidebar lock ([`SIDEBAR_WIDTH_LOCK`]) is on. Same
+/// lifecycle as [`SIDEBAR_DOCKED_WIDTH`]: the strip whose pane height
+/// changed publishes it with `set -g`, its peers adopt it with
+/// `resize-pane -y`, and a value left behind by a disabled lock stays
+/// stale but harmless until the lock returns.
+pub const SIDEBAR_DOCKED_HEIGHT: &str = "@sidebar_docked_height";
 /// On/off switch for the shared docked width. While `on`, every sidebar
 /// instance on the tmux server converges on [`SIDEBAR_DOCKED_WIDTH`]
 /// within one refresh tick; while off, each sidebar keeps whatever width
