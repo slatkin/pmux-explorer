@@ -238,8 +238,8 @@ pub struct AppState {
     /// sidebar from before the strip layout existed keeps its behavior.
     /// The layout is fixed for the life of the pane.
     pub layout_kind: LayoutKind,
-    /// Cross-tick state of the size-lock step (design D4, D5): the last
-    /// observed docked size on this instance's axis and the echo
+    /// Cross-tick state of the size-sync step: the last observed docked
+    /// size and window dimension on this instance's axis and the echo
     /// suppressor for this instance's own resizes. The step itself lives
     /// in `app/width_guard.rs`; `apply_pop_in` (`state/popout.rs`) arms
     /// the suppressor so a pop-in restore does not echo back as a publish.
@@ -1649,37 +1649,22 @@ mod tests {
     }
 
     #[test]
-    fn a_strip_click_on_the_lock_control_toggles_the_lock() {
-        // The lock control sits on the control row's last column (3,
-        // after the side switch and the pop-out): a click on it runs
-        // the same toggle the `w` key and the column's lock glyph run
-        // (design D9). In tests tmux rejects the shared write, so the
-        // flip arms the retry latch.
+    fn a_strip_click_on_the_former_lock_column_is_inert() {
+        // The control row's column 3 held the retired lock glyph; the
+        // cell stays empty and owns no control, like the spacer column
+        // between the side switch and the pop-out.
         let mut state = strip_state();
         reset_filter_debounce(&mut state);
 
         state.handle_terminal_click(11, 3, 12);
 
-        assert!(state.global.width_lock, "the click toggles the lock on");
-        assert!(
-            state.global.lock_latch.save_pending,
-            "the rejected shared write arms the retry latch"
-        );
         assert!(state.split_drag.is_none(), "a control click starts no drag");
 
-        // A second click unlocks again.
-        reset_filter_debounce(&mut state);
-        state.handle_terminal_click(11, 3, 12);
-        assert!(!state.global.width_lock, "a second click unlocks again");
-
         // The spacer column between the side switch and the pop-out
-        // owns no control.
+        // owns no control either.
         reset_filter_debounce(&mut state);
         state.handle_terminal_click(11, 1, 12);
-        assert!(
-            !state.global.width_lock,
-            "the spacer column owns no control"
-        );
+        assert!(state.split_drag.is_none(), "the spacer owns no control");
     }
 
     #[test]
@@ -2685,29 +2670,19 @@ mod tests {
     }
 
     #[test]
-    fn filter_click_on_the_lock_control_toggles_the_width_lock() {
-        // The lock glyph sits one cell left of the pop-out glyph; its
-        // column runs the same toggle the `w` key does. In tests tmux
-        // rejects the shared write, so the flip arms the retry latch.
+    fn filter_click_on_the_former_lock_column_is_inert() {
+        // The lock glyph used to sit one cell left of the pop-out
+        // glyph; the cell stays empty and owns no control.
         let mut state = AppState::new("%99".into());
         state.layout.filter_bar_width = 20;
         state.global.status_filter = StatusFilter::All;
 
         reset_filter_debounce(&mut state);
-        state.handle_filter_click(17); // the lock glyph column
-        assert!(state.global.width_lock, "the lock toggles on click");
-        assert!(
-            state.global.lock_latch.save_pending,
-            "the rejected shared write arms the retry latch"
-        );
-        assert!(state.flash.is_none(), "the lock click must not pop out");
+        state.handle_filter_click(17); // the retired lock cell
+        assert!(state.flash.is_none(), "the freed cell owns no control");
 
-        reset_filter_debounce(&mut state);
-        state.handle_filter_click(17);
-        assert!(!state.global.width_lock, "a second click unlocks again");
-
-        // The neighbouring pop-out column is untouched by the lock hit
-        // test: clicking it still reaches the pop-out action.
+        // The neighbouring pop-out column still reaches the pop-out
+        // action.
         reset_filter_debounce(&mut state);
         state.handle_filter_click(18);
         assert!(
@@ -2718,24 +2693,16 @@ mod tests {
             "the pop-out column still pops out"
         );
 
-        // The narrow degradation keeps the same mapping: on a two-column
-        // row the pop-out control is dropped and the lock takes the row's
-        // last column, so a click there still toggles the lock, while the
-        // column before it owns neither control and changes nothing.
-        state.global.width_lock = false;
+        // The narrow degradation draws no control at all on a
+        // two-column row, so neither column owns anything.
         state.layout.filter_bar_width = 2;
+        state.flash = None;
         reset_filter_debounce(&mut state);
         state.handle_filter_click(1);
-        assert!(
-            state.global.width_lock,
-            "the lock still toggles on a two-column row"
-        );
+        assert!(state.flash.is_none(), "a two-column row owns no control");
         reset_filter_debounce(&mut state);
         state.handle_filter_click(0);
-        assert!(
-            state.global.width_lock,
-            "a left-column click on a two-column row changes nothing"
-        );
+        assert!(state.flash.is_none(), "the left column owns no control");
     }
 
     #[test]

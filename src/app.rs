@@ -16,9 +16,9 @@ mod input;
 mod panel_guard;
 mod render;
 mod setup;
-// Exposed to crate-internal state: the width lock's seed floor
-// (`DEFAULT_MIN_WIDTH`) is shared with `state/width.rs`, and the width
-// guard's echo suppressor is armed from `state/popout.rs` on a pop-in.
+// Exposed to crate-internal state: the sync floor (`DEFAULT_MIN_WIDTH`)
+// is shared with `state/width.rs`, and the width guard's echo
+// suppressor is armed from `state/popout.rs` on a pop-in.
 pub(crate) mod size_guard;
 pub(crate) mod width_guard;
 mod workers;
@@ -132,10 +132,10 @@ pub fn run(
                 );
             }
             // Converge the docked size on the shared value for every docked
-            // pane, every tick, locked or not: hidden windows must be right
-            // before the user switches to them. Each instance serves the
-            // axis its fixed layout gave it — a column the shared width, a
-            // strip the shared height (design D5). Runs after the
+            // pane, every tick: hidden windows must be right before the
+            // user switches to them. Each instance serves the axis its
+            // fixed layout gave it — a column the shared width, a strip
+            // the shared height. Runs after the
             // active-window block so an adopt resize lands after
             // `size_guard`'s grow — the adopt target never goes below the
             // floor, so the floor wins when both fire. Floating panes and

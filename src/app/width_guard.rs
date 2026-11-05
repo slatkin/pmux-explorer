@@ -1,28 +1,31 @@
-//! One sidebar-size-lock step per refresh tick: publish a locally
+//! One docked-size sync step per refresh tick: publish a locally
 //! resized docked size to the shared option, or adopt the shared size
-//! onto the pane — on the axis the instance's fixed layout gave it
-//! (design D5 of the strip-height-sync change).
+//! onto the pane — on the axis the instance's fixed layout gave it.
 //!
-//! While the lock is on, every docked sidebar converges on one docked
-//! size on its own axis: a column on the shared width, a strip on the
+//! The sync is always on: every docked sidebar converges on one docked
+//! size on its own axis, a column on the shared width, a strip on the
 //! shared height. tmux never reports who resized a pane, so the step
 //! works from what an instance can observe: its own docked size (`W`,
 //! the pane width for a column, the pane height for a strip), the
 //! shared docked size on that axis (`S`), and the floor. A size that
 //! changed since the last recorded observation is a local resize and
-//! is PUBLISHED as the new shared size; a pane sitting off the shared
-//! size ADOPTS it with `resize-pane -x` (a column) or `-y` (a strip),
-//! capped at half the window's matching dimension and floored at
-//! `@sidebar_min_width` (a column) or the 4-row strip constant (a
-//! strip). Both sides act only while the lock is on — while it is off
-//! every sidebar keeps its own size, and the stale shared size an
-//! unlock leaves behind must not drag panes back (design D5).
+//! is PUBLISHED as the new shared size — unless the pane's window
+//! changed size too, which marks the change as a window resize (tmux
+//! resizes every pane proportionally when its window or a client
+//! resizes) rather than a user resize, so one window's resize never
+//! ripples its new geometry into the shared size; a pane sitting off
+//! the shared size ADOPTS it with `resize-pane -x` (a column) or `-y`
+//! (a strip), capped at half the window's matching dimension and
+//! floored at `@sidebar_min_width` (a column) or the 4-row strip
+//! constant (a strip). With no shared value present an instance idles
+//! until a local resize publishes the first one — there is no seeding
+//! at startup.
 //!
 //! Unlike [`super::size_guard`], the step is NOT gated on the window being
-//! active: the spec requires convergence in hidden windows within one
-//! refresh tick. It runs after the active-window guards, so when an
-//! adoption and a size-guard grow fire in the same tick, the adopt resize
-//! lands last and its target — never below the floor — wins.
+//! active: hidden windows converge within one refresh tick. It runs
+//! after the active-window guards, so when an adoption and a
+//! size-guard grow fire in the same tick, the adopt resize lands last
+//! and its target — never below the floor — wins.
 
 use crate::state::{
     AppState, GlobalState, LayoutKind, adopt_target, resize_pane_args, strip_height_floor,
@@ -30,15 +33,16 @@ use crate::state::{
 };
 use crate::tmux::{self, SidebarPaneInfo};
 
-/// Cross-tick state of the size-lock step. Lives on [`AppState`] as the
+/// Cross-tick state of the size-sync step. Lives on [`AppState`] as the
 /// `width_guard` field, beside the other per-feature state, so the pop-in
 /// restore (`state/popout.rs`) can arm
 /// [`WidthGuardState::pending_adopt_observation`] for the size change its
 /// own resize will produce.
 ///
 /// One tracker per instance holds for both axes: the layout is fixed for
-/// the life of the pane, so one echo suppressor per instance stays
-/// correct no matter which axis the instance serves.
+/// the life of the pane, so one pair of trackers and one echo
+/// suppressor per instance stay correct no matter which axis the
+/// instance serves.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct WidthGuardState {
     /// The docked size observed on the previous tick the step ran, on
@@ -48,6 +52,14 @@ pub struct WidthGuardState {
     /// pane's (possibly tmux-clamped) startup size as a change and
     /// demote `S` server-wide.
     pub(crate) last_observed_size: Option<u16>,
+    /// The window's matching dimension observed on the previous tick
+    /// the step ran, on the same axis as [`Self::last_observed_size`].
+    /// A window-size change marks the tick as a window resize: tmux
+    /// resizes every pane proportionally then, so the pane's own size
+    /// change that tick is geometry, not a user resize, and must not
+    /// be published as the shared size. `None` until the first docked
+    /// reading primes it.
+    pub(crate) last_observed_window_size: Option<u16>,
     /// One-shot echo suppressor: set whenever this instance issues a
     /// `resize-pane` (the adopt step below; the pop-in restore sets it
     /// too), then consumed by the first observed width change — that
@@ -59,7 +71,7 @@ pub struct WidthGuardState {
     pub(crate) pending_adopt_observation: bool,
 }
 
-/// What one size-lock step decided for its pane.
+/// What one size-sync step decided for its pane.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum WidthAction {
     /// Nothing to do this tick.
@@ -83,7 +95,7 @@ pub(crate) enum WidthAction {
 /// refresh. The floor is the axis's rule: the tick's
 /// `global.min_width`, floored by [`width_floor`], for a column, and
 /// the constant [`strip_height_floor`] for a strip — the same helpers
-/// the enabling seeds and the pop-in restore clamp use.
+/// the pop-in restore clamp uses.
 pub(crate) fn step(
     tracker: &mut WidthGuardState,
     pane: SidebarPaneInfo,
@@ -106,26 +118,32 @@ pub(crate) fn step(
     }
 
     // Only a size that changed since a recorded observation counts as a
-    // change. The tracker updates on every docked tick, locked or not —
-    // one that slept while unlocked would read a stale size as a fresh
-    // change on the tick the lock arrives.
+    // change, and only on a tick the window's own dimension stayed put:
+    // a window resize moves every pane proportionally, so a pane-size
+    // change on a window-change tick is geometry, not a user resize,
+    // and must not be published as the shared size. The trackers update
+    // on every docked tick.
     let observed_change = match tracker.last_observed_size {
         None => false,
         Some(last) => last != size,
     };
+    let window_change = match tracker.last_observed_window_size {
+        None => false,
+        Some(last) => last != window_size,
+    };
     tracker.last_observed_size = Some(size);
+    tracker.last_observed_window_size = Some(window_size);
 
-    // The echo suppressor is evaluated on every tick the step runs,
-    // locked or not: a flag armed while unlocked (a pop-in) is consumed
-    // by its own landing or dropped, never carried into a later enable.
+    // The echo suppressor is evaluated on every tick the step runs: a
+    // flag armed by an earlier pop-in is consumed by its own landing
+    // or dropped, never carried into a later tick's publish.
     let mut suppress_publish = false;
     if tracker.pending_adopt_observation {
         tracker.pending_adopt_observation = false;
         suppress_publish = observed_change;
     }
 
-    let locked = global.width_lock;
-    // The floored-and-clamped floor the lock sites share, in
+    // The floored-and-clamped floor the sync sites share, in
     // `state/width.rs` — the width option's floor for a column, the
     // constant for a strip.
     let floor = match axis {
@@ -140,7 +158,7 @@ pub(crate) fn step(
     // fresh `S`, whose `W != S` term then blocks any cap, so the pane the
     // user resized is never grown or shrunk back in the same tick.
     let mut action = WidthAction::Idle;
-    if locked && observed_change && !suppress_publish && size >= floor {
+    if observed_change && !window_change && !suppress_publish && size >= floor {
         match axis {
             LayoutKind::Column => global.shared_docked_width = Some(size),
             LayoutKind::Strip => global.shared_docked_height = Some(size),
@@ -155,7 +173,7 @@ pub(crate) fn step(
     // check stops the adopt side from reverting a pane whose publish
     // write failed: tmux still holds the stale shared value, and adopting
     // it would resize the pane over the user's hand.
-    if action == WidthAction::Idle && locked {
+    if action == WidthAction::Idle {
         let shared = match axis {
             LayoutKind::Column => global.shared_docked_width,
             LayoutKind::Strip => global.shared_docked_height,
@@ -177,12 +195,12 @@ pub(crate) fn step(
     action
 }
 
-/// Run one size-lock step for this instance's own sidebar and execute
-/// the decision, on the axis the instance's fixed layout gave it
-/// (design D5). Runs every refresh tick for every docked pane — NOT
-/// gated on the window being active, so hidden windows converge
-/// before the user switches to them. A floating panel and an unknown
-/// window size are no-ops ([`step`] gates them).
+/// Run one size-sync step for this instance's own sidebar and execute
+/// the decision, on the axis the instance's fixed layout gave it.
+/// Runs every refresh tick for every docked pane — NOT gated on the
+/// window being active, so hidden windows converge before the user
+/// switches to them. A floating panel and an unknown window size are
+/// no-ops ([`step`] gates them).
 pub(crate) fn enforce(state: &mut AppState) {
     let axis = state.layout_kind;
     let pane = state.sidebar_pane;
@@ -218,20 +236,21 @@ mod tests {
         }
     }
 
-    /// A tracker that has already observed `size` on a previous tick,
-    /// so a different size on the next call counts as a change.
-    fn primed(size: u16) -> WidthGuardState {
+    /// A tracker that has already observed `size` in a window of
+    /// `window_size` on a previous tick, so a different size on the
+    /// next call counts as a change.
+    fn primed(size: u16, window_size: u16) -> WidthGuardState {
         WidthGuardState {
             last_observed_size: Some(size),
+            last_observed_window_size: Some(window_size),
             pending_adopt_observation: false,
         }
     }
 
-    /// A locked `GlobalState` with the given shared width, floor and
+    /// A `GlobalState` with the given shared width, floor and
     /// width-latch state — the inputs the step reads.
-    fn locked_global(shared: Option<u16>, min_width: Option<u32>, pending: bool) -> GlobalState {
+    fn synced_global(shared: Option<u16>, min_width: Option<u32>, pending: bool) -> GlobalState {
         let mut g = GlobalState::new();
-        g.width_lock = true;
         g.shared_docked_width = shared;
         g.min_width = min_width;
         g.width_latch.save_pending = pending;
@@ -242,9 +261,9 @@ mod tests {
     fn a_cold_start_primes_without_publishing() {
         // First docked reading ever: the tracker is primed and can never
         // publish, so a tmux-clamped creation width cannot demote the
-        // server's shared width on the first locked tick.
+        // server's shared width on the first tick.
         let mut tracker = WidthGuardState::default();
-        let mut global = locked_global(None, None, false);
+        let mut global = synced_global(None, None, false);
 
         let action = step(&mut tracker, pane(80, 200), &mut global, LayoutKind::Column);
 
@@ -261,7 +280,7 @@ mod tests {
         // A fresh instance on an already-locked server starts at its
         // creation width and must converge on `S`, not publish 28 over it.
         let mut tracker = WidthGuardState::default();
-        let mut global = locked_global(Some(45), None, false);
+        let mut global = synced_global(Some(45), None, false);
 
         let action = step(&mut tracker, pane(28, 200), &mut global, LayoutKind::Column);
 
@@ -273,8 +292,8 @@ mod tests {
     fn a_manual_resize_publishes() {
         // The pane was at the shared width and the user dragged it: the
         // new width becomes the shared one.
-        let mut tracker = primed(45);
-        let mut global = locked_global(Some(45), None, false);
+        let mut tracker = primed(45, 200);
+        let mut global = synced_global(Some(45), None, false);
 
         let action = step(&mut tracker, pane(60, 200), &mut global, LayoutKind::Column);
 
@@ -283,11 +302,80 @@ mod tests {
     }
 
     #[test]
+    fn a_window_resize_does_not_publish() {
+        // A tmux window (or client) resize moves every pane
+        // proportionally: the pane's width change rides a window-size
+        // change, so it is geometry, not a user resize, and must not
+        // become the shared size other windows adopt.
+        let mut tracker = primed(45, 200);
+        let mut global = synced_global(None, None, false);
+
+        let action = step(&mut tracker, pane(38, 180), &mut global, LayoutKind::Column);
+
+        assert_eq!(action, WidthAction::Idle);
+        assert_eq!(
+            global.shared_docked_width, None,
+            "a window-resize width must not become the shared width"
+        );
+        assert_eq!(tracker.last_observed_size, Some(38));
+        assert_eq!(tracker.last_observed_window_size, Some(180));
+    }
+
+    #[test]
+    fn a_window_resize_adopts_the_shared_size_back_instead_of_publishing() {
+        // The same tick, with a shared width present: the shrunken pane
+        // sits off `S`, so the step adopts the shared size back — the
+        // window resize may change the window, never the synced docked
+        // size.
+        let mut tracker = primed(45, 200);
+        let mut global = synced_global(Some(45), None, false);
+
+        let action = step(&mut tracker, pane(38, 180), &mut global, LayoutKind::Column);
+
+        assert_eq!(action, WidthAction::Adopt { target: 45 });
+        assert_eq!(
+            global.shared_docked_width,
+            Some(45),
+            "the window-resize width must not move the shared width"
+        );
+    }
+
+    #[test]
+    fn a_window_resize_that_clamps_the_pane_adopts_floor_and_cap_not_the_geometry() {
+        // A window too small for the shared 80 caps the adoption —
+        // and never publishes the clamped geometry over the shared
+        // value. The floor wins where the cap cannot hold it: a
+        // 60-column window caps at 30, the default floor lifts the
+        // target back to 35.
+        let mut tracker = primed(80, 100);
+        let mut global = synced_global(Some(80), None, false);
+
+        let action = step(&mut tracker, pane(30, 60), &mut global, LayoutKind::Column);
+
+        assert_eq!(action, WidthAction::Adopt { target: 35 });
+        assert_eq!(global.shared_docked_width, Some(80));
+    }
+
+    #[test]
+    fn a_manual_resize_after_a_window_resize_publishes() {
+        // Once the window's dimension is recorded, the next pane-size
+        // change on an unchanged window is a user resize again and
+        // publishes normally.
+        let mut tracker = primed(38, 180);
+        let mut global = synced_global(Some(38), None, false);
+
+        let action = step(&mut tracker, pane(50, 180), &mut global, LayoutKind::Column);
+
+        assert_eq!(action, WidthAction::Publish);
+        assert_eq!(global.shared_docked_width, Some(50));
+    }
+
+    #[test]
     fn a_squeeze_below_the_floor_does_not_publish() {
         // A layout squeeze reads as a squeeze, not a choice: a width below
         // the floor is never published (size_guard grows the pane back).
-        let mut tracker = primed(45);
-        let mut global = locked_global(None, None, false);
+        let mut tracker = primed(45, 200);
+        let mut global = synced_global(None, None, false);
 
         let action = step(&mut tracker, pane(10, 200), &mut global, LayoutKind::Column);
 
@@ -305,9 +393,10 @@ mod tests {
         // published back over the shared width.
         let mut tracker = WidthGuardState {
             last_observed_size: Some(80),
+            last_observed_window_size: Some(200),
             pending_adopt_observation: true,
         };
-        let mut global = locked_global(Some(50), None, false);
+        let mut global = synced_global(Some(50), None, false);
 
         let action = step(&mut tracker, pane(50, 200), &mut global, LayoutKind::Column);
 
@@ -330,9 +419,10 @@ mod tests {
         // the shared value stays 80, and the step retries the resize.
         let mut tracker = WidthGuardState {
             last_observed_size: Some(80),
+            last_observed_window_size: Some(100),
             pending_adopt_observation: true,
         };
-        let mut global = locked_global(Some(80), None, false);
+        let mut global = synced_global(Some(80), None, false);
 
         let action = step(&mut tracker, pane(48, 100), &mut global, LayoutKind::Column);
 
@@ -352,9 +442,10 @@ mod tests {
     fn a_refused_resize_frees_the_suppression_for_the_next_manual_resize() {
         let mut tracker = WidthGuardState {
             last_observed_size: Some(45),
+            last_observed_window_size: Some(200),
             pending_adopt_observation: true,
         };
-        let mut global = locked_global(Some(45), None, false);
+        let mut global = synced_global(Some(45), None, false);
 
         // Tick 1: the pane never moved — the resize was refused, the flag
         // clears unconsumed.
@@ -376,8 +467,8 @@ mod tests {
     fn a_100_column_window_caps_a_shared_80_at_50_without_clobbering_the_shared_value() {
         // An adopting peer in a 100-column window takes the cap (half the
         // window), and the shared value itself stays 80 for wide windows.
-        let mut tracker = primed(45);
-        let mut global = locked_global(Some(80), None, false);
+        let mut tracker = primed(45, 100);
+        let mut global = synced_global(Some(80), None, false);
 
         let action = step(&mut tracker, pane(45, 100), &mut global, LayoutKind::Column);
 
@@ -394,8 +485,8 @@ mod tests {
         // The floor binds both ways: a shared width below the floor (a
         // seed written while the enabling pane was squeezed) is adopted at
         // the floor, not at `S`.
-        let mut tracker = primed(45);
-        let mut global = locked_global(Some(8), Some(20), false);
+        let mut tracker = primed(45, 200);
+        let mut global = synced_global(Some(8), Some(20), false);
 
         let action = step(&mut tracker, pane(45, 200), &mut global, LayoutKind::Column);
 
@@ -406,8 +497,8 @@ mod tests {
     fn an_explicit_floor_option_lifts_a_low_shared_width() {
         // The floor rides the tick's options map (`global.min_width`), not
         // a fresh tmux read.
-        let mut tracker = primed(45);
-        let mut global = locked_global(Some(10), Some(24), false);
+        let mut tracker = primed(45, 200);
+        let mut global = synced_global(Some(10), Some(24), false);
 
         let action = step(&mut tracker, pane(45, 200), &mut global, LayoutKind::Column);
 
@@ -420,8 +511,8 @@ mod tests {
         // publishes and stays: the adopt check reads the freshly assigned
         // `S` and its `W != S` term blocks the cap. The ordering between
         // the publish assignment and the adopt check is load-bearing.
-        let mut tracker = primed(45);
-        let mut global = locked_global(Some(45), None, false);
+        let mut tracker = primed(45, 100);
+        let mut global = synced_global(Some(45), None, false);
 
         let action = step(&mut tracker, pane(70, 100), &mut global, LayoutKind::Column);
 
@@ -432,8 +523,8 @@ mod tests {
     #[test]
     fn a_narrower_shared_width_shrinks_the_pane() {
         // A peer published a smaller width; this pane adopts it.
-        let mut tracker = primed(80);
-        let mut global = locked_global(Some(30), Some(20), false);
+        let mut tracker = primed(80, 100);
+        let mut global = synced_global(Some(30), Some(20), false);
 
         let action = step(&mut tracker, pane(80, 100), &mut global, LayoutKind::Column);
 
@@ -446,51 +537,12 @@ mod tests {
         // value this instance is replacing; adopting it would resize the
         // pane over the user's hand (spec: "a failed width publish is not
         // reverted").
-        let mut tracker = primed(80);
-        let mut global = locked_global(Some(45), None, true);
+        let mut tracker = primed(80, 200);
+        let mut global = synced_global(Some(45), None, true);
 
         let action = step(&mut tracker, pane(80, 200), &mut global, LayoutKind::Column);
 
         assert_eq!(action, WidthAction::Idle);
-    }
-
-    #[test]
-    fn an_unlocked_resize_neither_publishes_nor_adopts() {
-        // While the lock is off every sidebar keeps its own width, and the
-        // stale shared width an unlock leaves behind must not drag panes.
-        let mut tracker = primed(45);
-        let mut global = GlobalState::new();
-        global.shared_docked_width = Some(45);
-
-        let action = step(&mut tracker, pane(80, 200), &mut global, LayoutKind::Column);
-
-        assert_eq!(action, WidthAction::Idle);
-        assert_eq!(
-            global.shared_docked_width,
-            Some(45),
-            "an unlocked resize must not move the shared width"
-        );
-    }
-
-    #[test]
-    fn the_tracker_stays_current_while_unlocked() {
-        // A tracker that slept while unlocked would read the width it
-        // missed as a fresh change on the tick the lock arrives and
-        // publish it over the shared value; staying current makes that
-        // tick an adoption instead.
-        let mut tracker = WidthGuardState::default();
-        let mut global = GlobalState::new();
-        step(&mut tracker, pane(80, 200), &mut global, LayoutKind::Column);
-
-        // The lock arrives (adopted by `apply_all` at the refresh) with a
-        // shared width already set.
-        global.width_lock = true;
-        global.shared_docked_width = Some(45);
-
-        let action = step(&mut tracker, pane(80, 200), &mut global, LayoutKind::Column);
-
-        assert_eq!(action, WidthAction::Adopt { target: 45 });
-        assert_eq!(global.shared_docked_width, Some(45));
     }
 
     #[test]
@@ -498,9 +550,9 @@ mod tests {
         // The fixed 40-column floating panel must never feed itself into
         // the shared width, and a floating tick moves neither the tracker
         // nor the suppressor.
-        let mut tracker = primed(45);
+        let mut tracker = primed(45, 200);
         tracker.pending_adopt_observation = true;
-        let mut global = locked_global(Some(45), None, false);
+        let mut global = synced_global(Some(45), None, false);
 
         let mut floating = pane(40, 200);
         floating.floating = true;
@@ -515,9 +567,9 @@ mod tests {
     fn an_unknown_window_size_is_a_no_op() {
         // `window_width == 0` means the probe failed; the step does not
         // act and does not touch the tracker or the suppressor.
-        let mut tracker = primed(45);
+        let mut tracker = primed(45, 200);
         tracker.pending_adopt_observation = true;
-        let mut global = locked_global(Some(45), None, false);
+        let mut global = synced_global(Some(45), None, false);
 
         let action = step(&mut tracker, pane(0, 0), &mut global, LayoutKind::Column);
 
@@ -526,7 +578,7 @@ mod tests {
         assert!(tracker.pending_adopt_observation);
     }
 
-    // ─── the strip axis (design D5) ────────────
+    // ─── the strip axis ────────────
     //
     // Only the axis selection is mirrored here: the strip step reads
     // `height`/`window_height`, floors at the 4-row strip constant, caps
@@ -549,11 +601,10 @@ mod tests {
         }
     }
 
-    /// A locked `GlobalState` with the given shared height and
-    /// height-latch state — the strip inputs the step reads.
-    fn locked_strip_global(shared: Option<u16>, pending: bool) -> GlobalState {
+    /// A `GlobalState` with the given shared height and height-latch
+    /// state — the strip inputs the step reads.
+    fn synced_strip_global(shared: Option<u16>, pending: bool) -> GlobalState {
         let mut g = GlobalState::new();
-        g.width_lock = true;
         g.shared_docked_height = shared;
         g.height_latch.save_pending = pending;
         g
@@ -563,8 +614,8 @@ mod tests {
     fn a_strip_step_reads_the_height_axis() {
         // The axis selection: a changed pane height publishes the shared
         // docked HEIGHT, never the width field a column's step writes.
-        let mut tracker = primed(12);
-        let mut global = locked_strip_global(None, false);
+        let mut tracker = primed(12, 40);
+        let mut global = synced_strip_global(None, false);
 
         let action = step(&mut tracker, strip(14, 40), &mut global, LayoutKind::Strip);
 
@@ -581,8 +632,8 @@ mod tests {
         // The strip's floor is the 4-row constant, not an option: a
         // horizontal split that squeezes the strip below it is never
         // published as a choice.
-        let mut tracker = primed(12);
-        let mut global = locked_strip_global(None, false);
+        let mut tracker = primed(12, 40);
+        let mut global = synced_strip_global(None, false);
 
         let action = step(&mut tracker, strip(2, 40), &mut global, LayoutKind::Strip);
 
@@ -594,8 +645,8 @@ mod tests {
     fn a_strip_adopts_at_half_the_window_s_rows() {
         // The cap runs in rows: a shared 16 in a 30-row window adopts 15,
         // and the shared value itself stays 16 for taller windows.
-        let mut tracker = primed(10);
-        let mut global = locked_strip_global(Some(16), false);
+        let mut tracker = primed(10, 30);
+        let mut global = synced_strip_global(Some(16), false);
 
         let action = step(&mut tracker, strip(10, 30), &mut global, LayoutKind::Strip);
 
@@ -612,8 +663,8 @@ mod tests {
         // The 4-row floor binds adoptions both ways, and it wins over the
         // cap where the two cannot both hold — a 5-row window caps at 2,
         // but the floor still gives 4.
-        let mut tracker = primed(10);
-        let mut global = locked_strip_global(Some(2), false);
+        let mut tracker = primed(10, 40);
+        let mut global = synced_strip_global(Some(2), false);
 
         let action = step(&mut tracker, strip(10, 40), &mut global, LayoutKind::Strip);
 
@@ -628,8 +679,8 @@ mod tests {
         // latch is untouched.
         let mut state = AppState::new("%99".into());
         state.layout_kind = LayoutKind::Strip;
-        state.global.width_lock = true;
         state.width_guard.last_observed_size = Some(12);
+        state.width_guard.last_observed_window_size = Some(40);
         state.sidebar_pane = strip(14, 40);
 
         enforce(&mut state);
@@ -646,9 +697,9 @@ mod tests {
         // shared `resize_pane_args` test in `state/width.rs`.
         let mut state = AppState::new("%99".into());
         state.layout_kind = LayoutKind::Strip;
-        state.global.width_lock = true;
         state.global.shared_docked_height = Some(14);
         state.width_guard.last_observed_size = Some(10);
+        state.width_guard.last_observed_window_size = Some(40);
         state.sidebar_pane = strip(10, 40);
 
         enforce(&mut state);
@@ -661,9 +712,9 @@ mod tests {
         // The floating panel must never feed its height into the shared
         // value, and a floating tick moves neither the tracker nor the
         // suppressor.
-        let mut tracker = primed(12);
+        let mut tracker = primed(12, 40);
         tracker.pending_adopt_observation = true;
-        let mut global = locked_strip_global(Some(12), false);
+        let mut global = synced_strip_global(Some(12), false);
 
         let mut floating = strip(24, 40);
         floating.floating = true;
@@ -678,9 +729,9 @@ mod tests {
     fn an_unknown_window_height_is_a_no_op() {
         // `window_height == 0` means the probe failed; the step does not
         // act and does not touch the tracker or the suppressor.
-        let mut tracker = primed(12);
+        let mut tracker = primed(12, 40);
         tracker.pending_adopt_observation = true;
-        let mut global = locked_strip_global(Some(12), false);
+        let mut global = synced_strip_global(Some(12), false);
 
         let action = step(&mut tracker, strip(0, 0), &mut global, LayoutKind::Strip);
 

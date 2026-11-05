@@ -117,7 +117,7 @@ fn snapshot_git_status_tab_ui() {
 
     let output = render_to_string(&mut state, 28, 24);
     insta::assert_snapshot!(output, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄  ⤢
     ⓘ                        — ▾
     project
     ┃  
@@ -153,7 +153,7 @@ fn snapshot_git_clean_ui() {
 
     let output = render_to_string(&mut state, 28, 24);
     insta::assert_snapshot!(output, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄  ⤢
     ⓘ                        — ▾
     project
     ┃  
@@ -189,7 +189,7 @@ fn snapshot_activity_tab_active_ui() {
 
     let output = render_to_string(&mut state, 28, 24);
     insta::assert_snapshot!(output, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄  ⤢
     ⓘ                        — ▾
     project
     ┃  
@@ -228,7 +228,7 @@ fn activity_tab_leaves_one_blank_row_above_entries() {
     // row, the first row must be empty and the timestamp/tool row must
     // appear one row further down.
     insta::assert_snapshot!(render_to_string(&mut state, 28, 24), @"
-     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄  ⤢
     ⓘ                        — ▾
     project
     ┃  
@@ -269,7 +269,7 @@ fn snapshot_activity_long_tool_keeps_one_space_gap() {
 
     let output = render_to_string(&mut state, 28, 14);
     insta::assert_snapshot!(output, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄  ⤢
     ⓘ                        — ▾
     project
     ┃  
@@ -303,7 +303,7 @@ fn snapshot_tab_bar_renders_both_labels() {
 
     let output = render_to_string(&mut state, 28, 14);
     insta::assert_snapshot!(output, @"
-     󱓯 1  0 󰥔 0 󰒲 1  0   ⇄ ☐⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0   ⇄  ⤢
     ⓘ                        — ▾
     project
     ┃ 󰒲 
@@ -354,7 +354,7 @@ fn snapshot_tasks_empty_tab_ui() {
 
     let output = render_to_string(&mut state, 28, 24);
     insta::assert_snapshot!(output, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄  ⤢
     ⓘ                        — ▾
     project
     ┃  
@@ -389,7 +389,7 @@ fn snapshot_tasks_tab_ui() {
 
     let output = render_to_string(&mut state, 28, 24);
     insta::assert_snapshot!(output, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄  ⤢
     ⓘ                        — ▾
     project
     ┃  
@@ -443,7 +443,7 @@ fn snapshot_tasks_tab_after_finished_list_closes() {
 
     let output = render_to_string(&mut state, 28, 24);
     insta::assert_snapshot!(output, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄  ⤢
     ⓘ                        — ▾
     project
     ┃  
@@ -497,7 +497,7 @@ fn snapshot_tasks_status_colors_styled() {
     // the task-progress color (223), pending takes task_pending blue
     // (111); all three sit one column in from the panel edge.
     insta::assert_snapshot!(render_to_styled_string(&mut state, 28, 24), @"
-     [bg:#414868]󱓯[fg:#7aa2f7,bg:#414868] [bg:#414868]1[fg:#7aa2f7,bg:#414868,bold] [bg:#414868][fg:#9ece6a,bg:#414868] [bg:#414868]1[fg:#c0caf5,bg:#414868] [bg:#414868]󰥔[fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868]󰒲[fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868][fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]⇄[fg:#9ece6a,bg:#414868] [bg:#414868]☐[fg:#9aa5ce,bg:#414868]⤢[fg:#9ece6a,bg:#414868] [bg:#414868]
+     [bg:#414868]󱓯[fg:#7aa2f7,bg:#414868] [bg:#414868]1[fg:#7aa2f7,bg:#414868,bold] [bg:#414868][fg:#9ece6a,bg:#414868] [bg:#414868]1[fg:#c0caf5,bg:#414868] [bg:#414868]󰥔[fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868]󰒲[fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868][fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]⇄[fg:#9ece6a,bg:#414868] [bg:#414868] [bg:#414868]⤢[fg:#9ece6a,bg:#414868] [bg:#414868]
     ⓘ[fg:#e0af68,bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]—[fg:#a9b1d6,bg:#1e2336] [bg:#1e2336]▾[fg:#a9b1d6,bg:#1e2336]
     p[fg:#7aa2f7,bg:#1e2336]r[fg:#7aa2f7,bg:#1e2336]o[fg:#7aa2f7,bg:#1e2336]j[fg:#7aa2f7,bg:#1e2336]e[fg:#7aa2f7,bg:#1e2336]c[fg:#7aa2f7,bg:#1e2336]t[fg:#7aa2f7,bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
     ┃[fg:#7aa2f7,bg:#414868] [bg:#414868][fg:82,bg:#414868] [fg:#ff9e64,bg:#414868][fg:#ff9e64,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]
@@ -599,7 +599,7 @@ fn snapshot_tasks_description_stays_pinned_while_items_scroll() {
     let _ = render_to_string(&mut state, 28, 24);
     state.tasks.scroll.scroll(3);
     insta::assert_snapshot!(render_to_string(&mut state, 28, 24), @"
-     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄  ⤢
     ⓘ                        — ▾
     project
     ┃  
@@ -693,7 +693,7 @@ fn snapshot_tasks_subject_wraps_at_narrow_width() {
     }];
 
     insta::assert_snapshot!(render_to_string(&mut state, 24, 24), @"
-     󱓯 1  1 󰥔 0 󰒲 0   ⇄ ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0   ⇄  ⤢
     ⓘ                    — ▾
     project
     ┃  
@@ -730,7 +730,7 @@ fn snapshot_tasks_multiline_subject_shows_every_line() {
     }];
 
     insta::assert_snapshot!(render_to_string(&mut state, 28, 24), @"
-     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄  ⤢
     ⓘ                        — ▾
     project
     ┃  
@@ -785,7 +785,7 @@ fn snapshot_git_full_info_ui() {
     // Use plain render since elapsed time varies
     let output = render_to_string(&mut state, 28, 24);
     insta::assert_snapshot!(output, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄  ⤢
     ⓘ                        — ▾
     project
     ┃  
@@ -822,7 +822,7 @@ fn snapshot_git_diff_summary_tight_ui() {
 
     let plain = render_to_string(&mut state, 28, 14);
     insta::assert_snapshot!(plain, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄  ⤢
     ⓘ                        — ▾
     project
     ┃  
@@ -863,7 +863,7 @@ fn snapshot_git_staged_file_diff_right_ui() {
 
     let plain = render_to_string(&mut state, 28, 18);
     insta::assert_snapshot!(plain, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄  ⤢
     ⓘ                        — ▾
     project
     ┃  
@@ -905,7 +905,7 @@ fn snapshot_git_unstaged_long_name_diff_right_ui() {
 
     let plain = render_to_string(&mut state, 28, 18);
     insta::assert_snapshot!(plain, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄  ⤢
     ⓘ                        — ▾
     project
     ┃  
@@ -956,7 +956,7 @@ fn snapshot_git_long_filename_truncated_ui() {
     // Verify the long filename is truncated (contains ellipsis)
     let plain = render_to_string(&mut state, 28, 24);
     insta::assert_snapshot!(plain, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄  ⤢
     ⓘ                        — ▾
     project
     ┃  
@@ -1044,7 +1044,7 @@ fn snapshot_git_more_than_5_files() {
     // Verify file list rendering (scroll to see overflow)
     let plain = render_to_string(&mut state, 28, 40);
     insta::assert_snapshot!(plain, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄  ⤢
     ⓘ                        — ▾
     project
     ┃  
@@ -1071,7 +1071,7 @@ fn snapshot_git_more_than_5_files() {
     state.scrolls.git.offset = 5;
     let scrolled = render_to_string(&mut state, 28, 40);
     insta::assert_snapshot!(scrolled, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄  ⤢
     ⓘ                        — ▾
     project
     ┃  
@@ -1113,7 +1113,7 @@ fn snapshot_git_branch_only_no_changes() {
 
     let plain = render_to_string(&mut state, 38, 20);
     insta::assert_snapshot!(plain, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0             ⇄ ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0             ⇄  ⤢
     ⓘ                                  — ▾
     project
     ┃  
@@ -1150,7 +1150,7 @@ fn snapshot_git_pr_number_ui() {
 
     let plain = render_to_string(&mut state, 28, 14);
     insta::assert_snapshot!(plain, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄  ⤢
     ⓘ                        — ▾
     project
     ┃  
@@ -1161,7 +1161,7 @@ fn snapshot_git_pr_number_ui() {
     // Styled snapshot locks in the PR link's underline + pr_link color (fg:117)
     // so future style regressions surface as a diff rather than a missed grep.
     insta::assert_snapshot!(render_to_styled_string(&mut state, 28, 14), @"
-     [bg:#414868]󱓯[fg:#7aa2f7,bg:#414868] [bg:#414868]1[fg:#7aa2f7,bg:#414868,bold] [bg:#414868][fg:#9ece6a,bg:#414868] [bg:#414868]1[fg:#c0caf5,bg:#414868] [bg:#414868]󰥔[fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868]󰒲[fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868][fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]⇄[fg:#9ece6a,bg:#414868] [bg:#414868]☐[fg:#9aa5ce,bg:#414868]⤢[fg:#9ece6a,bg:#414868] [bg:#414868]
+     [bg:#414868]󱓯[fg:#7aa2f7,bg:#414868] [bg:#414868]1[fg:#7aa2f7,bg:#414868,bold] [bg:#414868][fg:#9ece6a,bg:#414868] [bg:#414868]1[fg:#c0caf5,bg:#414868] [bg:#414868]󰥔[fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868]󰒲[fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868][fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]⇄[fg:#9ece6a,bg:#414868] [bg:#414868] [bg:#414868]⤢[fg:#9ece6a,bg:#414868] [bg:#414868]
     ⓘ[fg:#e0af68,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]—[fg:#a9b1d6,bg:#1a1b26] [bg:#1a1b26]▾[fg:#a9b1d6,bg:#1a1b26]
     p[fg:#7aa2f7,bg:#1a1b26]r[fg:#7aa2f7,bg:#1a1b26]o[fg:#7aa2f7,bg:#1a1b26]j[fg:#7aa2f7,bg:#1a1b26]e[fg:#7aa2f7,bg:#1a1b26]c[fg:#7aa2f7,bg:#1a1b26]t[fg:#7aa2f7,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
     ┃[fg:#7aa2f7,bg:#414868] [bg:#414868][fg:82,bg:#414868] [fg:#ff9e64,bg:#414868][fg:#ff9e64,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]
@@ -1212,7 +1212,7 @@ fn snapshot_git_pr_with_diff_ui() {
 
     let plain = render_to_string(&mut state, 28, 14);
     insta::assert_snapshot!(plain, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄  ⤢
     ⓘ                        — ▾
     project
     ┃  
@@ -1242,7 +1242,7 @@ fn snapshot_subagents_tree_ui() {
 
     let output = render_to_string(&mut state, 40, 28);
     insta::assert_snapshot!(output, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0               ⇄ ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0               ⇄  ⤢
     ⓘ                                    — ▾
     project
     ┃  
@@ -1278,7 +1278,7 @@ fn snapshot_subagent_long_name_truncated_ui() {
     // Narrow width (28) to force truncation of long subagent names
     let output = render_to_string(&mut state, 28, 27);
     insta::assert_snapshot!(output, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄  ⤢
     ⓘ                        — ▾
     project
     ┃  
@@ -1313,7 +1313,7 @@ fn snapshot_activity_empty_centered_ui() {
 
     let output = render_to_string(&mut state, 28, 26);
     insta::assert_snapshot!(output, @"
-     󱓯 1  0 󰥔 0 󰒲 1  0   ⇄ ☐⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0   ⇄  ⤢
     ⓘ                        — ▾
     project
     ┃ 󰒲 
@@ -1343,7 +1343,7 @@ fn snapshot_git_clean_centered_ui() {
 
     let output = render_to_string(&mut state, 28, 26);
     insta::assert_snapshot!(output, @"
-     󱓯 1  0 󰥔 0 󰒲 1  0   ⇄ ☐⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0   ⇄  ⤢
     ⓘ                        — ▾
     project
     ┃ 󰒲 
@@ -1382,7 +1382,7 @@ fn snapshot_git_branch_loaded_no_changes_shows_inline_clean() {
 
     let plain = render_to_string(&mut state, 28, 24);
     insta::assert_snapshot!(plain, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄  ⤢
     ⓘ                        — ▾
     project
     ┃  
@@ -1417,7 +1417,7 @@ fn snapshot_git_no_data_shows_centered_clean() {
 
     let output = render_to_string(&mut state, 28, 24);
     insta::assert_snapshot!(output, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄  ⤢
     ⓘ                        — ▾
     project
     ┃  
@@ -1452,7 +1452,7 @@ fn test_git_behind_only() {
 
     let plain = render_to_string(&mut state, 28, 14);
     insta::assert_snapshot!(plain, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄  ⤢
     ⓘ                        — ▾
     project
     ┃  
@@ -1486,7 +1486,7 @@ fn test_git_ahead_and_behind() {
 
     let plain = render_to_string(&mut state, 38, 14);
     insta::assert_snapshot!(plain, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0             ⇄ ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0             ⇄  ⤢
     ⓘ                                  — ▾
     project
     ┃  
@@ -1522,7 +1522,7 @@ fn test_git_diff_insertions_only() {
 
     let plain = render_to_string(&mut state, 28, 14);
     insta::assert_snapshot!(plain, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄  ⤢
     ⓘ                        — ▾
     project
     ┃  
@@ -1556,7 +1556,7 @@ fn test_git_diff_deletions_only() {
 
     let plain = render_to_string(&mut state, 28, 14);
     insta::assert_snapshot!(plain, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄  ⤢
     ⓘ                        — ▾
     project
     ┃  
@@ -1597,7 +1597,7 @@ fn snapshot_branch_truncated_ui() {
 
     let plain = render_to_string(&mut state, 28, 30);
     insta::assert_snapshot!(plain, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄  ⤢
     ⓘ                        — ▾
     dotfiles                   +
     ┃  
@@ -1656,7 +1656,7 @@ fn snapshot_git_staged_unstaged_untracked_ui() {
 
     let output = render_to_string(&mut state, 28, 30);
     insta::assert_snapshot!(output, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄  ⤢
     ⓘ                        — ▾
     project
     ┃  
@@ -1702,7 +1702,7 @@ fn snapshot_git_long_branch_with_pr_ui() {
 
     let output = render_to_string(&mut state, 28, 24);
     insta::assert_snapshot!(output, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄  ⤢
     ⓘ                        — ▾
     project
     ┃  
@@ -1747,7 +1747,7 @@ fn snapshot_git_staged_only_ui() {
 
     let output = render_to_string(&mut state, 28, 24);
     insta::assert_snapshot!(output, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄  ⤢
     ⓘ                        — ▾
     project
     ┃  
@@ -1792,7 +1792,7 @@ fn snapshot_git_many_files_more_indicator_ui() {
 
     let output = render_to_string(&mut state, 28, 30);
     insta::assert_snapshot!(output, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄  ⤢
     ⓘ                        — ▾
     project
     ┃  
@@ -1840,7 +1840,7 @@ fn snapshot_git_more_than_10_files_ui() {
 
     let output = render_to_string(&mut state, 28, 30);
     insta::assert_snapshot!(output, @"
-     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄  ⤢
     ⓘ                        — ▾
     project
     ┃  
@@ -1893,7 +1893,7 @@ fn snapshot_focused_group_active_border_styled() {
     // on the active pane marker; the unfocused panel's rule stays
     // border_inactive (fg:240) with the selected Activity label in accent.
     insta::assert_snapshot!(render_to_styled_string(&mut state, 28, 30), @"
-     [bg:#414868]󱓯[fg:#7aa2f7,bg:#414868] [bg:#414868]2[fg:#7aa2f7,bg:#414868,bold] [bg:#414868][fg:#9ece6a,bg:#414868] [bg:#414868]1[fg:#c0caf5,bg:#414868] [bg:#414868]󰥔[fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868]󰒲[fg:#7dcfff,bg:#414868] [bg:#414868]1[fg:#c0caf5,bg:#414868] [bg:#414868][fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]⇄[fg:#9ece6a,bg:#414868] [bg:#414868]☐[fg:#9aa5ce,bg:#414868]⤢[fg:#9ece6a,bg:#414868] [bg:#414868]
+     [bg:#414868]󱓯[fg:#7aa2f7,bg:#414868] [bg:#414868]2[fg:#7aa2f7,bg:#414868,bold] [bg:#414868][fg:#9ece6a,bg:#414868] [bg:#414868]1[fg:#c0caf5,bg:#414868] [bg:#414868]󰥔[fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868]󰒲[fg:#7dcfff,bg:#414868] [bg:#414868]1[fg:#c0caf5,bg:#414868] [bg:#414868][fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]⇄[fg:#9ece6a,bg:#414868] [bg:#414868] [bg:#414868]⤢[fg:#9ece6a,bg:#414868] [bg:#414868]
     ⓘ[fg:#e0af68,bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]—[fg:#a9b1d6,bg:#1e2336] [bg:#1e2336]▾[fg:#a9b1d6,bg:#1e2336]
     d[fg:#7aa2f7,bg:#1e2336]o[fg:#7aa2f7,bg:#1e2336]t[fg:#7aa2f7,bg:#1e2336]f[fg:#7aa2f7,bg:#1e2336]i[fg:#7aa2f7,bg:#1e2336]l[fg:#7aa2f7,bg:#1e2336]e[fg:#7aa2f7,bg:#1e2336]s[fg:#7aa2f7,bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336] [bg:#1e2336]
     ┃[fg:#7aa2f7,bg:#414868] [bg:#414868][fg:82,bg:#414868] [fg:#ff9e64,bg:#414868][fg:#ff9e64,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]
@@ -1955,7 +1955,7 @@ fn snapshot_rule_with_full_width_content() {
     }];
 
     insta::assert_snapshot!(render_to_string(&mut state, 40, 14), @"
-     󱓯 1  0 󰥔 0 󰒲 1  0               ⇄ ☐⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0               ⇄  ⤢
     ⓘ                                    — ▾
     project
     ┃ 󰒲 
@@ -1991,7 +1991,7 @@ fn snapshot_rule_is_a_solid_band() {
     state.global.bottom_percent = 30;
 
     insta::assert_snapshot!(render_to_styled_string(&mut state, 40, 14), @"
-     [bg:#414868]󱓯[fg:#7aa2f7,bg:#414868] [bg:#414868]1[fg:#7aa2f7,bg:#414868,bold] [bg:#414868][fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868]󰥔[fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868]󰒲[fg:#7dcfff,bg:#414868] [bg:#414868]1[fg:#c0caf5,bg:#414868] [bg:#414868][fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]⇄[fg:#9ece6a,bg:#414868] [bg:#414868]☐[fg:#9aa5ce,bg:#414868]⤢[fg:#9ece6a,bg:#414868] [bg:#414868]
+     [bg:#414868]󱓯[fg:#7aa2f7,bg:#414868] [bg:#414868]1[fg:#7aa2f7,bg:#414868,bold] [bg:#414868][fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868]󰥔[fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868]󰒲[fg:#7dcfff,bg:#414868] [bg:#414868]1[fg:#c0caf5,bg:#414868] [bg:#414868][fg:#9aa5ce,bg:#414868] [bg:#414868]0[fg:#9aa5ce,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]⇄[fg:#9ece6a,bg:#414868] [bg:#414868] [bg:#414868]⤢[fg:#9ece6a,bg:#414868] [bg:#414868]
     ⓘ[fg:#e0af68,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]—[fg:#a9b1d6,bg:#1a1b26] [bg:#1a1b26]▾[fg:#a9b1d6,bg:#1a1b26]
     p[fg:#7aa2f7,bg:#1a1b26]r[fg:#7aa2f7,bg:#1a1b26]o[fg:#7aa2f7,bg:#1a1b26]j[fg:#7aa2f7,bg:#1a1b26]e[fg:#7aa2f7,bg:#1a1b26]c[fg:#7aa2f7,bg:#1a1b26]t[fg:#7aa2f7,bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26] [bg:#1a1b26]
     ┃[fg:#7aa2f7,bg:#414868] [bg:#414868]󰒲[fg:#7dcfff,bg:#414868] [fg:#ff9e64,bg:#414868][fg:#ff9e64,bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868] [bg:#414868]
@@ -2029,7 +2029,7 @@ fn snapshot_bottom_percent_zero_hides_panel() {
     state.global.bottom_percent = 0;
 
     insta::assert_snapshot!(render_to_string(&mut state, 28, 20), @"
-     󱓯 1  0 󰥔 0 󰒲 1  0   ⇄ ☐⤢
+     󱓯 1  0 󰥔 0 󰒲 1  0   ⇄  ⤢
     ⓘ                        — ▾
     project
     ┃ 󰒲 
@@ -2081,7 +2081,7 @@ fn snapshot_thought_short_ui() {
     ));
 
     insta::assert_snapshot!(render_to_string(&mut state, 28, 24), @"
-     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄  ⤢
     ⓘ                        — ▾
     project
     ┃  
@@ -2103,7 +2103,7 @@ fn snapshot_thought_tall_follows_the_end_ui() {
     state.global.bottom_percent = 60;
 
     insta::assert_snapshot!(render_to_string(&mut state, 40, 30), @"
-     󱓯 1  1 󰥔 0 󰒲 0  0               ⇄ ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0               ⇄  ⤢
     ⓘ                                    — ▾
     project
     ┃  
@@ -2144,7 +2144,7 @@ fn snapshot_thought_scrolled_up_ui() {
     state.scrolls.thought.offset = 0;
 
     insta::assert_snapshot!(render_to_string(&mut state, 40, 30), @"
-     󱓯 1  1 󰥔 0 󰒲 0  0               ⇄ ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0               ⇄  ⤢
     ⓘ                                    — ▾
     project
     ┃  
@@ -2174,7 +2174,7 @@ fn snapshot_thought_empty_notice_ui() {
     let mut state = thought_state_with(thought("", None));
 
     insta::assert_snapshot!(render_to_string(&mut state, 28, 24), @"
-     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄ ☐⤢
+     󱓯 1  1 󰥔 0 󰒲 0  0   ⇄  ⤢
     ⓘ                        — ▾
     project
     ┃  

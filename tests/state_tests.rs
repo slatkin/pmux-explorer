@@ -1324,7 +1324,7 @@ fn rendered_filter_row_and_hit_test_agree_at_the_20_column_minimum() {
     // pop-out control one column in from the row's right edge, its
     // spacer on the last column.
     insta::assert_snapshot!(output, @"
-     󱓯 40  10 󰥔 10⇄ ☐⤢
+     󱓯 40  10 󰥔 10⇄  ⤢
     ⓘ                — ▾
     project
        
@@ -1362,7 +1362,7 @@ fn rendered_filter_row_and_hit_test_agree_at_the_20_column_minimum() {
     }
 
     // The dropped chip's columns, the gap, and the trailing spacer do
-    // nothing — no filter change, no pop-out flash, no lock toggle.
+    // nothing — no filter change and no pop-out flash.
     for col in [16, 19] {
         click(&mut state, col);
         assert_eq!(
@@ -1373,10 +1373,6 @@ fn rendered_filter_row_and_hit_test_agree_at_the_20_column_minimum() {
         assert!(
             state.flash.is_none(),
             "click on undrawn column {col} must not reach the pop-out: {row}"
-        );
-        assert!(
-            !state.global.width_lock,
-            "click on undrawn column {col} must not toggle the width lock: {row}"
         );
     }
 
@@ -1467,7 +1463,7 @@ fn floating_panel_clicks_hit_the_clamped_bottom_panel_geometry() {
     // bottom panel with its rule row, and the agent list running right
     // up to the rule.
     insta::assert_snapshot!(output, @"
-     󱓯 20  0 󰥔 0 󰒲 20  0             ⇄ ☐⤡
+     󱓯 20  0 󰥔 0 󰒲 20  0             ⇄  ⤡
     ⓘ                                    — ▾
     project
       󰒲 

@@ -164,23 +164,21 @@ pub struct FilterChip {
 }
 
 /// Columns of the right-edge controls on the filter bar row. The
-/// cluster packs against the right border as `[switch] [lock] [popout]`
-/// — the lock glyph sits one cell left of the pop-out glyph, which
-/// keeps its one-column spacer against the border (design D8), and the
-/// side-switch glyph keeps its own one-column spacer left of the lock.
+/// cluster packs against the right border as `[switch] [popout]` — the
+/// pop-out glyph keeps its one-column spacer against the border, and
+/// the side-switch glyph sits three cells left of it, the column the
+/// retired lock glyph used to sit two cells left of (the freed cell
+/// stays empty; the surviving controls keep their columns).
 /// Narrow rows drop the controls left to right: the side switch goes
-/// first, then the pop-out pair, and the lock carries the row's last
-/// column alone — the spec's lock control has no width condition, and
-/// only a zero-width row leaves the control absent.
+/// first, then the pop-out pair; only a row narrower than three
+/// columns leaves both absent.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct FilterBarControl {
     /// Column of the side-switch glyph, `None` when the row is too
-    /// narrow for all three controls.
+    /// narrow for both controls.
     pub switch: Option<u16>,
-    /// Column of the width-lock glyph; present on every non-empty row.
-    pub lock: u16,
     /// Column of the pop-out glyph, `None` on the rows narrower than
-    /// the three columns the lock/pop-out pair occupies.
+    /// the three columns the pop-out glyph and its spacer occupy.
     pub popout: Option<u16>,
 }
 
@@ -193,16 +191,16 @@ fn count_digits(n: usize) -> u16 {
 /// wide with the per-filter status counts (see [`StatusCounts`]).
 ///
 /// The right-edge control cluster owns the row's rightmost columns —
-/// the side-switch glyph and its spacer, then the lock glyph, then the
-/// pop-out glyph and the one-column spacer that keeps it a space away
-/// from the right border — and the chips fill from the left with a
-/// single-space separator after one gutter column. A chip that would
-/// no longer fit before the control region is dropped whole — never
-/// partially drawn — together with every chip after it. The narrow
-/// degradation drops the side switch first, then the pop-out pair, and
-/// keeps the lock on the row's last column whenever even one column
-/// exists; only a zero-width row returns `None`, where nothing is
-/// drawn.
+/// the side-switch glyph and its spacer, then the pop-out glyph and
+/// the one-column spacer that keeps it a space away from the right
+/// border (the cell the retired lock glyph occupied between them stays
+/// empty) — and the chips fill from the left with a single-space
+/// separator after one gutter column. A chip that would no longer fit
+/// before the control region is dropped whole — never partially drawn
+/// — together with every chip after it. The narrow degradation drops
+/// the side switch first, then the pop-out pair; a row narrower than
+/// three columns draws no control at all, and only a zero-width row
+/// returns `None`, where nothing is drawn.
 ///
 /// Both the renderer and the click hit test run through this function,
 /// so a click can only ever select a chip that is actually drawn.
@@ -213,23 +211,20 @@ pub(crate) fn filter_bar_layout(
     if width == 0 {
         return (Vec::new(), None);
     }
-    // The lock/pop-out pair needs three columns (lock glyph, pop-out
-    // glyph, trailing spacer); below that the pop-out is dropped and
-    // the lock alone takes the row's last column. The side switch needs
-    // two more columns left of the lock (its glyph and spacer), so it
-    // shows only on a row of five or more. `then`/`checked_sub` keep
-    // the subtractions off the narrow rows where they would wrap
-    // (design D8's one-cell cluster).
+    // The pop-out pair needs three columns (pop-out glyph, trailing
+    // spacer, and the cell left of the glyph the retired lock glyph
+    // used to hold); below that the pop-out is dropped. The side switch
+    // sits three columns left of the pop-out glyph (its glyph, its
+    // spacer, and the retired lock cell), so it shows only on a row of
+    // five or more. `then` keeps the subtractions off the narrow rows
+    // where they would wrap.
     let popout = (width >= 3).then(|| width - 2);
-    let lock = popout.map_or(width - 1, |popout| popout - 1);
-    let switch = lock.checked_sub(2);
-    let control = FilterBarControl {
-        switch,
-        lock,
-        popout,
-    };
-    // A chip may end on the column before the leftmost control glyph.
-    let control_limit = switch.unwrap_or(lock);
+    let switch = (width >= 5).then(|| width - 5);
+    let control = FilterBarControl { switch, popout };
+    // A chip may end on the column before the leftmost control glyph —
+    // the pop-out glyph's left neighbour when no switch is drawn, so
+    // the retired lock cell stays empty too.
+    let control_limit = switch.unwrap_or_else(|| popout.map_or(width, |popout| popout - 1));
     let mut chips = Vec::new();
     let mut start: u16 = 1; // leading gutter column
     for filter in StatusFilter::VARIANTS {
@@ -488,7 +483,7 @@ pub fn cols_for_percent(cols: u16, width: u16) -> u8 {
 /// The layout of the strip's vertical filter bar: one chip per row,
 /// in the [`StatusFilter::VARIANTS`] order from the first row, and
 /// the control row (the side switch at column 0, the pop-out at
-/// column 2, the lock at column 3) on the last row. A chip that does
+/// column 2) on the last row. A chip that does
 /// not fit above the control row is dropped whole, together with every
 /// chip after it.
 ///
@@ -864,8 +859,8 @@ impl AppState {
     }
 
     /// Handle a press in the strip's vertical filter bar: the control
-    /// row acts (the side switch at column 0, the pop-out at column 2,
-    /// the lock at column 3) and a chip row selects its category. The
+    /// row acts (the side switch at column 0, the pop-out at column 2)
+    /// and a chip row selects its category. The
     /// chip layout comes from the same pure function the renderer used
     /// for the current frame ([`filter_column_layout`], keyed on the
     /// drawn bar's height), so a click can only ever select a chip
@@ -887,15 +882,12 @@ impl AppState {
         if control_row.is_some_and(|control_row| row == control_row) {
             // The drawn control row: the side switch first (a no-op
             // while the sidebar floats; the dimmed glyph says so before
-            // the click), then the pop-out one column in, then the
-            // lock control — the same single writer the `w` key and
-            // the column's lock glyph run (design D9).
+            // the click), then the pop-out one column in. The former
+            // lock column (3) owns nothing.
             if col == 0 {
                 self.switch_sidebar_side();
             } else if col == 2 {
                 self.toggle_popout();
-            } else if col == 3 {
-                self.toggle_width_lock();
             }
             return;
         }
@@ -1238,9 +1230,9 @@ impl AppState {
         // renderer used for the current frame, keyed on the width that
         // frame rendered with. The right-edge controls are hit-tested
         // before the chip walk, so a click on them never changes the
-        // status filter. The lock column is always present and its cell
-        // maps to the lock toggle alone; the side-switch and pop-out
-        // columns — where they exist at all — map to their own actions.
+        // status filter. The side-switch and pop-out columns — where
+        // they exist at all — map to their own actions; the freed
+        // former lock cell owns nothing.
         let (chips, control) =
             filter_bar_layout(self.status_counts(), self.layout.filter_bar_width);
         if let Some(control) = control {
@@ -1248,10 +1240,6 @@ impl AppState {
                 // A no-op while the sidebar floats; the dimmed glyph
                 // says so before the click.
                 self.switch_sidebar_side();
-                return;
-            }
-            if col == control.lock {
-                self.toggle_width_lock();
                 return;
             }
             if control.popout.is_some_and(|popout| col == popout) {
@@ -1898,13 +1886,12 @@ mod tests {
     }
 
     #[test]
-    fn narrow_rows_keep_the_lock_control_dropping_the_pop_out_first() {
-        // The spec's lock control has no width condition: on a one- or
-        // two-column row the pop-out glyph and its spacer are dropped
-        // first and the lock takes the row's last column; only a
-        // zero-width row makes nothing clickable. Width 3 is the first
-        // width the lock/pop-out pair fits on again, width 5 the first
-        // the side switch joins.
+    fn narrow_rows_drop_the_pop_out_pair_then_the_side_switch() {
+        // The pop-out pair needs three columns; below that no control
+        // is drawn at all. Width 3 is the first width the pop-out glyph
+        // and its spacer fit on again, width 5 the first the side
+        // switch joins — three columns left of the pop-out glyph, the
+        // column layout the retired lock glyph left behind.
         let zero_counts = crate::state::AppState::new("%99".into()).status_counts();
         for (width, expected) in [
             (0u16, None),
@@ -1912,7 +1899,6 @@ mod tests {
                 1,
                 Some(FilterBarControl {
                     switch: None,
-                    lock: 0,
                     popout: None,
                 }),
             ),
@@ -1920,7 +1906,6 @@ mod tests {
                 2,
                 Some(FilterBarControl {
                     switch: None,
-                    lock: 1,
                     popout: None,
                 }),
             ),
@@ -1928,7 +1913,6 @@ mod tests {
                 3,
                 Some(FilterBarControl {
                     switch: None,
-                    lock: 0,
                     popout: Some(1),
                 }),
             ),
@@ -1936,7 +1920,6 @@ mod tests {
                 4,
                 Some(FilterBarControl {
                     switch: None,
-                    lock: 1,
                     popout: Some(2),
                 }),
             ),
@@ -1944,7 +1927,6 @@ mod tests {
                 5,
                 Some(FilterBarControl {
                     switch: Some(0),
-                    lock: 2,
                     popout: Some(3),
                 }),
             ),

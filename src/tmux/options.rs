@@ -182,25 +182,18 @@ pub const SIDEBAR_CURSOR: &str = "@sidebar_cursor";
 /// Selected bottom-panel tab (`activity` / `tasks` / `git`), shared by
 /// every sidebar instance on the tmux server.
 pub const SIDEBAR_BOTTOM_TAB: &str = "@sidebar_bottom_tab";
-/// The docked width in absolute columns shared by every sidebar instance
-/// while the width lock ([`SIDEBAR_WIDTH_LOCK`]) is on. The instance whose
-/// pane width changed publishes it with `set -g`; its peers adopt it with
-/// `resize-pane -x`. Written only while the lock is on: a value left
-/// behind by a disabled lock stays stale but harmless and is reused when
-/// the lock returns.
+/// The docked width in absolute columns shared by every sidebar
+/// instance. The sidebar whose pane width changed publishes it with
+/// `set -g`; its peers adopt it with `resize-pane -x`. The sync runs
+/// unconditionally — there is no on/off switch — and a value left
+/// behind when no sidebar is running stays stale but harmless and is
+/// reused by the next sidebar created.
 pub const SIDEBAR_DOCKED_WIDTH: &str = "@sidebar_docked_width";
-/// The docked height in absolute rows shared by every docked strip
-/// while the sidebar lock ([`SIDEBAR_WIDTH_LOCK`]) is on. Same
-/// lifecycle as [`SIDEBAR_DOCKED_WIDTH`]: the strip whose pane height
-/// changed publishes it with `set -g`, its peers adopt it with
-/// `resize-pane -y`, and a value left behind by a disabled lock stays
-/// stale but harmless until the lock returns.
+/// The docked height in absolute rows shared by every docked strip.
+/// Same lifecycle as [`SIDEBAR_DOCKED_WIDTH`]: the strip whose pane
+/// height changed publishes it with `set -g`, its peers adopt it with
+/// `resize-pane -y`, and the sync runs unconditionally.
 pub const SIDEBAR_DOCKED_HEIGHT: &str = "@sidebar_docked_height";
-/// On/off switch for the shared docked width. While `on`, every sidebar
-/// instance on the tmux server converges on [`SIDEBAR_DOCKED_WIDTH`]
-/// within one refresh tick; while off, each sidebar keeps whatever width
-/// it already has and resizes stay local.
-pub const SIDEBAR_WIDTH_LOCK: &str = "@sidebar_width_lock";
 pub const SIDEBAR_REPO_FILTER: &str = "@sidebar_repo_filter";
 pub const SIDEBAR_BOTTOM_HEIGHT: &str = "@sidebar_bottom_height";
 /// Width of a strip's tab panel, divider included, as a percent of the

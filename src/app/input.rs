@@ -189,12 +189,6 @@ fn handle_column_main_key(key: KeyEvent, state: &mut AppState, git_tab_active: &
             state.switch_sidebar_side();
         }
         KeyCode::Char('p') if ctrl => pane_nav_up(state),
-        // The width lock is a bare single-key action on a column —
-        // the feature it toggles converges docked column widths, and
-        // a strip has neither a docked width nor the lock glyph. It
-        // stays reachable in every focus state; popups still swallow
-        // it, since they return above the match.
-        KeyCode::Char('w') => state.toggle_width_lock(),
         KeyCode::Char('n') => {
             if state.focus_state.focus == Focus::Panes {
                 state.open_spawn_input_from_selection();
@@ -569,33 +563,6 @@ mod tests {
         state.toggle_repo_popup();
         state.set_repo_popup_selected(0);
         state
-    }
-
-    #[test]
-    fn w_toggles_the_width_lock_and_arms_the_save_latch() {
-        // The `w` key runs the same toggle as the lock glyph. In tests
-        // tmux rejects every write, so the flip must arm the retry
-        // latch without advancing the last_saved guard — the same
-        // contract the other shared writes pin in their unit tests.
-        let mut state = state_with_three_panes();
-        let flag = AtomicBool::new(false);
-        assert!(!state.global.width_lock);
-
-        handle_key_event(key(KeyCode::Char('w')), &mut state, &flag);
-
-        assert!(state.global.width_lock, "the `w` key flips the lock intent");
-        assert!(
-            state.global.lock_latch.save_pending,
-            "the rejected shared write arms the retry latch"
-        );
-        assert!(
-            !state.global.lock_latch.last_saved,
-            "only an accepted write advances the guard"
-        );
-
-        handle_key_event(key(KeyCode::Char('w')), &mut state, &flag);
-
-        assert!(!state.global.width_lock, "a second `w` unlocks again");
     }
 
     #[test]

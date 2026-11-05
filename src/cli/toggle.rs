@@ -31,21 +31,20 @@ pub(crate) fn cmd_toggle(args: &[String]) -> i32 {
     // window width, a strip from `@sidebar_height` against the window
     // height (the same row-count-or-percent parse).
     let sidebar_size = if is_strip {
-        // The shared docked height wins while the lock is on (design
-        // D6): a strip created under the lock starts at the server's
+        // The shared docked height wins whenever one exists: a strip
+        // created beside an already-synced server starts at the
         // shared rows instead of the configured default, so it never
         // opens at the wrong height just to jump on the first adopt
-        // tick. Like every read here, the two options are read once
-        // at creation, never per tick — and while locked nothing else
-        // is read. Percentage support otherwise stays exactly as it
-        // was, absolute rows only for the shared height (design D1).
-        let lock = tmux::display_message(window_id, &format!("#{{{}}}", tmux::SIDEBAR_WIDTH_LOCK));
+        // tick. Like every read here, the option is read once at
+        // creation, never per tick. Percentage support otherwise
+        // stays exactly as it was, absolute rows only for the shared
+        // height.
         let docked =
             tmux::display_message(window_id, &format!("#{{{}}}", tmux::SIDEBAR_DOCKED_HEIGHT));
-        match shared_creation_height(&lock, &docked) {
+        match shared_creation_height(&docked) {
             Some(shared) => shared,
             None => {
-                // The unlocked fallback path, unchanged by the lock.
+                // The no-shared-value fallback path.
                 let setting =
                     tmux::display_message(window_id, &format!("#{{{}}}", tmux::SIDEBAR_HEIGHT));
                 let window_height: u32 = tmux::display_message(window_id, "#{window_height}")
@@ -55,22 +54,20 @@ pub(crate) fn cmd_toggle(args: &[String]) -> i32 {
             }
         }
     } else {
-        // The shared docked width wins while the width lock is on
-        // (design D7): a sidebar created under the lock starts at the
+        // The shared docked width wins whenever one exists: a sidebar
+        // created beside an already-synced server starts at the
         // server's shared width instead of the configured default, so
         // it never opens at the wrong width just to jump on the first
-        // adopt tick. Like every read here, the two options are read
-        // once at creation, never per tick — and while locked nothing
-        // else is read. Percentage support otherwise stays exactly as
-        // it was, absolute columns only for the shared width
-        // (design D1).
-        let lock = tmux::display_message(window_id, &format!("#{{{}}}", tmux::SIDEBAR_WIDTH_LOCK));
+        // adopt tick. Like every read here, the option is read once
+        // at creation, never per tick. Percentage support otherwise
+        // stays exactly as it was, absolute columns only for the
+        // shared width.
         let docked =
             tmux::display_message(window_id, &format!("#{{{}}}", tmux::SIDEBAR_DOCKED_WIDTH));
-        match shared_creation_width(&lock, &docked) {
+        match shared_creation_width(&docked) {
             Some(shared) => shared,
             None => {
-                // The unlocked fallback path, unchanged by the lock.
+                // The no-shared-value fallback path.
                 let width_setting =
                     tmux::display_message(window_id, &format!("#{{{}}}", tmux::SIDEBAR_WIDTH));
                 // The window's columns feed the percentage expansion
@@ -510,44 +507,36 @@ fn resolve_height_arg(setting: &str, window_height: u32) -> String {
 
 /// The shared docked width as the `split-window -l` creation width, or
 /// `None` to fall through to the configured `@sidebar_width`. Extracted
-/// as a pure function so the locked/unlocked resolution is unit-testable
+/// as a pure function so the shared/fallback resolution is unit-testable
 /// without a running tmux server.
 ///
-/// `lock` and `docked` are the raw `display-message` outputs of reading
-/// `@sidebar_width_lock` / `@sidebar_docked_width`. Only the exact `on`
-/// the writers send counts as locked, and the width must parse as
-/// columns — `@sidebar_width` may legitimately hold a percentage, none
-/// of which is a splittable column count (design D1), and a 0-column
-/// width is unusable — so every other value falls back to the setting
-/// path (design D7).
-fn shared_creation_width(lock: &str, docked: &str) -> Option<String> {
-    if lock.trim() == "on"
-        && let Some(width) = docked.trim().parse::<u16>().ok().filter(|w| *w > 0)
-    {
-        return Some(width.to_string());
-    }
-    None
+/// `docked` is the raw `display-message` output of reading
+/// `@sidebar_docked_width`. The width must parse as columns —
+/// `@sidebar_width` may legitimately hold a percentage, none of which
+/// is a splittable column count, and a 0-column width is unusable —
+/// so every other value falls back to the setting path. An unset or
+/// empty shared width falls through the same way: with no shared value
+/// present the configured setting decides, and the size sync only
+/// picks the value up once a running sidebar publishes one.
+fn shared_creation_width(docked: &str) -> Option<String> {
+    let width = docked.trim().parse::<u16>().ok().filter(|w| *w > 0)?;
+    Some(width.to_string())
 }
 
 /// The shared docked height as the `split-window -l` creation height,
 /// or `None` to fall through to the configured `@sidebar_height` — the
-/// height-axis twin of [`shared_creation_width`] (design D6). The same
-/// rules carry over: only the exact `on` the writers send counts as
-/// locked, the rows must parse as a usable count (a percentage is not
-/// a splittable row count, and 0 rows is unusable), and every other
+/// height-axis twin of [`shared_creation_width`]. The same rules carry
+/// over: the rows must parse as a usable count (a percentage is not a
+/// splittable row count, and 0 rows is unusable), and every other
 /// value falls back to the setting path.
-fn shared_creation_height(lock: &str, docked: &str) -> Option<String> {
-    if lock.trim() == "on"
-        && let Some(height) = docked.trim().parse::<u16>().ok().filter(|h| *h > 0)
-    {
-        return Some(height.to_string());
-    }
-    None
+fn shared_creation_height(docked: &str) -> Option<String> {
+    let height = docked.trim().parse::<u16>().ok().filter(|h| *h > 0)?;
+    Some(height.to_string())
 }
 
 /// The historical `@sidebar_width` resolution, extracted as a pure
-/// function so the unlocked fallback is unit-testable without a running
-/// tmux server (the same shape as `should_kill_window`).
+/// function so the no-shared-value fallback is unit-testable without a
+/// running tmux server (the same shape as `should_kill_window`).
 ///
 /// `width_setting` is the raw `display-message` output of reading
 /// `@sidebar_width`; an empty read defaults to 30 columns. A `N%`
@@ -941,98 +930,84 @@ mod tests {
     // ─── shared_creation_width ────────────────────────────────
 
     #[test]
-    fn shared_creation_width_uses_the_shared_width_while_locked() {
-        // Spec: a sidebar opened under the lock starts at the shared
-        // docked width, not at the configured default.
-        assert_eq!(shared_creation_width("on", "45"), Some("45".to_string()));
-    }
-
-    #[test]
-    fn shared_creation_width_falls_through_when_unlocked() {
-        // While the lock is off the whole `@sidebar_width` path must run,
-        // whatever a stale shared value from an earlier lock says.
-        assert_eq!(shared_creation_width("off", "45"), None);
-        assert_eq!(shared_creation_width("", "45"), None);
+    fn shared_creation_width_uses_a_present_shared_width() {
+        // A sidebar opened beside an already-synced server starts at
+        // the shared docked width, not at the configured default.
+        assert_eq!(shared_creation_width("45"), Some("45".to_string()));
         assert_eq!(
-            shared_creation_width("on ", "45"),
+            shared_creation_width(" 45 "),
             Some("45".to_string()),
-            "display-message output is trimmed before the match"
-        );
-        assert_eq!(
-            shared_creation_width("ON", "45"),
-            None,
-            "only the exact value the writers send counts as on"
+            "display-message output is trimmed before the parse"
         );
     }
 
     #[test]
-    fn shared_creation_width_falls_through_when_the_width_is_unset_or_useless() {
-        // A locked lock without a usable width (unset, unseeded, a
-        // percentage, or any non-column value) cannot size a
+    fn shared_creation_width_falls_through_when_no_shared_width_exists() {
+        // Without a shared value (unset or empty) the whole
+        // `@sidebar_width` path must run.
+        assert_eq!(shared_creation_width(""), None);
+        assert_eq!(shared_creation_width("   "), None);
+    }
+
+    #[test]
+    fn shared_creation_width_falls_through_when_the_width_is_useless() {
+        // A percentage or any non-column value cannot size a
         // split-window: the configured setting decides instead.
-        assert_eq!(shared_creation_width("on", ""), None);
-        assert_eq!(shared_creation_width("on", "15%"), None);
-        assert_eq!(shared_creation_width("on", "wide"), None);
+        assert_eq!(shared_creation_width("15%"), None);
+        assert_eq!(shared_creation_width("wide"), None);
     }
 
     #[test]
     fn shared_creation_width_falls_through_on_a_zero_width() {
         // No split-window can honor 0 columns; treat a hand-edited 0
         // like any other unusable shared value.
-        assert_eq!(shared_creation_width("on", "0"), None);
+        assert_eq!(shared_creation_width("0"), None);
     }
 
     // ─── shared_creation_height ───────────────────────────────
 
     #[test]
-    fn shared_creation_height_uses_the_shared_height_while_locked() {
-        // Design D6: a strip opened under the lock starts at the
-        // shared docked height, not at the configured default.
-        assert_eq!(shared_creation_height("on", "12"), Some("12".to_string()));
-    }
-
-    #[test]
-    fn shared_creation_height_falls_through_when_unlocked() {
-        // While the lock is off the whole `@sidebar_height` path must
-        // run, whatever a stale shared value from an earlier lock says.
-        assert_eq!(shared_creation_height("off", "12"), None);
-        assert_eq!(shared_creation_height("", "12"), None);
+    fn shared_creation_height_uses_a_present_shared_height() {
+        // A strip opened beside an already-synced server starts at
+        // the shared docked height, not at the configured default.
+        assert_eq!(shared_creation_height("12"), Some("12".to_string()));
         assert_eq!(
-            shared_creation_height("on ", "12"),
+            shared_creation_height(" 12 "),
             Some("12".to_string()),
-            "display-message output is trimmed before the match"
-        );
-        assert_eq!(
-            shared_creation_height("ON", "12"),
-            None,
-            "only the exact value the writers send counts as on"
+            "display-message output is trimmed before the parse"
         );
     }
 
     #[test]
-    fn shared_creation_height_falls_through_when_the_height_is_unset_or_useless() {
-        // A locked lock without a usable height (unset, unseeded, a
-        // percentage, or any non-row value) cannot size a split-window:
+    fn shared_creation_height_falls_through_when_no_shared_height_exists() {
+        // Without a shared value (unset or empty) the whole
+        // `@sidebar_height` path must run.
+        assert_eq!(shared_creation_height(""), None);
+        assert_eq!(shared_creation_height("   "), None);
+    }
+
+    #[test]
+    fn shared_creation_height_falls_through_when_the_height_is_useless() {
+        // A percentage or any non-row value cannot size a split-window:
         // the configured setting decides instead.
-        assert_eq!(shared_creation_height("on", ""), None);
-        assert_eq!(shared_creation_height("on", "30%"), None);
-        assert_eq!(shared_creation_height("on", "tall"), None);
+        assert_eq!(shared_creation_height("30%"), None);
+        assert_eq!(shared_creation_height("tall"), None);
     }
 
     #[test]
     fn shared_creation_height_falls_through_on_a_zero_height() {
         // No split-window can honor 0 rows; treat a hand-edited 0 like
         // any other unusable shared value.
-        assert_eq!(shared_creation_height("on", "0"), None);
+        assert_eq!(shared_creation_height("0"), None);
     }
 
     #[test]
     fn the_strip_creation_argv_carries_the_shared_height() {
         // The shared rows reach tmux as the `split-window -l` size of
-        // the strip path (design D6), the way the shared columns reach
-        // the column path.
-        let Some(shared) = shared_creation_height("on", "12") else {
-            panic!("a locked lock with a usable height must resolve");
+        // the strip path, the way the shared columns reach the column
+        // path.
+        let Some(shared) = shared_creation_height("12") else {
+            panic!("a present shared height must resolve");
         };
         let args = split_window_args(
             split_window_flags(SidebarPosition::Bottom),
