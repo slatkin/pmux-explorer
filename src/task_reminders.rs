@@ -18,7 +18,8 @@
 pub const RECORD_FIRST_REMINDER: &str = "No tasks recorded yet: describe the work with task-describe <text>, then record tasks with task-set <subject>.";
 
 /// Wording delivered when a turn ends while todo items are still open.
-pub const UPDATE_BEFORE_FINISH_REMINDER: &str = "Reminder: make sure the task board is up to date.";
+pub const UPDATE_BEFORE_FINISH_REMINDER: &str =
+    "Automated reminder: make sure the task board is up to date.";
 
 #[cfg(test)]
 mod tests {

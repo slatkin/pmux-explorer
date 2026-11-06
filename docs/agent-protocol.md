@@ -319,7 +319,10 @@ none.
 - A turn that ends while items are still open receives, verbatim from
   `UPDATE_BEFORE_FINISH_REMINDER`:
 
-  `Reminder: make sure the task board is up to date.`
+  `Automated reminder: make sure the task board is up to date.`
+
+  The "Automated reminder:" prefix marks the text as machine-generated, not
+  a message from the user.
 
 ## The thinking feed
 
