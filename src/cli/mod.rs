@@ -13,8 +13,12 @@ use crate::pane_store::PaneStore;
 use crate::task_reminders;
 use crate::tmux;
 
-/// Run a CLI subcommand. Returns Some(exit_code) if a subcommand was matched,
-/// None if no subcommand was given (caller should launch TUI).
+/// Run a CLI subcommand. Returns Some(exit_code) if arguments were given,
+/// None only when argv is empty (caller should launch TUI). An argument
+/// the dispatcher does not know is a usage error, never a TUI: a stray
+/// argv — a mistyped subcommand, an agent guessing `pmux-explorer list` —
+/// must fail fast with the command list instead of opening the sidebar in
+/// the terminal it was run from and blocking on its input.
 pub fn run(args: &[String]) -> Option<i32> {
     let cmd = args.first().map(|s| s.as_str())?;
     let rest = &args[1..];
@@ -34,9 +38,45 @@ pub fn run(args: &[String]) -> Option<i32> {
             println!("{}", crate::VERSION);
             0
         }
-        _ => return None,
+        "--help" | "-h" | "help" => {
+            println!("{}", usage_text());
+            0
+        }
+        _ => {
+            eprintln!("pmux-explorer: unknown command '{cmd}'\n\n{}", usage_text());
+            2
+        }
     };
     Some(code)
+}
+
+/// Top-level usage text, printed on stdout for `help`, `--help` and `-h`
+/// (exit 0) and after an unknown command's error on stderr. The exit code
+/// for the unknown command is 2, the code `spawn` and `capture` already
+/// return for their own usage errors.
+fn usage_text() -> String {
+    format!(
+        "pmux-explorer {} — tmux sidebar for AI coding agents\n\
+         \n\
+         usage:\n\
+         \x20 pmux-explorer                             open the sidebar TUI (run inside tmux)\n\
+         \x20 pmux-explorer <command> [args...]\n\
+         \n\
+         commands:\n\
+         \x20 setup <claude|codex|pi>                  register the agent's hooks (pi prints the contract)\n\
+         \x20 hook <agent> <event>                     handle one agent event (JSON on stdin)\n\
+         \x20 toggle [--create-only] <window> [dir]    toggle the sidebar for a window\n\
+         \x20 toggle-all                               toggle sidebars for every window\n\
+         \x20 auto-close <window>                      close the sidebar when its window is empty\n\
+         \x20 set-status <status>                      set the calling pane's status\n\
+         \x20 task-set <subject>                       record a pending task for the calling pane\n\
+         \x20 task-update <id> <status>                update a task (pending|in_progress|completed)\n\
+         \x20 task-describe <text>                     set the calling pane's task list description\n\
+         \x20 spawn <name>                              open a worktree spawn for the calling pane\n\
+         \x20 capture --session <name> [options]       snapshot pane content (text, canvas or frames)\n\
+         \x20 version                                   print the version",
+        crate::VERSION
+    )
 }
 
 // ─── Shared helpers ──────────────────────────────────────────────────────────
@@ -267,22 +307,59 @@ mod tests {
     }
 
     #[test]
-    fn run_returns_none_for_unknown_command() {
-        assert_eq!(run(&["unknown-cmd".into()]), None);
-    }
-
-    #[test]
     fn run_returns_none_for_tui_mode_no_args() {
         assert_eq!(run(&[]), None);
     }
 
     #[test]
-    fn the_removed_channel_subcommands_start_the_tui_again() {
-        // D3: no tombstone. `channel-ready` and `--mcp` match no arm, so
-        // `run` returns `None` and `main` launches the TUI instead of a
-        // clean failure.
-        assert_eq!(run(&["channel-ready".into()]), None);
-        assert_eq!(run(&["--mcp".into()]), None);
+    fn an_unknown_command_is_a_usage_error_never_the_tui() {
+        // The TUI is opt-in on empty argv only. Anything else the
+        // dispatcher does not know — a mistyped subcommand, an agent
+        // guessing `pmux-explorer list` — exits 2 with usage instead of
+        // taking over the caller's terminal and blocking on its input.
+        assert_eq!(run(&["unknown-cmd".into()]), Some(2));
+        assert_eq!(run(&["list".into()]), Some(2));
+    }
+
+    #[test]
+    fn the_removed_channel_subcommands_fail_with_usage() {
+        // Supersedes the earlier no-tombstone fallthrough: `channel-ready`
+        // and `--mcp` used to reach the TUI because an unknown argv meant
+        // "no subcommand". With the usage error they get the clean failure
+        // a removed entry point should produce.
+        assert_eq!(run(&["channel-ready".into()]), Some(2));
+        assert_eq!(run(&["--mcp".into()]), Some(2));
+    }
+
+    #[test]
+    fn help_variants_print_usage_and_exit_zero() {
+        assert_eq!(run(&["--help".into()]), Some(0));
+        assert_eq!(run(&["-h".into()]), Some(0));
+        assert_eq!(run(&["help".into()]), Some(0));
+    }
+
+    #[test]
+    fn usage_text_names_every_dispatched_command() {
+        // The usage is the error surface an agent sees after a wrong
+        // argv; a command missing from it is invisible there even though
+        // the dispatcher would run it.
+        let usage = usage_text();
+        for cmd in [
+            "setup",
+            "hook",
+            "toggle",
+            "toggle-all",
+            "auto-close",
+            "set-status",
+            "task-set",
+            "task-update",
+            "task-describe",
+            "spawn",
+            "capture",
+            "version",
+        ] {
+            assert!(usage.contains(cmd), "usage must name '{cmd}'");
+        }
     }
 
     // ─── json_str tests ──────────────────────────────────────────────

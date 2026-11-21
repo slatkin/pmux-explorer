@@ -36,8 +36,8 @@ After implementation is complete, run `cargo build --release`. The plugin direct
 ### Entry Points
 
 The binary has two modes controlled by CLI args (`src/cli/mod.rs`):
-1. **TUI mode** — default. `src/main.rs` handles CLI arg parsing, SIGUSR1 signal wiring, and TUI session setup, then delegates to `app::run` (`src/app.rs`) for the event loop.
-2. **CLI subcommands** — `setup`, `hook`, `toggle`, `toggle-all`, `auto-close`, `set-status`, `task-set`, `task-update`, `task-describe`, `spawn`, `capture`, `--version` / `version`.
+1. **TUI mode** — default, and only reached on empty argv. `src/main.rs` handles CLI arg parsing, SIGUSR1 signal wiring, and TUI session setup, then delegates to `app::run` (`src/app.rs`) for the event loop.
+2. **CLI subcommands** — `setup`, `hook`, `toggle`, `toggle-all`, `auto-close`, `set-status`, `task-set`, `task-update`, `task-describe`, `spawn`, `capture`, `--version` / `version`, `--help` / `-h` / `help`. Any other first argument is a usage error: it prints the command list and exits 2 instead of opening the TUI in the caller's terminal.
 
 ### Core Data Flow
 
