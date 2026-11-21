@@ -40,7 +40,7 @@ When `@sidebar_lazygit` is `on` and no `lazygit` executable is on `PATH` at star
 
 ### Requirement: lazygit shows only its list panels
 
-The lazygit view SHALL show lazygit's side panels (status, files, branches, commits, stash) across the full width of the area. It SHALL NOT show lazygit's diff panel while a side panel has lazygit's focus. The view SHALL keep the user's own lazygit config, and the sidebar's settings SHALL override it only for the layout (including the panel jump labels), auto-fetch, suspend, the bottom line, the tips, the command log, the startup popups and the refresh interval.
+The lazygit view SHALL show lazygit's side panels (status, files, branches, commits, stash) across the full width of the area, and SHALL NOT show lazygit's diff panel while a side panel has lazygit's focus, unless a repo-level config file changes the layout.
 
 #### Scenario: the files panel without a diff
 - **WHEN** the lazygit view is 40 columns wide and 15 rows high and the repo has changed files
@@ -51,13 +51,22 @@ The lazygit view SHALL show lazygit's side panels (status, files, branches, comm
 - **WHEN** the selected file has staged and unstaged changes
 - **THEN** no diff panel is drawn
 
+### Requirement: a repo-level config wins over the overlay
+
+The view SHALL keep the user's own lazygit config, and the sidebar's settings SHALL override the user-level config file only for the layout (including the panel jump labels), auto-fetch, suspend, the bottom line, the tips, the command log, the startup popups, the update checks and the refresh behaviour. lazygit merges repo-level config files (`.git/lazygit.yml` in the repo and `.lazygit.yml` in any parent directory) after the overlay, so a repo-level file wins for the keys it sets.
+
 #### Scenario: the user's keys stay
 - **WHEN** the user's lazygit config binds a custom key
 - **THEN** that key does the same thing in the lazygit view
 
+#### Scenario: a repo-level config overrides the overlay
+- **WHEN** the repo holds a `.git/lazygit.yml` or a `.lazygit.yml` in a parent directory that sets a key the overlay also sets
+- **THEN** the repo-level value wins
+- **AND** the rest of the user's config stays
+
 ### Requirement: lazygit does not fetch or suspend
 
-The lazygit view SHALL NOT start a background `git fetch`. lazygit's suspend key SHALL NOT stop the lazygit process.
+The lazygit view SHALL NOT start a background `git fetch`, and lazygit's suspend key SHALL NOT stop the lazygit process, unless a repo-level config file re-enables them.
 
 #### Scenario: no auto-fetch
 - **WHEN** the lazygit view runs for two minutes
@@ -142,6 +151,11 @@ While the keys are not captured, the sidebar SHALL handle every key and mouse ev
 - **THEN** lazygit gets the key
 - **AND** the sidebar's tab does not change
 
+#### Scenario: mouse events disabled
+- **WHEN** the user's config disables lazygit's mouse events and the user clicks in the lazygit area
+- **THEN** the keys are captured
+- **AND** lazygit gets no mouse event
+
 ### Requirement: Ctrl-] or a click outside releases the keys
 
 While the keys are captured, Ctrl-] SHALL release them and SHALL NOT go to lazygit. A left click outside the lazygit area SHALL release them and SHALL then act as a normal sidebar click. A change of the displayed tab or a hidden window SHALL also release them.
@@ -155,6 +169,10 @@ While the keys are captured, Ctrl-] SHALL release them and SHALL NOT go to lazyg
 - **WHEN** the keys are captured and the user clicks an agent row
 - **THEN** the keys are released
 - **AND** the click selects the agent row
+
+#### Scenario: the window hides
+- **WHEN** the keys are captured and the user switches to another window
+- **THEN** the keys are released
 
 ### Requirement: the header row shows the capture state
 

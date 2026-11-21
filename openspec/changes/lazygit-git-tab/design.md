@@ -61,6 +61,8 @@ update:
   method: never
 git:
   autoFetch: false
+  autoRefresh: true
+  autoDetectExternalChanges: true
 refresher:
   refreshInterval: 2
 keybinding:
@@ -68,7 +70,7 @@ keybinding:
     suspendApp: <disabled>
 ```
 
-The child gets `--use-config-file <user files>,<overlay>`. The user files are the value of `LG_CONFIG_FILE` when it is set. Otherwise the user file is `config.yml` in the directory that `lazygit --print-config-dir` prints, once at startup, if that file exists. The overlay comes last, so it wins only for the keys it sets, and the user's other settings and keys stay. `refresher.externalChangeCheckInterval` keeps its default of 2 s, which gives the 2 s ref refresh.
+The child gets `--use-config-file <user files>,<overlay>`. The user files are the value of `LG_CONFIG_FILE` when it is set. Otherwise the user file is `config.yml` in the directory that `lazygit --print-config-dir` prints, once at startup, if that file exists. The overlay comes last, so it wins only for the keys it sets, and the user's other settings and keys stay. Repo-level config files (`.git/lazygit.yml` and `.lazygit.yml` files in parent directories) are merged by lazygit after the files in this list and can still override the overlay. `refresher.externalChangeCheckInterval` keeps its default of 2 s, which gives the 2 s ref refresh.
 
 Alternative considered: a full generated config with no user file. This loses the user's keys and theme.
 
@@ -95,9 +97,9 @@ The command is `lazygit -p <repo top-level> --use-config-file <list>`, with the 
                                      Enter on the Git tab ------------+
 ```
 
-The host keeps `wanted_repo`, a pending repo with its first-seen `Instant` (for the 300 ms debounce), and `hidden_since` (for the 10 s grace). The main loop calls `host.tick(now, inputs)` on every iteration, not only on the 1 s refresh, so the debounce has 16 ms resolution. The inputs are: the option, the binary, `git_poll_active()`, `window_active`, `session_attached` and the focused repo top-level. All time is passed in, so tests drive the machine with fixed `Instant`s. A path outside a repo resolves to no repo, and the view shows the not-a-repo notice.
+The host keeps `wanted_repo`, a pending repo with its first-seen `Instant` (for the 300 ms debounce), and `hidden_since` (for the 10 s grace). The main loop calls `host.tick(now, inputs)` on every iteration, not only on the 1 s refresh, so the debounce has 16 ms resolution. The inputs are: the option, the binary, `git_poll_active()`, `window_active`, `session_attached` (a client count; any value above zero is attached) and the focused repo top-level. All time is passed in, so tests drive the machine with fixed `Instant`s. A path outside a repo resolves to no repo, and the view shows the not-a-repo notice.
 
-The repo top-level is resolved on the main thread when the focused pane changes, from the same pane path the native tab uses (`tmux::get_pane_path`, then `git::repo_root`). That is one `git rev-parse` call per focus change, which is what `refresh_git_for_focused_pane` already costs.
+The repo top-level is resolved on the main thread once at startup, beside the native fetch `init_state` runs, and again when the focused pane changes, from the same pane path the native tab uses (`tmux::get_pane_path`, then `git::repo_root`). That is one `git rev-parse` call per focus change, which is what `refresh_git_for_focused_pane` already costs.
 
 `#{session_attached}` joins the format of the existing per-tick `display-message` read, so it adds no tmux call.
 
@@ -108,7 +110,7 @@ The repo top-level is resolved on the main thread when the focused pane changes,
 - **Captured:** Ctrl-] (`Char('5')` with `CONTROL`, and `Char(']')` with `CONTROL` for terminals that report it that way) releases. Every other key is encoded with xterm legacy encoding and written to the pty: characters, the C0 control characters, Alt as an ESC prefix, Enter `\r`, Backspace `\x7f`, Tab, BackTab `\x1b[Z`, Esc, the arrows (`\x1bO` in application cursor mode, else `\x1b[`), Home, End, PageUp, PageDown, Delete, Insert and F1–F12. A mouse event in the lazygit area is translated to area-relative cells and encoded in the protocol mode and encoding that the screen reports (SGR or the default). A mouse mode of none sends nothing. A left press outside the area releases and then goes through the normal dispatch.
 - **Not captured:** Enter, when the displayed Git tab has the keyboard focus (`Focus::ActivityLog` in a column or a one-pane strip, or pane A's focus in a split strip), captures, or starts lazygit again from `Exited`. A left press in the lazygit area captures and is forwarded. The press is the lazygit click. Everything else goes through the normal dispatch, unchanged.
 
-A change of the displayed tab, the grace expiry or a child exit releases the capture. The capture state lives in the host, not in `Focus`, so the existing focus rules and their tests do not change.
+A change of the displayed tab, the window becoming hidden (or the session detaching) or a child exit releases the capture. The capture state lives in the host, not in `Focus`, so the existing focus rules and their tests do not change.
 
 ### 8. Drawing
 
@@ -124,7 +126,7 @@ With the option `on`, the poll thread runs a header fetch in place of `fetch_git
 
 ### 10. Startup and the missing binary
 
-`init_state` reads `@sidebar_lazygit` with the same pattern as the other startup-read options and looks up `lazygit` on `PATH`. With the option `on` and no binary, the view stays native, and `refresh_notices` adds one setup notice. The conf seeds `off`, and the conf/code drift test that pins `@sidebar_position` also pins the new seed.
+`init_state` reads `@sidebar_lazygit` with the same pattern as the other startup-read options and looks up `lazygit` on `PATH`. With the option `on` and no binary, the view stays native, and `refresh_notices` adds one setup notice that names the missing executable. The notice reaches the user through the ⓘ badge (`has_info` in `src/ui/notices/button.rs`) and one section of the notices popup (`src/ui/notices/popup.rs`); both are hard-coded lists, so both need the new arm and the popup needs a snapshot. The conf seeds `off`, and the conf/code drift test that pins `@sidebar_position` also pins the new seed.
 
 ### 11. Testing seam
 
@@ -138,6 +140,7 @@ The host takes a `PtySpawner` trait: spawn a command at a size and return a writ
 - [An editor opened from lazygit (`e`) runs inside the small screen] → It works but is cramped. This is a non-goal and is documented.
 - [A wrong config path: lazygit's config directory discovery differs from `--print-config-dir`] → The host asks lazygit itself for the directory. When `LG_CONFIG_FILE` is set, it uses that value.
 - [`vt100` misparses a sequence that lazygit uses] → lazygit uses a common xterm subset. The drawing tests include a captured lazygit frame as a fixture.
+- [lazygit older than the probed version: `keybinding.universal.suspendApp` exists since 0.55 and older binaries silently ignore unknown config keys, so the suspend key keeps its old meaning and other overrides may not apply] → The sidebar does not check lazygit's version; the layout was probed on 0.66.3 and the option is opt-in.
 - [The runtime directory falls back to `/tmp`] → The overlay is written again at each start and holds no secret.
 
 ## Migration Plan
